@@ -147,6 +147,10 @@ describe("createModuleRegistry", () => {
       "boards",
       // `order: 350`, the last discovered module this build registers.
       "chess",
+      // `order: 400`, the astronomy corner: the module that assembles the four
+      // parts wave 1 built (`astronomy/solar`, `earth`, `stars`, `sunmoon`) into
+      // one page, one clock and one place.
+      "astronomy",
     ]);
   });
 
@@ -274,6 +278,10 @@ describe("createModuleRegistry", () => {
       // is not a second reading of the utility belt.
       LAB: ["lab"],
       LANG: ["translator"],
+      // The astronomy corner takes ASTR on the same terms: the PRD registry has
+      // no row for a sky, so the module declares its own prefix rather than
+      // borrowing a tool drawer's or a reference library's.
+      ASTR: ["astronomy"],
     });
   });
 
@@ -349,6 +357,11 @@ describe("createModuleRegistry", () => {
       "wiki",
       // The translator, `order: 230` (ADR-090).
       "translator",
+      // The astronomy corner (ADR-109), `order: 400`: what is overhead is
+      // material somebody consults, which is ADR-093's own reading of this
+      // group — the same reading that put the reference library and the map in
+      // it.
+      "astronomy",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -513,6 +526,9 @@ describe("createModuleRegistry", () => {
       "boards",
       // ...and the same for a board: no game exists until somebody starts one.
       "chess",
+      // The astronomy corner is ON by the same test every module but PRIV and
+      // PRO passes: it stores nothing at all, so there is nothing to opt into.
+      "astronomy",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -723,6 +739,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "puzzles",
       // The second, whose one preference is the level a new game opens at.
       "boards",
+      // The astronomy corner's one control is the place the sky is drawn for,
+      // declared as a `{ sr, en }` pair in its own manifest and drawn by its own
+      // body; it is a DEVICE value, so the card is a device card.
+      "astronomy",
     ]);
   });
 

@@ -37,12 +37,22 @@ export interface PlacePickerProps {
   /** The computer's zone, as `computerZone()` named it: the reset's own place, and the default. */
   readonly zone: string | null;
   readonly onChange: (point: LatLon | null) => void;
+  /**
+   * Whether the picker draws its own card frame and title.
+   *
+   * `true` — the default, and what the module's page draws. `false` is for the
+   * module's SETTINGS BODY, which the shell already wraps in a card: a card
+   * inside a card is one frame too many, and its title would be the section's
+   * own heading a second time. The controls are identical either way, so the
+   * page and the settings card cannot drift.
+   */
+  readonly framed?: boolean;
 }
 
 /** How many search results the picker shows at once. Fewer than eight and a common name hides the one being looked for. */
 const RESULT_LIMIT = 8;
 
-export function PlacePicker({ observer, zone, onChange }: PlacePickerProps) {
+export function PlacePicker({ observer, zone, onChange, framed = true }: PlacePickerProps) {
   const [query, setQuery] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -72,8 +82,8 @@ export function PlacePicker({ observer, zone, onChange }: PlacePickerProps) {
     onChange({ latDeg, lonDeg });
   }
 
-  return (
-    <Card className="ast-place__card" title={copy.panel.placeTitle}>
+  const body = (
+    <>
       <p className="nx-hint">
         {observer === null ? copy.place.none : `${copy.place.current} ${coordinateText(observer)}`}
       </p>
@@ -144,7 +154,15 @@ export function PlacePicker({ observer, zone, onChange }: PlacePickerProps) {
         </p>
       )}
       {zone !== null && <p className="nx-hint">{`${copy.place.defaultPlace} (${zone})`}</p>}
+    </>
+  );
+
+  return framed ? (
+    <Card className="ast-place__card" title={copy.panel.placeTitle}>
+      {body}
     </Card>
+  ) : (
+    <div className="ast-place__body">{body}</div>
   );
 }
 

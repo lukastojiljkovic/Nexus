@@ -4,8 +4,21 @@
  *
  * **The subsolar and sublunar points are the two places where the body's hour
  * angle is zero**, which is a difference of two angles in the same frame:
- * `lon = siderealAngle - RA`, folded to (-180, 180]. The sidereal angle is the
+ * `lon = RA - siderealAngle`, folded to (-180, 180]. The sidereal angle is the
  * Greenwich apparent sidereal time `earth.ts` supplies.
+ *
+ * **East-positive, like every other longitude in this package.** A place has the
+ * body overhead exactly when its LOCAL sidereal time equals the body's right
+ * ascension, and `apparentSiderealTimeDegrees` adds an east-positive longitude,
+ * so that longitude is `RA - GMST` (Meeus ch. 12's own relation, read for a
+ * sidereal angle rather than for a clock). Written in this direction the answer
+ * is the SAME `LatLon` convention `cities.ts`, `zoneLocation.ts` and the star
+ * map's `skyPlace` use, which is what lets a view draw the sub-solar marker and
+ * the reader's own pin on one map. The reverse order is the west-positive
+ * convention Horizons writes `SunSub-LON` in, and it is a mirror of this one —
+ * the module's `terminator.test.ts` is the measurement that caught it, because a
+ * mirrored longitude agrees with a fixture the closer that fixture sits to the
+ * date line, which is where all ten of the sub-solar fixtures are.
  *
  * **The subsolar point is GEOMETRIC**, and that is a correction rather than a
  * detail: it is the point the Sun is physically overhead of, so it uses the
@@ -169,12 +182,12 @@ export function dayNightAt(at: SkyInstant, samples = DEFAULT_SAMPLES): DayNight 
   const sun = geometricSunEquatorial(jde);
   const subsolar: LatLon = {
     latDeg: sun.declination,
-    lonDeg: wrapSignedLongitude(siderealDegrees - sun.rightAscension),
+    lonDeg: wrapSignedLongitude(sun.rightAscension - siderealDegrees),
   };
   const moon = moonEquatorial(jde);
   const sublunar: LatLon = {
     latDeg: moon.declination,
-    lonDeg: wrapSignedLongitude(siderealDegrees - moon.rightAscension),
+    lonDeg: wrapSignedLongitude(moon.rightAscension - siderealDegrees),
   };
   // The step count is the caller's, floored so a caller asking for a three-point
   // terminator gets a triangle rather than an error.

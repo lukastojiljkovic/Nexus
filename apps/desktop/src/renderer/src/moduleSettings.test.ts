@@ -139,6 +139,8 @@ describe("moduleSettingsDeclarations", () => {
       // And the puzzles, `order: 330`, before the board games at 340.
       "puzzles",
       "boards",
+      // The astronomy corner's one place control, `order: 400`.
+      "astronomy",
     ]);
   });
 
@@ -189,6 +191,9 @@ describe("moduleSettingsCardIds", () => {
       "workshop",
       "puzzles",
       "boards",
+      // And the astronomy corner's, declared in its own manifest on the same
+      // terms: one `value` control, for the place.
+      "astronomy",
     ]);
   });
 
@@ -246,6 +251,8 @@ describe("moduleSettingsCards", () => {
       "puzzles",
       // The board games, whose one control is the level a new game opens at.
       "boards",
+      // And the astronomy corner, whose one control is the place.
+      "astronomy",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -274,6 +281,7 @@ describe("moduleSettingsCards", () => {
       kitManifest("workshop")?.copy?.name[activeLocale()] ?? "",
       kitManifest("puzzles")?.copy?.name[activeLocale()] ?? "",
       kitManifest("boards")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("astronomy")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 
@@ -306,7 +314,7 @@ describe("moduleSettingsCards", () => {
 // --- which cards may be reset -------------------------------------------------
 
 describe("isDeviceOnlyPanel", () => {
-  it("is true for the nine cards whose whole state is this machine's", () => {
+  it("is true for the ten cards whose whole state is this machine's", () => {
     const declarations = new Map(
       moduleSettingsDeclarations(createModuleRegistry()).map((declaration) => [
         declaration.moduleId,
@@ -330,6 +338,9 @@ describe("isDeviceOnlyPanel", () => {
       // And the translator's three, on the same terms: its direction and its
       // recent-pair list are this machine's, not the profile's.
       "translator",
+      // The astronomy corner's place is this machine's too — it defaults to this
+      // computer's own zone — so the card earns the shell's reset.
+      "astronomy",
     ]);
   });
 

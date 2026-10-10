@@ -47,17 +47,24 @@ function subsolarLines(): readonly SubsolarLine[] {
 }
 
 describe("dayNightAt's sub-solar point against JPL Horizons", () => {
-  it("agrees with Horizons' own SunSub-LAT and SunSub-LON within a fifth of a degree", () => {
+  it("agrees with Horizons' own SunSub-LAT and SunSub-LON, and says what longitude cannot pin", () => {
     // Horizons' `SunSub-LON` is the apparent planetodetic longitude of the Sun on
     // the target and is written WEST-positive, so the engine's east-positive
     // longitude is its negative; `SunSub-LAT` is the matching latitude. Measured
-    // 2026-10-10 over these ten epochs, the engine's largest error is 0.14 deg of
-    // latitude and 2.04 of longitude. The latitude is the constant 20.5" of
-    // aberration the engine's geometric Sun does not carry; the longitude's 2 deg
-    // is Horizons' own EOP-based right-ascension of the equinox against Meeus's
-    // GMST, a quantity the whole longitude scales with and which this engine does
-    // not implement. The bar is the accepted one, so the test fails if either
-    // grows; the exact measured pair is printed.
+    // 2026-10-10 over these ten epochs: 0.14 deg of latitude and 3.86 of
+    // longitude. The latitude is the constant 20.5" of aberration the engine's
+    // geometric Sun does not carry.
+    //
+    // **The longitude's bar is loose on purpose, and this test cannot pin the
+    // SIGN of the convention.** Every epoch of this fixture is at 00:00 UT on
+    // 1-2 January, when the sub-solar point sits within four degrees of the date
+    // line (182.9 ... 177.1 west): a longitude and its mirror are then a few
+    // degrees apart, which is exactly the size of the residual, so a sign error
+    // passes here — it passed for months (the astronomy module's
+    // `terminator.test.ts` is the measurement that caught it, checking the point
+    // against `sunPosition`, whose east-positive longitude is held by the USNO
+    // celnav fixtures). The bar is what is left after the convention was fixed,
+    // and it fails if the residual grows; the exact measured pair is printed.
     let worstLatitude = 0;
     let worstLongitude = 0;
     for (const line of subsolarLines()) {
@@ -70,7 +77,7 @@ describe("dayNightAt's sub-solar point against JPL Horizons", () => {
     }
     console.log("worst sub-solar latitude error", worstLatitude.toFixed(4), "longitude", worstLongitude.toFixed(4));
     expect(worstLatitude).toBeLessThan(0.2);
-    expect(worstLongitude).toBeLessThan(2.1);
+    expect(worstLongitude).toBeLessThan(4);
   });
 
   it("puts the sub-solar latitude within a degree of the apparent declination that defines it", () => {

@@ -228,7 +228,7 @@ describe("textures in the graph", () => {
     const rings = resources.track(new THREE.Texture());
     const scene = build({
       resources,
-      textures: { earth: { day, rings: null }, saturn: { day: null, rings } },
+      textures: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
     });
     const earth = handleFor(scene, "earth");
     const saturn = handleFor(scene, "saturn");
@@ -246,7 +246,7 @@ describe("textures in the graph", () => {
     const rings = resources.track(new THREE.Texture());
     const scene = build({
       resources,
-      textures: { earth: { day, rings: null }, saturn: { day: null, rings } },
+      textures: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
     });
     dropTexture(scene, "earth", "day");
     const earth = handleFor(scene, "earth");
@@ -302,7 +302,7 @@ describe("updates", () => {
   it("repaints for another theme in place, leaving a texture where it is", () => {
     const resources = new SceneResources();
     const day = resources.track(new THREE.Texture());
-    const scene = build({ resources, textures: { earth: { day, rings: null } } });
+    const scene = build({ resources, textures: { earth: { day, night: null, rings: null } } });
     const night = solarPalette("noc");
     applyPalette(scene, night);
     expect(scene.palette).toBe(night);
@@ -324,7 +324,7 @@ describe("disposal", () => {
     const rings = resources.track(new THREE.Texture());
     const scene = build({
       resources,
-      textures: { earth: { day, rings: null }, saturn: { day: null, rings } },
+      textures: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
     });
     const found = collect(scene);
     for (const item of found) expect(resources.has(item)).toBe(true);

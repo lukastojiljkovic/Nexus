@@ -194,7 +194,14 @@ export type IconName =
   // one of that module's four tools. Drawn here rather than in the module
   // because the drawing lives with the other drawings; the module brings the
   // name (`renderer/icon.ts`).
-  | "signal";
+  | "signal"
+  // The ASTRONOMY module's mark: a ringed planet, which is the one shape that
+  // says "the sky" rather than any single thing in it — `globe` is the Earth,
+  // `sun` and `moon` are two of the bodies, and astronomy is the corner that
+  // holds all of them. Appended at the end for the reason `calculator` and
+  // `signal` above are, and drawn from the set's own vocabulary (a circle and
+  // two rotation-carrying arcs).
+  | "planet";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -994,6 +1001,15 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M6 9.5A8.5 8.5 0 0 1 14.5 18" />
       <path d="M6 5.5A12.5 12.5 0 0 1 18.5 18" />
       <path d="M6 18h0" />
+    </>
+  ),
+  // ASTRONOMY. A disc with a ring across it: the ring is one ellipse written as
+  // two arcs (arc flags, not a transform, so every icon in the set is drawn by
+  // the same grammar), tilted the way Saturn's ring is.
+  planet: (
+    <>
+      <circle cx="12" cy="12" r="5.2" />
+      <path d="M3.3 15.1A9 3.4 -20 1 0 20.7 8.9A9 3.4 -20 1 0 3.3 15.1" />
     </>
   ),
 };

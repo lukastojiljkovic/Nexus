@@ -35,10 +35,12 @@ import "./solar.css";
  *
  * **Drawing only while something moves.** There is no frame loop. A change — a
  * drag, a wheel, a flight, a resize, a new snapshot, an image that finished
- * decoding — calls `requestRender`, which schedules exactly one frame; that frame
- * draws and, if a flight is still running, schedules the next. An idle solar
- * system costs nothing, which matters because this page may be left open for
- * hours beside a running clock.
+ * decoding — calls `requestRender`, which schedules exactly one frame. That
+ * frame draws only while the canvas is on screen and the window is visible, so
+ * the three views a user is not looking at cost nothing while the shared clock
+ * advances behind them; and it schedules the next one only for a flight that is
+ * still running. An idle solar system costs nothing, which matters because this
+ * page may be left open for hours beside a running clock.
  *
  * **The props are read through one ref.** The mount effect runs once and never
  * re-runs; the newest of every prop lives in `liveRef` for the callbacks that
@@ -326,8 +328,21 @@ export function SolarSystemView({
     };
     stateRef.current = state;
 
+    /**
+     * Whether the canvas is on screen at all. The view is one of four tabs, so
+     * three quarters of the time it is in the DOM but not visible; a frame
+     * scheduled while it is hidden is a frame nobody sees and, with a clock
+     * driving new snapshots, one that keeps arriving. `IntersectionObserver`
+     * plus the document's own visibility is what makes "renders only while
+     * visible" true rather than hoped for.
+     */
+    let onScreen = true;
+
     function paint(): void {
       state.frame = 0;
+      // A hidden tab or a hidden window draws nothing and does NOT reschedule:
+      // the next change (or the return of visibility) calls `requestRender`.
+      if (document.hidden || !onScreen) return;
       const stillFlying = advanceFlight();
       updateLabels();
       renderer.render(state.scene, state.camera);
@@ -361,6 +376,23 @@ export function SolarSystemView({
       camera.updateProjectionMatrix();
       state.requestRender();
     }
+
+    const screenObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        const next = entry?.isIntersecting ?? true;
+        const resumed = next && !onScreen;
+        onScreen = next;
+        if (resumed) state.requestRender();
+      },
+      { threshold: 0 },
+    );
+    screenObserver.observe(viewport);
+
+    const onDocumentVisibility = (): void => {
+      if (!document.hidden && onScreen) state.requestRender();
+    };
+    document.addEventListener("visibilitychange", onDocumentVisibility);
 
     /**
      * A body's centre and drawn radius in CSS pixels, or `null` when it is
@@ -498,6 +530,8 @@ export function SolarSystemView({
       window.cancelAnimationFrame(state.frame);
       resizeObserver.disconnect();
       themeObserver.disconnect();
+      screenObserver.disconnect();
+      document.removeEventListener("visibilitychange", onDocumentVisibility);
       viewport.removeEventListener("pointerdown", onPointerDown);
       viewport.removeEventListener("pointerup", onPointerUp);
       controls.dispose();

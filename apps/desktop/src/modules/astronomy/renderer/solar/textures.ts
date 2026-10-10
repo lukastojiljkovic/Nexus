@@ -19,13 +19,12 @@ import type { SceneResources } from "./resources.js";
  * That is what lets the mapping — which body gets which map, how each texture is
  * configured, and that every one is on the dispose list — be tested in Node.
  *
- * **Earth's night map is not loaded, on purpose.** The pack ships it and the
- * layout above carries it, but nothing in the graph consumes it: drawing city
- * lights only on the dark side is a shader, not a material property, and a
- * `MeshStandardMaterial`'s `emissiveMap` would light them on the day side too.
- * Fetching a megabyte the view has no place for would be a decision made by
- * omission, so the field is declared and the fetch is not made; the material
- * that wants it is where this constant's successor goes.
+ * **Earth's night map is loaded now, because something draws it.** It was
+ * declared and deliberately not fetched while nothing consumed it; `night.ts`
+ * is the material that consumes it, weighting the city lights to the hemisphere
+ * facing away from the Sun, so the fetch is made here like every other map's.
+ * A pack that carries no night image is the ordinary case (`night` absent), not
+ * a special one: the slot is null and the terminator is the lighting's own.
  */
 
 export interface PlanetTextureSet {
@@ -44,13 +43,15 @@ export interface PlanetTextures {
 /** The two images a body can be drawn with, once they are textures. */
 export interface LoadedBodyTextures {
   readonly day: THREE.Texture | null;
+  /** Earth's city lights, drawn on the night side. Declared per body because the layout is. */
+  readonly night: THREE.Texture | null;
   readonly rings: THREE.Texture | null;
 }
 
 export type LoadedTextures = Readonly<Partial<Record<BodyId, LoadedBodyTextures>>>;
 
 /** Which image of a body a callback is about. */
-export type PlanetTextureSlot = "day" | "rings";
+export type PlanetTextureSlot = "day" | "night" | "rings";
 
 /**
  * How an image becomes a texture. `TextureLoader.load` answers immediately with
@@ -99,6 +100,10 @@ export function loadPlanetTextures(
     if (set === undefined) continue;
     loaded[id] = {
       day: loadOne(id, "day", set.day, port, resources, onLoaded, onFailed),
+      night:
+        set.night === undefined
+          ? null
+          : loadOne(id, "night", set.night, port, resources, onLoaded, onFailed),
       rings:
         set.rings === undefined
           ? null

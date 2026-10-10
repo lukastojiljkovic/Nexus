@@ -457,6 +457,9 @@ describe("buildSettingsIndex", () => {
       // The puzzles' one control, and the board games' one.
       "puzzles:check-while-typing",
       "boards:default-level",
+      // And the astronomy corner's, the last discovered card this build
+      // registers: the place the sky is drawn for.
+      "astronomy:place",
     ]);
   });
 

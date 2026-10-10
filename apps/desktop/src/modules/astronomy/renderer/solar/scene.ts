@@ -2,8 +2,16 @@ import type { BodyId, OrbitPath, SolarSystemSnapshot, Vector3 } from "@nexus/cor
 import * as THREE from "three";
 
 import type { SolarPalette } from "./palette.js";
+import { installEarthNight, setEarthNightTexture, setEarthNightTone } from "./night.js";
 import { SceneResources } from "./resources.js";
-import { bodyRadiusUnits, placeBodies, scenePosition, type SolarScale } from "./scale.js";
+import {
+  bodyRadiusUnits,
+  placeBodies,
+  satelliteClearanceUnits,
+  satelliteOffsetUnits,
+  scenePosition,
+  type SolarScale,
+} from "./scale.js";
 import type { LoadedTextures } from "./textures.js";
 
 /**
@@ -92,6 +100,13 @@ export interface BuiltSolarBody {
   readonly mesh: THREE.Mesh;
   readonly ring: THREE.Mesh | null;
   readonly orbit: THREE.Line | null;
+  /**
+   * The body this one's orbit line is drawn around, for a satellite, or `null`
+   * for a heliocentric path. The line's own vertices are offsets from the
+   * parent in that case, so its world position is the parent's drawn position
+   * (set by `applySnapshot`) — the same transform the dot is placed with.
+   */
+  readonly orbitParent: BodyId | null;
 }
 
 export interface BuiltSolarScene {
@@ -176,13 +191,28 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
   root.add(sunLight);
   root.add(new THREE.AmbientLight(WHITE, AMBIENT_INTENSITY));
 
+  const bodiesById = new Map(input.snapshot.bodies.map((body) => [body.id, body]));
   const orbitsByBody = new Map<BodyId, THREE.Line>();
+  const orbitParents = new Map<BodyId, BodyId>();
   for (const path of input.orbits) {
     if (path.points.length < 2) continue;
+    // A satellite's points are offsets from the body it names, and its line is
+    // drawn with the SAME transform the dot is placed with (`placeBodies`): the
+    // parent's mapped position plus the stretched offset. That is what makes
+    // the dot lie on its own orbit line instead of inside the enlarged planet
+    // it belongs to.
+    const parent = path.parent ?? null;
+    const parentBody = parent === null ? undefined : bodiesById.get(parent);
+    const satelliteBody = bodiesById.get(path.id);
+    const clearance =
+      parentBody === undefined || satelliteBody === undefined
+        ? 0
+        : satelliteClearanceUnits(parentBody, satelliteBody, input.scale);
     const geometry = resources.track(new THREE.BufferGeometry());
     const positions = new Float32Array(path.points.length * 3);
     path.points.forEach((point, index) => {
-      const mapped = scenePosition(point, input.scale);
+      const mapped =
+        parent === null ? scenePosition(point, input.scale) : satelliteOffsetUnits(point, clearance, input.scale);
       positions[index * 3] = mapped[0];
       positions[index * 3 + 1] = mapped[1];
       positions[index * 3 + 2] = mapped[2];
@@ -198,6 +228,7 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
     const line = new THREE.Line(geometry, material);
     root.add(line);
     orbitsByBody.set(path.id, line);
+    if (parent !== null) orbitParents.set(path.id, parent);
   }
 
   const bodies: BuiltSolarBody[] = [];
@@ -208,17 +239,28 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
 
     // The Sun is its own light: a lit material on it would be lit from inside
     // itself and read as a grey ball. Everything else is a lit sphere.
-    const material = isSun
-      ? resources.track(
-          new THREE.MeshBasicMaterial({ color: dayMap === null ? input.palette.sun : WHITE }),
-        )
-      : resources.track(
-          new THREE.MeshStandardMaterial({
-            color: dayMap === null ? input.palette.body : WHITE,
-            roughness: 1,
-            metalness: 0,
-          }),
-        );
+    let material: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
+    if (isSun) {
+      material = resources.track(
+        new THREE.MeshBasicMaterial({ color: dayMap === null ? input.palette.sun : WHITE }),
+      );
+    } else {
+      const lit = resources.track(
+        new THREE.MeshStandardMaterial({
+          color: dayMap === null ? input.palette.body : WHITE,
+          roughness: 1,
+          metalness: 0,
+        }),
+      );
+      // The Earth is the one body with a night side worth drawing, and it is
+      // drawn only when the pack gave it a day map: the injection samples the
+      // night map with the mesh's own UVs, and a body with no textures is the
+      // neutral tone the terminator already comes from the point light for.
+      if (body.id === "earth" && dayMap !== null) {
+        installEarthNight(lit, forBody?.night ?? null, input.palette.nightLights);
+      }
+      material = lit;
+    }
     if (dayMap !== null) material.map = dayMap;
 
     const group = new THREE.Group();
@@ -249,7 +291,15 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
     }
 
     root.add(group);
-    bodies.push({ id: body.id, group, spin, mesh, ring, orbit: orbitsByBody.get(body.id) ?? null });
+    bodies.push({
+      id: body.id,
+      group,
+      spin,
+      mesh,
+      ring,
+      orbit: orbitsByBody.get(body.id) ?? null,
+      orbitParent: orbitParents.get(body.id) ?? null,
+    });
   }
 
   const scene: BuiltSolarScene = {
@@ -283,6 +333,15 @@ export function applySnapshot(scene: BuiltSolarScene, snapshot: SolarSystemSnaps
     const radius = bodyRadiusUnits(body, scene.scale);
     handle.mesh.scale.setScalar(radius);
     handle.ring?.scale.setScalar(radius);
+  }
+  // A satellite's orbit line is drawn around its parent and travels with it:
+  // its vertices are offsets, so the parent's drawn position IS the line's
+  // transform, and one write per snapshot keeps the two in step. Done in a
+  // second pass because the parent's position has to be current first.
+  for (const handle of scene.bodies) {
+    if (handle.orbit === null || handle.orbitParent === null) continue;
+    const parent = scene.bodies.find((candidate) => candidate.id === handle.orbitParent);
+    if (parent !== undefined) handle.orbit.position.copy(parent.group.position);
   }
 }
 
@@ -318,6 +377,11 @@ export function applyPalette(scene: BuiltSolarScene, palette: SolarPalette): voi
     if (material.map === null) {
       material.color.set(handle.id === "sun" ? palette.sun : palette.body);
     }
+    // The Earth's night lights are drawn in the accent's own gold, so a theme
+    // switch reaches them like every other colour in the scene.
+    if (material instanceof THREE.MeshStandardMaterial) {
+      setEarthNightTone(material, palette.nightLights);
+    }
     if (handle.ring !== null) {
       const ringMaterial = handle.ring.material as THREE.MeshBasicMaterial;
       if (ringMaterial.map === null) ringMaterial.color.set(palette.rings);
@@ -327,7 +391,7 @@ export function applyPalette(scene: BuiltSolarScene, palette: SolarPalette): voi
 }
 
 /** Which image of a body's set a failed load is falling back from. */
-export type TextureSlot = "day" | "rings";
+export type TextureSlot = "day" | "night" | "rings";
 
 /**
  * Drops a texture that failed to load and paints the slot with its token tone.
@@ -350,6 +414,12 @@ export function dropTexture(scene: BuiltSolarScene, id: BodyId, slot: TextureSlo
     return;
   }
   const material = handle.mesh.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+  if (slot === "night") {
+    // A `value` write on a uniform, never a rebuild: the night map failing
+    // costs the city lights and leaves the terminator the lighting's own.
+    if (material instanceof THREE.MeshStandardMaterial) setEarthNightTexture(material, null);
+    return;
+  }
   material.map = null;
   material.color.set(id === "sun" ? scene.palette.sun : scene.palette.body);
   material.needsUpdate = true;
@@ -375,10 +445,14 @@ export function sceneFitRadius(scene: BuiltSolarScene): number {
   for (const handle of scene.bodies) {
     if (handle.orbit === null) continue;
     const positions = handle.orbit.geometry.getAttribute("position");
+    // A satellite's line is drawn around its parent, so its vertices are
+    // offsets from a point the fit must add back in.
+    const origin = handle.orbit.position;
+    const offset = handle.orbitParent === null ? 0 : Math.hypot(origin.x, origin.y, origin.z);
     for (let index = 0; index < positions.count; index += 1) {
       radius = Math.max(
         radius,
-        Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+        offset + Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
       );
     }
   }
