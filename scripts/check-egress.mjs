@@ -128,6 +128,24 @@ export const EGRESS_RULES = [
   { id: "css-remote", pattern: /(url\s*\(|@import\s+)["']?\s*(https?):\/\/(?!localhost|127\.0\.0\.1)/, what: "a remote CSS url() or @import" },
   { id: "src-assign", pattern: /\.\s*(src|href)\s*=\s*["'`](https?|wss?):\/\/(?!localhost|127\.0\.0\.1)/, what: "an assignment of a remote URL to .src/.href" },
   { id: "load-remote", pattern: /\b(loadURL|openExternal|open)\s*\(\s*["'`](https?|wss?):\/\/(?!localhost|127\.0\.0\.1)/, what: "a remote URL handed to a loader" },
+  /**
+   * A NODE DNS MODULE, which is egress with no request in sight.
+   *
+   * This rule arrived with the assistant's web service (ADR-097), and it closed
+   * a hole that had been open the whole time: every other rule in this list
+   * looks for a REQUEST, and `dns.lookup` makes one - a UDP or TCP query to
+   * whatever resolver the machine is configured with - while containing none of
+   * the words the other rules match. That the switch is off by default does not
+   * make a lookup free: the question „which name did this process ask about" is
+   * exactly the metadata an offline-first app promises not to leak.
+   *
+   * It is a rule and not a note in `check:egress`'s header because there is no
+   * way for a reader to see a lookup in a review: `dnsLookup(hostname)` is a
+   * function call with a variable in it, and the URL rules would sail past a
+   * module that resolved names it never fetched. The ONE legitimate caller is
+   * named in `ALLOWLIST` below.
+   */
+  { id: "node-dns", pattern: /from\s+["']node:dns(\/promises)?["']|require\s*\(\s*["']node:dns(\/promises)?["']\s*\)/, what: "a Node DNS module (a lookup is egress)" },
 ];
 
 /**
@@ -202,6 +220,36 @@ export const ALLOWLIST = new Map([
     // why this entry may not grow a second one.
     "apps/desktop/src/main/download/service.test.ts",
     ["node-http"],
+  ],
+  [
+    // THE SECOND SANCTIONED EGRESS PATH (ADR-097), and the only place in the
+    // assistant's web service that has a socket or a resolver. Both rule ids are
+    // the SAME decision seen twice: this feature asks for a page on the open web
+    // (`node:https`) and has to resolve the name before it may, because the
+    // address is what tells a public host from `169.254.169.254` (`node:dns`).
+    //
+    // WHY AN EXEMPTION AT ALL, RATHER THAN THE DEDICATED SESSION. ADR-089/092's
+    // single non-renderer session allows https to a COMPILED-IN list of hosts,
+    // and that is the whole of its value. A search result's host is not a fact
+    // about the binary: it is a fact about the internet, and the user typed the
+    // question. The alternatives were to lift `host-resolver-rules` for any
+    // launch with the switch on (which would weaken the two features that do
+    // depend on that layer, an update check and a content download, in the
+    // session they share) or to give this feature its own socket. ADR-097 takes
+    // the second, and states the consequence instead of hiding it: what protects
+    // this path is `web/gate.ts` (the switch, off by default, AND a network mode
+    // that allows a connection), `web/target.ts` (https only, and every resolved
+    // address public, re-checked on every redirect hop) and `web/limits.ts`
+    // (bytes and time), not Chromium's proxy, resolver or session rules.
+    //
+    // WHY IT IS ONE FILE AND NOT A DIRECTORY. This entry names
+    // `web/transport.ts` and nothing beside it, so the six files that DECIDE
+    // what may be requested - `index.ts`, `gate.ts`, `target.ts`, `fetch.ts`,
+    // `providers.ts`, `secrets.ts` - still fail this gate if one of them ever
+    // reaches for a socket, which is the mistake that would make the gate
+    // irrelevant. `check-egress.test.mjs` asserts exactly that.
+    "apps/desktop/src/main/assistant/web/transport.ts",
+    ["node-http", "node-dns"],
   ],
 ]);
 

@@ -23,6 +23,7 @@ describe("the rules catch what they are for", () => {
     ["preconnect", '<link rel="preconnect" href={h} />'],
     ["node-http", 'import { request } from "node:https";'],
     ["node-require", 'const dgram = require("node:dgram");'],
+    ["node-dns", 'import { lookup } from "node:dns/promises";'],
     ["electron-net", 'net.request({ url })'],
     ["remote-import", 'const m = await import("https://esm.sh/x")'],
     ["css-remote", '@import url("https://fonts.example/x.css");'],
@@ -135,5 +136,36 @@ describe("the repository itself", () => {
     // The assertion the CLI makes, run here so a red gate is a red TEST — the
     // form people actually notice — and not only a red pipeline step.
     expect(scanRepo()).toEqual([]);
+  });
+});
+
+// ADR-097: the assistant's web service is the second egress path, and its
+// exemption has to stay exactly one file wide. These assertions exist because
+// the interesting failure is not "somebody added a socket" - that is what the
+// other rules catch - but "somebody added a socket to a file NEXT TO the one
+// that is allowed to have one", which would leave the module looking unchanged
+// while the boundary moved from "one socket behind a gate" to "a socket wherever
+// it is convenient".
+describe("the assistant's web service (ADR-097)", () => {
+  const WEB_DIR = "apps/desktop/src/main/assistant/web/";
+
+  it("exempts its one socket file, for both of the rule ids that file earns", () => {
+    expect(ALLOWLIST.get(`${WEB_DIR}transport.ts`)).toEqual(["node-http", "node-dns"]);
+    // And the new DNS rule really is what catches a lookup, which is the half of
+    // that exemption a reader cannot see from the entry alone.
+    expect(ids(scanSource("some/file.ts", 'import { lookup } from "node:dns/promises";'))).toContain("node-dns");
+    expect(ids(scanSource("some/file.ts", 'import { lookup } from "node:dns";'))).toContain("node-dns");
+  });
+
+  it("does not extend to the files that decide what may be requested", () => {
+    for (const file of ["index.ts", "fetch.ts", "gate.ts", "target.ts", "providers.ts", "secrets.ts", "electron.ts"]) {
+      const path = `${WEB_DIR}${file}`;
+      expect(ALLOWLIST.has(path), path).toBe(false);
+      expect(ids(scanSource(path, 'import { request } from "node:https";')), path).toContain("node-http");
+      expect(ids(scanSource(path, 'import { lookup } from "node:dns/promises";')), path).toContain("node-dns");
+      // Including the global, which is the substitution that would bypass this
+      // gate's own record of where the socket is.
+      expect(ids(scanSource(path, 'await fetch("https://example.org/")')), path).toContain("fetch");
+    }
   });
 });
