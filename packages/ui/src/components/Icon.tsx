@@ -109,6 +109,7 @@ export type IconName =
   | "chart"
   | "wallet"
   | "book"
+  | "cookbook"
   | "lock"
   | "unlock"
   | "eye"
@@ -684,6 +685,17 @@ const SHAPES: Record<IconName, ReactNode> = {
     <>
       <path d="M5.6 4.6h11.8a2 2 0 0 1 2 2v12.8H7.6a2 2 0 0 1-2-2z" />
       <path d="M5.6 17.4a2 2 0 0 1 2-2h11.8" />
+    </>
+  ),
+  // A pot with its lid. The COOKBOOK module's mark, and the reason it is not a
+  // book: a library owns that glyph, and two modules in one rail wearing one
+  // mark breaks the only thing a mark is for — recognising which module you are
+  // looking at. A pot is what a cookbook is FOR.
+  cookbook: (
+    <>
+      <path d="M5.6 10.8h12.8v5.4a3.2 3.2 0 0 1-3.2 3.2H8.8a3.2 3.2 0 0 1-3.2-3.2z" />
+      <path d="M3.8 10.8h16.4" />
+      <circle cx="12" cy="7.4" r="1.8" />
     </>
   ),
   lock: (

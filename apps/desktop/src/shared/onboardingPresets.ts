@@ -46,6 +46,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // And the second (ADR-090): a cookbook writes nothing until somebody saves a
+  // recipe, so there is nothing to opt into either.
+  cookbook: true,
   pro: false,
 };
 

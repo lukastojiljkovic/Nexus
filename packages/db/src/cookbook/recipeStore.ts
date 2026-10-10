@@ -3,6 +3,7 @@ import {
   COOKBOOK_COURSES,
   INGREDIENT_UNITS,
   RECIPE_SOURCES,
+  foldSearchText,
   foodRefText,
   isRecipeLicenceId,
   parseFoodRef,
@@ -46,6 +47,8 @@ export const MAX_RECIPE_STEP_TIMER_MINUTES = 1_440;
 export const MAX_INGREDIENT_NAME_LENGTH = 120;
 export const MAX_INGREDIENT_PREPARATION_LENGTH = 120;
 export const MAX_INGREDIENT_GROUP_LENGTH = 60;
+/** The line AS WRITTEN. Bounded like the name it parses into, with room for the amount, the unit and a note. */
+export const MAX_INGREDIENT_RAW_LENGTH = 500;
 /** The ceiling on an amount: „100 000 g" is a hundred kilograms and holds every batch this app will see. */
 export const MAX_INGREDIENT_QUANTITY = 100_000;
 /** A unit that weighs more than this is a sack of it, not a portion — `MAX_FIT_SERVING_GRAMS`' rule one module over. */
@@ -59,6 +62,31 @@ export const MAX_LICENCE_ATTRIBUTION_LENGTH = 500;
  * neither module imports the other's number.
  */
 export const MAX_RECIPE_PHOTO_BYTES = 52_428_800; // 50 MB
+
+/** How many remembered ingredient-name → food links one profile may hold — a bound on untrusted input, not a number anybody meets. */
+export const MAX_FOOD_MATCHES = 500;
+
+/**
+ * The two units a scaled quantity is written in — the module's own vocabulary,
+ * closed for `COOKBOOK_COURSES`' reason: a third answer would need a third
+ * rounding rule, and a rounding rule outside this list is a quantity the kitchen
+ * cannot act on.
+ */
+export const RECIPE_UNIT_SYSTEMS = ["metric", "kitchen"] as const;
+
+export type RecipeUnitSystem = (typeof RECIPE_UNIT_SYSTEMS)[number];
+
+/** The module's one preference, resolved: what a profile with no stored row reads. */
+export interface CookbookSettings {
+  readonly unitSystem: RecipeUnitSystem;
+  /**
+   * When the stored row was last written, or null when there is no row and the
+   * value above is the shipped default. It travels in the archive so a restore
+   * reproduces the row verbatim rather than stamping it with the restoring
+   * machine's clock — `exportData`'s own rule for every other timestamp.
+   */
+  readonly updatedAt: string | null;
+}
 
 /**
  * Serbian Latin ordering for the recipe list, the app's one collator spelling:
@@ -87,6 +115,8 @@ export interface RecipeIngredient extends IngredientLine {
   id: string;
   recipeId: string;
   position: number;
+  /** The line as the author wrote it, or "" for a row that arrived structured. */
+  rawText: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +172,8 @@ export interface Recipe {
 /** A line as a caller supplies it — no id, no position, all of it validated here. */
 export interface RecipeIngredientInput {
   name: string;
+  /** The line as the user typed it — the same name the wire and the archive use. Omitted or empty for a caller that holds only the structured fields. */
+  rawText?: string | null;
   quantity?: number | null;
   quantityMax?: number | null;
   unit?: IngredientUnit | null;
@@ -178,6 +210,35 @@ export interface CreateRecipeInput {
 }
 
 /**
+ * One remembered link from an ingredient NAME to a food, as the store holds it.
+ *
+ * `nameKey` is the folded name and is the key; `name` is the spelling the user
+ * first used, kept so the page can show the name they recognise. `foodRef` is a
+ * reference in `@nexus/core`'s own grammar (`catalogue:<id>` for a food in a
+ * dataset pack) rather than a foreign key: the food lives in a signed content
+ * pack outside this database (ADR-091), and a match whose pack has been
+ * uninstalled must survive as „unknown food" rather than be deleted.
+ */
+export interface FoodMatch {
+  name: string;
+  nameKey: string;
+  foodRef: FoodRef;
+  foodName: string;
+  /** What ONE unit of this ingredient weighs, when the user stated it — the author's own density, `ingredients.grams_per_unit`'s rule one table over. */
+  gramsPerUnit: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A link as a caller supplies it. `foodName` is the name shown beside the match, snapshotted at the moment it was made. */
+export interface FoodMatchInput {
+  name: string;
+  foodRef: FoodRef;
+  foodName: string;
+  gramsPerUnit?: number | null;
+}
+
+/**
  * A partial patch. An omitted key is left untouched; an explicit `null` clears a
  * nullable field. `ingredients` and `steps` are replaced WHOLESALE when given,
  * for `FitRoutineStore`'s reason: a per-line patch would need a third value
@@ -206,6 +267,8 @@ export interface UpdateRecipeFields {
 /** One exported ingredient: the model, its id, and nothing else — the array's order IS the order. */
 export interface ExportedIngredient extends IngredientLine {
   id: string;
+  /** The line as the author wrote it — see `RecipeIngredient.rawText`. */
+  rawText: string;
 }
 
 /** One exported step, same arrangement. */
@@ -244,10 +307,19 @@ export interface ExportedRecipe {
  */
 export const COOKBOOK_EXPORT_VERSION = 1;
 
-/** What one profile's cookbook exports: a version, and every live recipe with its children. */
+/**
+ * What one profile's cookbook exports: a version, every live recipe with its
+ * children, the module's one preference and every remembered ingredient link.
+ *
+ * The odds and ends travel with the recipes because they are the profile's own
+ * answer about them: an archive that carried a recipe and forgot which food its
+ * „mleveno meso" was would restore a cookbook whose nutrition silently changed.
+ */
 export interface CookbookExport {
   version: typeof COOKBOOK_EXPORT_VERSION;
   recipes: ExportedRecipe[];
+  settings: CookbookSettings;
+  foodMatches: FoodMatch[];
 }
 
 interface RecipeRow {
@@ -283,6 +355,7 @@ interface IngredientRow {
   recipe_id: string;
   position: number;
   group_heading: string | null;
+  raw_text: string;
   quantity: number | null;
   quantity_max: number | null;
   unit: string | null;
@@ -304,6 +377,16 @@ interface StepRow {
   updated_at: string;
 }
 
+interface FoodMatchRow {
+  name: string;
+  name_key: string;
+  food_ref: string;
+  food_name: string;
+  grams_per_unit: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const RECIPE_COLUMNS =
   "id, profile_id, title, description, cuisine, course, servings, prep_minutes, cook_minutes, " +
   "tags_json, rating, notes, favourite, source, licence_title, licence_author, licence_url, " +
@@ -311,8 +394,8 @@ const RECIPE_COLUMNS =
   "created_at, updated_at";
 
 const INGREDIENT_COLUMNS =
-  "id, recipe_id, position, group_heading, quantity, quantity_max, unit, name, preparation, " +
-  "food_ref, grams_per_unit, created_at, updated_at";
+  "id, recipe_id, position, group_heading, raw_text, quantity, quantity_max, unit, name, " +
+  "preparation, food_ref, grams_per_unit, created_at, updated_at";
 
 const STEP_COLUMNS = "id, recipe_id, position, text, timer_minutes, created_at, updated_at";
 
@@ -334,6 +417,8 @@ interface ResolvedRecipe {
 
 /** One validated child row, before the store mints it an id and a position. */
 interface ResolvedIngredient extends IngredientLine {
+  /** The line as the author wrote it, trimmed, or "" — never null: the column is NOT NULL (migration 076). */
+  rawText: string;
   /** The wire text the column holds, or null — validated through `parseFoodRef`. */
   foodRefText: string | null;
 }
@@ -384,6 +469,18 @@ export class RecipeStore {
   private readonly selectStepsForProfile: Database.Statement;
   private readonly deleteStepsByRecipe: Database.Statement;
   private readonly deleteRecipesByProfile: Database.Statement;
+  private readonly selectSettings: Database.Statement;
+  private readonly upsertSettings: Database.Statement;
+  private readonly deleteSettings: Database.Statement;
+  private readonly selectFoodMatches: Database.Statement;
+  private readonly upsertFoodMatch: Database.Statement;
+  private readonly deleteFoodMatch: Database.Statement;
+  private readonly deleteFoodMatchesByProfile: Database.Statement;
+  private readonly countPhotoHash: Database.Statement;
+  private readonly selectPhotoMime: Database.Statement;
+  private readonly findRecipeIdOwner: Database.Statement;
+  private readonly findIngredientId: Database.Statement;
+  private readonly findStepId: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -432,9 +529,9 @@ export class RecipeStore {
     );
     this.insertIngredient = db.prepare(
       `INSERT INTO cookbook_ingredients
-         (id, recipe_id, position, group_heading, quantity, quantity_max, unit, name,
-          preparation, food_ref, grams_per_unit, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, recipe_id, position, group_heading, raw_text, quantity, quantity_max, unit,
+          name, preparation, food_ref, grams_per_unit, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.selectIngredientsByRecipe = db.prepare(
       `SELECT ${INGREDIENT_COLUMNS} FROM cookbook_ingredients
@@ -445,9 +542,9 @@ export class RecipeStore {
     // wrong shape for a list page.
     this.selectIngredientsForProfile = db.prepare(
       `SELECT i.id AS id, i.recipe_id AS recipe_id, i.position AS position,
-              i.group_heading AS group_heading, i.quantity AS quantity,
-              i.quantity_max AS quantity_max, i.unit AS unit, i.name AS name,
-              i.preparation AS preparation, i.food_ref AS food_ref,
+              i.group_heading AS group_heading, i.raw_text AS raw_text,
+              i.quantity AS quantity, i.quantity_max AS quantity_max, i.unit AS unit,
+              i.name AS name, i.preparation AS preparation, i.food_ref AS food_ref,
               i.grams_per_unit AS grams_per_unit, i.created_at AS created_at,
               i.updated_at AS updated_at
          FROM cookbook_ingredients i
@@ -482,6 +579,66 @@ export class RecipeStore {
     // the cascade takes the two child tables with it, and no other profile's
     // cookbook is touched.
     this.deleteRecipesByProfile = db.prepare(`DELETE FROM cookbook_recipes WHERE profile_id = ?`);
+
+    // The module's one preference. No row is the DEFAULT rather than an error
+    // (`dashboard_settings`' arrangement), so `settings()` answers the shipped
+    // value for a profile that never opened the card.
+    this.selectSettings = db.prepare(
+      `SELECT unit_system, updated_at FROM cookbook_settings WHERE profile_id = ?`,
+    );
+    this.upsertSettings = db.prepare(
+      `INSERT INTO cookbook_settings (profile_id, unit_system, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(profile_id) DO UPDATE SET unit_system = excluded.unit_system,
+                                             updated_at = excluded.updated_at`,
+    );
+    // What an archive that carries NO stored preference restores to: the row is
+    // removed rather than rewritten with the default, so a profile reads exactly
+    // what a profile that never opened the card reads.
+    this.deleteSettings = db.prepare(`DELETE FROM cookbook_settings WHERE profile_id = ?`);
+    this.selectFoodMatches = db.prepare(
+      `SELECT name, name_key, food_ref, food_name, grams_per_unit, created_at, updated_at
+         FROM cookbook_food_matches WHERE profile_id = ? ORDER BY name_key`,
+    );
+    this.upsertFoodMatch = db.prepare(
+      `INSERT INTO cookbook_food_matches
+         (profile_id, name_key, name, food_ref, food_name, grams_per_unit, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(profile_id, name_key) DO UPDATE SET
+         name = excluded.name,
+         food_ref = excluded.food_ref,
+         food_name = excluded.food_name,
+         grams_per_unit = excluded.grams_per_unit,
+         updated_at = excluded.updated_at`,
+    );
+    this.deleteFoodMatch = db.prepare(
+      `DELETE FROM cookbook_food_matches WHERE profile_id = ? AND name_key = ?`,
+    );
+    this.deleteFoodMatchesByProfile = db.prepare(
+      `DELETE FROM cookbook_food_matches WHERE profile_id = ?`,
+    );
+    // The blob store's two questions, and both are deliberately
+    // PROFILE-AGNOSTIC — the store is content-addressed across the whole
+    // database, so a count that saw one profile's rows would be the same bug one
+    // profile smaller (`note_attachments`' own reading of the same problem).
+    // Neither is partial on `deleted_at`: a soft-deleted recipe still references
+    // its photo's bytes.
+    this.countPhotoHash = db.prepare(
+      `SELECT count(*) AS n FROM cookbook_recipes WHERE photo_sha256 = ?`,
+    );
+    this.selectPhotoMime = db.prepare(
+      `SELECT photo_mime AS mime FROM cookbook_recipes
+        WHERE photo_sha256 = ? AND photo_mime IS NOT NULL LIMIT 1`,
+    );
+    // The import's three identity questions (see `importData`): every id in this
+    // module is a GLOBAL primary key, while a cookbook is a profile's, so an
+    // archive restored into a second profile of the same device can carry ids
+    // that profile one already holds.
+    this.findRecipeIdOwner = db.prepare(
+      `SELECT profile_id FROM cookbook_recipes WHERE id = ?`,
+    );
+    this.findIngredientId = db.prepare(`SELECT 1 AS present FROM cookbook_ingredients WHERE id = ?`);
+    this.findStepId = db.prepare(`SELECT 1 AS present FROM cookbook_steps WHERE id = ?`);
   }
 
   /** This profile's live recipes, sr-Latn alphabetical by title, each with its ingredients and steps in order. */
@@ -644,6 +801,83 @@ export class RecipeStore {
   }
 
   /**
+   * The module's one preference, resolved: the stored row, or the shipped
+   * default with `updatedAt: null` for a profile that never opened the card.
+   */
+  settings(): CookbookSettings {
+    const row = this.selectSettings.get(this.profileId) as
+      | { unit_system: string; updated_at: string }
+      | undefined;
+    if (row === undefined) return { unitSystem: DEFAULT_UNIT_SYSTEM, updatedAt: null };
+    return {
+      // The column is CHECKed against the same two values, so anything else here
+      // is corruption rather than input to interpret — `parseStoredTags`'
+      // posture: a value nobody could have written is not quietly coerced.
+      unitSystem: validateUnitSystem(row.unit_system),
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /** Writes the module's one preference. Whole-value, like every other write here: a row, not a patch. */
+  setUnitSystem(value: RecipeUnitSystem, now: string): CookbookSettings {
+    const validNow = validateNow(now);
+    this.upsertSettings.run(this.profileId, validateUnitSystem(value), validNow);
+    return this.settings();
+  }
+
+  /** Every remembered ingredient link, keyed by folded name. The page lists each beside the ingredient it belongs to. */
+  listFoodMatches(): FoodMatch[] {
+    return (this.selectFoodMatches.all(this.profileId) as FoodMatchRow[]).map(toFoodMatch);
+  }
+
+  /**
+   * Remembers „this ingredient name is that food", replacing whatever the name
+   * pointed at before.
+   *
+   * The name is folded into the key and the user's own spelling is kept as the
+   * display value, which is what makes „Mleveno meso" and „mleveno meso" one
+   * answer rather than two rows that disagree about a quantity.
+   */
+  setFoodMatch(input: FoodMatchInput, now: string): FoodMatch {
+    const validNow = validateNow(now);
+    const resolved = resolveFoodMatch(input);
+    const existing = this.listFoodMatches();
+    if (
+      existing.length >= MAX_FOOD_MATCHES &&
+      !existing.some((match) => match.nameKey === resolved.nameKey)
+    ) {
+      throw new RecipeValidationError(
+        `A profile may remember at most ${MAX_FOOD_MATCHES} ingredient links.`,
+      );
+    }
+    this.writeFoodMatch(resolved, validNow, validNow);
+    return { ...resolved, createdAt: validNow, updatedAt: validNow };
+  }
+
+  /** Forgets the link for one name. Answers whether there was one, so the page can say so rather than pretend. */
+  clearFoodMatch(name: string): boolean {
+    const { changes } = this.deleteFoodMatch.run(this.profileId, foldIngredientName(name));
+    return changes > 0;
+  }
+
+  /**
+   * How many rows — in ANY profile — name this blob hash (ADR-019 / ADR-014).
+   * Main sums every blob-naming table before it deletes a file, so this is the
+   * cookbook's contribution to that union, and nothing here may filter by
+   * profile: the store is content-addressed across the whole database.
+   */
+  refCount(sha256: string): number {
+    const row = this.countPhotoHash.get(sha256) as { n: number };
+    return row.n;
+  }
+
+  /** The main-sniffed mime registered for this hash by whichever recipe holds it, or null when no row does. */
+  mimeForHash(sha256: string): string | null {
+    const row = this.selectPhotoMime.get(sha256) as { mime: string } | undefined;
+    return row?.mime ?? null;
+  }
+
+  /**
    * Every live recipe with its children, as a versioned plain JSON value — what
    * stage 2 hands to the profile archive.
    *
@@ -657,6 +891,8 @@ export class RecipeStore {
   exportData(): CookbookExport {
     return {
       version: COOKBOOK_EXPORT_VERSION,
+      settings: this.settings(),
+      foodMatches: this.listFoodMatches(),
       recipes: this.list().map((entry) => ({
         id: entry.id,
         title: entry.title,
@@ -668,6 +904,7 @@ export class RecipeStore {
         cookMinutes: entry.cookMinutes,
         ingredients: entry.ingredients.map((line) => ({
           id: line.id,
+          rawText: line.rawText,
           quantity: line.quantity,
           quantityMax: line.quantityMax,
           unit: line.unit,
@@ -712,8 +949,16 @@ export class RecipeStore {
     this.db.transaction((): void => {
       this.deleteRecipesByProfile.run(this.profileId);
       for (const recipe of archive.recipes) {
+        // An id this OTHER profile already holds is re-minted for this one.
+        //
+        // Every id here is a global primary key and a cookbook is one profile's
+        // (`note_attachments`' arrangement), so restoring A's archive into B on
+        // the same device would otherwise fail the primary key on the first row
+        // — and the ids that DO travel (the same-profile restore, whose rows were
+        // just deleted) keep travelling, which is what `exportData` promises.
+        const recipeId = this.importRecipeId(recipe.id);
         this.insertRecipe.run(
-          recipe.id, this.profileId, recipe.title, recipe.description, recipe.cuisine,
+          recipeId, this.profileId, recipe.title, recipe.description, recipe.cuisine,
           recipe.course, recipe.servings, recipe.prepMinutes, recipe.cookMinutes,
           JSON.stringify(recipe.tags), recipe.rating, recipe.notes,
           recipe.favourite ? 1 : 0, recipe.source, recipe.licence?.title ?? null,
@@ -725,17 +970,37 @@ export class RecipeStore {
         );
         recipe.ingredients.forEach((line, index) => {
           this.insertIngredient.run(
-            line.id, recipe.id, index, line.group, line.quantity, line.quantityMax,
-            line.unit, line.name, line.preparation, line.foodRefText,
+            this.freeChildId(line.id, this.findIngredientId), recipeId, index, line.group,
+            line.rawText, line.quantity,
+            line.quantityMax, line.unit, line.name, line.preparation,
+            line.foodRef === null ? null : foodRefText(line.foodRef),
             line.gramsPerUnit, recipe.createdAt, recipe.updatedAt,
           );
         });
         recipe.steps.forEach((step, index) => {
           this.insertStep.run(
-            step.id, recipe.id, index, step.text, step.timerMinutes,
+            this.freeChildId(step.id, this.findStepId), recipeId, index, step.text,
+            step.timerMinutes,
             recipe.createdAt, recipe.updatedAt,
           );
         });
+      }
+      // The preference and the matches are this profile's own rows too, so the
+      // replace is whole: what the archive carries is written, and an archive
+      // that carries none of them (a pre-cookbook one, or a kit section that
+      // names no cookbook) leaves the shipped default and no matches.
+      this.deleteFoodMatchesByProfile.run(this.profileId);
+      for (const match of archive.foodMatches) {
+        this.writeFoodMatch(match, match.createdAt, match.updatedAt);
+      }
+      if (archive.settings.updatedAt === null) {
+        this.deleteSettings.run(this.profileId);
+      } else {
+        this.upsertSettings.run(
+          this.profileId,
+          archive.settings.unitSystem,
+          archive.settings.updatedAt,
+        );
       }
     })();
   }
@@ -756,8 +1021,8 @@ export class RecipeStore {
   ): void {
     lines.forEach((line, index) => {
       this.insertIngredient.run(
-        uuidv7(), recipeId, index, line.group, line.quantity, line.quantityMax, line.unit,
-        line.name, line.preparation, line.foodRefText, line.gramsPerUnit, now, now,
+        uuidv7(), recipeId, index, line.group, line.rawText, line.quantity, line.quantityMax,
+        line.unit, line.name, line.preparation, line.foodRefText, line.gramsPerUnit, now, now,
       );
     });
   }
@@ -776,6 +1041,40 @@ export class RecipeStore {
   private readSteps(recipeId: string): RecipeStepRow[] {
     const rows = this.selectStepsByRecipe.all(recipeId) as StepRow[];
     return rows.map(toStep);
+  }
+
+  /** One match row, written whole. The timestamps are parameters because an archive reproduces them verbatim. */
+  private writeFoodMatch(
+    match: Pick<FoodMatch, "name" | "nameKey" | "foodRef" | "foodName" | "gramsPerUnit">,
+    createdAt: string,
+    updatedAt: string,
+  ): void {
+    this.upsertFoodMatch.run(
+      this.profileId,
+      match.nameKey,
+      match.name,
+      foodRefText(match.foodRef),
+      match.foodName,
+      match.gramsPerUnit,
+      createdAt,
+      updatedAt,
+    );
+  }
+
+  /** The id a recipe from an archive is written under: its own, unless another profile already holds it. */
+  private importRecipeId(archived: string): string {
+    const owner = this.findRecipeIdOwner.get(archived) as { profile_id: string } | undefined;
+    return owner === undefined ? archived : uuidv7();
+  }
+
+  /**
+   * The id a child row from an archive is written under. Any row this profile
+   * had was just deleted — the recipe it belonged to went first, and the cascade
+   * took its ingredients and steps with it — so an id that is still present here
+   * belongs to another profile and is re-minted.
+   */
+  private freeChildId(archived: string, find: Database.Statement): string {
+    return find.get(archived) === undefined ? archived : uuidv7();
   }
 }
 
@@ -846,6 +1145,7 @@ function toIngredient(row: IngredientRow): RecipeIngredient {
     id: row.id,
     recipeId: row.recipe_id,
     position: row.position,
+    rawText: row.raw_text,
     quantity: row.quantity,
     quantityMax: row.quantity_max,
     unit: row.unit as IngredientUnit | null,
@@ -857,6 +1157,34 @@ function toIngredient(row: IngredientRow): RecipeIngredient {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function toFoodMatch(row: FoodMatchRow): FoodMatch {
+  return {
+    name: row.name,
+    nameKey: row.name_key,
+    foodRef: storedMatchRef(row.food_ref, row.name_key),
+    foodName: row.food_name,
+    gramsPerUnit: row.grams_per_unit,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Reads a stored match's `food_ref` back, through the same grammar it was
+ * written with. `storedFoodRef`'s posture: a value that fails to parse is
+ * corruption rather than input to coerce, and dropping the link silently would
+ * change a recipe's nutrition without saying so.
+ */
+function storedMatchRef(text: string, nameKey: string): FoodRef {
+  const ref = parseFoodRef(text);
+  if (ref === null) {
+    throw new RecipeValidationError(
+      `The ingredient link for "${nameKey}" carries a food reference that is not one.`,
+    );
+  }
+  return ref;
 }
 
 function toStep(row: StepRow): RecipeStepRow {
@@ -1047,6 +1375,14 @@ function validateIngredients(lines: readonly RecipeIngredientInput[]): ResolvedI
   return lines.map((line, index) => {
     const path = `ingredients[${index}]`;
     const name = validateText(line?.name, `${path}.name`, MAX_INGREDIENT_NAME_LENGTH);
+    // The raw line is optional — a pack or an archive may carry only the
+    // structured fields — but a line that HAS one keeps it whole, trimmed.
+    const raw = typeof line?.rawText === "string" ? line.rawText.trim() : "";
+    if (raw.length > MAX_INGREDIENT_RAW_LENGTH) {
+      throw new RecipeValidationError(
+        `"${path}.rawText" must be at most ${MAX_INGREDIENT_RAW_LENGTH} characters after trimming.`,
+      );
+    }
     const quantity = validateOptionalQuantity(line?.quantity ?? null, `${path}.quantity`);
     const quantityMax = validateOptionalQuantity(line?.quantityMax ?? null, `${path}.quantityMax`);
     // Migration 076's pair CHECKs, refused here so that a malformed line is a
@@ -1068,6 +1404,7 @@ function validateIngredients(lines: readonly RecipeIngredientInput[]): ResolvedI
       );
     }
     return {
+      rawText: raw,
       quantity,
       quantityMax,
       unit: validateUnit(line?.unit ?? null, `${path}.unit`),
@@ -1177,6 +1514,58 @@ function validateFavourite(value: boolean): boolean {
   return value;
 }
 
+/**
+ * The key an ingredient name is remembered under: trimmed, and folded through
+ * the app's ONE folding table (`foldSearchText`, shared with the search index
+ * and `nx_fold` in SQL) rather than a private copy of it.
+ *
+ * Folding is what makes the memory work for the way people write: „Mleveno
+ * meso" and „mleveno meso" are one ingredient, and so are „đuveč" and the
+ * „djuvec" somebody types without the stroke — a private table here would be a
+ * second answer to „are these the same word", and the day the two disagreed a
+ * user's own link would stop applying to their own recipe.
+ */
+export function foldIngredientName(name: string): string {
+  return foldSearchText(name.trim());
+}
+
+/** The shipped preference: metric, because a Serbian kitchen weighs in grams and the store's own quantites are grams. */
+export const DEFAULT_UNIT_SYSTEM: RecipeUnitSystem = "metric";
+
+/** The closed vocabulary, checked against `RECIPE_UNIT_SYSTEMS` rather than respelled — one list, one source. */
+function validateUnitSystem(value: string): RecipeUnitSystem {
+  if (!(RECIPE_UNIT_SYSTEMS as readonly string[]).includes(value)) {
+    throw new RecipeValidationError(`"unitSystem" must be one of ${RECIPE_UNIT_SYSTEMS.join(", ")}.`);
+  }
+  return value as RecipeUnitSystem;
+}
+
+/** One match, resolved and validated — the ONE place those refusals live, so a live write and an import cannot drift. */
+function resolveFoodMatch(input: FoodMatchInput): Pick<
+  FoodMatch,
+  "name" | "nameKey" | "foodRef" | "foodName" | "gramsPerUnit"
+> {
+  const name = validateText(input.name, "name", MAX_INGREDIENT_NAME_LENGTH);
+  const nameKey = foldIngredientName(name);
+  if (nameKey.length === 0 || nameKey.length > MAX_INGREDIENT_NAME_LENGTH) {
+    throw new RecipeValidationError('"name" must be a name this module can key on.');
+  }
+  // A match with no food is not a match: `validateFoodRef` answer `null` for
+  // „nothing to point at", and this is the one caller for which that is a
+  // refusal rather than an empty field.
+  const foodRef = validateFoodRef(input.foodRef, "foodRef");
+  if (foodRef === null) {
+    throw new RecipeValidationError('"foodRef" must name a food.');
+  }
+  return {
+    name,
+    nameKey,
+    foodRef,
+    foodName: validateText(input.foodName, "foodName", MAX_INGREDIENT_NAME_LENGTH),
+    gramsPerUnit: validateGramsPerUnit(input.gramsPerUnit ?? null, "gramsPerUnit"),
+  };
+}
+
 /** Trimmed, 1..`max` — a field that must say something. */
 function validateText(value: string, field: string, max: number): string {
   const trimmed = typeof value === "string" ? value.trim() : "";
@@ -1282,17 +1671,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** One exported ingredient once it has passed: the model, its id, and the wire text its column holds. */
-interface ParsedIngredient extends IngredientLine {
-  id: string;
-  foodRefText: string | null;
-}
-
-/** One exported recipe once it has passed — what the writer can insert without deciding anything. */
-interface ParsedRecipe extends Omit<ExportedRecipe, "ingredients" | "steps"> {
-  ingredients: ParsedIngredient[];
-  steps: (RecipeStep & { id: string })[];
-}
-
+ 
 /**
  * Validates an export value WHOLE, and hands back the resolved rows a writer can
  * insert. Nothing here writes, and nothing here is tolerant: a version this build
@@ -1303,7 +1682,7 @@ interface ParsedRecipe extends Omit<ExportedRecipe, "ingredients" | "steps"> {
  * The `unknown` parameter is the point: this is the archive boundary, where a
  * value comes from a file somebody could have edited.
  */
-function parseCookbookExport(value: unknown): { recipes: ParsedRecipe[] } {
+export function parseCookbookExport(value: unknown): CookbookExport {
   if (!isRecord(value)) {
     throw new RecipeValidationError("The cookbook export must be an object.");
   }
@@ -1323,7 +1702,7 @@ function parseCookbookExport(value: unknown): { recipes: ParsedRecipe[] } {
   const recipeIds = new Set<string>();
   const ingredientIds = new Set<string>();
   const stepIds = new Set<string>();
-  const recipes: ParsedRecipe[] = [];
+  const recipes: ExportedRecipe[] = [];
 
   rawRecipes.forEach((raw, index) => {
     const path = `recipes[${index}]`;
@@ -1371,7 +1750,18 @@ function parseCookbookExport(value: unknown): { recipes: ParsedRecipe[] } {
           );
         }
         ingredientIds.add(lineId);
-        return { ...line, id: lineId };
+        return {
+          id: lineId,
+          rawText: line.rawText,
+          quantity: line.quantity,
+          quantityMax: line.quantityMax,
+          unit: line.unit,
+          name: line.name,
+          preparation: line.preparation,
+          group: line.group,
+          foodRef: line.foodRef,
+          gramsPerUnit: line.gramsPerUnit,
+        };
       }),
       steps: steps.map((step, stepIndex) => {
         const stepId = validateId(
@@ -1384,7 +1774,7 @@ function parseCookbookExport(value: unknown): { recipes: ParsedRecipe[] } {
           );
         }
         stepIds.add(stepId);
-        return { ...step, id: stepId };
+        return { id: stepId, text: step.text, timerMinutes: step.timerMinutes };
       }),
       source,
       licence,
@@ -1393,7 +1783,85 @@ function parseCookbookExport(value: unknown): { recipes: ParsedRecipe[] } {
     });
   });
 
-  return { recipes };
+  return {
+    version: COOKBOOK_EXPORT_VERSION,
+    recipes,
+    settings: parseSettings(value["settings"]),
+    foodMatches: parseFoodMatches(value["foodMatches"]),
+  };
+}
+
+/**
+ * The module's one preference off an archive: the closed value, and the stamp
+ * the row carried or null for „no row".
+ *
+ * An ABSENT block is the archive saying nothing about the preference, which for
+ * a restore that replaces a profile whole means the shipped default — ADR-090's
+ * own reading of an archive that names no module. A block that is there but
+ * malformed is a file somebody edited, and it is refused outright.
+ */
+function parseSettings(value: unknown): CookbookSettings {
+  if (value === undefined) return { unitSystem: DEFAULT_UNIT_SYSTEM, updatedAt: null };
+  if (!isRecord(value)) {
+    throw new RecipeValidationError('"settings" must be an object.');
+  }
+  const unitSystem = value["unitSystem"];
+  if (typeof unitSystem !== "string") {
+    throw new RecipeValidationError('"settings.unitSystem" must be a string.');
+  }
+  const updatedAt = value["updatedAt"];
+  return {
+    unitSystem: validateUnitSystem(unitSystem),
+    updatedAt: updatedAt === null ? null : validateDateTime(updatedAt, "settings.updatedAt"),
+  };
+}
+
+/**
+ * The remembered ingredient links off an archive, validated whole.
+ *
+ * The archived `nameKey` is CHECKED against the name rather than trusted: the
+ * key is derived from the name everywhere else, so an archive whose two halves
+ * disagree is a file somebody edited, and importing it would create a row no
+ * live write could ever have produced.
+ */
+function parseFoodMatches(value: unknown): FoodMatch[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new RecipeValidationError('"foodMatches" must be an array.');
+  }
+  if (value.length > MAX_FOOD_MATCHES) {
+    throw new RecipeValidationError(
+      `An archive may carry at most ${MAX_FOOD_MATCHES} ingredient links.`,
+    );
+  }
+  const seen = new Set<string>();
+  return value.map((raw, index) => {
+    const path = `foodMatches[${index}]`;
+    if (!isRecord(raw)) {
+      throw new RecipeValidationError(`"${path}" must be an object.`);
+    }
+    const resolved = resolveFoodMatch({
+      name: raw["name"] as string,
+      foodRef: raw["foodRef"] as FoodRef,
+      foodName: raw["foodName"] as string,
+      gramsPerUnit: (raw["gramsPerUnit"] ?? null) as number | null,
+    });
+    const nameKey = raw["nameKey"];
+    if (typeof nameKey !== "string" || nameKey !== resolved.nameKey) {
+      throw new RecipeValidationError(`"${path}.nameKey" does not match its name.`);
+    }
+    if (seen.has(nameKey)) {
+      throw new RecipeValidationError(
+        `"${path}.nameKey" names an ingredient the value already carries.`,
+      );
+    }
+    seen.add(nameKey);
+    return {
+      ...resolved,
+      createdAt: validateDateTime(raw["createdAt"], `${path}.createdAt`),
+      updatedAt: validateDateTime(raw["updatedAt"], `${path}.updatedAt`),
+    };
+  });
 }
 
 /**

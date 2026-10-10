@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // And the second one, after it: the discovered modules sort by their
+      // manifests' own `order` (ADR-090).
+      "cookbook",
     ]);
   });
 
@@ -153,6 +156,9 @@ describe("createModuleRegistry", () => {
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
       UTIL: ["focus", "tools", "timers"],
+      // „Kuvarica" takes its own for „Elektronika"'s reason: the cookbook is a
+      // section of the product rather than a second reading of PRD 29.
+      COOK: ["cookbook"],
       CANV: ["canvas"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
@@ -206,6 +212,9 @@ describe("createModuleRegistry", () => {
       "priv",
       "finance",
       "fitness",
+      // A discovered module in the group it declares (ADR-090): the cookbook
+      // belongs to Life beside the pantry and the fitness log.
+      "cookbook",
     ]);
     expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
@@ -254,6 +263,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // And the cookbook, on the same terms: nothing is written until a recipe
+      // is saved.
+      "cookbook",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +452,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      "cookbook",
     ]);
   });
 

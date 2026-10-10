@@ -1780,6 +1780,20 @@ describe("RestoreStore", () => {
       "chess_games",
       "chess_resume",
       "chess_level_stats",
+      //  - cookbook_settings / cookbook_food_matches (migration 076): the
+      //    COOKBOOK's stage-2 additions, exempt for TIMERS' reason rather than
+      //    for their own. They are PROFILE rows that travel in the archive, and
+      //    the module replaces them itself inside the kit's one restore
+      //    transaction (`modules/cookbook/main/register.ts` calls
+      //    `RecipeStore.importData`, which writes the preference and the links
+      //    the archive carries and empties them when it carries none). Being
+      //    absent from `RESTORE_WIPE_TABLES` is therefore not a hole: a restore
+      //    that names no cookbook leaves a profile with no recipes, the shipped
+      //    units and no ingredient links — and neither table is in
+      //    `@nexus/sync`'s map, which `collectionGuard.test.ts` holds equal to
+      //    that list, because a kit module may not edit `@nexus/sync`.
+      "cookbook_settings",
+      "cookbook_food_matches",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
