@@ -346,6 +346,11 @@ export const en = {
         instalacije: "I wire installations",
         sistemi: "I run networks and systems",
         servis: "I service vehicles",
+        jedrim: "I sail",
+        letim: "I fly",
+        "merim-teren": "I survey and map",
+        radio: "I work with radio",
+        solar: "I install solar systems",
       } satisfies Record<string, string>,
     },
     /** Not what somebody does but HOW — and it decides what every module opens on. */
