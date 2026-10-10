@@ -240,7 +240,9 @@ export function canUndoKlondike(state: KlondikeState): boolean {
 
 /**
  * Takes back the last move. Unlimited: an undo is a log entry like any other, so
- * one may follow another, and undoing an undo puts the move back. The BOARD comes
+ * one may follow another, and each one takes back the last move then standing —
+ * so a second undo takes back the move before the first, exactly as the shared
+ * log's own `logMoves` reads a log carrying two undos. The BOARD comes
  * back exactly as it was; the score does not, because the undo's own −2 is the
  * price of the rule rather than a change to the position.
  */

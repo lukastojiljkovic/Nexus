@@ -10,6 +10,7 @@ import {
   isSuit,
   RANKS,
   rankBelow,
+  rankStrength,
   sameCard,
   standardDeck,
   SUITS,
@@ -100,5 +101,18 @@ describe("the card model", () => {
     expect(new Set(oneSuit.map(cardCode)).size).toBe(13);
     // Document order: copy, then rank, then suit — the order the deal walks.
     expect(oneSuit.slice(0, 3).map(cardCode)).toEqual(["AS", "2S", "3S"]);
+  });
+
+  it("puts the Ace at the top of the suit for the trick-taking games", () => {
+    // Rank is arithmetic — the Ace is 1 so that `rankBelow(1)` is null — and
+    // strength is the order a trick is won in. The two disagree about the Ace and
+    // about nothing else, which is what this pins.
+    expect(rankStrength(1)).toBe(14);
+    expect(rankStrength(13)).toBe(13);
+    expect(rankStrength(12)).toBe(12);
+    expect(rankStrength(2)).toBe(2);
+    expect(rankStrength(1)).toBeGreaterThan(rankStrength(13));
+    expect(rankStrength(13)).toBeGreaterThan(rankStrength(12));
+    expect(rankStrength(2)).toBeLessThan(rankStrength(3));
   });
 });

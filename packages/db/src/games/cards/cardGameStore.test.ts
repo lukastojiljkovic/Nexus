@@ -11,8 +11,13 @@ import {
   klondikeHint,
   replayKlondike,
   spiderMoves,
+  applyTablic,
+  createSeededRandom,
+  dealTablic,
+  tablicChooseMove,
   type KlondikeState,
   type SpiderState,
+  type TablicState,
 } from "@nexus/core";
 import {
   CardGameStore,
@@ -68,6 +73,21 @@ function playKlondike(seed: number, limit = 400): KlondikeState {
   return state;
 }
 
+/**
+ * A real Tablić hand, played by the engine's own medium rule until the first deal
+ * of the game ends. It is the move list a save has to survive for a game against
+ * the computer, where every seat's action is in the log.
+ */
+function playTablic(limit = 300): TablicState {
+  const random = createSeededRandom(5);
+  let state = dealTablic("duo", 5);
+  for (let step = 0; step < limit; step += 1) {
+    if (state.board.hand > 0 || state.board.phase === "complete") break;
+    state = applyTablic(state, tablicChooseMove(state, "medium", random));
+  }
+  return state;
+}
+
 describe("CardGameStore statistics", () => {
   it("answers zeroes for a pair nobody has played, and one row per variant", () => {
     const cards = store();
@@ -82,7 +102,7 @@ describe("CardGameStore statistics", () => {
       longestStreak: 0,
       updatedAt: null,
     });
-    // Three games, six variants: Klondike two, FreeCell one, Spider three.
+    // Nine games, sixteen variants, in the vocabulary's own order.
     expect(cards.listStats().map((row) => `${row.game}/${row.variant}`)).toEqual([
       "klondike/draw1",
       "klondike/draw3",
@@ -90,6 +110,16 @@ describe("CardGameStore statistics", () => {
       "spider/suits1",
       "spider/suits2",
       "spider/suits4",
+      "pyramid/pass1",
+      "pyramid/pass3",
+      "tripeaks/classic",
+      "tripeaks/wrap",
+      "golf/classic",
+      "golf/wrap",
+      "hearts/standard",
+      "spades/standard",
+      "tablic/duo",
+      "tablic/pairs",
     ]);
   });
 
@@ -335,7 +365,10 @@ describe("CardGameStore saved games", () => {
       ),
     ).toThrow(new RegExp(String(MAX_CARD_GAME_MOVES)));
     // And the byte ceiling, which the count alone does not bound.
-    const padded = Array.from({ length: 1000 }, () => ({ kind: "pad", junk: "x".repeat(300) }));
+    const padded = Array.from({ length: 1_000 }, () => ({
+      kind: "pad",
+      junk: "x".repeat(MAX_CARD_GAME_MOVES_BYTES / 500),
+    }));
     expect(() => cards.saveProgress({ ...base, moves: padded }, NOW)).toThrow(/characters/);
     // Nothing was written by any of the refusals.
     expect(
@@ -392,6 +425,109 @@ describe("CardGameStore saved games", () => {
     expect(text.length).toBeLessThan(MAX_CARD_GAME_MOVES_BYTES);
     expect(elapsed).toBeLessThan(500);
     expect(stored?.score).toBe(played.score);
+  });
+
+  it("keeps the best score in each game's OWN direction", () => {
+    const cards = store();
+    // Klondike counts up, so the higher score is the better one...
+    const klondike = (score: number, at: string) =>
+      cards.recordResult(
+        { game: "klondike", variant: "draw1", won: true, elapsedSeconds: 100, score },
+        at,
+      );
+    expect(klondike(480, NOW).bestScore).toBe(480);
+    expect(klondike(300, LATER).bestScore).toBe(480);
+    expect(klondike(610, LATER).bestScore).toBe(610);
+
+    // ...and Hearts counts penalty points, so the LOWER total is. A store that
+    // compared the two the same way round would keep the worst Hearts game as the
+    // best, which is the half of the record this pins.
+    const hearts = (score: number, at: string) =>
+      cards.recordResult(
+        { game: "hearts", variant: "standard", won: true, elapsedSeconds: 100, score },
+        at,
+      );
+    expect(hearts(18, NOW).bestScore).toBe(18);
+    expect(hearts(24, LATER).bestScore).toBe(18);
+    expect(hearts(6, LATER).bestScore).toBe(6);
+
+    // Golf counts the tableau cards it failed to clear, so it is the same way
+    // round as Hearts and the opposite way round from Klondike.
+    const golf = (score: number, at: string) =>
+      cards.recordResult(
+        { game: "golf", variant: "classic", won: true, elapsedSeconds: 100, score },
+        at,
+      );
+    expect(golf(9, NOW).bestScore).toBe(9);
+    expect(golf(14, LATER).bestScore).toBe(9);
+    expect(golf(4, LATER).bestScore).toBe(4);
+
+    // A loss never moves a best, whichever direction the game runs in.
+    const lost = cards.recordResult(
+      { game: "golf", variant: "classic", won: false, elapsedSeconds: 100, score: 1 },
+      LATER,
+    );
+    expect({ bestScore: lost.bestScore, played: lost.played, won: lost.won }).toEqual({
+      bestScore: 4,
+      played: 4,
+      won: 3,
+    });
+  });
+
+  it("stores and reads back a game against the computer, replaying it with its own engine", () => {
+    const cards = store();
+    // A real Tablić game played to the end of its first deal, by the engine's own
+    // medium rule: the log a save has to survive is the whole game's actions, in
+    // every seat's vocabulary.
+    const state = playTablic();
+    const saved = cards.saveProgress(
+      { game: "tablic", variant: "duo", seed: 5, moves: state.log, elapsedSeconds: 90 },
+      NOW,
+    );
+    expect(saved.game).toBe("tablic");
+    expect(saved.moves).toHaveLength(state.log.length);
+    expect(saved.score).toBe(state.board.scores[0]);
+    const read = cards.getProgress("tablic", "duo");
+    expect(read?.moves).toEqual(state.log);
+    expect(cards.listProgress().map((row) => row.game)).toEqual(["tablic"]);
+
+    // And the engine is the judge: a Tablić move played out of turn is refused.
+    expect(() =>
+      cards.saveProgress(
+        { game: "tablic", variant: "duo", seed: 5, moves: [{ kind: "play", card: { suit: "spades", rank: 13 }, capture: [] }], elapsedSeconds: 90 },
+        NOW,
+      ),
+    ).toThrow(CardGameValidationError);
+  });
+
+  it("refuses a game the vocabulary does not carry and a seed a game cannot deal", () => {
+    const cards = store();
+    expect(() =>
+      cards.saveProgress(
+        { game: "bridge" as never, variant: "duo", seed: 1, moves: [], elapsedSeconds: 1 },
+        NOW,
+      ),
+    ).toThrow(CardGameValidationError);
+    expect(() =>
+      cards.saveProgress(
+        { game: "hearts", variant: "duo" as never, seed: 1, moves: [], elapsedSeconds: 1 },
+        NOW,
+      ),
+    ).toThrow(/variant/);
+    // A seed is a 32-bit whole number for every game but FreeCell, whose seed is a
+    // DEAL NUMBER in the classic 1..32 000 set.
+    expect(() =>
+      cards.saveProgress(
+        { game: "golf", variant: "classic", seed: 1.5, moves: [], elapsedSeconds: 1 },
+        NOW,
+      ),
+    ).toThrow(/seed/);
+    expect(() =>
+      cards.saveProgress(
+        { game: "freecell", variant: "classic", seed: 32_001, moves: [], elapsedSeconds: 1 },
+        NOW,
+      ),
+    ).toThrow(/FreeCell deal number/);
   });
 });
 

@@ -49,7 +49,12 @@ import type { Migration } from "./migrations.js";
  *
  * **`game` is a CHECK and `variant`'s SHAPE is one; `variant`'s vocabulary is
  * not.** `game` is the closed list of games the engines deal, so the schema states
- * it exactly as `arcade_scores` states its two. `variant` is a per-game vocabulary
+ * it exactly as `arcade_scores` states its two — and it was extended IN PLACE on
+ * 2026-10-10, before this migration ever shipped, when Pyramid, TriPeaks, Golf,
+ * Hearts, Spades and TabliÄ‡ joined Klondike, FreeCell and Spider: an unreleased
+ * migration is not a historical record, and a second migration adding six words
+ * to a CHECK would mean rebuilding the table for a vocabulary the release notes
+ * never described. `variant` is a per-game vocabulary
  * the store validates against `@nexus/core`'s `CARD_GAME_VARIANTS`, exactly as
  * `note_folders`' palette is validated in the store rather than in the schema
  * (migration 011's choice, made so that a palette — or a Spider variant — can
@@ -77,7 +82,10 @@ export const migration081: Migration = {
     db.exec(`
       CREATE TABLE cardgame_stats (
         profile_id        TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-        game              TEXT NOT NULL CHECK (game IN ('klondike', 'freecell', 'spider')),
+        game              TEXT NOT NULL CHECK (game IN (
+                            'klondike', 'freecell', 'spider',
+                            'pyramid', 'tripeaks', 'golf',
+                            'hearts', 'spades', 'tablic')),
         variant           TEXT NOT NULL CHECK (length(variant) > 0 AND length(variant) <= 32),
         played            INTEGER NOT NULL DEFAULT 0
                             CHECK (typeof(played) = 'integer' AND played >= 0),
