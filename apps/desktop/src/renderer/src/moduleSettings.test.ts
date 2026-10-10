@@ -122,18 +122,23 @@ describe("moduleSettingsDeclarations", () => {
       "fitness",
       "focus",
       "tools",
-      // The first DISCOVERED card (ADR-090), last because a kit module
-      // registers after every compiled-in one.
+      // The first DISCOVERED card (ADR-090): a kit module registers after every
+      // compiled-in one, and the discovered ones order themselves.
       "timers",
       "culture",
+      "car",
       "pantry",
       "cookbook",
       "recorder",
       "calculator",
       "signals",
-      // And the second, ordered after the first by its own `order`.
-      "boards",
+      // The translator's two controls, `order: 230`.
       "translator",
+      // The workshop's one `fact` row, `order: 310`.
+      "workshop",
+      // And the puzzles, `order: 330`, before the board games at 340.
+      "puzzles",
+      "boards",
     ]);
   });
 
@@ -172,6 +177,7 @@ describe("moduleSettingsCardIds", () => {
       "tools",
       "timers",
       "culture",
+      "car",
       "pantry",
       "cookbook",
       "recorder",
@@ -179,8 +185,10 @@ describe("moduleSettingsCardIds", () => {
       "signals",
       // The second discovered card, in its own group — the card order follows the
       // registry, and a kit module registers after every compiled-in one.
-      "boards",
       "translator",
+      "workshop",
+      "puzzles",
+      "boards",
     ]);
   });
 
@@ -223,15 +231,21 @@ describe("moduleSettingsCards", () => {
       "tools",
       "timers",
       "culture",
+      "car",
       "pantry",
       "cookbook",
       "recorder",
       "calculator",
       "signals",
-      // The second discovered card, whose one control is the level a new game
-      // opens at.
-      "boards",
+      // The translator's two controls.
       "translator",
+      // The workshop's one `fact` row.
+      "workshop",
+      // And the puzzles, whose one control is whether sudoku conflicts are
+      // marked while the board is played.
+      "puzzles",
+      // The board games, whose one control is the level a new game opens at.
+      "boards",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -250,13 +264,16 @@ describe("moduleSettingsCards", () => {
       // than a path into the shell's table.
       kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
       kitManifest("culture")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("car")?.copy?.name[activeLocale()] ?? "",
       kitManifest("pantry")?.copy?.name[activeLocale()] ?? "",
       kitManifest("cookbook")?.copy?.name[activeLocale()] ?? "",
       kitManifest("recorder")?.copy?.name[activeLocale()] ?? "",
       kitManifest("calculator")?.copy?.name[activeLocale()] ?? "",
       kitManifest("signals")?.copy?.name[activeLocale()] ?? "",
-      kitManifest("boards")?.copy?.name[activeLocale()] ?? "",
       kitManifest("translator")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("workshop")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("puzzles")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("boards")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 
@@ -289,7 +306,7 @@ describe("moduleSettingsCards", () => {
 // --- which cards may be reset -------------------------------------------------
 
 describe("isDeviceOnlyPanel", () => {
-  it("is true for the six cards whose whole state is this machine's", () => {
+  it("is true for the nine cards whose whole state is this machine's", () => {
     const declarations = new Map(
       moduleSettingsDeclarations(createModuleRegistry()).map((declaration) => [
         declaration.moduleId,
@@ -310,6 +327,9 @@ describe("isDeviceOnlyPanel", () => {
       // SIGNALS has no store at all: its three preferences are the whole of what
       // it keeps, and they are this machine's (`modules/signals/shared/manifest.ts`).
       "signals",
+      // And the translator's three, on the same terms: its direction and its
+      // recent-pair list are this machine's, not the profile's.
+      "translator",
     ]);
   });
 

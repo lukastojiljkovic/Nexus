@@ -22,6 +22,9 @@ import { EmergencyCardStore } from "@nexus/db";
 import type { EmergencyCard } from "@nexus/db";
 import type { CardAllergy, CardMedication } from "@nexus/core";
 import type { AssistantLocale, Tool } from "@nexus/core";
+// The disclaimer, exactly as the assistant's own rules state it: this sentence
+// is the product's promise about how it talks about safety, and it exists once.
+import { SAFETY_NOTICE } from "@nexus/core";
 import { asArgs } from "./args.js";
 import {
   assertLive,
@@ -35,16 +38,6 @@ import {
 export interface EmergencyToolDeps {
   readonly profileDb: ProfileDb;
 }
-
-/**
- * The disclaimer, in both languages, exactly as the assistant's own rules state
- * it. Not a paraphrase and not a shorter version: this sentence is the product's
- * promise about how it talks about safety, and it exists once.
- */
-const SAFETY_NOTICE = {
-  sr: "Samo za informisanje. Nije zamena za stručnu pomoć. Proveri informacije. U hitnom slučaju pozovi 112.",
-  en: "For reference only. Not a substitute for professional help. Check the information. In an emergency, call 112.",
-} as const;
 
 /** Said to the model, once, so the notice above is not treated as decoration. */
 const SAFETY_INSTRUCTION = {

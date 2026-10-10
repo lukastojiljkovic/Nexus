@@ -65,6 +65,7 @@ describe("launcherGroups", () => {
       "life",
       "culture",
       "make",
+      "play",
     ]);
     expect(groups()[0]?.tiles.map((tile) => tile.id)).toEqual([
       "tasks",
@@ -73,11 +74,30 @@ describe("launcherGroups", () => {
       "focus",
       "timers",
     ]);
-    // „Kultura" is a group of its own, with the one module in it.
-    expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["culture"]);
-    expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual(["boards"]);
-    // The games are a group of their own (ADR-093), and Šah is its first tile.
-    expect(groups()[4]?.tiles.map((tile) => tile.id)).toEqual(["chess"]);
+    // Kultura is a group of its own (ADR-093), and it draws the shelf and the
+    // culture corner beside it.
+    expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["library", "culture"]);
+    // Play closes the list; the arcade ships off by default, so its three
+    // on-by-default games are what this group draws.
+    expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual([
+      "puzzles",
+      "boards",
+      "chess",
+    ]);
+    // Make holds the tool drawers and the makers' modules; `pro` is absent
+    // because it ships off.
+    expect(groups()[4]?.tiles.map((tile) => tile.id)).toEqual([
+      "tools",
+      "canvas",
+      "electronics",
+      "calculator",
+      "signals",
+      "miniapps",
+      "scanner",
+      "workshop",
+      "drawings",
+      "lab",
+    ]);
   });
 
   /**
@@ -107,6 +127,7 @@ describe("launcherGroups", () => {
       "life",
       "culture",
       "make",
+      "play",
     ]);
     // PRIV is off by default, so it is absent until its flag says otherwise —
     // the same `resolveEnabled` set the rail is filtered through.

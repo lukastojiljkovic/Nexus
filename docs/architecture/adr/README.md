@@ -105,15 +105,15 @@ directory is the decision log behind it.
 | [091](091-content-packs.md) | Content packs: a signed folder, verified with the release key | Accepted | 2026-10-09 |
 | [092](092-downloads-network-mode.md) | The third network mode, „downloads", and the download service | Accepted; amends ADR-089 | 2026-10-09 |
 | [093](093-navigation-groups.md) | Navigation groups, the pinned shortlist and the launcher | Accepted; supersedes ADR-008 decision #11, amends ADR-086 §4 | 2026-10-09 |
-| [101](101-shell-visibility.md) | Hiding and ordering modules: ONE setting for the whole app | Accepted | 2026-10-10 |
-| [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3 | 2026-10-10 |
 | [094](094-tool-packs.md) | Tool packs: a GPL program as a separate process in a signed folder (amends ADR-091 §2 and §9) | Accepted | 2026-10-10 |
-| [100](100-reader-module.md) | The Reader module: content packs, read and printed | Accepted | 2026-10-10 |
-| [102](102-portable-build.md) | A portable build: Nexus on a stick, and the data on the stick too | Accepted; amends ADR-089 | 2026-10-10 |
-| [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093) | 2026-10-10 |
-| [098](098-zim-offline-library.md) | An offline library, through our own ZIM reader (module `wiki`, migration 086) | Accepted; amends ADR-092 | 2026-10-10 |
 | [095](095-assistant.md) | The assistant: eight parts, one contract, nothing off this machine | Accepted | 2026-10-10 |
 | [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted | 2026-10-10 |
+| [097](097-assistant-web-search.md) | Opt-in web search for the assistant: a consent beside the network mode, and the second sanctioned egress path | Accepted; amends ADR-092 §2 for one path | 2026-10-10 |
+| [098](098-zim-offline-library.md) | An offline library, through our own ZIM reader (module `wiki`, migration 086) | Accepted; amends ADR-092 | 2026-10-10 |
+| [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093) | 2026-10-10 |
+| [100](100-reader-module.md) | The Reader module: content packs, read and printed | Accepted | 2026-10-10 |
+| [101](101-shell-visibility.md) | Hiding and ordering modules: ONE setting for the whole app | Accepted | 2026-10-10 |
+| [102](102-portable-build.md) | A portable build: Nexus on a stick, and the data on the stick too | Accepted; amends ADR-089 | 2026-10-10 |
+| [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3 | 2026-10-10 |
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
 | [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
-| [097](097-assistant-web-search.md) | Opt-in web search for the assistant: a consent beside the network mode, and the second sanctioned egress path | Accepted; amends ADR-092 §2 for one path | 2026-10-10 |

@@ -112,6 +112,22 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: the viewer reads a file and stores nothing, so it is on.
   drawings: true,
+  // The map (ADR-099), decided here like every other selectable module: its pack
+  // is installed data and its pins are the user's own, so nothing about it asks
+  // to be opted into and it follows its manifest's `defaultEnabled`.
+  maps: true,
+  // The reference library on the same terms: it holds installed data rather than
+  // the user's, so there is nothing here to opt into.
+  wiki: true,
+  // And the car service book, decided the same way: it writes nothing until
+  // somebody adds a vehicle, so `defaultEnabled` is the whole decision.
+  car: true,
+  // The Lab is an instrument drawer that writes nothing until a reading is
+  // taken, so it is on for the reason every other tool-shaped module is.
+  lab: true,
+  // And the puzzles, on the same terms: a board stores nothing until a game is
+  // started, so nothing about it asks to be opted into either.
+  puzzles: true,
 };
 
 /**

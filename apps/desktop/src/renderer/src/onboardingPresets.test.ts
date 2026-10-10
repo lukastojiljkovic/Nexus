@@ -249,6 +249,19 @@ describe("resolveModuleSelection", () => {
       // The second discovered module, decided the same way and read from its own
       // manifest default.
       drawings: true,
+      // The map (ADR-099) is decided here like every other selectable module,
+      // from its own manifest default.
+      maps: true,
+      // The reference library, on the same terms: installed data, so its default
+      // is the whole decision.
+      wiki: true,
+      // The Lab stores nothing until a reading is taken, so `defaultEnabled` is
+      // the decision here too.
+      lab: true,
+      // And the puzzles, whose board stores nothing until a game is started.
+      puzzles: true,
+      // And the car service book, which writes nothing until a vehicle is added.
+      car: true,
     });
   });
 
@@ -285,38 +298,36 @@ describe("moduleFlagWrites", () => {
       // stored fact of the profile, not an accident of this build's manifests.
       { moduleId: "pro", enabled: false },
       // And the DISCOVERED modules last, because a kit module registers after
-      // every compiled-in one (ADR-090) - in `ModuleManifest.order`, so `timers`
-      // (100) precedes `miniapps` (210).
+      // every compiled-in one (ADR-090): ordered by `ModuleManifest.order`, ties
+      // broken by id.
       { moduleId: "timers", enabled: true },
-      // And the second, the Reader (ADR-100), for the same reason.
-      { moduleId: "reader", enabled: true },
-      // And the SECOND discovered module, after it for the same reason: a kit
-      // module registers after every compiled-in one, ordered by `order`.
       { moduleId: "library", enabled: true },
       { moduleId: "culture", enabled: true },
-      // ...and the second, in the order the registry holds them.
+      { moduleId: "car", enabled: true },
       { moduleId: "pantry", enabled: true },
       { moduleId: "cookbook", enabled: true },
-      // And the second discovered one after it, on the same terms.
       { moduleId: "recorder", enabled: true },
-      // The discovered modules follow in `order`: „Tajmeri" is 100, „Hitna
-      // karta" is 180.
       { moduleId: "emergency", enabled: true },
       { moduleId: "calculator", enabled: true },
+      // The Reader (ADR-100) and Signals share `order: 200`; the tie-break by
+      // id puts the reader first.
+      { moduleId: "reader", enabled: true },
       { moduleId: "signals", enabled: true },
+      // `maps` and `miniapps` share `order: 210`, ordered here by id.
+      { moduleId: "maps", enabled: true },
       { moduleId: "miniapps", enabled: true },
-      // And the second discovered module after it, off in Osnovno: PRD 31 keeps
-      // the entertainment section out of the questionnaire.
-      { moduleId: "arcade", enabled: false },
-      { moduleId: "boards", enabled: true },
-      // The discovered modules keep their own order among themselves: „Šah" is
-      // `order: 350` and the timers are `order: 100`, so the board comes last.
-      { moduleId: "chess", enabled: true },
+      { moduleId: "wiki", enabled: true },
+      { moduleId: "translator", enabled: true },
       { moduleId: "scanner", enabled: true },
       { moduleId: "workshop", enabled: true },
-      // Then the second one, in registry order.
+      // The arcade is off in Osnovno: PRD 31 keeps the entertainment section
+      // out of the questionnaire.
+      { moduleId: "arcade", enabled: false },
       { moduleId: "drawings", enabled: true },
-      { moduleId: "translator", enabled: true },
+      { moduleId: "lab", enabled: true },
+      { moduleId: "puzzles", enabled: true },
+      { moduleId: "boards", enabled: true },
+      { moduleId: "chess", enabled: true },
     ]);
   });
 

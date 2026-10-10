@@ -428,6 +428,9 @@ describe("buildSettingsIndex", () => {
       "timers:sound-on-end",
       // And the second discovered card's one control, for the same reason.
       "culture:prompt-past-plans",
+      // The car service book's two thresholds.
+      "car:due-soon-days",
+      "car:due-soon-distance",
       "pantry:expiry-window",
       // The second DISCOVERED card's one control (ADR-090), last for the same
       // reason its section is.
@@ -445,13 +448,15 @@ describe("buildSettingsIndex", () => {
       "signals:morse-speed",
       "signals:morse-pitch",
       "signals:tuner-a4",
-      "boards:default-level",
-      // The second DISCOVERED card, whose one control is a `fact`: the list of
-      // paths this machine opened. It is indexable and has nothing to set.
-      "workshop:recent-files",
       // The second DISCOVERED card's two controls (ADR-090).
       "translator:direction",
       "translator:recent",
+      // The second DISCOVERED card, whose one control is a `fact`: the list of
+      // paths this machine opened. It is indexable and has nothing to set.
+      "workshop:recent-files",
+      // The puzzles' one control, and the board games' one.
+      "puzzles:check-while-typing",
+      "boards:default-level",
     ]);
   });
 

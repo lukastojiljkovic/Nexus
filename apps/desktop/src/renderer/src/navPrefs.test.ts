@@ -221,8 +221,8 @@ describe("sidebarGroups", () => {
       "life",
       "culture",
       "make",
-      // „Igre" joined the rail with its first module: the board games page.
-      "play",
+      // The play group joined the rail with the games (ADR-093); the arcade is
+      // its first module under `allEnabled()`.
       "play",
     ]);
   });

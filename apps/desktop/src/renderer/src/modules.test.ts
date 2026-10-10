@@ -96,64 +96,57 @@ describe("createModuleRegistry", () => {
       // The first DISCOVERED module (ADR-090): a kit module registers after
       // every compiled-in one, ordered by its manifest's `order`. It is written
       // here rather than derived because this test IS the declaration — what the
-      // registry holds is what the app shows.
+      // registry holds is what the app shows. `timers` declares 100.
       "timers",
-      // The second DISCOVERED module (ADR-100), after Timers on its own `order`.
-      "reader",
-      // The second DISCOVERED module: a kit module registers after every
-      // compiled-in one, ordered by its manifest's `order` - Tajmeri declares
-      // 100 and Biblioteka 110.
+      // `order: 110`, after `timers` on the same rule.
       "library",
-      // The second DISCOVERED module: `order: 120` sorts it after `timers`
-      // (100), and a tie would be broken by id.
+      // `order: 120`, after `library`; a tie would be broken by id.
       "culture",
-      // The second discovered module (ADR-090), and the first in the life
-      // group: a service book for a car somebody owns.
+      // The first discovered module in the life group: a service book for a car
+      // somebody owns, at `order: 140`.
       "car",
-      // The second DISCOVERED module, after TIMERS' `order: 100`.
+      // `order: 150`, after the car service book.
       "pantry",
-      // And the second one, after it: the discovered modules sort by their
-      // manifests' own `order` (ADR-090).
+      // `order: 160`, after it on the same terms (ADR-090).
       "cookbook",
-      // The second: the voice and camera diary, ordered after the first by its
-      // own `order` (170 against the timer's 100).
+      // The voice and camera diary, `order: 170`.
       "recorder",
-      // The second discovered module, after „Tajmeri" because its manifest says
-      // `order: 180` and „Tajmeri" says 100.
+      // `order: 180`, after `timers`' own 100.
       "emergency",
-      // The second discovered module (CALC, migration 079), after „Tajmeri" on
-      // its own `order` of 190.
+      // CALC (migration 079), `order: 190`.
       "calculator",
-      // And the second, on the same terms (order 200).
+      // The Reader (ADR-100), `order: 200` — tied with Signals, and the
+      // tie-break by id puts it first.
+      "reader",
+      // `order: 200` as well; the id breaks the tie, since `reader` < `signals`.
       "signals",
-      // The second discovered module (ADR-090), after `timers` because its
-      // manifest declares a higher `order` (210 against 100).
-      "miniapps",
-      // The second DISCOVERED module (ADR-090), ordered by its own manifest
-      // after `timers`: 320 against 100. It is the first module in the „Igra"
-      // group, which existed in `MODULE_GROUPS` from ADR-093 with no member
-      // until now.
-      "arcade",
-      // The second DISCOVERED module, ordered after the first by its own
-      // `order` (ADR-090): a board game is the `play` group's first member.
-      "boards",
-      // The second discovered module, at `order: 350` — so it sorts above the
-      // timers at 100 and below anything a later run gives a higher number.
-      "chess",
-      // The second kit module (ADR-099), ordered after it by `order` 210.
+      // The map (ADR-099), `order: 210` — tied with `miniapps`, ordered before
+      // it by id.
       "maps",
-      // The second discovered module, after it by `order` (300). Registered in
-      // the same way, and written here for the same reason.
-      "scanner",
-      // The maker's file viewers, ordered by their manifest's `order` (310).
-      "workshop",
-      // The second discovered module, ordered after TIMERS by its own
-      // `ModuleManifest.order`.
-      "drawings",
-      // The second discovered module, and the second line of the same kind: the
-      // LAB declares `order: 330`, so it registers after `timers` and its 100.
-      "lab",
+      // `order: 210`, after the map on the same number.
+      "miniapps",
+      // The reference library, `order: 220`.
+      "wiki",
+      // `order: 230`, after the reference library.
       "translator",
+      // `order: 300`.
+      "scanner",
+      // The maker's file viewers, `order: 310`.
+      "workshop",
+      // `order: 320` — tied with Drawings, ordered before it by id — and the
+      // first module in the `play` group, which `MODULE_GROUPS` had held empty
+      // since ADR-093.
+      "arcade",
+      // `order: 320`, after the arcade on the same number.
+      "drawings",
+      // `order: 330` — tied with Puzzles, ordered before it by id.
+      "lab",
+      // `order: 330`, after the Lab on the same number.
+      "puzzles",
+      // `order: 340`: a board game, the `play` group's last member after Puzzles.
+      "boards",
+      // `order: 350`, the last discovered module this build registers.
+      "chess",
     ]);
   });
 
@@ -208,15 +201,15 @@ describe("createModuleRegistry", () => {
       // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
-      UTIL: ["focus", "tools", "timers", "miniapps"],
+      UTIL: ["focus", "tools", "timers", "miniapps", "scanner"],
       // PRD 26 (Read Later & Bookmarks) is the section the Reader implements: its
       // bookmark half, against the content packs installed on this machine rather
       // than against a web page. Written down here rather than shared with UTIL,
       // for the reason the comment above gives.
       READ: ["reader"],
       // „Ostava" takes its own, on „Tabla"'s terms exactly: PANT is its own PRD
-      // entry, and the UTIL sharing above is one section implemented twice rather
-      // than a bin for anything shelf-shaped.
+      // entry, and the UTIL sharing above is one section implemented five times
+      // rather than a bin for anything shelf-shaped.
       PANT: ["pantry"],
       // „Kuvarica" takes its own for „Elektronika"'s reason: the cookbook is a
       // section of the product rather than a second reading of PRD 29.
@@ -231,12 +224,13 @@ describe("createModuleRegistry", () => {
       WS: ["workshop"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
-      // twice rather than a bin for anything tool-shaped.
+      // five times rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
-      // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and the
-      // other game modules of this wave (cards, chess, boards, puzzles) take it
-      // too: one PRD section implemented as separate surfaces with separate
-      // toggles, exactly as UTIL is. Each one adds its id to this line.
+      // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and chess
+      // joins it: one PRD section implemented as separate surfaces with separate
+      // toggles, exactly as UTIL is. Each one adds its id to this line, and the
+      // other game modules of this wave take prefixes of their own instead
+      // (BOARD for boards, PUZ for puzzles), each its own subject.
       FUN: ["arcade", "chess"],
       PRO: ["pro"],
       // PRD 27, and the module that finally puts a member in the `culture`
@@ -257,16 +251,22 @@ describe("createModuleRegistry", () => {
       // join the UTIL sharing above.
       CALC: ["calculator"],
       // „Signali" takes a prefix of its own rather than borrowing UTIL: the
-      // sharing above is one PRD section implemented three times, and Morse,
+      // sharing above is one PRD section implemented five times, and Morse,
       // the ASCII table, the tuner and the sound meter are one instrument panel
-      // that is not any of those three.
+      // that is not any of those five.
       SIG: ["signals"],
       // The board games module: a board game is its own subject rather than a
       // second reading of anything above, so it takes a prefix of its own.
       BOARD: ["boards"],
+      // And puzzles take theirs on the same terms: a sudoku is its own subject,
+      // not a second reading of `board` or of PRD 31.
+      PUZ: ["puzzles"],
       // MAPS' own, on the same terms: the PRD registry has no row for a map, so
       // a map declares its own prefix rather than borrowing a tool drawer's.
       MAP: ["maps"],
+      // The reference library takes its own prefix too: it is its own PRD entry
+      // rather than a second reading of PRD 27 (`LIB`, the shelf beside it).
+      WIKI: ["wiki"],
       // Opening an AutoCAD drawing is its own subject rather than a second
       // reading of another prefix, so DRAW is this module's own entry.
       DRAW: ["drawings"],
@@ -314,7 +314,15 @@ describe("createModuleRegistry", () => {
    */
   it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
     const grouped = createModuleRegistry().byGroup();
-    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "culture", "make", "shell"]);
+    expect([...grouped.keys()]).toEqual([
+      "plan",
+      "knowledge",
+      "life",
+      "culture",
+      "make",
+      "play",
+      "shell",
+    ]);
     expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
@@ -327,15 +335,19 @@ describe("createModuleRegistry", () => {
       "notes",
       "files",
       "study",
-      // The second discovered module, in the group it declares (ADR-100).
-      "reader",
       // The recorder is Knowledge, on ADR-093's own reading of the group: it is
-      // the handling of what somebody wrote down, not an area of a life.
+      // the handling of what somebody wrote down, not an area of a life. Its
+      // `order: 170` puts it ahead of the reference kits that follow.
       "recorder",
+      // The Reader (ADR-100), `order: 200`.
+      "reader",
       // The map joins Knowledge (ADR-093 sent the reference libraries there and
       // named maps as one), after the compiled-in three by its `order`.
       "maps",
-      // The second discovered module, in the group it declares (ADR-090).
+      // The reference library is Knowledge on the same reading (ADR-098): it is
+      // material somebody consults, and its `order: 220` places it here.
+      "wiki",
+      // The translator, `order: 230` (ADR-090).
       "translator",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
@@ -355,9 +367,12 @@ describe("createModuleRegistry", () => {
       // joins it after the compiled-in three.
       "emergency",
     ]);
-    // The culture group's first member, and the group ADR-093 named before
-    // anything was in it.
-    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["library"]);
+    // Culture is the group ADR-093 named before anything was in it, and it now
+    // holds both the shelf and the visits beside it.
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual([
+      "library",
+      "culture",
+    ]);
     expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
       "canvas",
@@ -381,19 +396,29 @@ describe("createModuleRegistry", () => {
       // The LAB declares `make`, after the professional drawer (ADR-093).
       "lab",
     ]);
-    // „Kultura" is its own group (ADR-093), and the first module to fill it.
-    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
-    // „Igra" is the group the games arrive in (ADR-093), and Šah is its first
-    // member: a board is what somebody does for fun, which is what the group is
-    // for rather than a second drawer of tools.
-    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual(["chess"]);
+    // Kultura is the culture group ADR-093 named, and it now holds two members:
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual([
+      "library",
+      "culture",
+    ]);
+    // The play group is where the games arrive (ADR-093), and the arcade is
+    // its first member: a game is what somebody does for fun, which is what the
+    // group is for rather than a second drawer of tools.
+    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual([
+      "arcade",
+      // Puzzles and the board games follow the arcade by their own `order`.
+      "puzzles",
+      "boards",
+      // `order: 350`, the last of the four.
+      "chess",
+    ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
     expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
-    // Play has no module yet, so it draws nothing rather than an empty heading.
-    // Culture used to be in the same place, and Biblioteka is what took it out.
-    expect(grouped.has("play")).toBe(false);
+    // Every canonical group now has a member, so none is omitted; Play was the
+    // last empty one, and the games filled it.
+    expect(grouped.has("play")).toBe(true);
   });
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
     const first = createModuleRegistry();
@@ -427,12 +452,8 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
-      // And the Reader on the same terms (ADR-100): a shelf with no packs on it
-      // writes nothing, and it is where the person learns where packs come from.
-      "reader",
-      // ON by default like every module but PRIV and PRO: nothing about a
-      // library asks to be opted into, and the module writes nothing until a
-      // first title is added.
+      // Nothing about a library asks to be opted into, and the module writes
+      // nothing until a first title is added.
       "library",
       // And the same is true of the culture corner: it writes nothing until a
       // visit, a plan or a file is added.
@@ -456,21 +477,23 @@ describe("createModuleRegistry", () => {
       // The same for the calculator: a bench that writes nothing until an
       // expression is committed.
       "calculator",
+      // The Reader (ADR-100): a shelf with no packs on it writes nothing, and it
+      // is where the person learns where packs come from.
+      "reader",
       // And the signals module, whose four tools open the microphone only when
       // one of them is started.
       "signals",
+      // A map writes nothing either - its pack is installed data and its pins
+      // are the user's own - so it is on like every module but the two above.
+      "maps",
       // The second discovered module (ADR-090), ON by default for the same
       // reason: nine small tools, and not one of them writes anything until it
       // is used.
       "miniapps",
-      // And the second discovered module, ON by default for its own version of
-      // that reason: a board game writes nothing until somebody plays one.
-      "boards",
-      // ...and the same for a board: no game exists until somebody starts one.
-      "chess",
-      // A map writes nothing either - its pack is installed data and its pins
-      // are the user's own - so it is on like every module but the two above.
-      "maps",
+      // The reference library (ADR-098) stores installed packs and "where was I",
+      // so there is nothing here to opt into either.
+      "wiki",
+      "translator",
       // ON by default too. The scanner needs a language pack before it can
       // read, and the page says so where the reading happens instead of hiding
       // the module from everybody who has not installed one.
@@ -483,7 +506,13 @@ describe("createModuleRegistry", () => {
       // ON by default too: the LAB writes nothing until a log is created, and
       // the microphone and the serial port are each opened by a click.
       "lab",
-      "translator",
+      // And the puzzles, on the same terms: a board writes nothing until a game
+      // is started.
+      "puzzles",
+      // A board game writes nothing until somebody plays one.
+      "boards",
+      // ...and the same for a board: no game exists until somebody starts one.
+      "chess",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -684,11 +713,16 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // module's own `renderer/Settings.tsx` draws them.
       "calculator",
       "signals",
-      // The second, whose one preference is the level a new game opens at.
-      "boards",
+      // The translator's two controls, declared as `{ sr, en }` pairs in its own
+      // manifest and drawn by its own body.
+      "translator",
       // The second: one `fact` row, because the module stores nothing to set.
       "workshop",
-      "translator",
+      // And the puzzles, whose one preference is whether sudoku conflicts are
+      // marked while the board is played.
+      "puzzles",
+      // The second, whose one preference is the level a new game opens at.
+      "boards",
     ]);
   });
 
