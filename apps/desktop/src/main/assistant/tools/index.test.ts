@@ -85,7 +85,10 @@ const EFFECTS: readonly ToolEffect[] = ["read", "write", "navigate", "network"];
 describe("createToolRegistry", () => {
   it("declares every area's tools, each named area.verb", () => {
     const tools = registryWith().tools({ web: false });
-    expect(tools).toHaveLength(19);
+    // 19 before wave 2, plus the eighteen the wave-1 kit modules added
+    // (library 2, pantry 2, car 2, cookbook 2, culture 2, recorder, reader,
+    // wiki, maps, calculator, lab 2, miniapps).
+    expect(tools).toHaveLength(37);
     for (const tool of tools) {
       expect(tool.name).toMatch(/^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$/);
       expect(EFFECTS).toContain(tool.effect);
@@ -123,9 +126,14 @@ describe("createToolRegistry", () => {
           expect((property["enum"] as readonly unknown[]).length).toBeGreaterThan(1);
         }
         if (property["type"] === "string" && required.includes(name)) {
-          // A required string the model may send must say how long it may be.
+          // A required string the model may send must say how long it may be —
+          // or be a closed vocabulary, which is the tighter statement of the
+          // same thing: a kind that must be one of four words cannot be an
+          // unbounded text field.
           expect(
-            property["maxLength"] ?? property["pattern"],
+            property["maxLength"] ??
+              property["pattern"] ??
+              (Array.isArray(property["enum"]) ? property["enum"] : undefined),
             `"${tool.name}".${name}`,
           ).toBeDefined();
         }
