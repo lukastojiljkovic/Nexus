@@ -1423,3 +1423,1096 @@ export type {
   ZoneReading,
   ZoneWorkHours,
 } from "./miniapps/worldClock.js";
+
+// --- LIBRARY (items, passes, thoughts, collections, migration 072) ----------
+//
+// Pure logic only: the vocabulary and its bounds (kinds, statuses, ratings,
+// years, the length caps), the validators the store and the archive reader both
+// call, the title fold that decides whether a curated list's entry and a work a
+// person already logged are the SAME work, the four orders, the year's
+// statistics, the shape of a bundled list, and the versioned value the profile
+// archive will carry.
+//
+// The ROW SHAPES live here too (`LibraryItem`, `LibraryPass`, …), deliberately:
+// the sorters, the statistics and the archive validator all read them, and one
+// shape that cannot drift from itself is worth more than a second copy in
+// `@nexus/db` — the store returns exactly these values (`electronics`'
+// `Chassis`, one module over).
+export {
+  LIBRARY_EXPORT_VERSION,
+  LIBRARY_MAX_IMPORT_ROWS,
+  libraryExportVersion,
+  validateLibraryExport,
+} from "./library/export.js";
+export type { LibraryExportV1 } from "./library/export.js";
+export {
+  LIBRARY_COLLATOR,
+  LIBRARY_SORT_KEYS,
+  compareLibraryItems,
+  compareLibraryItemsBy,
+  sortLibraryItems,
+} from "./library/sort.js";
+export type { LibrarySortableItem, LibrarySortKey } from "./library/sort.js";
+export { LIBRARY_MAX_SUGGESTION_ITEMS, validateSuggestedCollection } from "./library/suggested.js";
+export type { SuggestedCollectionItemV1, SuggestedCollectionV1, SuggestedTitle } from "./library/suggested.js";
+export { libraryYearStats } from "./library/stats.js";
+export type { LibraryStatsItem, LibraryStatsPass, LibraryYearStats } from "./library/stats.js";
+export { normalizeLibraryTitle, titleMatchKey } from "./library/title.js";
+export { collectionProgress } from "./library/collections.js";
+export type {
+  LibraryCollection,
+  LibraryCollectionItem,
+  LibraryCollectionProgress,
+} from "./library/collections.js";
+export {
+  LIBRARY_KINDS,
+  LIBRARY_MAX_COLLECTION_DESCRIPTION_LENGTH,
+  LIBRARY_MAX_COLLECTION_NAME_LENGTH,
+  LIBRARY_MAX_COUNT,
+  LIBRARY_MAX_COVER_BYTES,
+  LIBRARY_MAX_CREATORS,
+  LIBRARY_MAX_CREATOR_LENGTH,
+  LIBRARY_MAX_RATING,
+  LIBRARY_MAX_SUMMARY_LENGTH,
+  LIBRARY_MAX_TAGS,
+  LIBRARY_MAX_TAG_LENGTH,
+  LIBRARY_MAX_THOUGHT_LENGTH,
+  LIBRARY_MAX_TITLE_LENGTH,
+  LIBRARY_MAX_YEAR,
+  LIBRARY_MIN_RATING,
+  LIBRARY_MIN_YEAR,
+  LIBRARY_PROGRESS_FIELDS,
+  LIBRARY_STATUSES,
+  deriveLibraryRatingFromPass,
+  deriveLibraryStatusFromPass,
+  isLibraryCount,
+  isLibraryDay,
+  isLibraryKind,
+  isLibraryRating,
+  isLibraryReadPages,
+  isLibraryStatus,
+  isLibraryTimestamp,
+  isLibraryYear,
+  isWikidataId,
+  serializeLibraryList,
+  validateLibraryCreators,
+  validateLibraryProgress,
+  validateLibraryTags,
+} from "./library/item.js";
+export type {
+  LibraryCover,
+  LibraryItem,
+  LibraryKind,
+  LibraryPass,
+  LibraryPassOutcome,
+  LibraryProgress,
+  LibraryProgressField,
+  LibraryStatus,
+  LibraryThought,
+} from "./library/item.js";
+
+/**
+ * CULTURE - the culture corner: what you went to see, what you listened to, and
+ * the music you own. Stage 1 is this logic and the store behind it; the page
+ * arrives on the module kit.
+ *
+ * Three files, split by what a caller is asking. `kinds.ts` is the VOCABULARY -
+ * the ten visit kinds, the four listening kinds, the 1-10 rating scale and the
+ * five audio formats the library accepts - and it is exported because the store
+ * refuses a value outside those lists and stage 2's pickers have to offer
+ * exactly them; one list, read by both, is the only way a picker cannot offer a
+ * kind the schema rejects. `stats.ts` answers a PERIOD (the caller passes the
+ * rows a store read returned, which is what makes the same function answer for
+ * a month or for everything) and `format.ts` is the two durations the page
+ * draws.
+ */
+export {
+  CULTURE_AUDIO_MIMES,
+  MAX_CULTURE_RATING,
+  MIN_CULTURE_RATING,
+  MUSIC_LOG_KINDS,
+  VISIT_KINDS,
+  isCultureAudioMime,
+  isCultureRating,
+  isMusicLogKind,
+  isVisitKind,
+} from "./culture/kinds.js";
+export type { CultureAudioMime, MusicLogKind, VisitKind } from "./culture/kinds.js";
+export { culturePlaylistTotalMs, formatCultureDuration } from "./culture/format.js";
+export type { CultureDurationSource } from "./culture/format.js";
+export {
+  DEFAULT_CULTURE_TOP_ARTISTS,
+  MAX_CULTURE_TOP_ARTISTS,
+  summarizeCulture,
+} from "./culture/stats.js";
+export type {
+  CultureArtistCount,
+  CultureEntrySource,
+  CultureKindCount,
+  CultureStats,
+  CultureStatsInput,
+  CultureStatsOptions,
+  CultureTrackPlaySource,
+  CultureVenueCount,
+  CultureVisitSource,
+} from "./culture/stats.js";
+
+/**
+ * CAR — what a car was, what it is due for, and what it costs (stage 1: the
+ * logic and the data, no UI). The vocabularies in `./car/vehicle.js` are the
+ * module's own language and migration 074's CHECKs spell out the same sets, so
+ * everything that reads a fuel type, a distance unit, a service category or a
+ * fault status reads it from here.
+ */
+export {
+  CAR_COST_CATEGORIES,
+  DISTANCE_UNITS,
+  FAULT_STATUSES,
+  FUEL_TYPES,
+  KM_PER_MILE,
+  MIN_VEHICLE_YEAR,
+  SERVICE_CATEGORIES,
+  VIN_LENGTH,
+  fromKilometres,
+  fuelQuantityUnit,
+  normalizeVin,
+  toKilometres,
+} from "./car/vehicle.js";
+export type {
+  CarCostCategory,
+  DistanceUnit,
+  FaultStatus,
+  FuelQuantityUnit,
+  FuelType,
+  ServiceCategory,
+} from "./car/vehicle.js";
+
+export { addMonthsClamped, dayNumber, daysBetween } from "./car/dates.js";
+
+export {
+  checkOdometerReading,
+  currentSegment,
+  estimateOdometerForDate,
+  segmentForDate,
+} from "./car/odometer.js";
+export type { OdometerPoint, OdometerVerdict } from "./car/odometer.js";
+
+export { fuelConsumption } from "./car/consumption.js";
+export type {
+  ConsumptionSegment,
+  FuelConsumption,
+  FuelFill,
+  OverallConsumption,
+} from "./car/consumption.js";
+
+export { whatIsDue } from "./car/due.js";
+export type {
+  DueInput,
+  DueItem,
+  DueStatus,
+  DueThresholds,
+  ServiceIntervalSpec,
+  ServiceRecord,
+} from "./car/due.js";
+
+export {
+  costPerDistance,
+  distanceCovered,
+  fuelCostMinor,
+  totalsByCategory,
+  totalsByMonth,
+  vehicleCosts,
+} from "./car/costs.js";
+export type {
+  CarCost,
+  CategoryTotal,
+  DistanceCost,
+  FuelCostFields,
+  MonthlyTotal,
+  ServiceCostFields,
+} from "./car/costs.js";
+
+// --- PANTRY (migration 075) -------------------------------------------------
+//
+// What is at home and when it expires, as pure arithmetic: the effective expiry
+// (the earlier of the printed date and „opened + use within N days“), the
+// expiry verdict against a ladder the caller supplies, the shopping list, and
+// the waste report. The vocabularies and the three validators are exported
+// beside it for FIN's reason — stage 2's IPC layer must refuse a barcode, a unit
+// or a category by the SAME rule the store does, and one definition is the only
+// way the wire and the store cannot quietly disagree about what a minimum
+// quantity is.
+//
+// What is deliberately NOT here: anything that computes a dose. `doseNote` is
+// free text this module never parses.
+export {
+  MAX_PANTRY_DOSE_NOTE_LENGTH,
+  MAX_PANTRY_LOCATION_NAME_LENGTH,
+  MAX_PANTRY_NAME_LENGTH,
+  MAX_PANTRY_NOTES_LENGTH,
+  MAX_PANTRY_QUANTITY,
+  MAX_PANTRY_USE_WITHIN_DAYS,
+  PANTRY_BARCODE_LENGTHS,
+  PANTRY_CATEGORIES,
+  PANTRY_LOG_REASONS,
+  PANTRY_UNITS,
+  isPantryBarcode,
+  isPantryCategory,
+  isPantryLogReason,
+  isPantryUnit,
+  validatePantryChange,
+  validatePantryItem,
+  validatePantryLocation,
+} from "./pantry/pantryItem.js";
+export type {
+  PantryCategory,
+  PantryChange,
+  PantryItemFields,
+  PantryLogReason,
+  PantryProblem,
+  PantryProblemCode,
+  PantryUnit,
+} from "./pantry/pantryItem.js";
+export {
+  PantryInputError,
+  effectiveExpiry,
+  shoppingList,
+  stockStatus,
+  wasteReport,
+} from "./pantry/pantryStock.js";
+export type {
+  PantryEffectiveExpiry,
+  PantryExpirySource,
+  PantryExpiryStatus,
+  PantryLocationRef,
+  PantryShoppingGroup,
+  PantryShoppingLine,
+  PantryStockItem,
+  PantryStockStatus,
+  PantryWasteEntry,
+  PantryWasteInput,
+  PantryWasteItem,
+  PantryWasteRow,
+} from "./pantry/pantryStock.js";
+
+/**
+ * COOK (the cookbook, stage 1: the logic and no UI). A recipe's units and their
+ * exact conversions, the line shape an ingredient has, scaling, the typed-line
+ * parser, per-serving nutrition off the same food table the fitness log reads,
+ * and the shopping list. Stage 2's page and IPC sit on this and own none of it.
+ */
+export {
+  COUNT_UNITS,
+  INGREDIENT_UNITS,
+  MASS_UNITS,
+  VOLUME_UNITS,
+  compatibleUnits,
+  convertQuantity,
+  isIngredientUnit,
+  unitFamily,
+} from "./cookbook/units.js";
+export type {
+  CountUnit,
+  IngredientUnit,
+  MassUnit,
+  UnitFamily as CookbookUnitFamily,
+  VolumeUnit,
+} from "./cookbook/units.js";
+export { roundToKitchen, scaleIngredients } from "./cookbook/ingredient.js";
+export type { IngredientLine, ScalableIngredient } from "./cookbook/ingredient.js";
+export { parseIngredientLine } from "./cookbook/parse.js";
+export { nutritionPerServing } from "./cookbook/nutrition.js";
+export type {
+  NutritionLine,
+  RecipeNutrition,
+  UncountedIngredient,
+  UncountedReason,
+} from "./cookbook/nutrition.js";
+export { buildShoppingList } from "./cookbook/shopping.js";
+export type { ShoppingLine } from "./cookbook/shopping.js";
+export {
+  COOKBOOK_COURSES,
+  PUBLIC_DOMAIN_LICENCE_ID,
+  RECIPE_SOURCES,
+  isRecipeLicenceId,
+} from "./cookbook/recipe.js";
+export type {
+  CookbookCourse,
+  RecipeLicence,
+  RecipeSource,
+  RecipeStep,
+} from "./cookbook/recipe.js";
+
+// --- RECORDER (voice and video diary, migration 077) ------------------------
+//
+// The capture side is `MediaRecorder`, so the two kinds and the four mime
+// strings it can actually produce are a CLOSED list declared here rather than a
+// pattern: the store refuses anything else on the way in, and stage 2 must
+// check the mime the browser reports after `start()` against the same list —
+// one definition, or the wire and the store disagree about what a recording is.
+export {
+  RECORDING_KINDS,
+  RECORDING_MIME_TYPES,
+  isRecordingMime,
+  recordingKindForMime,
+} from "./recorder/recording.js";
+export type { RecordingKind, RecordingMime } from "./recorder/recording.js";
+export { formatRecordingDuration } from "./recorder/duration.js";
+export {
+  diaryMonthSummary,
+  groupByCreationDay,
+  groupByDiaryDate,
+  recordingStorageSummary,
+} from "./recorder/recordingGroups.js";
+export type {
+  RecorderEntry,
+  RecorderMonthSummary,
+  RecordingGroup,
+  RecordingStorageSummary,
+  RecordingTotals,
+} from "./recorder/recordingGroups.js";
+
+// --- EMERGENCY (the emergency card, migration 078) --------------------------
+//
+// The card POINTS at People and Documents instead of copying them, so a person
+// or a document either module has lost comes back from `buildCardModel` as a
+// MISSING row rather than quietly disappearing from the page. The model returns
+// the page in print order with the section headings left to the renderer's own
+// copy, and `cardCompleteness` names the recommended fields still unanswered.
+export {
+  ALLERGY_SEVERITIES,
+  BLOOD_TYPES,
+  BLOOD_TYPE_UNKNOWN,
+  CARD_DOCUMENT_MODES,
+  CARD_LANGUAGES,
+  isAllergySeverity,
+  isBloodType,
+  isCardDocumentMode,
+  isCardLanguage,
+  isCardPrintLanguage,
+  isOrganDonor,
+  MAX_CARD_ALLERGY_LABEL_LENGTH,
+  MAX_CARD_CONDITION_LENGTH,
+  MAX_CARD_CONTACTS,
+  MAX_CARD_CONTACT_NAME_LENGTH,
+  MAX_CARD_CONTACT_RELATION_LENGTH,
+  MAX_CARD_DOCUMENTS,
+  MAX_CARD_DOCTOR_NAME_LENGTH,
+  MAX_CARD_FULL_NAME_LENGTH,
+  MAX_CARD_INSURANCE_NUMBER_LENGTH,
+  MAX_CARD_LIST_ITEMS,
+  MAX_CARD_MEDICATION_DOSE_LENGTH,
+  MAX_CARD_MEDICATION_NAME_LENGTH,
+  MAX_CARD_NOTES_LENGTH,
+  MAX_CARD_PHONE_LENGTH,
+  ORGAN_DONOR_CHOICES,
+  serializeCardAllergies,
+  serializeCardConditions,
+  serializeCardMedications,
+  validateCardAllergies,
+  validateCardConditions,
+  validateCardMedications,
+} from "./emergency/cardFields.js";
+export type {
+  AllergySeverity,
+  BloodType,
+  CardAllergy,
+  CardBloodType,
+  CardDocumentMode,
+  CardLanguage,
+  CardMedication,
+  CardPrintLanguage,
+  OrganDonor,
+} from "./emergency/cardFields.js";
+export { buildCardModel } from "./emergency/cardModel.js";
+export type {
+  CardBlock,
+  CardBlockKey,
+  CardContactSource,
+  CardDocument,
+  CardDocumentSource,
+  CardModel,
+  CardPass,
+  CardPerson,
+  EmergencyCardFields,
+  EmergencyCardSource,
+  EmergencyCardWithContacts,
+  ResolvedCardContact,
+  ResolvedCardDocument,
+} from "./emergency/cardModel.js";
+export { cardCompleteness } from "./emergency/cardCompleteness.js";
+export type { CardGap } from "./emergency/cardCompleteness.js";
+
+// --- CALC (the calculator's engine, no UI) -----------------------------------
+//
+// The expression engine over mathjs, narrowed to the boundary the security page
+// asks for: `engine.ts`'s header says what is disabled and why, and `limits.ts`
+// carries the bounds that keep a typed expression from becoming a way to make
+// the process work forever. Two decisions a reader should not have to
+// rediscover:
+//
+//  - **`display` is not `value`.** `value` is mathjs's own lexical form and is
+//    what the session stores; `display` is the reader's, and `display.ts` is the
+//    pure function that produces it from a locale.
+//  - **A session is plain JSON.** `session.ts` holds variables as the TEXT of
+//    their values and user functions as a signature plus a body, which is what
+//    lets `@nexus/db` store one and validate it without mathjs.
+export {
+  CALCULATOR_DISPLAY_PRECISION,
+  CALCULATOR_LOCALES,
+  DEFAULT_CALCULATOR_FORMAT,
+  formatCalculatorDisplay,
+} from "./calculator/display.js";
+export type { CalculatorFormatOptions, CalculatorLocale } from "./calculator/display.js";
+export {
+  BIG_NUMBER_PRECISION,
+  CALCULATOR_ANGLE_MODES,
+  CALCULATOR_CODES,
+  CALCULATOR_PRECISIONS,
+  createCalculatorEngine,
+} from "./calculator/engine.js";
+export type {
+  CalculatorAngleMode,
+  CalculatorCode,
+  CalculatorEngine,
+  CalculatorEvaluateOptions,
+  CalculatorFailure,
+  CalculatorOutcome,
+  CalculatorPrecision,
+  CalculatorProgrammerView,
+  CalculatorSuccess,
+} from "./calculator/engine.js";
+export {
+  MAX_EXPRESSION_LENGTH,
+  MAX_FACTORIAL_ARGUMENT,
+  MAX_MATRIX_ELEMENTS,
+} from "./calculator/limits.js";
+export {
+  CALCULATOR_SESSION_VERSION,
+  MAX_CALCULATOR_FUNCTION_PARAMS,
+  MAX_CALCULATOR_NAME_LENGTH,
+  MAX_CALCULATOR_SESSION_FUNCTIONS,
+  MAX_CALCULATOR_SESSION_VARIABLES,
+  MAX_CALCULATOR_VALUE_LENGTH,
+  emptyCalculatorSession,
+  parseCalculatorSession,
+  parseCalculatorSessionText,
+  serializeCalculatorSession,
+} from "./calculator/session.js";
+export type { CalculatorFunctionDefinition, CalculatorSession } from "./calculator/session.js";
+
+// --- GAMES (the arcade: Minesweeper and Blocks, migration 080) --------------
+//
+// Two engines, both pure, both playable from an input log: a seeded source is
+// handed in, every clock reading is handed in, and the whole game is a VALUE on
+// the way out. `games/random.ts` carries the argument for the source, and each
+// engine's own header carries its rules — including why the falling-blocks game
+// is called Blocks and drawn by us rather than by the trademarked game's look.
+export { createSeededRandom, randomBelow, shuffled } from "./games/random.js";
+export type { SeededRandom } from "./games/random.js";
+
+export {
+  MINESWEEPER_MAX_COLUMNS,
+  MINESWEEPER_MAX_ROWS,
+  MINESWEEPER_MIN_COLUMNS,
+  MINESWEEPER_MIN_FREE_CELLS,
+  MINESWEEPER_MIN_MINES,
+  MINESWEEPER_MIN_ROWS,
+  MINESWEEPER_PRESETS,
+  MINESWEEPER_PRESET_IDS,
+  chordCell,
+  createMinesweeper,
+  cycleMark,
+  minesweeperElapsedMs,
+  minesweeperFaces,
+  minesweeperFromMines,
+  minesweeperIndex,
+  minesweeperRemainingMines,
+  minesweeperVariant,
+  revealCell,
+  validateMinesweeperConfig,
+} from "./games/minesweeper/minesweeper.js";
+export type {
+  MinesweeperCell,
+  MinesweeperConfig,
+  MinesweeperConfigResult,
+  MinesweeperFace,
+  MinesweeperMark,
+  MinesweeperOptions,
+  MinesweeperPresetId,
+  MinesweeperState,
+  MinesweeperStatus,
+  MinesweeperVariant,
+} from "./games/minesweeper/minesweeper.js";
+
+export { BLOCKS_PIECE_IDS, pieceCells, pieceFrame } from "./games/blocks/pieces.js";
+export type { BlockCell, BlockPieceId } from "./games/blocks/pieces.js";
+export {
+  BLOCKS_BOARD_CAPACITY,
+  BLOCKS_CLEAR_SCORES,
+  BLOCKS_COLUMNS,
+  BLOCKS_GRAVITY_BASE_MS,
+  BLOCKS_GRAVITY_MIN_MS,
+  BLOCKS_GRAVITY_STEP_MS,
+  BLOCKS_HARD_DROP_POINTS,
+  BLOCKS_LINES_PER_LEVEL,
+  BLOCKS_LOCK_DELAY_MS,
+  BLOCKS_MAX_LOCK_RESETS,
+  BLOCKS_PREVIEW_COUNT,
+  BLOCKS_ROWS,
+  BLOCKS_SOFT_DROP_POINTS,
+  BLOCKS_TICK_MS,
+  activeCells,
+  blocksFrom,
+  createBlocks,
+  ghostCells,
+  gravityIntervalMs,
+  levelForLines,
+  lineScore,
+  step,
+} from "./games/blocks/blocks.js";
+export type {
+  BlocksInput,
+  BlocksPiece,
+  BlocksSetup,
+  BlocksState,
+  BlocksStatus,
+} from "./games/blocks/blocks.js";
+
+// --- GAMES: cards (stage 1 — the engines, no UI) -----------------------------
+//
+// Three solitaires in one area, because they are one family: one card model, one
+// shuffled-deal contract, one action log with undo in it, and one answer to „may
+// this card go home by itself". The engines are pure — no clock, no randomness
+// but the seed they are handed, no storage — so the deal is a function of
+// `(variant, seed)` and a saved game is three fields long.
+//
+// `CARD_GAME_VARIANTS` and the two seed predicates are exported beside the
+// engines rather than kept inside them, on `finance/money.ts`'s terms: the store's
+// enum check, stage 2's pickers and the engines must refuse by the SAME rule, or
+// the wire and the store quietly disagree about what a variant is.
+export {
+  CARD_CODES,
+  cardCode,
+  cardFromCode,
+  colourOf,
+  deckOf,
+  isCard,
+  RANKS,
+  rankBelow,
+  sameCard,
+  standardDeck,
+  SUITS,
+} from "./games/cards/card.js";
+export type { Card, CardColour, Rank, Suit } from "./games/cards/card.js";
+export { shuffle } from "./games/cards/shuffle.js";
+export type { RandomSource } from "./games/cards/shuffle.js";
+export { autoplaySafe, autoplaySafeCards } from "./games/cards/autoplay.js";
+export {
+  isGameLogEntry,
+  isUndoEntry,
+  logCanUndo,
+  logMoves,
+  logPushMove,
+  logPushUndo,
+  UNDO_ENTRY,
+} from "./games/cards/log.js";
+export type { GameLogEntry, GameUndoEntry } from "./games/cards/log.js";
+export {
+  CARD_GAMES,
+  CARD_GAME_VARIANTS,
+  CardGameError,
+  FREE_CELL_MAX_DEAL,
+  FREE_CELL_MIN_DEAL,
+  IllegalMoveError,
+  isCardGameId,
+  isCardGameVariant,
+  isCardSeed,
+  isFreeCellDeal,
+  MAX_CARD_SEED,
+} from "./games/cards/game.js";
+export type {
+  CardGameId,
+  CardGameRefusal,
+  CardGameRefusalCode,
+  CardGameReplay,
+  CardGameVariant,
+  FreeCellVariant,
+  KlondikeVariant,
+  SpiderVariant,
+} from "./games/cards/game.js";
+export {
+  applyKlondike,
+  canUndoKlondike,
+  dealKlondike,
+  hasKlondikeMoves,
+  isKlondikeEntry,
+  isKlondikeMove,
+  isKlondikeMoveLegal,
+  isKlondikeWon,
+  KLONDIKE_COLUMNS,
+  KLONDIKE_SCORE,
+  klondikeAllFaceUp,
+  klondikeAutoComplete,
+  klondikeAutoMoves,
+  klondikeHint,
+  klondikeMoves,
+  replayKlondike,
+  undoKlondike,
+} from "./games/cards/klondike.js";
+export type {
+  KlondikeBoard,
+  KlondikeCard,
+  KlondikeMove,
+  KlondikePile,
+  KlondikeReplay,
+  KlondikeState,
+} from "./games/cards/klondike.js";
+export {
+  applyFreeCell,
+  canUndoFreeCell,
+  dealFreeCell,
+  FREE_CELL_COLUMNS,
+  FREE_CELL_COUNT,
+  FREE_CELL_SCORE,
+  freeCellAutoMoves,
+  freeCellHint,
+  freeCellMoves,
+  freeCellSupermoveLimit,
+  hasFreeCellMoves,
+  isFreeCellEntry,
+  isFreeCellMove,
+  isFreeCellMoveLegal,
+  isFreeCellWon,
+  replayFreeCell,
+  undoFreeCell,
+} from "./games/cards/freecell.js";
+export type {
+  FreeCellBoard,
+  FreeCellMove,
+  FreeCellReplay,
+  FreeCellSlot,
+  FreeCellState,
+} from "./games/cards/freecell.js";
+export {
+  applySpider,
+  canUndoSpider,
+  dealSpider,
+  hasSpiderMoves,
+  isSpiderEntry,
+  isSpiderMove,
+  isSpiderMoveLegal,
+  isSpiderWon,
+  replaySpider,
+  SPIDER_COLUMNS,
+  SPIDER_FOUNDATIONS,
+  SPIDER_RUN,
+  SPIDER_SCORE,
+  SPIDER_SUITS,
+  spiderAutoMoves,
+  spiderDealCount,
+  spiderHint,
+  spiderMoves,
+  undoSpider,
+} from "./games/cards/spider.js";
+export type {
+  SpiderBoard,
+  SpiderCard,
+  SpiderMove,
+  SpiderReplay,
+  SpiderState,
+} from "./games/cards/spider.js";
+
+// --- GAMES / CHESS (stage 1) -------------------------------------------------
+//
+// The module's LOGIC: no UI, no IPC, no database. Three layers meet here, and
+// which one a caller is in is spelled out in `games/chess/index.ts`.
+//
+// The RULES — `createGame`, `gameStatus`, `applyUci`, `gamePgn`, `replayUci` —
+// are `chess.js` (BSD-2-Clause), and it is a dependency of THIS package and of
+// nothing else, because the renderer must reach the rules through us and never
+// through a second copy of its own.
+//
+// The ENGINE — `parseFen`, `legalMoves`, `perft`, `searchPosition`,
+// `chooseEngineMove` — is this project's own: a 0x88 move generator proved by
+// perft against the published counts, and a small alpha-beta search with
+// quiescence, a fixed transposition table and a level ladder from a beginner's
+// opponent to a sound one. It is interruptible, and it reads neither the clock
+// nor a random source: `now`, `rng` and `shouldStop` are passed in, which is what
+// lets stage 2 run it in a worker and stop it.
+export {
+  ChessError,
+  CHESS_LEVELS,
+  MATE_SCORE,
+  START_FEN,
+  applyUci,
+  chessLevel,
+  chooseEngineMove,
+  createGame,
+  evaluate,
+  gamePgn,
+  gameStatus,
+  isCapture,
+  isValidFen,
+  legalMoves,
+  legalUci,
+  loadGamePgn,
+  materialBalance,
+  moveSquares,
+  moveToUci,
+  parseFen,
+  perft,
+  perftAt,
+  playMove,
+  replayUci,
+  resultToken,
+  searchPosition,
+  squareIndex,
+  squareName,
+  toFen,
+  uciToMove,
+} from "./games/chess/index.js";
+export type {
+  Chess,
+  ChessColor,
+  ChessLevel,
+  ChessResultToken,
+  EnginePosition,
+  GameSnapshot,
+  Move,
+  MoveSquares,
+  SearchLimits,
+  SearchOptions,
+  SearchResult,
+  Side,
+  Square,
+} from "./games/chess/index.js";
+
+// --- SKY (the astronomy engine, stage 1: no store, no UI) --------------------
+//
+// Offline sun, moon and sky for any place and date, from Jean Meeus'
+// „Astronomical Algorithms“ and nothing else — no dependency, no network, and
+// no time zone: every function takes an instant in UT and every instant it
+// returns is one, because turning them into somebody's clock is the shell's job.
+//
+// The eight functions are the product. `sunPosition` and `moonPosition` answer
+// „where is it now“, `sunDay`, `moonDay` and `sunTwilight` answer „what happens
+// today“ — each of which reports a state (`always-above`, `always-below`)
+// instead of a time when the body does not cross, so polar day and polar night
+// are answers rather than errors — `moonPhase` and `nextMoonPhases` answer what
+// the Moon looks like and when it next changes, and `sunOrientation` turns the
+// Sun into a compass. Everything lower down (Julian days, ΔT, the sidereal time,
+// the refraction curve, the topocentric correction) is reachable inside this
+// package for tests and for the next slice, and is deliberately not part of the
+// cross-package surface: a caller that wanted the obliquity would be a second
+// astronomy module.
+export type { SkyInstant } from "./sky/julian.js";
+export type { SkyPlace, SkyPosition } from "./sky/horizontal.js";
+export { sunPosition } from "./sky/sun.js";
+export type { SunEquatorial, SunPosition } from "./sky/sun.js";
+export { moonPosition } from "./sky/moon.js";
+export type { MoonEcliptic, MoonPosition } from "./sky/moon.js";
+export { moonDay, sunDay, sunTwilight } from "./sky/horizon.js";
+export type { MoonDay, SkyDayState, SkyTwilight, SunDay, TwilightWindow } from "./sky/horizon.js";
+export { MOON_PHASE_NAMES, moonPhase, nextMoonPhases } from "./sky/phases.js";
+export type { MoonPhaseName, MoonPhaseReading, NextMoonPhases } from "./sky/phases.js";
+export { northFromSun, sunOrientation } from "./sky/orientation.js";
+export type { SunOrientation } from "./sky/orientation.js";
+
+// --- SIGNALS (Morse, ASCII, the tuner and the sound meter) -------------------
+export {
+  MAX_WPM,
+  MIN_WPM,
+  MORSE_TRANSLITERATIONS,
+  PARIS_DIT_MS,
+  charForMorse,
+  decodeMorse,
+  ditMs,
+  encodeMorse,
+  farnsworthGapUnits,
+  farnsworthWordGapUnits,
+  morseAlphabet,
+  morseForChar,
+  morseSchedule,
+  scheduleDurationMs,
+} from "./signals/morse.js";
+export type {
+  MorseDecodeOptions,
+  MorseDecodeResult,
+  MorseDecodedChar,
+  MorseEncodeResult,
+  MorseInterval,
+  MorseTiming,
+} from "./signals/morse.js";
+export { MORSE_ALPHABET, MORSE_BY_CHARACTER, MORSE_BY_CODE } from "./signals/morseTable.js";
+export type { MorseCharacter } from "./signals/morseTable.js";
+export {
+  ASCII_CODES,
+  ASCII_RADICES,
+  asciiEntry,
+  asciiFromCode,
+  codeFromAscii,
+  codesFromText,
+  formatAsciiCode,
+  formatAsciiString,
+  formatCodePoint,
+  isAsciiCode,
+  isAsciiText,
+  parseAsciiCode,
+  textFromCodes,
+  textToCodePoints,
+} from "./signals/ascii.js";
+export type { AsciiChar, AsciiRadix } from "./signals/ascii.js";
+export {
+  DEFAULT_CLARITY,
+  DEFAULT_MAX_HZ,
+  DEFAULT_MIN_HZ,
+  MIN_FRAME_SAMPLES,
+  detectPitch,
+} from "./signals/pitch.js";
+export type { PitchDetection, PitchDetectionOptions, PitchOptions } from "./signals/pitch.js";
+export {
+  CHROMATIC_PRESET,
+  CONCERT_A4_HZ,
+  MAX_A4_HZ,
+  MIN_A4_HZ,
+  NOTE_NAMES,
+  SEMITONE_RATIO,
+  TUNING_PRESETS,
+  centsBetween,
+  isValidA4,
+  noteForFrequency,
+  noteFrequencyHz,
+  noteLabel,
+  shiftCents,
+  targetFor,
+} from "./signals/notes.js";
+export type { InstrumentPreset, NoteReading, PitchReading, TuningTarget } from "./signals/notes.js";
+export {
+  DEFAULT_LEVEL_GATE_DB,
+  LeqWindow,
+  SILENCE_FLOOR_DB,
+  aWeightingDb,
+  amplitudeFromDbfs,
+  applyAWeighting,
+  biquadCascadeDb,
+  dBfsFromAmplitude,
+  dBfsFromPeak,
+  dBfsFromRms,
+  designAWeighting,
+  frameLevel,
+  leqFromFrameLevels,
+  leqFromFrameRms,
+  peak,
+  rms,
+  splFromDbfs,
+} from "./signals/soundLevel.js";
+export type { AWeightingFilter, Biquad, FrameLevel } from "./signals/soundLevel.js";
+
+// --- GAMES: the board games' engines (slice 1 of 2, no store) ---------------
+//
+// Six engines, each with the same six functions — `initialState`, `legalMoves`,
+// `applyMove`, `result`, `bestMove` and the `toJSON`/`fromJSON` pair — so they
+// are exported as six NAMESPACES rather than as sixty names: `reversi
+// .legalMoves(state)` says which game it is, and `legalMoves` alone could not.
+// Each game's own file (`games/<game>/<game>.ts`) is the module comment that
+// explains its rules and cites them, and stage 2 reaches one game at a time.
+//
+// The shared pieces are exported directly, because they are what makes the six
+// one shape: `Rng` and `createRng` (no engine reads `Math.random`, so a saved
+// game replays its dice), `InvalidStateError` (what `applyMove` and `fromJSON`
+// refuse an untrusted move or saved game with, and which carries a machine token
+// rather than copy), `Outcome` with its `win` and `draw` for the games that end
+// in a win or a draw, and `search` with its `SearchGame`/`SearchLimits`/`Choice`
+// shape for the games whose computer opponent is the alpha-beta in
+// `boards-shared`. Backgammon, whose result carries a gammon and a cube, and
+// ludo, which has up to four seats and so cannot use `Player = 0 | 1`, define
+// their own result types and are the only two that do.
+export * as reversi from "./games/reversi/reversi.js";
+export * as draughts from "./games/draughts/draughts.js";
+export * as mlin from "./games/mlin/mlin.js";
+export * as backgammon from "./games/backgammon/backgammon.js";
+export * as fourInARow from "./games/four-in-a-row/fourInARow.js";
+export * as ludo from "./games/ludo/ludo.js";
+
+export { createRng, rollDie, rollDice } from "./games/boards-shared/rng.js";
+export type { Rng } from "./games/boards-shared/rng.js";
+export { InvalidStateError } from "./games/boards-shared/errors.js";
+export { IN_PROGRESS, draw, win } from "./games/boards-shared/outcome.js";
+export type { Outcome, Player } from "./games/boards-shared/outcome.js";
+export { search } from "./games/boards-shared/search.js";
+export type { Choice, SearchGame, SearchLimits as BoardSearchLimits } from "./games/boards-shared/search.js";
+
+// --- GAMES: the puzzle engines (stage 1, no store) ---------------------------
+//
+// Sudoku, 2048, nonograms, mahjong solitaire, Broj, and the snake and brick
+// arcade engines — pure logic, one folder each, with no store of their own: a
+// result joins the arcade scores table in stage 2. Every one of them takes its
+// random source in and none of them reads a clock, so a seed plus a move log is
+// a whole game and a report that carries its seed is a reproduction.
+//
+// `step` is the name both arcade engines use for their one entry point, so the
+// two are exported under the game they belong to. `puzzles-shared/random.ts` is
+// the seeded source they draw from; its shuffle and its bounded draw stay
+// internal, because a caller that needs one has taken on the rule that decides
+// what a draw means.
+export { createPuzzleRandom } from "./games/puzzles-shared/random.js";
+export type { PuzzleRandom } from "./games/puzzles-shared/random.js";
+
+export {
+  SUDOKU_UNITS,
+  countSudokuSolutions,
+  generateSudoku,
+  solveSudokuLogically,
+  sudokuCandidates,
+  sudokuConflicts,
+  sudokuDifficulty,
+  sudokuHint,
+  sudokuSolution,
+} from "./games/sudoku/sudoku.js";
+export type {
+  SudokuCells,
+  SudokuDifficulty,
+  SudokuEliminateHint,
+  SudokuFillHint,
+  SudokuHint,
+  SudokuLogicalSolve,
+  SudokuNarrowHint,
+  SudokuOptions,
+  SudokuPuzzle,
+  SudokuTechnique,
+} from "./games/sudoku/sudoku.js";
+
+export {
+  TILE_2048_SIZES,
+  TILE_2048_WIN,
+  canMoveTile2048,
+  continueAfterWin,
+  createTile2048,
+  highestTile,
+  mergeLine,
+  moveTile2048,
+  nextTileValue,
+  tile2048From,
+  undoLastMove,
+} from "./games/tile2048/tile2048.js";
+export type {
+  Tile2048Move,
+  Tile2048Setup,
+  Tile2048Size,
+  Tile2048Snapshot,
+  Tile2048State,
+} from "./games/tile2048/tile2048.js";
+
+export {
+  NONOGRAM_ATTEMPT_LIMIT,
+  NONOGRAM_MAX,
+  NONOGRAM_MIN,
+  checkNonogram,
+  cluesOf,
+  generateNonogram,
+  solveNonogramLines,
+} from "./games/nonogram/nonogram.js";
+export type {
+  NonogramCell,
+  NonogramCheck,
+  NonogramPuzzle,
+} from "./games/nonogram/nonogram.js";
+
+export {
+  MAHJONG_FACES,
+  MAHJONG_SOLVER_NODE_BUDGET,
+  TURTLE,
+  TURTLE_LAYER_COUNTS,
+  TURTLE_SLOTS,
+  createMahjongDeal,
+  createMahjongGame,
+  isMahjongFree,
+  mahjongBoard,
+  mahjongFacesMatch,
+  mahjongFreeSlots,
+  mahjongGameFrom,
+  mahjongGroupOf,
+  mahjongHint,
+  mahjongLegalPairs,
+  mahjongRemove,
+  mahjongShuffle,
+  mahjongUndo,
+  mahjongWon,
+  solveMahjong,
+} from "./games/mahjong/mahjong.js";
+export type {
+  MahjongBoard,
+  MahjongDeal,
+  MahjongGame,
+  MahjongGroup,
+  MahjongMove,
+  MahjongNeighbourhood,
+  MahjongSlot,
+  MahjongSolution,
+} from "./games/mahjong/mahjong.js";
+
+export {
+  BROJ_FIFTH_CHOICES,
+  BROJ_SIXTH_CHOICES,
+  BROJ_SMALL_MAX,
+  BROJ_SMALL_MIN,
+  BROJ_TARGET_MAX,
+  BROJ_TARGET_MIN,
+  BROJ_VALUE_LIMIT,
+  brojNumbersOf,
+  checkBrojExpression,
+  createBrojPuzzle,
+  evaluateBroj,
+  formatBroj,
+  solveBroj,
+} from "./games/broj/broj.js";
+export type {
+  BrojCheck,
+  BrojExpression,
+  BrojOperation,
+  BrojOptions,
+  BrojPuzzle,
+  BrojRefusal,
+  BrojSolution,
+} from "./games/broj/broj.js";
+
+export {
+  SNAKE_COLUMNS,
+  SNAKE_FOOD_POINTS,
+  SNAKE_MAX_TICKS_PER_STEP,
+  SNAKE_MIN_TICK_MS,
+  SNAKE_POINTS_PER_LEVEL,
+  SNAKE_ROWS,
+  SNAKE_START_LENGTH,
+  SNAKE_TICK_MS,
+  SNAKE_TICK_STEP_MS,
+  createSnake,
+  snakeTickMs,
+  step as stepSnake,
+} from "./games/snake/snake.js";
+export type { SnakeDirection, SnakeInput, SnakeState } from "./games/snake/snake.js";
+
+export {
+  BRICKS_BALL_RADIUS,
+  BRICKS_BASE_SPEED,
+  BRICKS_BRICK_POINTS,
+  BRICKS_BRICK_TOP,
+  BRICKS_COLUMNS,
+  BRICKS_LEVEL_BONUS,
+  BRICKS_LIVES,
+  BRICKS_MAX_BRICK_ROWS,
+  BRICKS_MAX_SPEED,
+  BRICKS_MAX_TICKS_PER_STEP,
+  BRICKS_PADDLE_HEIGHT,
+  BRICKS_PADDLE_SPEED,
+  BRICKS_PADDLE_WIDTH,
+  BRICKS_ROWS,
+  BRICKS_TENTHS,
+  BRICKS_TICK_MS,
+  bricksRemaining,
+  bricksSpeed,
+  createBricks,
+  step as stepBricks,
+} from "./games/bricks/bricks.js";
+export type { BricksInput, BricksState } from "./games/bricks/bricks.js";

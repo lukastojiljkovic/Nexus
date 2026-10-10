@@ -858,6 +858,37 @@ export class HabitValidationError extends DatabaseError {}
 export class HabitNotFoundError extends DatabaseError {}
 
 /**
+ * Thrown when a recording or marker write is rejected at the store boundary
+ * because its input breaks a domain rule the UI is expected to have caught
+ * already (RECORDER slice a, migration 077): a `kind` outside `audio`/`video`, a
+ * `mime` outside the closed list `RECORDING_MIME_TYPES` — or a mime whose family
+ * disagrees with the kind, which is two answers to one question — a
+ * `durationMs`/`sizeBytes` that is not a positive whole number within its cap, a
+ * `sha256` that is not 64 lowercase hex characters, an over-long title, note,
+ * transcript or marker label, too many tags or markers, a diary flag with no
+ * date to file it under, a diary date on a recording that is not a diary, a
+ * malformed `now`, a marker whose `atMs` falls outside its recording's duration,
+ * or an imported archive value that is not this store's own format.
+ *
+ * The import case is the one worth naming: `importData` validates the WHOLE
+ * value before it writes anything, so a refusal here means the profile still
+ * holds exactly what it held before the call. The store revalidates because the
+ * archive is a file the user picked and stage 2's IPC passes it through
+ * (SEC-EL-02).
+ */
+export class RecorderValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a recording operation targets an id that is not a live recording
+ * in the store's own profile — unknown, soft-deleted, or owned by another
+ * profile. A MARKER reaches its recording through the row it names and never
+ * through a `profile_id` of its own (migration 077), so every marker operation
+ * surfaces the same error when the recording it names is missing, deleted or
+ * another profile's.
+ */
+export class RecorderNotFoundError extends DatabaseError {}
+
+/**
  * Thrown when a USER FOOD write is rejected at the store boundary (FIT slice a,
  * migration 057): an empty or over-long `name`, a `category` outside
  * `FOOD_CATEGORIES`, a nutrient that is not a finite non-negative number, a
@@ -912,6 +943,28 @@ export class CanvasValidationError extends DatabaseError {}
 
 /** Thrown when a board operation targets an id that is not a live board in the store's own profile — unknown, soft-deleted, or owned by another profile. */
 export class CanvasBoardNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a calculator write is rejected at the store boundary (CALC,
+ * migration 079): an empty or over-long expression, a result past its own cap,
+ * a malformed `now`, an export whose version this build does not know, or an
+ * imported value with one bad row in it.
+ *
+ * Most of what it reports is `@nexus/core`'s answer rather than this store's:
+ * `parseCalculatorSession` is the session's storage gate — a variable holding a
+ * number instead of text, a function with no parameters, a name that is not an
+ * identifier — and `CalculatorStore` renames its refusal into this, because a
+ * caller that is main's IPC layer is untrusted (SEC-EL-02).
+ *
+ * It is also thrown on the way OUT, when a stored session no longer parses.
+ * That is corruption rather than input — the store writes nothing but core's own
+ * serialized form — and reading it back as an empty session would silently
+ * discard somebody's variables.
+ */
+export class CalculatorValidationError extends DatabaseError {}
+
+/** Thrown when a history operation names an entry that is not in the store's own profile. */
+export class CalcHistoryNotFoundError extends DatabaseError {}
 
 /**
  * Thrown when a circuit, a placed part or a wire is rejected at the store
@@ -1028,6 +1081,281 @@ export class FitMeasurementValidationError extends DatabaseError {}
  * bound, or an `activity` outside `ACTIVITY_LEVELS`.
  */
 export class FitBodyProfileValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a library write is rejected at the store boundary (LIBRARY,
+ * migration 072): a `kind`/`status` outside its closed vocabulary, an empty or
+ * over-long `title`/creator/tag/note, a `year` outside 1..9999, a `rating`
+ * outside 1..10, a count that is not a whole number in range, progress that is
+ * impossible for the item's kind or a count past its total, a bare date that is
+ * no calendar day, a malformed `now`, a `wikidataId` that is not a `Q…`
+ * grammar — or, on the way OUT, a stored JSON list column that no longer parses
+ * to a valid creator or tag list, which is corruption rather than input to
+ * coerce (`HabitStore`'s posture on its own JSON column).
+ *
+ * It is also the archive reader's refusal: `importData` validates the whole
+ * value before it writes anything, so an unknown `version`, an unknown key, a
+ * reference to a row the value does not carry, a second cover for one item and a
+ * second link for one pair all arrive here — as one sentence about the value,
+ * because that is what the caller handed over.
+ */
+export class LibraryValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a library operation targets an id that is not a live row reachable
+ * from the store's own profile — an unknown item, a soft-deleted item, an item
+ * of another profile, or a pass, thought or collection link that does not belong
+ * to the item or collection the call named. Surfacing this uniformly keeps one
+ * profile's library invisible to a store scoped to another, and it is the whole
+ * of the scoping for `library_passes`, `library_thoughts` and
+ * `library_collection_items`, which carry no `profile_id` of their own.
+ */
+export class LibraryNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a culture write is rejected at the store boundary (CULTURE,
+ * migration 073): a `kind` outside `VISIT_KINDS` or `MUSIC_LOG_KINDS`, a title,
+ * venue, artist or playlist name that is empty or over its bound after
+ * trimming, a `date` that is not a real calendar day, a `startTime` that is not
+ * a wall clock `HH:MM`, a `rating` outside 1-10, an amount that is not a
+ * non-negative whole number of minor units, a currency that is not three
+ * upper-case ISO-4217 letters, a price missing one of its two halves, a
+ * `durationMs` that is negative or past a day, a `releaseYear` outside four
+ * digits, a `mime` outside the five audio formats, a malformed
+ * `fileName`/`sizeBytes`/`sha256`, or a `trackId` that is not a live track of
+ * this profile.
+ *
+ * Also the archive reader's refusal: `importData` raises this for a value whose
+ * `version` is not 1, for a row that is not shaped like this module's export,
+ * and for a reference between rows that the archive cannot satisfy - all before
+ * a single row is written.
+ *
+ * Raised on the way IN (an untrusted caller, SEC-EL-02) and equally on the way
+ * OUT, where it reports a stored `rank` that is no longer a rank - corruption,
+ * never something to coerce, exactly as `parseStoredSchedule` treats a damaged
+ * habit schedule.
+ */
+export class CultureValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a culture operation names a row that is not live in the store's
+ * own profile - unknown, soft-deleted, or another profile's - including a photo
+ * that is not on the visit it was addressed through, an item that is not in the
+ * playlist it was addressed through, and a `trackId` no live track carries.
+ *
+ * One class for four row kinds because one store owns them all, and because the
+ * caller's question is the same in every case: "is this still here, and is it
+ * mine?"
+ */
+export class CultureNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a vehicle, an odometer reading, a service entry, a service
+ * interval, a fuel entry, a fault or a receipt is refused at the store boundary
+ * (CAR stage 1, migration 074).
+ *
+ * Four of its refusals are the reason this class exists rather than the schema
+ * alone:
+ *
+ * - a VIN that is not seventeen characters of the ISO 3779 alphabet (no I, O or
+ *   Q). The check digit is deliberately NOT recomputed — it is a North-American
+ *   rule and enforcing it would refuse every European vehicle.
+ * - an odometer reading that DECREASES without the replaced-odometer override.
+ *   That refusal carries the way out in its own message, because the number is
+ *   legitimate and only its segment is wrong.
+ * - a reading that opens a new segment while something is already dated after
+ *   it, which would leave the older reading on the far side of the boundary.
+ * - a model year past next year, which no clock-free CHECK can state.
+ *
+ * The rest is the ordinary vocabulary of a store boundary: trimmed lengths,
+ * closed enums (`fuel_type`, `distance_unit`, `category`, `status`), a
+ * non-negative reading, a positive quantity, a price that is a safe integer of
+ * minor units with a three-letter currency beside it, a bare date, a
+ * well-formed `now`, a receipt's file name/mime/size/sha, and a referenced
+ * service entry that is not a live row of the same vehicle.
+ *
+ * It is also thrown on the way OUT of `importData`, whose whole value is
+ * validated before a single row is written — including its version, its ids, its
+ * cross-references and the monotone-within-a-segment rule — and on the way out
+ * of no reader: this module stores nothing but what it wrote, so a stored row
+ * that does not parse is corruption rather than input to coerce.
+ */
+export class CarValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a CAR operation names an id that is not a live row reachable from
+ * the store's own profile — unknown, soft-deleted (for a mutation), archived
+ * where a mutation needs a current vehicle, or owned by another profile.
+ *
+ * One class for all seven tables, because one store owns them all and every
+ * method reaches its row through the same gate: the vehicle is resolved in this
+ * profile first, and each child statement is scoped through it. Surfacing them
+ * uniformly keeps one profile's cars invisible to a store scoped to another, and
+ * it is why a child row of another profile's vehicle can never be written —
+ * that is a `CarNotFoundError` about the vehicle, never a row.
+ *
+ * An ARCHIVED vehicle is deliberately NOT among the refusals for a read or an
+ * edit (`HabitNotFoundError`'s own note): archiving a sold car is how its
+ * history stays reachable, so the history must stay correctable.
+ */
+export class CarNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a pantry write is rejected at the store boundary (PANTRY,
+ * migration 075), naming the failing field from `@nexus/core`'s
+ * `validatePantryItem`/`validatePantryLocation`/`validatePantryChange`
+ * (`PantryProblem[]`) rather than the raw problem list — an empty or over-long
+ * name, a category or unit outside its closed list, a negative or unbounded
+ * quantity, a minimum that is not above zero, an expiry or opening date that is
+ * not a real calendar day, an opening date in the future, a use-within that is
+ * not a whole number of days, an over-long note, a barcode that is not 8, 12, 13
+ * or 14 digits, an unbounded location id, a change of zero, or a change whose
+ * sign contradicts its reason.
+ *
+ * It is also the error the store raises for the rules a validator cannot see: a
+ * patch that tries to set `quantity` — quantity moves only through
+ * `changeQuantity`, which is what writes the log — a change that would leave the
+ * item below zero, a reorder whose neighbours do not describe a gap, a location
+ * that still holds live items, and every refusal in `importData`.
+ *
+ * Raised on the way IN because renderer input is untrusted (SEC-EL-02): main
+ * validates the same fields at the IPC boundary, and a store is never the place
+ * that assumes its caller did.
+ */
+export class PantryValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a pantry operation targets a row that is not there for THIS store
+ * — an unknown item or location, a soft-deleted one, or a row owned by another
+ * profile. Every statement in
+ * `PantryStore` is scoped by `profile_id`, so another profile's pantry is not
+ * merely invisible: naming it is this error.
+ */
+export class PantryNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when a recipe, an ingredient line or a step is rejected at the store
+ * boundary (COOK, migration 076): an empty or over-long title, a `course` outside
+ * the eleven, a `servings` that is not a whole number in range, a prep/cook time
+ * or step timer outside its bound, more tags/ingredients/steps than the module
+ * holds, a unit outside `INGREDIENT_UNITS`, a range with no lower end or one that
+ * runs backwards, a `gramsPerUnit` with no `foodRef` to be the weight of, a food
+ * reference that is not `catalogue:<id>`/`user:<uuid>` shaped, a photo whose
+ * name/mime/size/hash is not a legal attachment index row, or a malformed `now`.
+ *
+ * The two refusals worth naming out loud are the licence pair: an `imported`
+ * recipe without all five licence fields is refused, and an `own` recipe that
+ * carries one is refused too — a recipe credited to a source it did not come from
+ * is worse than one with no attribution at all, and the store does not get to
+ * decide the caller meant the other value.
+ *
+ * It is also what `importData` throws, for a whole archive at once: an unknown
+ * `version`, a field missing, a duplicated id. That import validates the entire
+ * value before it writes anything is the property this class is the signal of —
+ * a caller that sees it knows nothing was replaced.
+ */
+export class RecipeValidationError extends DatabaseError {}
+
+/** Thrown when a recipe operation targets an id that is not a live recipe in the store's own profile — unknown, soft-deleted, or owned by another profile. */
+export class RecipeNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when an emergency-card write is rejected at the store boundary
+ * (EMERGENCY, migration 078): a blood type, an organ-donor answer, an allergy
+ * severity or a print language outside its closed vocabulary, a `dateOfBirth`
+ * that is not a real bare day or that lies in the future of the moment being
+ * stamped, a free-text field past its bound, a contact that names BOTH a person
+ * and its own text (or neither), a `personId`/`documentId` that does not resolve
+ * to a live row of this profile, a document that is already on the card, a rank
+ * past `rankBetween`'s reach, a malformed `now`, or an export value that is not
+ * this module's version 1.
+ *
+ * It is also thrown on the way OUT, for a stored JSON list that no longer parses
+ * - corruption rather than input, and never something to coerce to an empty list,
+ * because an empty list means "the user says there are none" and replacing a
+ * damaged one with it would invent that answer.
+ *
+ * The store revalidates all of it because stage 2's IPC layer hands it untrusted
+ * renderer input (SEC-EL-02), exactly as every store added since `NoteStore`
+ * does.
+ */
+export class EmergencyCardValidationError extends DatabaseError {}
+
+/**
+ * Thrown when an emergency-card operation names something this profile does not
+ * have: no live card (a second `create`, an `update` or a child write with no
+ * card to hang off, a `restore` of a card that was never deleted), a contact or a
+ * document reference that is not a row of this profile's card, or a `move` whose
+ * neighbour ids are not live siblings. One class, because the card, its contacts
+ * and its document references are one aggregate - the `FitSetNotFoundError`
+ * posture, one module over.
+ */
+export class EmergencyCardNotFoundError extends DatabaseError {}
+
+/**
+ * Thrown when an arcade score write or an arcade archive is rejected at the store
+ * boundary (GAMES, migration 080): a `game` outside the closed two, a `variant`
+ * that is not a lower-case board key, a `timeMs`/`score`/`lines` that is not a
+ * whole number inside its bound, a malformed `now`, a won Minesweeper game with
+ * no time to record — or an `importData` value that is not a version this build
+ * reads, is missing a field, carries one twice, or holds a row that mixes the two
+ * games' columns. The store revalidates because renderer input is untrusted
+ * (SEC-EL-02), and it validates an imported archive in full before writing a row
+ * because a half-applied archive is worse than a refused one.
+ */
+export class ArcadeValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a card-game write is rejected at the store boundary (GAMES cards,
+ * migration 081): a `game` outside the three, a `variant` that does not belong to
+ * that game, a `seed` outside what that game deals from — a FreeCell deal number
+ * is 1 to 32 000 — an `elapsedSeconds` that is not a whole number of seconds
+ * inside a day, a `score` that is not a whole number, a move list over either of
+ * its two ceilings, or a `now` that is not an ISO-8601 date-time.
+ *
+ * The last refusal is the one worth naming: a move list the game's own engine
+ * would not have accepted — a forged entry, a truncated log, a move that was
+ * never legal in the position it claims to have been played from — arrives here
+ * too, because the store validates by REPLAYING it through `@nexus/core`
+ * (`replayKlondike`/`replayFreeCell`/`replaySpider`) rather than by trusting the
+ * shape. That is what makes „the renderer may pass this straight in" true: the
+ * same fold the UI's own moves go through is the gate on the way to the column.
+ *
+ * Raised on the way OUT as well, where it reports a stored row that no longer
+ * replays — a hand-edited file, a bad restore — which is corruption, never
+ * something to coerce to an empty board. The `CanvasValidationError` posture
+ * applied to a column of JSON.
+ */
+export class CardGameValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a chess write is rejected at the store boundary (migration 082):
+ * an empty or oversized PGN, a PGN that is not a game, a result or colour outside
+ * its closed vocabulary, an opponent/level pair that cannot exist (an engine game
+ * with no level, a game against a person carrying one), a level outside 1..8, a
+ * time control that is not a `base+increment` clock, a `playedAt`/`now` that is
+ * not an ISO-8601 instant, a resume slot whose FEN or move list is not a game, or
+ * a resume whose stored position is not the one its moves produce.
+ *
+ * That last pair is why this class exists rather than a schema CHECK alone: the
+ * resume slot stores both a move list and the position it leads to, and only a
+ * replay can say whether the two describe the same game. A board reading the
+ * position and a clock counting the moves must not be able to disagree.
+ *
+ * The same class covers the archive reader's refusals — an unknown export
+ * version, a game entry whose fields do not validate, statistics whose arithmetic
+ * does not add up. `importData` validates the WHOLE value before it writes
+ * anything, so a refusal here leaves the profile's chess content untouched.
+ */
+export class ChessValidationError extends DatabaseError {}
+
+/**
+ * Thrown when a chess operation targets a game id that is not a live game in the
+ * store's own profile — unknown, soft-deleted (for a mutation), or owned by
+ * another profile. Surfacing this uniformly keeps one profile's archive invisible
+ * to a store scoped to another.
+ */
+export class ChessNotFoundError extends DatabaseError {}
 
 /**
  * Whether a driver error is a violated UNIQUE (or partial-UNIQUE) index.

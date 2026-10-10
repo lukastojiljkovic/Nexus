@@ -125,11 +125,13 @@ export class ProfileStore {
     this.selectMimeByHash = db.prepare(
       `SELECT picture_mime AS mime FROM profiles WHERE picture_hash = ? LIMIT 1`,
     );
-    // The five blob-naming tables, joined through their parents where the row
+    // The seven blob-naming tables, joined through their parents where the row
     // carries no `profile_id` of its own — the delete-side counterpart of
     // main's `blobRefCount` union (ADR-019/041/SET-001). UNION deduplicates.
     // Deliberately NO liveness filter on the parents: a soft-deleted task's
-    // attachment row still holds its hash, and the cascade takes it too.
+    // attachment row still holds its hash, and the cascade takes it too — and
+    // the same holds for a soft-deleted VISIT's photos and for the tracks a
+    // deleted listing was removed from (culture, migration 073).
     this.selectBlobHashes = db.prepare(
       `SELECT na.sha256 AS hash FROM note_attachments na
          JOIN notes n ON n.id = na.note_id WHERE n.profile_id = ?
@@ -140,6 +142,11 @@ export class ProfileStore {
        SELECT sa.sha256 FROM subject_attachments sa
          JOIN subjects s ON s.id = sa.subject_id WHERE s.profile_id = ?
        UNION
+      SELECT vp.sha256 FROM culture_visit_photos vp
+        JOIN culture_visits v ON v.id = vp.visit_id WHERE v.profile_id = ?
+      UNION
+      SELECT ct.sha256 FROM culture_tracks ct WHERE ct.profile_id = ?
+      UNION
        SELECT background_hash FROM dashboard_settings
         WHERE profile_id = ? AND background_hash IS NOT NULL
        UNION
@@ -229,18 +236,33 @@ export class ProfileStore {
   }
 
   /**
-   * Every blob hash this profile's rows name, deduplicated, across all five
+   * Every blob hash this profile's rows name, deduplicated, across all seven
    * blob-naming tables — soft-deleted parents included, since their attachment
    * rows still hold bytes the cascade is about to take. Main reads this BEFORE
    * `delete` and then runs `deleteBlobIfOrphaned` per hash against the
    * post-delete `blobRefCount`, which is what keeps a deleted profile from
    * leaking files without ever deleting one some other profile still shows.
+   *
+   * **Culture's two sources are read here even though main's `blobRefCount`
+   * does not yet count them** (stage 1 adds the tables, stage 2 wires the
+   * module's page and its blob GC). That asymmetry is safe in one direction
+   * only, which is the one this method is for: a hash that ONLY culture names
+   * counts zero after the delete and its blob is collected, and a hash another
+   * profile still names survives. The other direction — removing one photo
+   * THROUGH main's GC — must not be wired up until `blobRefCount` knows these
+   * tables, or a blob culture still holds could be collected as an orphan.
    */
   blobHashes(profileId: string): string[] {
     return (
-      this.selectBlobHashes.all(profileId, profileId, profileId, profileId, profileId) as {
-        hash: string;
-      }[]
+      this.selectBlobHashes.all(
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+      ) as { hash: string }[]
     ).map((row) => row.hash);
   }
 

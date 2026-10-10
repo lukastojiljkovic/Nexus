@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 71 (the timers module), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(71);
+  it("is at version 82 (the chess games), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(82);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -9244,6 +9244,614 @@ describe("migration 070 — the circuit search kind", () => {
     expect(
       raw.prepare("SELECT COUNT(*) AS n FROM search_entries").get(),
     ).toEqual({ n: 1 });
+    raw.close();
+  });
+});
+
+describe("migration 073 - the culture corner", () => {
+  const NOW = "2026-06-01T08:00:00.000Z";
+  const CULTURE_TABLES = [
+    "culture_visits",
+    "culture_visit_photos",
+    "culture_tracks",
+    "culture_music_entries",
+    "culture_playlists",
+    "culture_playlist_items",
+  ];
+
+  /**
+   * A migrated database holding one profile and nothing else, over a handle this
+   * block owns. The schema is what is under test here, so every row below is
+   * written with raw SQL: a store that refused a bad value before SQLite saw it
+   * would prove the store, not the CHECK.
+   */
+  function open(): Database.Database {
+    const raw = new Database(join(dir, "culture-073.db"));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", NOW);
+    return raw;
+  }
+
+  /** One visit row, with whichever optional columns the test is exercising named in `columns`. */
+  function insertVisit(
+    raw: Database.Database,
+    columns: string,
+    values: readonly (string | number)[],
+  ): void {
+    raw
+      .prepare(
+        `INSERT INTO culture_visits
+           (id, profile_id, kind, title, venue, visit_date, created_at, updated_at${columns})
+         VALUES ('v1', 'p1', 'museum', 'Postavka', 'Muzej', '2026-05-01', ?, ?${values
+           .map(() => ", ?")
+           .join("")})`,
+      )
+      .run(NOW, NOW, ...values);
+  }
+
+  it("creates all six tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "culture-fresh.db") });
+    expect(tableNames(db)).toEqual(expect.arrayContaining(CULTURE_TABLES));
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("refuses a visit kind outside the ten, at the schema", () => {
+    const raw = open();
+    expect(() =>
+      raw
+        .prepare(
+          `INSERT INTO culture_visits
+             (id, profile_id, kind, title, venue, visit_date, created_at, updated_at)
+           VALUES ('v1', 'p1', 'muzej', 'Postavka', 'Muzej', '2026-05-01', ?, ?)`,
+        )
+        .run(NOW, NOW),
+    ).toThrow(/CHECK constraint failed/);
+    raw.close();
+  });
+
+  it("refuses a rating off the 1-10 scale and a negative duration, at the schema", () => {
+    const raw = open();
+    expect(() => insertVisit(raw, ", rating", [11])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", rating", [0])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", rating", [7.5])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", rating", [10])).not.toThrow();
+
+    expect(() =>
+      raw
+        .prepare(
+          `INSERT INTO culture_tracks
+             (id, profile_id, title, duration_ms, file_name, mime, size_bytes, sha256,
+              imported_at, updated_at)
+           VALUES ('t1', 'p1', 'Pesma', -1, 'p.mp3', 'audio/mpeg', 4, ?, ?, ?)`,
+        )
+        .run("a".repeat(64), NOW, NOW),
+    ).toThrow(/CHECK constraint failed/);
+    raw.close();
+  });
+
+  it("keeps a price's amount and currency together, at the schema", () => {
+    const raw = open();
+    expect(() => insertVisit(raw, ", price_minor", [70_000])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", price_currency", ["RSD"])).toThrow(/CHECK constraint failed/);
+    expect(() => insertVisit(raw, ", price_minor, price_currency", [70_000, "rsd"])).toThrow(
+      /CHECK constraint failed/,
+    );
+    expect(() => insertVisit(raw, ", price_minor, price_currency", [70_000, "RSD"])).not.toThrow();
+    raw.close();
+  });
+
+  it("clears a log entry's track link when the track itself is hard-deleted", () => {
+    const raw = open();
+    raw
+      .prepare(
+        `INSERT INTO culture_tracks
+           (id, profile_id, title, duration_ms, file_name, mime, size_bytes, sha256,
+            imported_at, updated_at)
+         VALUES ('t1', 'p1', 'Pesma', 1000, 'p.mp3', 'audio/mpeg', 4, ?, ?, ?)`,
+      )
+      .run("a".repeat(64), NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_music_entries
+           (id, profile_id, artist, title, kind, entry_date, track_id, created_at, updated_at)
+         VALUES ('e1', 'p1', 'Izvođač', 'Pesma', 'track', '2026-05-01', 't1', ?, ?)`,
+      )
+      .run(NOW, NOW);
+
+    raw.prepare("DELETE FROM culture_tracks WHERE id = 't1'").run();
+    expect(
+      raw.prepare("SELECT track_id AS trackId FROM culture_music_entries WHERE id = 'e1'").get(),
+    ).toEqual({ trackId: null });
+    raw.close();
+  });
+
+  it("cascades a profile delete through all six tables, photos and items included", () => {
+    const raw = open();
+    raw
+      .prepare(
+        `INSERT INTO culture_visits
+           (id, profile_id, kind, title, venue, visit_date, created_at, updated_at)
+         VALUES ('v1', 'p1', 'theatre', 'Hamlet', 'Narodno pozorište', '2026-05-01', ?, ?)`,
+      )
+      .run(NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_visit_photos
+           (id, visit_id, file_name, mime, size_bytes, sha256, created_at)
+         VALUES ('ph1', 'v1', 'program.pdf', 'application/pdf', 4, ?, ?)`,
+      )
+      .run("a".repeat(64), NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_tracks
+           (id, profile_id, title, duration_ms, file_name, mime, size_bytes, sha256,
+            imported_at, updated_at)
+         VALUES ('t1', 'p1', 'Pesma', 1000, 'p.mp3', 'audio/mpeg', 4, ?, ?, ?)`,
+      )
+      .run("b".repeat(64), NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_playlists (id, profile_id, name, created_at, updated_at)
+         VALUES ('pl1', 'p1', 'Za kola', ?, ?)`,
+      )
+      .run(NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO culture_playlist_items (id, playlist_id, track_id, rank, created_at)
+         VALUES ('i1', 'pl1', 't1', 'i0', ?)`,
+      )
+      .run(NOW);
+
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+
+    for (const table of CULTURE_TABLES) {
+      expect({
+        table,
+        n: (raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n,
+      }).toEqual({ table, n: 0 });
+    }
+    raw.close();
+  });
+});
+
+describe("migration 076 — the cookbook's three tables", () => {
+  const T = "2026-06-01T08:00:00.000Z";
+
+  /** A database with one profile, opened the way `openDatabase` opens one. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    return raw;
+  }
+
+  const RECIPE_COLUMNS =
+    "id, profile_id, title, description, cuisine, course, servings, prep_minutes, cook_minutes," +
+    " tags_json, rating, notes, favourite, source, licence_title, licence_author, licence_url," +
+    " licence_id, licence_attribution, photo_file_name, photo_mime, photo_size_bytes," +
+    " photo_sha256, created_at, updated_at";
+
+  /** A recipe row that satisfies every CHECK, so a case can break exactly one column. */
+  const RECIPE: readonly unknown[] = [
+    "r1", "p1", "Sarma", "", "srpska", "main", 4, null, 180,
+    "[]", null, "", 0, "own", null, null, null, null, null, null, null, null, null, T, T,
+  ];
+
+  function insertRecipe(raw: Database.Database, row: readonly unknown[]): void {
+    raw
+      .prepare(
+        `INSERT INTO cookbook_recipes (${RECIPE_COLUMNS}) VALUES (${"?, ".repeat(row.length - 1)}?)`,
+      )
+      .run(...row);
+  }
+
+  /** Replaces one positional value, so each CHECK is exercised on its own. */
+  function withField(index: number, value: unknown): unknown[] {
+    const row = [...RECIPE];
+    row[index] = value;
+    return row;
+  }
+
+  it("creates the three tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "076-fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("cookbook_recipes");
+    expect(names).toContain("cookbook_ingredients");
+    expect(names).toContain("cookbook_steps");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the recipe's list index and the photo reverse lookup, and both child indexes", () => {
+    const db = openDatabase({ path: join(dir, "076-indexes.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("cookbook_recipes_profile_active");
+    expect(indexes).toContain("cookbook_recipes_photo");
+    expect(indexes).toContain("cookbook_ingredients_recipe");
+    expect(indexes).toContain("cookbook_steps_recipe");
+    db.close();
+  });
+
+  it("takes a recipe nobody imported, with no licence anywhere on it", () => {
+    const raw = open("076-own.db");
+    insertRecipe(raw, RECIPE);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_recipes").get()).toEqual({ n: 1 });
+    raw.close();
+  });
+
+  it("refuses half an attribution in BOTH directions", () => {
+    const raw = open("076-licence.db");
+    // An own recipe carrying a licence: the source says one thing and the
+    // columns say another, and no reader could tell which to believe.
+    expect(() => insertRecipe(raw, withField(17, "CC-BY-SA-4.0"))).toThrow(/CHECK/);
+    // An imported recipe with only the identifier set.
+    const partial = [...RECIPE];
+    partial[13] = "imported";
+    partial[17] = "CC-BY-SA-4.0";
+    expect(() => insertRecipe(raw, partial)).toThrow(/CHECK/);
+    // The complete pair is taken.
+    const imported = [...RECIPE];
+    imported[13] = "imported";
+    imported[14] = "Sarma iz Vojvodine";
+    imported[15] = "Neki Autor";
+    imported[16] = "https://example.org/sarma";
+    imported[17] = "CC-BY-SA-4.0";
+    imported[18] = "Neki Autor, CC BY-SA 4.0";
+    expect(() => insertRecipe(raw, imported)).not.toThrow();
+    raw.close();
+  });
+
+  it("refuses a servings count that is not a whole number in range", () => {
+    const raw = open("076-servings.db");
+    // SQLite stores 2.5 happily in an INTEGER column; the typeof CHECK is what
+    // makes half a serving unrepresentable rather than merely unusual.
+    expect(() => insertRecipe(raw, withField(6, 2.5))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(6, 0))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(6, 101))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(6, 8))).not.toThrow();
+    raw.close();
+  });
+
+  it("refuses a course outside the eleven, a rating outside 1-10 and a negative duration", () => {
+    const raw = open("076-enums.db");
+    expect(() => insertRecipe(raw, withField(5, "brunch"))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(10, 0))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(10, 11))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(8, 0))).toThrow(/CHECK/);
+    expect(() => insertRecipe(raw, withField(8, 1.5))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("refuses a photo whose four columns do not all travel together", () => {
+    const raw = open("076-photo.db");
+    expect(() => insertRecipe(raw, withField(22, "a".repeat(64)))).toThrow(/CHECK/);
+    const complete = [...RECIPE];
+    complete[19] = "sarma.jpg";
+    complete[20] = "image/jpeg";
+    complete[21] = 40_112;
+    complete[22] = "a".repeat(64);
+    expect(() => insertRecipe(raw, complete)).not.toThrow();
+    // A hash that is not a hash is refused even with its companions beside it.
+    expect(() => insertRecipe(raw, withField(22, "abc"))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("refuses an ingredient range with no lower end, one that runs backwards, and a weight with no food", () => {
+    const raw = open("076-ingredient.db");
+    insertRecipe(raw, RECIPE);
+    let attempts = 0;
+    const insert = (
+      columns: string,
+      values: readonly unknown[],
+    ): void => {
+      attempts += 1;
+      raw
+        .prepare(
+          `INSERT INTO cookbook_ingredients (id, recipe_id, position, ${columns}, name, created_at, updated_at)
+           VALUES (?, 'r1', 0, ${values.map(() => "?").join(", ")}, 'kupus', ?, ?)`,
+        )
+        .run(`i${attempts}`, ...values, T, T);
+    };
+
+    expect(() => insert("quantity, quantity_max", [null, 3])).toThrow(/CHECK/);
+    expect(() => insert("quantity, quantity_max", [3, 2])).toThrow(/CHECK/);
+    expect(() => insert("quantity, quantity_max", [2, 3])).not.toThrow();
+    expect(() => insert("quantity", [0])).toThrow(/CHECK/);
+    expect(() => insert("quantity, food_ref, grams_per_unit", [1, null, 900])).toThrow(/CHECK/);
+    // A length is what the schema checks about a unit, and the store is what
+    // checks the unit itself against `INGREDIENT_UNITS` — deliberately, so the
+    // vocabulary can grow without a migration (migration 011's own rule).
+    expect(() => insert("unit", ["x".repeat(25)])).toThrow(/CHECK/);
+    expect(() => insert("unit", ["handful"])).not.toThrow();
+    raw.close();
+  });
+
+  it("refuses a step with no text and a timer outside a day", () => {
+    const raw = open("076-step.db");
+    insertRecipe(raw, RECIPE);
+    const insert = (text: string, timer: number | null): void => {
+      raw
+        .prepare(
+          `INSERT INTO cookbook_steps (id, recipe_id, position, text, timer_minutes, created_at, updated_at)
+           VALUES ('s1', 'r1', 0, ?, ?, ?, ?)`,
+        )
+        .run(text, timer, T, T);
+    };
+    expect(() => insert("", null)).toThrow(/CHECK/);
+    expect(() => insert("Kuvati.", 0)).toThrow(/CHECK/);
+    expect(() => insert("Kuvati.", 1441)).toThrow(/CHECK/);
+    expect(() => insert("Kuvati.", 90)).not.toThrow();
+    raw.close();
+  });
+
+  it("takes the children with the recipe, and only when the recipe is really gone", () => {
+    const raw = open("076-cascade.db");
+    insertRecipe(raw, RECIPE);
+    raw
+      .prepare(
+        `INSERT INTO cookbook_ingredients
+           (id, recipe_id, position, name, created_at, updated_at)
+         VALUES ('i1', 'r1', 0, 'kupus', ?, ?)`,
+      )
+      .run(T, T);
+    raw
+      .prepare(
+        `INSERT INTO cookbook_steps (id, recipe_id, position, text, created_at, updated_at)
+         VALUES ('s1', 'r1', 0, 'Kuvati.', ?, ?)`,
+      )
+      .run(T, T);
+
+    // A soft delete is an UPDATE of a timestamp and reaches neither table.
+    raw
+      .prepare("UPDATE cookbook_recipes SET deleted_at = ?, updated_at = ? WHERE id = 'r1'")
+      .run(T, T);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_ingredients").get()).toEqual({ n: 1 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_steps").get()).toEqual({ n: 1 });
+
+    // Removing the profile is the hard delete, and the cascade reaches both.
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_recipes").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_ingredients").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_steps").get()).toEqual({ n: 0 });
+    raw.close();
+  });
+});
+
+describe("migration 078 - the emergency card", () => {
+  const T = "2026-06-01T08:00:00.000Z";
+
+  /** A database with one profile, opened through the whole migration list. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    return raw;
+  }
+
+  function insertCard(raw: Database.Database, id: string, deletedAt: string | null = null): void {
+    raw
+      .prepare(
+        `INSERT INTO emergency_cards (id, profile_id, full_name, created_at, updated_at, deleted_at)
+         VALUES (?, 'p1', 'Mila', ?, ?, ?)`,
+      )
+      .run(id, T, T, deletedAt);
+  }
+
+  it("holds one LIVE card per profile, and lets a cleared one stand beside the new one", () => {
+    const raw = open("emergency-card-live.db");
+    insertCard(raw, "card-1");
+    expect(() => insertCard(raw, "card-2")).toThrow(/UNIQUE/);
+
+    raw.prepare("UPDATE emergency_cards SET deleted_at = ? WHERE id = 'card-1'").run(T);
+    insertCard(raw, "card-2");
+    expect(raw.prepare("SELECT count(*) AS n FROM emergency_cards").get()).toEqual({ n: 2 });
+    raw.close();
+  });
+
+  it("refuses a contact that names nobody, and one that names both a person and its own text", () => {
+    const raw = open("emergency-contact-pair.db");
+    insertCard(raw, "card-1");
+    const insert = raw.prepare(
+      `INSERT INTO emergency_contacts (id, card_id, person_id, name, rank, created_at, updated_at)
+       VALUES (?, 'card-1', ?, ?, 'i0', ?, ?)`,
+    );
+
+    expect(() => insert.run("c1", null, null, T, T)).toThrow(/CHECK/);
+    expect(() => insert.run("c2", "person-1", "Mila", T, T)).toThrow(/CHECK/);
+    insert.run("c3", null, "Marko", T, T);
+    insert.run("c4", "person-1", null, T, T);
+    raw.close();
+  });
+
+  it("refuses the same document twice on one card, and a print mode nobody prints", () => {
+    const raw = open("emergency-documents.db");
+    insertCard(raw, "card-1");
+    const insert = raw.prepare(
+      `INSERT INTO emergency_documents (id, card_id, document_id, mode, rank, created_at, updated_at)
+       VALUES (?, 'card-1', 'doc-1', ?, 'i0', ?, ?)`,
+    );
+
+    expect(() => insert.run("e1", "scan", T, T)).toThrow(/CHECK/);
+    insert.run("e2", "number", T, T);
+    expect(() => insert.run("e3", "number_image", T, T)).toThrow(/UNIQUE/);
+    raw.close();
+  });
+
+  it("refuses a blood type, an organ-donor answer and a print language outside their closed sets", () => {
+    const raw = open("emergency-vocabulary.db");
+    const insert = raw.prepare(
+      `INSERT INTO emergency_cards (id, profile_id, blood_type, organ_donor, print_language,
+                                    created_at, updated_at)
+       VALUES (?, 'p1', ?, ?, ?, ?, ?)`,
+    );
+
+    expect(() => insert.run("bad-blood", "a-", null, "sr", T, T)).toThrow(/CHECK/);
+    expect(() => insert.run("bad-donor", null, "maybe", "sr", T, T)).toThrow(/CHECK/);
+    expect(() => insert.run("bad-language", null, null, "de", T, T)).toThrow(/CHECK/);
+    insert.run("good", "unknown", "yes", "both", T, T);
+    raw.close();
+  });
+});
+
+describe("migration 081 — the card-game tables", () => {
+  const T = "2026-10-09T09:00:00.000Z";
+
+  /** A database with one profile, opened the way `openDatabase` opens one. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    return raw;
+  }
+
+  const STAT_COLUMNS =
+    "profile_id, game, variant, played, won, best_time_seconds, best_score," +
+    " current_streak, longest_streak, updated_at";
+  const STAT_ROW: readonly unknown[] = ["p1", "klondike", "draw1", 3, 2, 95, 480, 1, 2, T];
+
+  const insertStat = (raw: Database.Database, row: readonly unknown[]): void => {
+    raw
+      .prepare(`INSERT INTO cardgame_stats (${STAT_COLUMNS}) VALUES (${"?, ".repeat(9)}?)`)
+      .run(...row);
+  };
+
+  /** One field replaced, so each CHECK is exercised in isolation. */
+  const withField = (index: number, value: unknown): unknown[] => {
+    const row = [...STAT_ROW];
+    row[index] = value;
+    return row;
+  };
+
+  it("takes a statistics row keyed by profile, game and variant", () => {
+    const raw = open("cardgame-stats.db");
+    insertStat(raw, STAT_ROW);
+    // The same game in another variant is another row, not a collision.
+    insertStat(raw, withField(2, "draw3"));
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 2 });
+    raw.close();
+  });
+
+  it("refuses a second row for the same game in the same variant", () => {
+    const raw = open("cardgame-duplicate.db");
+    insertStat(raw, STAT_ROW);
+    expect(() => insertStat(raw, withField(3, 9))).toThrow(/UNIQUE/);
+    raw.close();
+  });
+
+  it("refuses counts that a whole-number column must not hold", () => {
+    for (const [index, bad] of [
+      [3, -1], // played
+      [4, 1.5], // won: a float SQLite would otherwise keep in an INTEGER column
+      [5, -3], // best time
+      // A best score that is not a number at all: notice that a NUMERIC string
+      // like „480" would NOT be refused — column affinity converts it to the
+      // integer it spells, which is the value that was meant.
+      [6, "not a number"],
+      [7, -1], // current streak
+      [8, 0.5], // longest streak
+    ] as const) {
+      const raw = open(`cardgame-bad-${String(index)}.db`);
+      expect(() => insertStat(raw, withField(index, bad))).toThrow(/CHECK/);
+      raw.close();
+    }
+  });
+
+  it("refuses wins over plays and a current streak longer than the longest", () => {
+    const raw = open("cardgame-coupled.db");
+    // Five wins out of three games is not a state a store can produce.
+    expect(() => insertStat(raw, withField(4, 5))).toThrow(/CHECK/);
+    // Nor is a current streak of five against a longest of two.
+    expect(() => insertStat(raw, withField(7, 5))).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("accepts a zero-win row with no bests, which is what a fresh profile has", () => {
+    const raw = open("cardgame-fresh.db");
+    insertStat(raw, ["p1", "spider", "suits2", 0, 0, null, null, 0, 0, T]);
+    expect(
+      raw.prepare("SELECT best_score, best_time_seconds FROM cardgame_stats").get(),
+    ).toEqual({ best_score: null, best_time_seconds: null });
+    raw.close();
+  });
+
+  it("takes one saved game per game and variant, and only one", () => {
+    const raw = open("cardgame-saves.db");
+    const insert = (variant: string, seed: number): void => {
+      raw
+        .prepare(
+          `INSERT INTO cardgame_saves
+             (profile_id, game, variant, seed, moves_json, elapsed_seconds, created_at, updated_at)
+           VALUES ('p1', 'klondike', ?, ?, '[{"kind":"draw"}]', 42, ?, ?)`,
+        )
+        .run(variant, seed, T, T);
+    };
+    insert("draw1", 7);
+    insert("draw3", 7);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_saves").get()).toEqual({ n: 2 });
+    expect(() => insert("draw1", 8)).toThrow(/UNIQUE/);
+    raw.close();
+  });
+
+  it("refuses a saved game with an empty move list, a negative seed or a day-long sitting", () => {
+    const raw = open("cardgame-save-checks.db");
+    const insert = (seed: unknown, moves: unknown, elapsed: unknown): void => {
+      raw
+        .prepare(
+          `INSERT INTO cardgame_saves
+             (profile_id, game, variant, seed, moves_json, elapsed_seconds, created_at, updated_at)
+           VALUES ('p1', 'spider', 'suits1', ?, ?, ?, ?, ?)`,
+        )
+        .run(seed, moves, elapsed, T, T);
+    };
+    expect(() => insert(1, "", 10)).toThrow(/CHECK/);
+    expect(() => insert(-1, "[]", 10)).toThrow(/CHECK/);
+    expect(() => insert(1, "[]", 86_401)).toThrow(/CHECK/);
+    insert(1, "[]", 86_400);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_saves").get()).toEqual({ n: 1 });
+    raw.close();
+  });
+
+  it("takes both tables with the profile that owned them", () => {
+    const raw = open("cardgame-cascade.db");
+    insertStat(raw, STAT_ROW);
+    raw
+      .prepare(
+        `INSERT INTO cardgame_saves
+           (profile_id, game, variant, seed, moves_json, elapsed_seconds, created_at, updated_at)
+         VALUES ('p1', 'freecell', 'classic', 617, '[]', 0, ?, ?)`,
+      )
+      .run(T, T);
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_stats").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cardgame_saves").get()).toEqual({ n: 0 });
+    raw.close();
+  });
+
+  it("carries no journal trigger, because sync is on hold and these tables are not synced", () => {
+    const raw = open("cardgame-journal.db");
+    const triggers = (
+      raw.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(triggers.filter((name) => name.startsWith("cardgame_"))).toEqual([]);
     raw.close();
   });
 });

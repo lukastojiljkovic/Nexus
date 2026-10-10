@@ -1592,6 +1592,105 @@ describe("RestoreStore", () => {
     //    a thing that may grant it. It is also not CONTENT in the archive's
     //    sense: nothing here is something the user wrote, so there is no
     //    version of it an archive could hold and no journal trigger on it.
+    //  - library_items / library_item_covers / library_passes / library_thoughts
+    //    / library_collections / library_collection_items (migration 072,
+    //    LIBRARY stage 1): NOT in the wipe list, and this is a state the next
+    //    stage removes rather than a decision about the module. The wipe is half
+    //    of a whole-profile REPLACE — the tables are emptied and refilled from
+    //    the archive — and library rows are not in the archive yet, because
+    //    wiring `LibraryStore.exportData` into `ProfileData` is stage 2's job.
+    //    On that list today, every restore would DELETE the user's library with
+    //    nothing to put back. They join it in the same change that teaches the
+    //    archive to carry them, with `LibraryStore`'s own export/import round
+    //    trip as their test.
+    //  - the six culture tables (migration 073) are exempt, and this is the
+    //    entry to remove when stage 2 lands. They ARE ordinary user content,
+    //    but their archive section does not exist yet: stage 1 built the store
+    //    and its own versioned `exportData`/`importData`, and stage 2 wires
+    //    that section into the profile archive. Until then a restore neither
+    //    wipes nor refills them. They are absent from `RESTORE_WIPE_TABLES` for
+    //    the reason they also carry no journal triggers — sync is on hold, and
+    //    that list is tied to `@nexus/sync`'s map by
+    //    `collectionGuard.test.ts`, which goes red the moment one side names a
+    //    table the other does not. The profile DELETE is unaffected: these
+    //    tables cascade from `profiles` like every other content table, which
+    //    the cascade audit in `profileStore.test.ts` proves for all six,
+    //    photos and playlist items included.
+    //  - CAR's seven tables (migration 074): the module arrived in two stages,
+    //    and this is the boundary between them. Stage 1 built the store and the
+    //    logic and deliberately left `RESTORE_WIPE_TABLES` ALONE, because a wipe
+    //    without a refill is how a restore DESTROYS data: the wipe empties a
+    //    table and the archive that was just read is what fills it again — and
+    //    no archive carries a CAR table yet, since the module has no kit entry
+    //    to export it through. Adding them to the wipe list would therefore
+    //    delete a user's whole car history on the first restore. They join that
+    //    list in stage 2, in the same pass as the archive's own half, which is
+    //    also the pass that must add them to `@nexus/sync`'s collection map:
+    //    `collectionGuard.test.ts` holds the map and the wipe list EQUAL, so a
+    //    table cannot be in one without the other. Until then this entry is the
+    //    decision the rule asks for, and the reason is that the module has no
+    //    archive yet.
+    //  - pantry_locations / pantry_items / pantry_log (migration 075): CONTENT,
+    //    and deliberately not wiped YET rather than never. Sync is on hold
+    //    permanently, and a table joins this list only by joining `@nexus/sync`'s
+    //    collection map — `collectionGuard.test.ts` holds the two lists equal —
+    //    which in turn owes migration 063's journal triggers for every
+    //    collection it names. Stage 2 is the pass that takes the pantry the whole
+    //    way into the archive, and it owes all three of those edits in the same
+    //    run that wires `PantryStore.exportData`/`importData` into
+    //    `ProfileData`: the map entries, the triggers, and these three names.
+    //    Wiping them NOW is the one direction migration 067's own commit message
+    //    warns about — this guard requires a table to be wiped OR documented, and
+    //    does NOT require a wiped table to be written back, so a restore would
+    //    silently destroy every pantry in the profile while the pantry is still
+    //    not something an archive can carry.
+    //  - cookbook_recipes / cookbook_ingredients / cookbook_steps (migration
+    //    076): NOT in the wipe list, and the reason is SEQUENCING rather than
+    //    device-locality, so it expires. These three ARE the user's own content
+    //    and they belong in the archive — what does not exist yet is the
+    //    archive's half of that: `ProfileData` carries no cookbook field, so
+    //    `RestoreStore` has nothing to write these tables back FROM, and an
+    //    entry in `RESTORE_WIPE_TABLES` today would turn every restore into a
+    //    silent deletion of the user's recipes. The module's own
+    //    `RecipeStore.exportData`/`importData` pair is the other end of the
+    //    same change, and the day stage 2 plugs it into the archive these three
+    //    lines move into `RESTORE_WIPE_TABLES` — together with `@nexus/sync`'s
+    //    collection map, which `src/sync/collectionGuard.test.ts` holds equal to
+    //    that list (and which is frozen with sync itself).
+    //  - recordings / recording_markers (migration 077): the same sequencing
+    //    as the cookbook. They are the user's own content and belong in the
+    //    archive, but `ProfileData` carries no recorder field yet, so wiping
+    //    them today would delete every recording on restore. Stage 2 wires
+    //    `RecorderStore.exportData`/`importData` into the archive and moves
+    //    these two names into `RESTORE_WIPE_TABLES`.
+    //  - arcade_scores (migration 080): the same sequencing. A profile's
+    //    scores are its own and go into the archive with stage 2, which wires
+    //    `ArcadeStore.exportData`/`importData` in and moves this name into
+    //    `RESTORE_WIPE_TABLES`; until then a wipe would lose them on restore.
+    //  - chess_games / chess_resume / chess_level_stats (migration 082): the
+    //    same sequencing as the arcade. Stage 2 wires `ChessStore.exportData`/
+    //    `importData` into the archive and moves these three names into
+    //    `RESTORE_WIPE_TABLES`.
+    //  - emergency_cards / emergency_contacts / emergency_documents (migration
+    //    078): the card IS user content, and it is deliberately NOT here yet
+    //    rather than exempt on its merits. The module ships in two stages, and
+    //    the profile archive is stage 2's job: it plugs this store's own
+    //    `exportData`/`importData` into the archive, and the three tables move
+    //    into `RESTORE_WIPE_TABLES` (with their sync classification) in that
+    //    pass. Exempting them HERE keeps a restore from emptying a table nothing
+    //    in this build refills - which is the lossy direction, not the safe one.
+    //  - calc_history / calc_sessions (migration 079): CONTENT, and the one
+    //    pair in this ledger that is here only until the next stage of the same
+    //    module lands. The calculator was built in two passes — the engine and
+    //    this store first, the page, the IPC and the profile archive second —
+    //    and until the archive carries a calculator there is nothing for a
+    //    restore to WRITE here. Wiping either table now would destroy history
+    //    and variables the archive cannot put back, which is the one direction
+    //    this guard exists to prevent; leaving them standing loses nothing,
+    //    because a restore is not a thing that should delete what it cannot
+    //    reproduce. When the archive learns about the calculator, both tables
+    //    move into `RESTORE_WIPE_TABLES` (children first, and here there are no
+    //    children) and this entry goes with them.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1630,6 +1729,57 @@ describe("RestoreStore", () => {
       "timers_presets",
       "timers_countdowns",
       "timers_settings",
+      "library_items",
+      "library_item_covers",
+      "library_passes",
+      "library_thoughts",
+      "library_collections",
+      "library_collection_items",
+      "culture_visits",
+      "culture_visit_photos",
+      "culture_tracks",
+      "culture_music_entries",
+      "culture_playlists",
+      "culture_playlist_items",
+      "vehicles",
+      "odometer_readings",
+      "service_entries",
+      "service_intervals",
+      "fuel_entries",
+      "faults",
+      "service_attachments",
+      "pantry_locations",
+      "pantry_items",
+      "pantry_log",
+      "cookbook_recipes",
+      "cookbook_ingredients",
+      "cookbook_steps",
+      "recordings",
+      "recording_markers",
+      "arcade_scores",
+      "emergency_cards",
+      "emergency_contacts",
+      "emergency_documents",
+      "calc_history",
+      "calc_sessions",
+      //  - cardgame_stats / cardgame_saves (migration 081, GAMES cards stage 1):
+      //    a DEFERRAL, not an exemption by nature — and it is written down here
+      //    because the alternative was to leave the gate red. Both tables hold
+      //    per-profile content, so they belong in this list the moment the
+      //    archive carries them: the module's own door is `CardGameStore.
+      //    exportData`/`importData`, and wiring them into the profile archive is
+      //    stage 2's job (it owns the module kit and the archive plug-in). Listing
+      //    them HERE alone would not be enough either — `collectionGuard.test.ts`
+      //    asserts that `RESTORE_WIPE_TABLES` and `@nexus/sync`'s collection map
+      //    are the same set, and sync is on hold with no new collections, so the
+      //    two lists have to gain these two tables together, in the run that
+      //    teaches the archive about GAMES. Until then a restore leaves whatever
+      //    game data this device has exactly where it is.
+      "cardgame_stats",
+      "cardgame_saves",
+      "chess_games",
+      "chess_resume",
+      "chess_level_stats",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);
