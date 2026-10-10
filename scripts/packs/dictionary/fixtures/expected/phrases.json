@@ -1,0 +1,266 @@
+{
+ "format": 1,
+ "source": "https://en.wikivoyage.org/w/index.php?title=Serbian_phrasebook&action=raw",
+ "topics": [
+  {
+   "id": "vowels",
+   "title": "Vowels",
+   "phrases": [
+    {
+     "en": "a",
+     "sr": "the 'a' in \"article\""
+    },
+    {
+     "en": "e",
+     "sr": "the 'e' in \"end\""
+    },
+    {
+     "en": "i",
+     "sr": "the 'ee' in \"week\""
+    },
+    {
+     "en": "o",
+     "sr": "the 'o' in \"obey\""
+    },
+    {
+     "en": "u",
+     "sr": "the 'oo' in \"moon\""
+    }
+   ]
+  },
+  {
+   "id": "consonants",
+   "title": "Consonants",
+   "phrases": [
+    {
+     "en": "b",
+     "sr": "the 'b' in \"abuse\""
+    },
+    {
+     "en": "c",
+     "sr": "always as 'ts' in \"bits\""
+    },
+    {
+     "en": "č",
+     "sr": "the 'ch' in \"chair\""
+    },
+    {
+     "en": "ć",
+     "sr": "the 'ch' in \"church\""
+    },
+    {
+     "en": "d",
+     "sr": "the 'd' in \"dog\""
+    },
+    {
+     "en": "đ",
+     "sr": "the 'd(u)' in \"endure\"; rarely used at the beginning of a word; this letter is sometimes written as dj; [the Cyrillic equivalent of this letter is \"ђ\"]"
+    },
+    {
+     "en": "dž",
+     "sr": "the 'dge' in \"edge\", but harder [the Cyrillic equivalent of this letter is \"џ\"]; seldom used"
+    },
+    {
+     "en": "f",
+     "sr": "the 'f' in \"face\""
+    },
+    {
+     "en": "g",
+     "sr": "the 'g' in \"gone\" [always hard 'g']"
+    },
+    {
+     "en": "h",
+     "sr": "the 'h' in \"ham\" [quite weak, unlike other Slavonic languages and often dropped, eg \"hoću\" (I will or I wish) becomes <nowiki/>'oću in speech]"
+    },
+    {
+     "en": "j",
+     "sr": "the 'y' in \"yes\""
+    },
+    {
+     "en": "k",
+     "sr": "the 'k' in \"kick\""
+    },
+    {
+     "en": "l",
+     "sr": "the 'l' in \"like\""
+    },
+    {
+     "en": "lj",
+     "sr": "the 'li' in \"million\" [the Cyrillic equivalent of this letter is \"љ\"]"
+    },
+    {
+     "en": "m",
+     "sr": "the 'm' in \"monkey\""
+    },
+    {
+     "en": "n",
+     "sr": "the 'n' in \"noise\""
+    },
+    {
+     "en": "nj",
+     "sr": "the 'ny' in \"canyon\" [Spanish ñ nasal sound, the Cyrillic equivalent of this letter is \"њ\"]"
+    },
+    {
+     "en": "p",
+     "sr": "the 'p' in \"post\""
+    },
+    {
+     "en": "r",
+     "sr": "the 'r' in \"barco\" [trilled 'r' like in Spanish language]"
+    },
+    {
+     "en": "s",
+     "sr": "the 's' in \"sun\""
+    },
+    {
+     "en": "š",
+     "sr": "the 'sh' in \"shower\""
+    },
+    {
+     "en": "t",
+     "sr": "the 't' in \"talk\""
+    },
+    {
+     "en": "v",
+     "sr": "the 'v' in \"vase\""
+    },
+    {
+     "en": "z",
+     "sr": "the 'z' in \"zone\""
+    },
+    {
+     "en": "ž",
+     "sr": "the 'su' in \"pleasure\""
+    }
+   ]
+  },
+  {
+   "id": "common-diphthongs",
+   "title": "Common diphthongs",
+   "phrases": [
+    {
+     "en": "ija",
+     "sr": "the 'ia' in \"Lydia\""
+    },
+    {
+     "en": "ije",
+     "sr": "the 'ie' in \"miedo\""
+    },
+    {
+     "en": "aj",
+     "sr": "the 'ie' in \"pie\" (ia sound)"
+    },
+    {
+     "en": "oj",
+     "sr": "the 'oy' in \"boy\""
+    },
+    {
+     "en": "oa",
+     "sr": "the 'oa' in \"boa\""
+    },
+    {
+     "en": "ao",
+     "sr": "similar to the 'ou' in \"out\""
+    },
+    {
+     "en": "eo",
+     "sr": "the 'eo' in \"video\" ('e' as in 'there')"
+    },
+    {
+     "en": "io",
+     "sr": "the 'io' in \"radio\""
+    }
+   ]
+  },
+  {
+   "id": "basics",
+   "title": "Basics",
+   "phrases": [
+    {
+     "en": "Hello.",
+     "sr": "Здраво. Zdravo. (ZDRAH-voh)"
+    },
+    {
+     "en": "How are you?",
+     "sr": "Како сте? Kako ste? (KAH-koh steh?)"
+    },
+    {
+     "en": "Well, thanks.",
+     "sr": "Добро, хвала. Dobro, hvala. (DOH-broh, HVAH-lah)"
+    },
+    {
+     "en": "What is your name?",
+     "sr": "Како се зовете? Kako se zovete? (KAH-koh seh ZOH-veh-teh)"
+    },
+    {
+     "en": "My name is ______ .",
+     "sr": "Зовем се_____. Zovem se_____. (ZOH-vehm seh_____.)"
+    },
+    {
+     "en": "Pleased to meet you.",
+     "sr": "Драго ми је. Drago mi je. (DRAH-goh mee yeh)"
+    },
+    {
+     "en": "Please.",
+     "sr": "Молим. Molim. (MOH-leem)"
+    },
+    {
+     "en": "Thank you.",
+     "sr": "Хвала. Hvala. (HVAH-lah)"
+    },
+    {
+     "en": "You're welcome.",
+     "sr": "Молим. Molim. (MOH-leem)"
+    },
+    {
+     "en": "Yes.",
+     "sr": "Да. Da. (DAH)"
+    },
+    {
+     "en": "No.",
+     "sr": "Не. Ne. (NEH)"
+    },
+    {
+     "en": "Excuse me. (getting attention)",
+     "sr": "Извините. Izvinite. (eez-VEE-nee-teh)"
+    },
+    {
+     "en": "Excuse me. (begging pardon)",
+     "sr": "Извините. Izvinite. (eez-VEE-nee-teh)"
+    },
+    {
+     "en": "I'm sorry. (if it isn't speaker's fault, e.g. if you hear bad news)",
+     "sr": "Жао ми је. Žao mi je. (ZHOW mee yeh)"
+    },
+    {
+     "en": "I'm sorry. (if it's speaker's fault, e.g. if you bump into someone)",
+     "sr": "Извините. Izvinite. (eez-VEE-nee-teh)"
+    },
+    {
+     "en": "Goodbye",
+     "sr": "Довиђења. Doviđenja. (doh vee-JEH-nyah)"
+    },
+    {
+     "en": "I can't speak Serbian.",
+     "sr": "Не говорим српски. Ne govorim srpski. (neh GOH-voh-reem SR-ps-kee)"
+    },
+    {
+     "en": "Do you speak English?",
+     "sr": "Говорите ли енглески? Govorite li engleski? (GOH-voh-ree-teh lee ENH-glehs-kee?)"
+    },
+    {
+     "en": "Is there someone here who speaks English?",
+     "sr": "Има ли неког ко говори енглески? Ima li nekog ko govori engleski? (EE-mah lee NEH-kohg koh GOH-voh-ree EHN-glehs-kee ?)"
+    },
+    {
+     "en": "Help!",
+     "sr": "Упомоћ! Upomoć! (OO-poh-mohtch!)"
+    },
+    {
+     "en": "Look out!",
+     "sr": "Пази! Pazi! (PAH-zee!)"
+    }
+   ]
+  }
+ ]
+}

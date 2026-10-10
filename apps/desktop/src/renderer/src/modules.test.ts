@@ -153,6 +153,7 @@ describe("createModuleRegistry", () => {
       // The second discovered module, and the second line of the same kind: the
       // LAB declares `order: 330`, so it registers after `timers` and its 100.
       "lab",
+      "translator",
     ]);
   });
 
@@ -277,6 +278,7 @@ describe("createModuleRegistry", () => {
       // The LAB takes its own prefix for the reason above: an instrument drawer
       // is not a second reading of the utility belt.
       LAB: ["lab"],
+      LANG: ["translator"],
     });
   });
 
@@ -338,6 +340,8 @@ describe("createModuleRegistry", () => {
       // The map joins Knowledge (ADR-093 sent the reference libraries there and
       // named maps as one), after the compiled-in three by its `order`.
       "maps",
+      // The second discovered module, in the group it declares (ADR-090).
+      "translator",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -484,6 +488,7 @@ describe("createModuleRegistry", () => {
       // ON by default too: the LAB writes nothing until a log is created, and
       // the microphone and the serial port are each opened by a click.
       "lab",
+      "translator",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -688,6 +693,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "boards",
       // The second: one `fact` row, because the module stores nothing to set.
       "workshop",
+      "translator",
     ]);
   });
 

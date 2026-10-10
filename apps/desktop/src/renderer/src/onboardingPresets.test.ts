@@ -239,6 +239,7 @@ describe("resolveModuleSelection", () => {
       // And the second: a viewer stores nothing, so its manifest default is the
       // whole decision.
       workshop: true,
+      translator: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -315,6 +316,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "workshop", enabled: true },
       // Then the second one, in registry order.
       { moduleId: "drawings", enabled: true },
+      { moduleId: "translator", enabled: true },
     ]);
   });
 

@@ -1,0 +1,56 @@
+{
+  "sources": [
+    {
+      "role": "the en-to-sr index (English records with Serbo-Croatian translations) and the sr-to-en index (Serbo-Croatian records with English definitions)",
+      "url": "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz",
+      "bytes": 2981058381,
+      "sha256": "3dac8a09e57827bef493e2e6b552fe917bf3b1fc55dee05c4e4a3702aff5dbdb",
+      "fetchedAt": "2026-10-10T03:22:36.768Z",
+      "licence": "CC-BY-SA-4.0 (and GFDL, unversioned, no invariant sections)",
+      "licenceEvidence": [
+        {
+          "url": "https://kaikki.org/dictionary/index.html",
+          "quote": "This data is made available under the same licenses as Wiktionary - both CC-BY-SA and GFDL.  See <a href=\"https://en.wiktionary.org/wiki/Wiktionary:Copyrights\">Wiktionary copyright page</a> for more information.",
+          "what": "kaikki.org, the publisher of the extract, stating the licence of the data it serves"
+        },
+        {
+          "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+          "quote": "Creative Commons Attribution-ShareAlike 4.0 International License</a> (\"CC BY-SA 4.0\"), and ... GNU Free Documentation License</a> (\"GFDL\") (unversioned, with no invariant sections, front-cover texts, or back-cover texts).",
+          "what": "the Wikimedia Foundation's Terms of Use, the authoritative statement of the licence on Wiktionary text"
+        },
+        {
+          "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+          "quote": "Through hyperlink (where possible) or URL to the article to which you contributed (since each article has a history page that lists all contributors, authors and editors)",
+          "what": "the attribution route the pack takes: every entry carries its Wiktionary URL"
+        },
+        {
+          "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+          "quote": "When modifying or making additions to text that you have obtained from a Project Website, you agree to license the modified or added content under CC BY-SA 4.0 or later",
+          "what": "why this pack is itself CC BY-SA 4.0 rather than Apache-2.0, which the application stays"
+        }
+      ],
+      "note": "kaikki.org states the extract comes from the enwiktionary dump dated 2026-09-02 and is updated at least weekly. sha256 and fetchedAt are written by the build itself (--update-sources) and are the guard for a rebuild: a source whose bytes changed is a new pack, never a silently different one."
+    },
+    {
+      "role": "the phrasebook: the phrase list by topic",
+      "url": "https://en.wikivoyage.org/w/index.php?title=Serbian_phrasebook&action=raw",
+      "bytes": 47086,
+      "sha256": "29a49421d5f6379ed8b95a79fbe7f5c0538ca11925cd9384ad4cfe289d8492c9",
+      "fetchedAt": "2026-10-10T03:22:36.768Z",
+      "licence": "CC-BY-SA-4.0",
+      "licenceEvidence": [
+        {
+          "url": "https://en.wikivoyage.org/w/index.php?title=Wikivoyage:Copyleft&action=raw",
+          "quote": "All written contributions to this project are automatically licensed under the CC BY-SA 4.0 License.",
+          "what": "Wikivoyage's own copyleft page, stating the licence of every written contribution"
+        },
+        {
+          "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+          "quote": "Creative Commons Attribution-ShareAlike 4.0 International License</a> (\"CC BY-SA 4.0\"), and ... GNU Free Documentation License</a> (\"GFDL\") (unversioned, with no invariant sections, front-cover texts, or back-cover texts).",
+          "what": "the same Terms of Use sentence, which covers Wikivoyage as a Wikimedia project"
+        }
+      ],
+      "note": "The phrasebook's text ships verbatim apart from markup; the page's own headings are the topics. The raw action is used rather than the rendered page because the wiki's own source is what the licence covers and what a diff can be taken against."
+    }
+  ]
+}
