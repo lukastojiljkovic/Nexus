@@ -359,6 +359,8 @@ export class LibraryStore {
   private readonly selectCoversForProfile: Database.Statement;
   private readonly selectCoversForExport: Database.Statement;
   private readonly deleteCover: Database.Statement;
+  private readonly countCoversBySha: Database.Statement;
+  private readonly selectCoverMimeBySha: Database.Statement;
 
   private readonly selectPasses: Database.Statement;
   private readonly selectPass: Database.Statement;
@@ -509,6 +511,21 @@ export class LibraryStore {
         ORDER BY c.item_id`,
     );
     this.deleteCover = db.prepare(`DELETE FROM library_item_covers WHERE item_id = ?`);
+    // The blob union's own two questions, asked about `library_item_covers` —
+    // this module's ONE hash-naming table (ADR-108). Profile-agnostic like every
+    // other member of that union (`NoteAttachmentStore.refCount`'s contract):
+    // the blob store is content-addressed across the whole database, so a count
+    // scoped to one profile would report zero for a file another profile's cover
+    // still names. Blind to the item's soft delete on purpose, as
+    // `RecorderStore.refCount` is blind to its own trash: a deleted work can be
+    // restored, and a file collected under it would be bytes that restore points
+    // at again.
+    this.countCoversBySha = db.prepare(
+      `SELECT count(*) AS n FROM library_item_covers WHERE sha256 = ?`,
+    );
+    this.selectCoverMimeBySha = db.prepare(
+      `SELECT mime FROM library_item_covers WHERE sha256 = ? LIMIT 1`,
+    );
 
     this.selectPasses = db.prepare(
       `SELECT ${PASS_COLUMNS} FROM library_passes WHERE item_id = ? ORDER BY seq`,
@@ -828,6 +845,26 @@ export class LibraryStore {
       if (changes > 0) this.touchItem.run(validNow, itemId, this.profileId);
     })();
     return this.getItem(itemId);
+  }
+
+  /**
+   * How many cover rows — across EVERY profile — name this blob hash. The
+   * store's own count, which `main/index.ts`'s `blobRefCount` adds to its other
+   * tables' before deciding a file on disk is orphaned (ADR-108's hook).
+   */
+  refCount(sha256: string): number {
+    const { n } = this.countCoversBySha.get(sha256) as { n: number };
+    return n;
+  }
+
+  /**
+   * The mime any cover row registered for a hash, or null when none names it —
+   * the `nx-blob:` serve gate, profile-agnostic like the count above (the
+   * protocol asks with no profile at all).
+   */
+  mimeForHash(sha256: string): string | null {
+    const row = this.selectCoverMimeBySha.get(sha256) as { mime: string } | undefined;
+    return row?.mime ?? null;
   }
 
   // --- passes --------------------------------------------------------------

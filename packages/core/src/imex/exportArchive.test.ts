@@ -429,6 +429,115 @@ describe("buildExportArchive", () => {
     });
   });
 
+  // ADR-108: a kit module's own files join the same `blobs/` union the picture
+  // and every attachment row do. The two hashes below are named the way a real
+  // module names them - a recipe photo and a culture ticket, each with the size
+  // its own row states - and the sizes are the ones the rows carry, which is
+  // what a restore compares a written file against.
+  describe("the kit section's blobs (ADR-108)", () => {
+    const RECIPE_PHOTO = { sha256: "1".repeat(64), sizeBytes: 5_242_880 };
+    const CULTURE_TICKET = { sha256: "2".repeat(64), sizeBytes: 96_512 };
+
+    it("declares one binary entry per module hash, with the manifest's own list", () => {
+      const input = emptyInput();
+      input.data.modules = [
+        { moduleId: "cookbook", payload: { version: 1, recipes: [] } },
+        { moduleId: "culture", payload: { version: 1, visits: [] } },
+      ];
+      input.moduleBlobs = [RECIPE_PHOTO, CULTURE_TICKET];
+      const archive = buildExportArchive(input);
+
+      // In the order they were declared - a module's own row order - while the
+      // manifest below is sha-sorted, exactly as the built-in blobs' two lists
+      // already differ. Both are deterministic, which is what "two exports of
+      // one profile are byte-identical" needs.
+      expect(archive.binaries).toEqual([
+        {
+          kind: "attachment",
+          path: `blobs/${RECIPE_PHOTO.sha256}`,
+          sha256: RECIPE_PHOTO.sha256,
+          sizeBytes: RECIPE_PHOTO.sizeBytes,
+        },
+        {
+          kind: "attachment",
+          path: `blobs/${CULTURE_TICKET.sha256}`,
+          sha256: CULTURE_TICKET.sha256,
+          sizeBytes: CULTURE_TICKET.sizeBytes,
+        },
+      ]);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+        blobs: { sha256: string; sizeBytes: number }[];
+      };
+      expect(manifest.blobs).toEqual([
+        { sha256: RECIPE_PHOTO.sha256, sizeBytes: RECIPE_PHOTO.sizeBytes },
+        { sha256: CULTURE_TICKET.sha256, sizeBytes: CULTURE_TICKET.sizeBytes },
+      ]);
+    });
+
+    // One namespace, one copy: the same rule the note/task/dashboard cases state
+    // for their own hashes, and the reason the two modules above may declare a
+    // hash twice without the archive growing a second entry for it.
+    it("declares a hash two modules both name exactly once", () => {
+      const input = emptyInput();
+      input.data.modules = [
+        { moduleId: "cookbook", payload: { version: 1, recipes: [] } },
+        { moduleId: "culture", payload: { version: 1, visits: [] } },
+      ];
+      input.moduleBlobs = [RECIPE_PHOTO, { ...RECIPE_PHOTO }];
+      const archive = buildExportArchive(input);
+      expect(archive.binaries.filter((entry) => entry.path === `blobs/${RECIPE_PHOTO.sha256}`)).toHaveLength(1);
+    });
+
+    it("declares a hash shared with a note attachment exactly once", () => {
+      const input = emptyInput();
+      input.data.notes = [noteRow({ id: "n1", title: "Recept" })];
+      input.data.noteAttachments = [
+        attachmentRow({
+          id: "na1",
+          noteId: "n1",
+          sha256: RECIPE_PHOTO.sha256,
+          sizeBytes: RECIPE_PHOTO.sizeBytes,
+        }),
+      ];
+      input.moduleBlobs = [RECIPE_PHOTO];
+      const archive = buildExportArchive(input);
+      expect(
+        archive.binaries.filter((entry) => entry.path === `blobs/${RECIPE_PHOTO.sha256}`),
+      ).toHaveLength(1);
+    });
+
+    // "No module blobs" is every archive written before this decision, and it
+    // must stay byte for byte the archive it was: the input key is absent, not
+    // empty, and nothing appears in the manifest that did not appear then.
+    it("writes neither an entry nor a manifest line when no module names a blob", () => {
+      const input = emptyInput();
+      input.data.modules = [{ moduleId: "timers", payload: { version: 1, presets: [] } }];
+      const archive = buildExportArchive(input);
+      expect(archive.binaries).toEqual([]);
+      const manifest = JSON.parse(archive.files.get("manifest.json") ?? "") as {
+        blobs: unknown[];
+      };
+      expect(manifest.blobs).toEqual([]);
+    });
+
+    // A module's payload belongs to no archive module (ADR-090 §5), so the file
+    // beside it rides whole in a subset export the way the section itself does.
+    it("carries the module blobs with every subset", () => {
+      const input = emptyInput();
+      input.modules = new Set<ArchiveModuleId>(["tasks"]);
+      input.moduleBlobs = [CULTURE_TICKET];
+      const archive = buildExportArchive(input);
+      expect(archive.binaries).toEqual([
+        {
+          kind: "attachment",
+          path: `blobs/${CULTURE_TICKET.sha256}`,
+          sha256: CULTURE_TICKET.sha256,
+          sizeBytes: CULTURE_TICKET.sizeBytes,
+        },
+      ]);
+    });
+  });
+
   describe("data/tasks.ndjson", () => {
     it("writes one type-discriminated line per task, fields in fixed order", () => {
       const input = emptyInput();

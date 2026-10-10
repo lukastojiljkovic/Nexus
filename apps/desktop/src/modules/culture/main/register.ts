@@ -567,6 +567,42 @@ export function register(host: ModuleHostSurface): void {
       }
     },
   });
+
+  // The blob hook (ADR-108): the count main's union takes from this module's two
+  // hash-naming tables, the mime `nx-blob:` serves a photo as, and the hashes one
+  // archive section carries. One registration, in the module's own folder - the
+  // two hand-written lines that used to name this module in `main/index.ts` are
+  // gone, and a run that adds a third table here has one place to say so.
+  ctx.blobs({
+    refCount: (session, profileId, sha256) => store(session, profileId).refCount(sha256),
+    mimeForHash: (session, profileId, sha256) => store(session, profileId).mimeForHash(sha256),
+    exportBlobs: (session) => {
+      const profileId = soleProfile(session.profileIds);
+      return profileId === null ? [] : sectionBlobs(store(session, profileId).exportData());
+    },
+    // The payload is what this module's own `parse` answered - the host parses
+    // before asking - and an absent one means the shipped default, exactly as
+    // `apply` reads it.
+    importBlobs: (payload) =>
+      sectionBlobs(cultureSectionOrDefault(payload as CultureExport | undefined)),
+  });
+}
+
+/**
+ * Every blob one CULTURE section names: each visit's photos and each track's
+ * audio, with the sizes the rows state.
+ *
+ * Read off the EXPORT value rather than the raw tables, so the list is exactly
+ * the rows the archive carries - a soft-deleted track is in neither - and so
+ * the export and import halves cannot disagree about which rows exist.
+ */
+function sectionBlobs(section: CultureExport): { sha256: string; sizeBytes: number }[] {
+  return [
+    ...section.visits.flatMap((visit) =>
+      visit.photos.map((photo) => ({ sha256: photo.sha256, sizeBytes: photo.sizeBytes })),
+    ),
+    ...section.tracks.map((track) => ({ sha256: track.sha256, sizeBytes: track.sizeBytes })),
+  ];
 }
 
 /** The one profile a session is about, or `null` when it names none or several (an archive is written one profile at a time). */

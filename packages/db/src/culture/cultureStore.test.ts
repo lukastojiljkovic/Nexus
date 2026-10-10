@@ -1321,6 +1321,30 @@ describe("CultureStore's own preference and blob counts", () => {
     expect(culture.mimeForHash(HASH)).toBe("audio/mpeg");
   });
 
+  it("counts a hash another profile's row names, and answers its mime with no profile to ask with", () => {
+    const mine = store();
+    const theirs = store();
+    const visit = theirs.createVisit(
+      { kind: "museum", title: "Tesla", venue: "Narodni muzej", date: "2026-05-01" },
+      NOW,
+    );
+    theirs.addVisitPhoto(
+      visit.id,
+      { fileName: "karta.jpg", mime: "image/jpeg", sizeBytes: 1_024, sha256: HASH },
+      NOW,
+    );
+
+    // The count is database-wide, like every other member of main's blob union:
+    // the file being removed is counted against the profile whose row goes, and
+    // a count scoped to that profile alone would take bytes the OTHER profile
+    // still shows (hand-counted: exactly one row anywhere names HASH).
+    expect(mine.refCount(HASH)).toBe(1);
+    // And so is the mime, because `nx-blob:` asks for a hash with no profile at
+    // all - a lookup scoped to one profile answered null there and 404'd a
+    // ticket the page was drawing.
+    expect(mine.mimeForHash(HASH)).toBe("image/jpeg");
+  });
+
   it("reads one live track, and answers null once it is deleted", () => {
     const culture = store();
     const track = culture.createTrack({ title: "Pesma", durationMs: 90_000, ...MP3 }, NOW);

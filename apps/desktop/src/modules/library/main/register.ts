@@ -483,6 +483,32 @@ export function register(host: ModuleHostSurface): void {
       }
     },
   });
+
+  // The blob hook (ADR-108): a work's cover is the one file this module keeps in
+  // the shared store. Nothing in this build creates a cover row yet (the module's
+  // screens do not upload images), and the carrier is registered anyway - the
+  // payload already travels with cover rows, so an archive carrying one has to
+  // find its bytes on the way back in, and the day a cover surface arrives is not
+  // the day to remember this.
+  ctx.blobs({
+    refCount: (session, profileId, sha256) => library(session, profileId).refCount(sha256),
+    mimeForHash: (session, profileId, sha256) => library(session, profileId).mimeForHash(sha256),
+    exportBlobs: (session) => {
+      const profileId = soleProfile(session.profileIds);
+      return profileId === null ? [] : coverBlobs(library(session, profileId).exportData());
+    },
+    importBlobs: (payload) =>
+      coverBlobs((payload as LibraryExportV1 | undefined) ?? EMPTY_LIBRARY_EXPORT),
+  });
+}
+
+/**
+ * Every cover one BIBLIOTEKA section names, with the size its row states - read
+ * off the EXPORT value rather than the raw table, so the list is exactly the
+ * covers the archive carries (a soft-deleted work is in neither).
+ */
+function coverBlobs(section: LibraryExportV1): { sha256: string; sizeBytes: number }[] {
+  return section.covers.map((cover) => ({ sha256: cover.sha256, sizeBytes: cover.sizeBytes }));
 }
 
 /**

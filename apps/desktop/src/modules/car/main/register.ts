@@ -18,6 +18,7 @@ import {
   type ServiceCategory,
 } from "@nexus/core";
 import {
+  type CarExport,
   CarStore,
   MAX_DUE_SOON_DAYS,
   MAX_FAULT_FIX_NOTES_LENGTH,
@@ -855,6 +856,35 @@ export function register(host: ModuleHostSurface): void {
       }
     },
   });
+
+  // The blob hook (ADR-108): a service's receipt is the one file this module
+  // keeps in the shared store. Registered here rather than named in
+  // `main/index.ts`, so this module's two hash-naming facts live beside the
+  // handlers that write the rows.
+  ctx.blobs({
+    refCount: (session, profileId, sha256) =>
+      carStore(session, profileId).attachmentRefCount(sha256),
+    mimeForHash: (session, profileId, sha256) =>
+      carStore(session, profileId).attachmentMimeForHash(sha256),
+    exportBlobs: (session) => {
+      const profileId = soleProfile(session.profileIds);
+      return profileId === null ? [] : receiptBlobs(carStore(session, profileId).exportData());
+    },
+    importBlobs: (payload) =>
+      receiptBlobs((payload as CarExportPayload | undefined) ?? emptyCarExport()),
+  });
+}
+
+/**
+ * Every receipt one CAR section names, with the size its row states - read off
+ * the EXPORT value rather than the raw table, so the list is exactly the rows
+ * the archive carries.
+ */
+function receiptBlobs(section: CarExport): { sha256: string; sizeBytes: number }[] {
+  return section.serviceAttachments.map((receipt) => ({
+    sha256: receipt.sha256,
+    sizeBytes: receipt.sizeBytes,
+  }));
 }
 
 /**

@@ -3150,3 +3150,4 @@ export {
 export type { AssistantWorkflow } from "./assistant/workflows.js";
 export { createScriptedModel } from "./assistant/fakeModel.js";
 export type { ScriptedChatModel, ScriptedModelOptions, ScriptedStep } from "./assistant/fakeModel.js";
+export type { ExportModuleBlob } from "./imex/exportArchive.js";

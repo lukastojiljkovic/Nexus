@@ -26,15 +26,16 @@ import type { LibraryStore } from "@nexus/db";
  * difference between sending a reader to a newer build and telling them their
  * own file is corrupt (Tajmeri's rule, one module over).
  *
- * **What the payload carries, and the one thing it cannot.** A work, its passes,
- * its thoughts, its collections and their order all ride. Its COVER rides as an
- * index row - name, MIME, size, hash - and the BYTES do not, because the
- * archive's `blobs/` union is built in `@nexus/core` from the compiled-in
- * modules' own fields, and a kit module's payload is deliberately opaque to that
- * builder. Nothing in this build creates a cover row either (the module's
- * screens do not upload images), so the gap is unreachable today and is recorded
- * here rather than papered over: the day a cover becomes reachable, the blob
- * carrier is the piece to add - not a field on this payload.
+ * **What the payload carries, and where the bytes go.** A work, its passes, its
+ * thoughts, its collections and their order all ride, and so does its COVER - as
+ * an index row (name, MIME, size, hash), never as bytes. The bytes travel beside
+ * the payload through the module's own blob hook (ADR-108, `ctx.blobs` at the
+ * bottom of `./register.ts`): main adds the hashes the covers name to the
+ * archive's `blobs/` union, and a restore writes them back before this module's
+ * `apply` writes the cover rows that name them. Nothing in this build creates a
+ * cover row either (the module's screens do not upload images), so the carrier is
+ * registered ahead of the surface that will fill it rather than left for that
+ * run to remember.
  *
  * **Live content only.** A soft-deleted work is not in the value, and neither
  * are its passes and its thoughts; that is `export.ts`'s own rule, and it is why
