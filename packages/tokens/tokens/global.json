@@ -115,7 +115,8 @@
       "danMat":  "#23201c", "nocMat":  "#0a0d1a",
       "danGrid": "#3a352d", "nocGrid": "#1c2340",
       "danBody": "#35302a", "nocBody": "#141a30",
-      "danEdge": "#a89c85", "nocEdge": "#8f96b3"
+      "danEdge": "#a89c85", "nocEdge": "#8f96b3",
+      "danFocus": "#eecb74", "nocFocus": "#e5bf62"
     }
   },
   "font": {

@@ -97,7 +97,11 @@ describe("the live palette", () => {
       // the bench and a component's outline against both its own body and the
       // bench, each at the 3:1 NON-TEXT floor because a wire is a mark rather
       // than prose; plus the grid, which is held to the HAIRLINE band instead.
-      expect(checked).toBe(87);
+      // +1 with the wire focus ring: the box the keyboard puts around a jumper,
+      // at the same 3:1 NON-TEXT floor, in the bench's own ink rather than in
+      // the accent — which is chosen against the theme's ground, and is a dark
+      // gold in Dan, the one thing a ring on this mat may not be.
+      expect(checked).toBe(88);
     }
   });
 });

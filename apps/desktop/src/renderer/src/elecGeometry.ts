@@ -278,7 +278,7 @@ const WIRE_REACH_MAX = 140;
 const WIRE_SAG_MAX = 26;
 
 /**
- * A jumper between two pins.
+ * How a jumper bows between the two pins it connects.
  *
  * A cubic whose control points leave each pin ALONG ITS OWN LEG, so a wire
  * never grows out of the side of a part it is not connected to — and with a sag
@@ -286,15 +286,25 @@ const WIRE_SAG_MAX = 26;
  * segments were the first draft and read as a schematic; the founder asked for
  * „što realističnije", and a bench is the thing being drawn.
  */
-export function wirePath(from: WireAnchor, to: WireAnchor): string {
+export function wireControls(from: WireAnchor, to: WireAnchor): readonly [ElecPoint, ElecPoint] {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.hypot(dx, dy);
   const reach = Math.min(WIRE_REACH_MAX, Math.max(WIRE_REACH_MIN, distance * 0.35));
   const sag = Math.min(WIRE_SAG_MAX, distance * 0.1);
 
-  const c1 = { x: from.x + from.out.x * reach, y: from.y + from.out.y * reach + sag };
-  const c2 = { x: to.x + to.out.x * reach, y: to.y + to.out.y * reach + sag };
+  // Both control points come back rather than being inlined into the path:
+  // `wireFocusBox` needs the same curve, and a second derivation of the reach
+  // and the sag would be a focus ring that visibly does not fit its wire.
+  return [
+    { x: from.x + from.out.x * reach, y: from.y + from.out.y * reach + sag },
+    { x: to.x + to.out.x * reach, y: to.y + to.out.y * reach + sag },
+  ];
+}
+
+/** A jumper between two pins, as the path the bench draws. */
+export function wirePath(from: WireAnchor, to: WireAnchor): string {
+  const [c1, c2] = wireControls(from, to);
   const n = (value: number): string => value.toFixed(2);
   return `M ${n(from.x)} ${n(from.y)} C ${n(c1.x)} ${n(c1.y)}, ${n(c2.x)} ${n(c2.y)}, ${n(to.x)} ${n(to.y)}`;
 }
@@ -305,6 +315,92 @@ export interface ElecBounds {
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
+}
+
+/** How far a wire's focus ring stands off the wire, from the wire's own centre line. */
+const WIRE_FOCUS_OFFSET = 5;
+/**
+ * The smallest side a focus ring may have, whatever the wire inside it measures.
+ * One pin pitch, which is the floor this bench already builds everything to: a
+ * pin's own hit disc is exactly this across, and it is the size below which the
+ * ring reads as two parallel lines rather than as a box around a wire.
+ */
+const WIRE_FOCUS_MIN = PIN_PITCH;
+
+/**
+ * The extreme values of one axis of a cubic, over the whole segment.
+ *
+ * The curve leaves the box its two ends span only where its derivative crosses
+ * zero, so the extremes are at the ends and at whatever roots of `B'(t)` land
+ * inside the segment. Taking the four control points instead is three lines
+ * shorter and up to one control arm wrong, and the caller draws a box around
+ * this, so wrong means a focus ring visibly failing to contain the wire it is
+ * around.
+ */
+function curveSpan(p0: number, p1: number, p2: number, p3: number): { min: number; max: number } {
+  const at = (t: number): number => {
+    const u = 1 - t;
+    return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+  };
+  let min = Math.min(p0, p3);
+  let max = Math.max(p0, p3);
+  const include = (t: number): void => {
+    if (t <= 0 || t >= 1) return;
+    const value = at(t);
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  };
+
+  // B'(t)/3 is the quadratic below, so the extremes are its roots.
+  const a = -p0 + 3 * p1 - 3 * p2 + p3;
+  const b = 2 * (p0 - 2 * p1 + p2);
+  const c = p1 - p0;
+  if (a === 0) {
+    if (b !== 0) include(-c / b);
+  } else {
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant >= 0) {
+      const root = Math.sqrt(discriminant);
+      include((-b + root) / (2 * a));
+      include((-b - root) / (2 * a));
+    }
+  }
+  return { min, max };
+}
+
+/**
+ * The box a wire's focus ring is drawn on: the whole curve, opened out by
+ * `WIRE_FOCUS_OFFSET` on every side and centred on what it surrounds.
+ *
+ * **A ring AROUND the wire, not a stroke along it.** The wire is already one of
+ * nine colours, and this is the one mark on the bench whose job is to be seen
+ * whatever is under it; a ring drawn on the wire would have to be told apart
+ * from the wire, and gold over a yellow jumper is not a ring. Standing the box
+ * off the curve puts the ring in the canvas on either side of the wire, at
+ * `WIRE_FOCUS_OFFSET` from the centre line, so the wire's own 3-unit stroke
+ * (half of it on each side) still leaves a visible gap, and that is the same
+ * mark on the yellow, the white and the black.
+ *
+ * **Nothing reads this but a keyboard.** The box is the target of the group's
+ * roving tab stop and of nothing else; a pointer never resolves it, and the hit
+ * path a click lands on is unchanged (`ElecBench.tsx`).
+ */
+export function wireFocusBox(from: WireAnchor, to: WireAnchor): ElecBounds {
+  const [c1, c2] = wireControls(from, to);
+  const x = curveSpan(from.x, c1.x, c2.x, to.x);
+  const y = curveSpan(from.y, c1.y, c2.y, to.y);
+  const width = Math.max(WIRE_FOCUS_MIN, x.max - x.min + WIRE_FOCUS_OFFSET * 2);
+  const height = Math.max(WIRE_FOCUS_MIN, y.max - y.min + WIRE_FOCUS_OFFSET * 2);
+  const centre = { x: (x.min + x.max) / 2, y: (y.min + y.max) / 2 };
+
+  // The floor is applied about the CURVE's own centre, so a short jumper's ring
+  // grows outwards on all four sides instead of drifting off the wire it rings.
+  return {
+    minX: centre.x - width / 2,
+    minY: centre.y - height / 2,
+    maxX: centre.x + width / 2,
+    maxY: centre.y + height / 2,
+  };
 }
 
 /** What the view is looking at: a translation in screen pixels and a scale. */
