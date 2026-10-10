@@ -130,7 +130,13 @@ export type IconName =
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The SIGNALS module's mark (ADR-090): an emission from a point — the key at
+  // the corner with three arcs leaving it, which is what a signal IS in every
+  // one of that module's four tools. Drawn here rather than in the module
+  // because the drawing lives with the other drawings; the module brings the
+  // name (`renderer/icon.ts`).
+  | "signal";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -794,6 +800,19 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  // SIGNALS (ADR-090). A key at the lower-left corner with three arcs leaving
+  // it: the one shape shared by a Morse key, a microphone reading a pitch, a
+  // level meter and a character's code. The arcs are quarter circles from the
+  // same centre, so they read as one emission rather than as three curves, and
+  // the dot is the set's own zero-length subpath rather than a second fill.
+  signal: (
+    <>
+      <path d="M6 13.5A4.5 4.5 0 0 1 10.5 18" />
+      <path d="M6 9.5A8.5 8.5 0 0 1 14.5 18" />
+      <path d="M6 5.5A12.5 12.5 0 0 1 18.5 18" />
+      <path d="M6 18h0" />
+    </>
+  ),
 };
 
 /**

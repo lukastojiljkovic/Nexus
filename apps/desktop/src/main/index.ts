@@ -775,6 +775,7 @@ import { seedDemoCanvas } from "./demo/canvas.js";
 import { createDemoContext } from "./demo/context.js";
 import type { DemoAttachmentIo } from "./demo/attachments.js";
 import { duplicateStems, missingCoverage, runShots } from "./shots/index.js";
+import { allows as signalsAllowsMicrophone } from "../modules/signals/main/permission.js";
 
 /**
  * Reads a harness flag off the command line — and answers false for every one
@@ -13769,14 +13770,23 @@ app.whenReady().then(async () => {
   // The one rung of the Electron hardening set that had neither code nor a
   // stated reason. Nexus asks the web platform for nothing — notifications are
   // raised by `Notification` in MAIN, not by the renderer's Notification API,
-  // and there is no camera, microphone, geolocation, MIDI or clipboard-read
-  // path anywhere in the product. So both handlers deny unconditionally rather
-  // than switching on a permission name: an allowlist with no entries is a
-  // list somebody eventually adds to, and a flat refusal is a decision.
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {
-    callback(false);
+  // and there is no camera, geolocation, MIDI or clipboard-read path anywhere in
+  // the product. Both handlers therefore deny by default, and the ONE exception
+  // is the microphone the SIGNALS module's tuner and sound meter need (ADR-090).
+  // The rule is a pure, tested function in that module's own folder
+  // (`modules/signals/main/permission.ts`): the `media` permission only, the main
+  // frame only, audio only, from this application's own page only. These two calls
+  // are the only places it is consulted (Chromium asks the check handler as well
+  // as the request handler), so nothing here is `true`, a wildcard, or a
+  // permission name this build does not implement.
+  const signalsDevOrigin = devServerOrigin(process.env);
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    callback(signalsAllowsMicrophone(permission, details.requestingUrl, details, signalsDevOrigin));
   });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, requestingOrigin, details) =>
+      signalsAllowsMicrophone(permission, requestingOrigin, details, signalsDevOrigin),
+  );
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries

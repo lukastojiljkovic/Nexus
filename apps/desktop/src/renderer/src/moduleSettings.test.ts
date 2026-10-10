@@ -104,6 +104,7 @@ describe("moduleSettingsDeclarations", () => {
       // The first DISCOVERED card (ADR-090), last because a kit module
       // registers after every compiled-in one.
       "timers",
+      "signals",
     ]);
   });
 
@@ -141,6 +142,7 @@ describe("moduleSettingsCardIds", () => {
       "focus",
       "tools",
       "timers",
+      "signals",
     ]);
   });
 
@@ -181,6 +183,7 @@ describe("moduleSettingsCards", () => {
       "focus",
       "tools",
       "timers",
+      "signals",
     ]);
     expect(cards.map((card) => card.title)).toEqual([
       s().sectionTitle.dashboard,
@@ -198,6 +201,7 @@ describe("moduleSettingsCards", () => {
       // expected value is its own pair read in the language being read rather
       // than a path into the shell's table.
       kitManifest("timers")?.copy?.name[activeLocale()] ?? "",
+      kitManifest("signals")?.copy?.name[activeLocale()] ?? "",
     ]);
   });
 
@@ -233,7 +237,18 @@ describe("isDeviceOnlyPanel", () => {
     const deviceOnly = [...declarations]
       .filter(([, panel]) => isDeviceOnlyPanel(panel))
       .map(([moduleId]) => moduleId);
-    expect(deviceOnly).toEqual(["tasks", "notes", "files", "finance", "habits", "focus", "tools"]);
+    expect(deviceOnly).toEqual([
+      "tasks",
+      "notes",
+      "files",
+      "finance",
+      "habits",
+      "focus",
+      "tools",
+      // SIGNALS has no store at all: its three preferences are the whole of what
+      // it keeps, and they are this machine's (`modules/signals/shared/manifest.ts`).
+      "signals",
+    ]);
   });
 
   it("is false for a panel holding a profile row — a reset there would be a write about the user's data", () => {
@@ -259,6 +274,12 @@ describe("isDeviceOnlyPanel", () => {
 
   it("agrees with the renderer: a panel offers `resetDevice` exactly when it is device-only", () => {
     for (const { moduleId, panel } of moduleSettingsDeclarations(createModuleRegistry())) {
+      // A KIT module's card is its own body and the shell offers it no reset at
+      // all (`moduleKit/settings.ts`), so the pairing this test states — „the
+      // shell's reset link appears exactly for a device-only CARD THE SHELL
+      // DRAWS" — is asked of the compiled-in map only. The module's own body
+      // brings the reset it wants; `Settings.tsx` of SIGNALS has one.
+      if (MODULE_SETTINGS_PANELS[moduleId] === undefined) continue;
       expect(MODULE_SETTINGS_PANELS[moduleId]?.resetDevice !== undefined, moduleId).toBe(
         isDeviceOnlyPanel(panel),
       );

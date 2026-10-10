@@ -163,9 +163,18 @@ export class LeqWindow {
   #sum = 0;
   #frames = 0;
 
-  /** Push one frame's RMS, in linear amplitude. */
+  /**
+   * Push one frame's RMS, in linear amplitude.
+   *
+   * A frame of digital silence is `0` and is COUNTED — it is a measurement of
+   * nothing, which is what a quiet room is — exactly as `leqFromFrameRms` counts
+   * it. The first version refused `value <= 0` along with the values that are not
+   * levels at all, so a window that went quiet kept reporting its last loud
+   * second; what may be refused is a value that is not a level (negative,
+   * `NaN`, infinite), never a quiet one.
+   */
   addFrameRms(value: number): void {
-    if (!Number.isFinite(value) || value <= 0) return;
+    if (!Number.isFinite(value) || value < 0) return;
     this.#sum += value * value;
     this.#frames += 1;
   }

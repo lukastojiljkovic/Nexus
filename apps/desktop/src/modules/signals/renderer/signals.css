@@ -1,0 +1,298 @@
+/* SIGNALI (ADR-090). Tokens exclusively — raw colour values are forbidden outside
+   @nexus/tokens, and this stylesheet is checked by the same gates the shell's own
+   are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE AND BY ITS SETTINGS CARD BODY. The
+ * page is lazy and so is the card, and the settings page can be opened by somebody
+ * who never opened the module, so the card imports the stylesheet too: two imports
+ * of one module is one chunk of CSS in the built output, and a card that assumed
+ * the page had been visited would be an unstyled card.
+ *
+ * Class prefix `signals__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries. `.set__*` classes are the SHELL's settings
+ * classes and are used here as a module body uses them (`TimersSettings` does the
+ * same) — they are the settings page's own arrangement, not this module's.
+ */
+
+.signals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+/* The four tabs: a wrapping row, so a narrow window stacks them rather than
+   scrolling sideways. */
+.signals__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.signals__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* Form rows. `end` rather than `center`: a stacked field (label above input) and a
+   bare button in one row line up at the BOTTOM, so the two things a person touches
+   sit on one line — `check:rows` is the gate that knows this, and it reads the
+   markup. */
+.signals__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.signals__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.signals__pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--nx-layout-field-min), 1fr));
+  gap: var(--nx-space-3);
+}
+
+.signals__message {
+  font-family: var(--nx-font-family-ui);
+}
+
+/* The code fields and every readout of a code, a note name or a level: monospace
+   and tabular, because a column of dots and dashes is read by aligning them. */
+.signals__message--code,
+.signals__code,
+.signals__num,
+.signals__note,
+.signals__level,
+.signals__decode-text {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.signals__number {
+  width: 9rem;
+}
+
+.signals__search {
+  flex: 1 1 16rem;
+}
+
+.signals__readout {
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-subtle);
+}
+
+.signals__error {
+  color: var(--nx-danger);
+}
+
+/* The tuner's own display type: the note somebody is looking at from across a
+   foot of cable. */
+.signals__note {
+  font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
+  color: var(--nx-text);
+}
+
+.signals__level {
+  font-size: var(--nx-font-size-h1);
+  line-height: var(--nx-font-leading-tight);
+  color: var(--nx-text);
+}
+
+.signals__needle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+  align-items: center;
+}
+
+/* The cents scale: a track with a centre mark and one moving needle. The needle's
+   POSITION is the one thing a style attribute carries (a number in a class cannot
+   be written), and it is a position, never a colour or a length. */
+.signals__needle {
+  position: relative;
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  height: 2px;
+  background: var(--nx-border-subtle);
+}
+
+.signals__needle-centre {
+  position: absolute;
+  inset-block: calc(-1 * var(--nx-space-1)) auto;
+  inset-inline-start: 50%;
+  width: 1px;
+  height: calc(2 * var(--nx-space-1) + 2px);
+  background: var(--nx-border);
+}
+
+.signals__needle-mark {
+  position: absolute;
+  top: calc(-1 * var(--nx-space-1));
+  width: 2px;
+  height: calc(2 * var(--nx-space-1) + 2px);
+  background: var(--nx-accent);
+}
+
+/* Redundancy rule: „in tune" is never colour alone — the chip beside the readout
+   says it in words, and this is the same state in position. */
+.signals__needle-mark--true {
+  background: var(--nx-data);
+}
+
+.signals__strings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  list-style: none;
+}
+
+.signals__string {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: baseline;
+  padding: var(--nx-space-1) var(--nx-space-2);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  color: var(--nx-text-subtle);
+}
+
+/* The string the reading is nearest: typographic, plus the readout above it. No
+   fill, no glow (the No-Glow Rule). */
+.signals__string--near {
+  border-color: var(--nx-accent);
+  color: var(--nx-text);
+}
+
+.signals__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2) var(--nx-space-4);
+  list-style: none;
+  padding-block-start: var(--nx-space-2);
+}
+
+.signals__legend-row {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: baseline;
+}
+
+.signals__legend-sign {
+  min-width: 2ch;
+  color: var(--nx-text-subtle);
+}
+
+.signals__decode-text {
+  min-height: 2rem;
+  overflow-wrap: anywhere;
+}
+
+/* The key-down lamp on the decoder: a small square that fills while the key is
+   down. It is the only animated thing in this module and it moves because the
+   signal moves. */
+.signals__key {
+  width: var(--nx-space-3);
+  height: var(--nx-space-3);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-xs);
+}
+
+.signals__key--down {
+  background: var(--nx-accent);
+}
+
+.signals__warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-3);
+  border: 1px solid var(--nx-danger);
+  border-radius: var(--nx-radius-md);
+}
+
+/* Deliberately NOT the hint tier: this line is a warning heading, and the gate
+   that counts retyped tiers (`check:tiers`) reads exactly this difference. */
+.signals__warning-title {
+  color: var(--nx-danger);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+/* The lamp: the whole window, above everything drawn in it. It sits on the
+   `overlay` rung of the one stacking scale (`check:layers`), and its two states
+   are the app's OWN ink and ground — a near-black and a near-white in both
+   themes, so no raw colour is needed to say „white" and „black". */
+.signals__lamp {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nx-layer-overlay);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--nx-space-4);
+}
+
+.signals__lamp--bright {
+  background: var(--nx-bg);
+}
+
+.signals__lamp--dark {
+  background: var(--nx-text);
+}
+
+.signals__lamp-bar {
+  display: flex;
+  gap: var(--nx-space-3);
+  align-items: center;
+}
+
+.signals__table-wrap {
+  overflow-x: auto;
+}
+
+.signals__ascii {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.signals__ascii th,
+.signals__ascii td {
+  padding: var(--nx-space-1) var(--nx-space-3);
+  text-align: start;
+  border-block-end: 0.5px solid var(--nx-border-subtle);
+}
+
+.signals__ascii th {
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.signals__char {
+  font-family: var(--nx-font-family-mono);
+  text-align: center;
+}
+
+.signals__settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--nx-layout-field-min), 1fr));
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+/* The hook the settings filter's highlight is applied to (`labelClass`); the
+   `set__hit` class beside it is the shell's own. */
+.signals__setting-label {
+  display: block;
+}
+

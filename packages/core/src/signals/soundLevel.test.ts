@@ -100,6 +100,36 @@ describe("Leq over a window", () => {
     window.addFrameRms(0.5);
     expect(window.leqDb).toBeCloseTo(-6.0206, 3);
   });
+
+  /**
+   * A SILENT frame is a frame, and it belongs in the average.
+   *
+   * `leqFromFrameRms` one describe above already counts a zero as zero ENERGY —
+   * `[0.5, 0, 0, 0]` is −12.04 dBFS, not −6.02 — so a window that dropped the
+   * silent frames would report a level nobody measured: a meter whose room goes
+   * quiet would keep reading the last loud second for ever. The two must agree,
+   * and this is the case that says so.
+   */
+  it("counts a frame of digital silence as zero energy, exactly as the pure function does", () => {
+    const window = new LeqWindow();
+    window.addFrameRms(0.5);
+    expect(window.leqDb).toBeCloseTo(-6.0206, 3);
+    window.addFrameRms(0);
+    expect(window.frameCount).toBe(2);
+    expect(window.leqDb).toBeCloseTo(leqFromFrameRms([0.5, 0]), 10);
+    // Halving the energy is 10·log₁₀(½) = −3.0103 dB: one loud frame and one
+    // silent one average to −9.0309 dBFS, and to −12.0412 with three silent ones
+    // (`[0.5, 0, 0, 0]`, one describe above).
+    expect(window.leqDb).toBeCloseTo(-9.0309, 3);
+  });
+
+  it("still refuses a value that is not a level at all", () => {
+    const window = new LeqWindow();
+    window.addFrameRms(Number.NaN);
+    window.addFrameRms(-0.5);
+    expect(window.frameCount).toBe(0);
+    expect(window.leqDb).toBe(SILENCE_FLOOR_DB);
+  });
 });
 
 describe("A-weighting", () => {

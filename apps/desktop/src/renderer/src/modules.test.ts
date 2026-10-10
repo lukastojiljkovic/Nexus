@@ -98,6 +98,8 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // And the second, on the same terms (order 200).
+      "signals",
     ]);
   });
 
@@ -159,6 +161,11 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // „Signali" takes a prefix of its own rather than borrowing UTIL: the
+      // sharing above is one PRD section implemented three times, and Morse,
+      // the ASCII table, the tuner and the sound meter are one instrument panel
+      // that is not any of those three.
+      SIG: ["signals"],
     });
   });
 
@@ -212,6 +219,9 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The second discovered module: an instrument panel is something built,
+      // which is what „make" is for (ADR-093).
+      "signals",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
@@ -254,6 +264,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // And the signals module, whose four tools open the microphone only when
+      // one of them is started.
+      "signals",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +453,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      "signals",
     ]);
   });
 

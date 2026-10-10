@@ -46,6 +46,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
   // turns it on exactly as the manifest's own `defaultEnabled` says.
   timers: true,
+  // And the SIGNALS module, on the same terms: its page draws four instruments
+  // and opens the microphone only when one of them is started, so there is
+  // nothing about it to opt into either.
+  signals: true,
   pro: false,
 };
 

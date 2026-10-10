@@ -396,6 +396,11 @@ describe("buildSettingsIndex", () => {
       // one. Its label is its own `{ sr, en }` pair, so the assertion above about
       // `strings` paths does not apply to it.
       "timers:sound-on-end",
+      // SIGNALS' three, declared as pairs too: the two Morse preferences and the
+      // tuner's reference.
+      "signals:morse-speed",
+      "signals:morse-pitch",
+      "signals:tuner-a4",
     ]);
   });
 
