@@ -72,6 +72,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // and opens the microphone only when one of them is started, so there is
   // nothing about it to opt into either.
   signals: true,
+  // The second kit module (ADR-090): a drawer of small tools, which asks to be
+  // opted into no more than a timer does.
+  miniapps: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

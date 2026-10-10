@@ -1840,6 +1840,12 @@ describe("RestoreStore", () => {
       //    that list, because a kit module may not edit `@nexus/sync`.
       "cookbook_settings",
       "cookbook_food_matches",
+      // The MINI-APPS module's one table (migration 085). A kit module's tables
+      // are NOT in `RESTORE_WIPE_TABLES` for the TIMERS reason stated above:
+      // that list is derived into `@nexus/sync`'s collection map, and this
+      // module replaces its own row from its own `importData` inside the same
+      // restore. One row per profile, holding the whole kept document.
+      "miniapps_state",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

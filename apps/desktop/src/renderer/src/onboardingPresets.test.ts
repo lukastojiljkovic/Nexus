@@ -227,6 +227,8 @@ describe("resolveModuleSelection", () => {
       // decided here in the same way and drawn after it.
       calculator: true,
       signals: true,
+      // The second discovered module (ADR-090), decided the same way.
+      miniapps: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -265,8 +267,9 @@ describe("moduleFlagWrites", () => {
       // is the whole point of a first run: what modules a profile has is a
       // stored fact of the profile, not an accident of this build's manifests.
       { moduleId: "pro", enabled: false },
-      // And the first DISCOVERED module last, because a kit module registers
-      // after every compiled-in one (ADR-090).
+      // And the DISCOVERED modules last, because a kit module registers after
+      // every compiled-in one (ADR-090) - in `ModuleManifest.order`, so `timers`
+      // (100) precedes `miniapps` (210).
       { moduleId: "timers", enabled: true },
       // And the second, the Reader (ADR-100), for the same reason.
       { moduleId: "reader", enabled: true },
@@ -284,6 +287,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "emergency", enabled: true },
       { moduleId: "calculator", enabled: true },
       { moduleId: "signals", enabled: true },
+      { moduleId: "miniapps", enabled: true },
     ]);
   });
 

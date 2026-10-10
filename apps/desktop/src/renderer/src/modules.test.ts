@@ -126,6 +126,9 @@ describe("createModuleRegistry", () => {
       "calculator",
       // And the second, on the same terms (order 200).
       "signals",
+      // The second discovered module (ADR-090), after `timers` because its
+      // manifest declares a higher `order` (210 against 100).
+      "miniapps",
     ]);
   });
 
@@ -180,7 +183,7 @@ describe("createModuleRegistry", () => {
       // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
-      UTIL: ["focus", "tools", "timers"],
+      UTIL: ["focus", "tools", "timers", "miniapps"],
       // PRD 26 (Read Later & Bookmarks) is the section the Reader implements: its
       // bookmark half, against the content packs installed on this machine rather
       // than against a web page. Written down here rather than shared with UTIL,
@@ -303,6 +306,8 @@ describe("createModuleRegistry", () => {
       // The second discovered module: an instrument panel is something built,
       // which is what „make" is for (ADR-093).
       "signals",
+      // The second discovered module (ADR-090), in the group it declares.
+      "miniapps",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -378,6 +383,10 @@ describe("createModuleRegistry", () => {
       // And the signals module, whose four tools open the microphone only when
       // one of them is started.
       "signals",
+      // The second discovered module (ADR-090), ON by default for the same
+      // reason: nine small tools, and not one of them writes anything until it
+      // is used.
+      "miniapps",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
