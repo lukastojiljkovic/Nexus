@@ -58,6 +58,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // And the second (ADR-090): a cookbook writes nothing until somebody saves a
   // recipe, so there is nothing to opt into either.
   cookbook: true,
+  // Likewise the recorder: a diary writes nothing until somebody records, so
+  // there is nothing for a user to opt into either.
+  recorder: true,
   pro: false,
   // The second module built on the kit (ADR-090), decided here like every other
   // selectable one: a library that had to be switched on first would be hiding

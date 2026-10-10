@@ -432,6 +432,10 @@ describe("buildSettingsIndex", () => {
       // The second DISCOVERED card's one control (ADR-090), last for the same
       // reason its section is.
       "cookbook:unit-system",
+      // The second discovered card's control, for the same reason and in the
+      // same place: it declares its own `{ sr, en }` pair rather than a
+      // `strings` path.
+      "recorder:countdown",
     ]);
   });
 

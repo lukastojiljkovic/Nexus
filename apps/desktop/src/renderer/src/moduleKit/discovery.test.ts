@@ -3,6 +3,9 @@ import { createModuleRegistry, kitManifest, kitManifests } from "../../../shared
 import { copy as timersCopy } from "../../../modules/timers/renderer/copy.js";
 import { sr as timersSr } from "../../../modules/timers/renderer/copy.sr.js";
 import { en as timersEn } from "../../../modules/timers/renderer/copy.en.js";
+import { copy as recorderCopy } from "../../../modules/recorder/renderer/copy.js";
+import { sr as recorderSr } from "../../../modules/recorder/renderer/copy.sr.js";
+import { en as recorderEn } from "../../../modules/recorder/renderer/copy.en.js";
 import { dashboardWidgetRenderer } from "../dashboardWidgets.js";
 import { settingsPanelRenderer } from "../moduleSettingsPanels.js";
 import { applyLocale, activeLocale } from "../strings.js";
@@ -120,5 +123,72 @@ describe("a kit module's copy", () => {
       );
     };
     expect(paths(timersEn).sort()).toEqual(paths(timersSr).sort());
+  });
+});
+
+/**
+ * The SECOND kit module (ADR-090): the recorder, a voice and camera diary.
+ *
+ * A block of its own rather than a loop over the modules above, and that is the
+ * file's own shape: each block names the ids, the words and the card THAT module
+ * declares, so what it proves is that the shell finds one module it was never
+ * told about — twice, in two different shapes (a page with one card and a
+ * settings row, against a page with ten ops and no clock in main).
+ */
+describe("the recorder, discovered the same way", () => {
+  const RECORDER = "recorder";
+
+  it("registers after the first discovered module, in the group it declares", () => {
+    const registry = createModuleRegistry();
+    const ids = registry.all().map((manifest) => manifest.id);
+    expect(ids).toContain(RECORDER);
+    expect(ids.indexOf(RECORDER)).toBeGreaterThan(ids.indexOf("timers"));
+    expect(registry.get(RECORDER)?.group).toBe("knowledge");
+  });
+
+  it("carries the words the shell needs before the page can load", () => {
+    const manifest = kitManifest(RECORDER);
+    expect(manifest?.copy?.name.sr).not.toBe("");
+    expect(manifest?.copy?.name.en).not.toBe("");
+    expect(manifest?.copy?.description.sr).not.toBe("");
+    expect(manifest?.copy?.description.en).not.toBe("");
+    expect(kitManifests().map((each) => each.id)).toContain(RECORDER);
+  });
+
+  it("finds the page, the mark, the settings body and the widget body", () => {
+    expect(hasModulePage(RECORDER)).toBe(true);
+    expect(modulePageIds()).toContain(RECORDER);
+    expect(modulePage(RECORDER)).not.toBeNull();
+    expect(kitIconIds()).toContain(RECORDER);
+
+    expect(kitSettingsPanel(RECORDER)).toBeDefined();
+    expect(settingsPanelRenderer(RECORDER)).toBeDefined();
+    const declared = kitManifest(RECORDER)?.settings;
+    expect(declared?.controls.map((control) => control.key)).toEqual(["countdown"]);
+    expect(resolveLabel(declared?.controls[0]?.labelKey ?? "")).not.toBe("");
+
+    expect(kitManifest(RECORDER)?.widgets?.map((widget) => widget.id)).toEqual(["snimci"]);
+    expect(kitWidgetIds()).toContain(`${RECORDER}:snimci`);
+    const renderer = dashboardWidgetRenderer(`${RECORDER}:snimci`);
+    expect(renderer).toBeDefined();
+    // The card follows its own module's flag, which is all `visible` is asked.
+    expect(renderer?.visible(new Set([RECORDER]))).toBe(true);
+    expect(renderer?.visible(new Set())).toBe(false);
+  });
+
+  it("joins the locale machinery, keeping the table's identity across a switch", () => {
+    const table = recorderCopy;
+    expect(recorderCopy.list.title).toBe(recorderSr.list.title);
+
+    applyLocale("en");
+    expect(recorderCopy).toBe(table);
+    expect(recorderCopy.list.title).toBe(recorderEn.list.title);
+    // A sentence that only one language has is a leaf somebody translated but
+    // did not write — the switch reaches the deep ones too.
+    expect(recorderCopy.capture.permissionDenied).toBe(recorderEn.capture.permissionDenied);
+
+    applyLocale("sr");
+    expect(recorderCopy.list.title).toBe(recorderSr.list.title);
+    expect(recorderCopy.capture.permissionDenied).toBe(recorderSr.capture.permissionDenied);
   });
 });

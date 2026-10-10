@@ -48,9 +48,12 @@ export const MAX_RECORDING_DURATION_MS = 43_200_000;
  * gigabyte is the largest size that keeps that path comfortably inside a
  * desktop's memory, and it is hundreds of megabytes because a diary video is.
  *
- * Stage 2 must decide whether capture streams: nothing here is segmented, so a
- * recording longer than this cap has to be chunked or refused, and refusing is
- * only honest with the number above in hand.
+ * Stage 2 DECIDED this, and refused: nothing here is segmented, so the capture
+ * stops itself at the cap and stores what it has
+ * (`renderer/CaptureSection.tsx`), which is the only end of that situation that
+ * keeps the recording — and the page says how much room is left, from the bytes
+ * this machine has really produced, so the number is visible long before the
+ * stop.
  */
 export const MAX_RECORDING_BYTES = 536_870_912;
 
@@ -167,8 +170,29 @@ export interface UpdateMarkerFields {
 /** An exported recording: the row minus `profileId`, which the importing profile decides. */
 export type ExportedRecording = Omit<Recording, "profileId">;
 
-/** The version `exportData` writes and `importData` is the only reader of. */
-export const RECORDER_EXPORT_VERSION = 1;
+/**
+ * The module's one preference: whether a capture waits a few seconds before it
+ * starts, so a person can put the device down.
+ *
+ * A PROFILE fact rather than a device one, on the rule the kit's settings card
+ * states: what a module archives travels in the profile's own archive, and
+ * „Vrati na podrazumevano" belongs to the cards whose whole state is this
+ * machine's (SET §5). `false` is what a profile with no row answers — a countdown
+ * nobody asked for would be the app delaying a recording the user just asked for.
+ */
+export interface RecorderSettings {
+  readonly countdown: boolean;
+}
+
+/**
+ * The version `exportData` writes and `importData` is the only reader of.
+ *
+ * **2**, because stage 2 added the `settings` member: a new shape is a new
+ * number, never a quiet reinterpretation (the same rule `parseExport` states
+ * about its exact keys). Stage 1's payload never shipped, so nothing in the
+ * world carries version 1 and this number costs nobody an archive.
+ */
+export const RECORDER_EXPORT_VERSION = 2;
 
 /**
  * The recorder's slice of a profile archive: plain JSON, versioned, and METADATA
@@ -191,6 +215,8 @@ export interface RecorderExport {
   readonly version: typeof RECORDER_EXPORT_VERSION;
   readonly recordings: readonly ExportedRecording[];
   readonly markers: readonly RecordingMarker[];
+  /** The module's one preference, which travels with the profile like every other settings row a module archives. */
+  readonly settings: RecorderSettings;
 }
 
 /** What one import wrote, for the caller's own "Uvezeno N snimaka" line. */
@@ -276,6 +302,11 @@ export class RecorderStore {
   private readonly countMarkers: Database.Statement;
   private readonly updateMarkerFields: Database.Statement;
   private readonly deleteMarker: Database.Statement;
+  private readonly countBySha: Database.Statement;
+  private readonly mimeBySha: Database.Statement;
+  private readonly selectSettings: Database.Statement;
+  private readonly deleteSettingsForProfile: Database.Statement;
+  private readonly upsertSettings: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -357,6 +388,25 @@ export class RecorderStore {
     );
     this.deleteMarker = db.prepare(
       `DELETE FROM recording_markers WHERE id = ? AND recording_id = ?`,
+    );
+    // The reverse lookups on `recordings_sha` (migration 077): which rows hold
+    // a hash, and what to serve it as. DELIBERATELY profile-agnostic (no
+    // `profile_id` in either query, unlike every other statement above): the
+    // blob store is content-addressed across the WHOLE database, so two
+    // recordings of byte-identical media in two profiles are one file on disk
+    // and a count that saw one profile would be the same bug one profile
+    // smaller (`NoteAttachmentStore`'s own rule, one module over).
+    this.countBySha = db.prepare(`SELECT count(*) AS n FROM recordings WHERE sha256 = ?`);
+    // One mime, deterministically: two rows sharing a hash were produced by
+    // the same capture settings, and the id is a UUIDv7, so "the oldest row"
+    // is a stable answer rather than whichever row SQLite happened to scan
+    // first.
+    this.mimeBySha = db.prepare(`SELECT mime FROM recordings WHERE sha256 = ? ORDER BY id LIMIT 1`);
+    this.selectSettings = db.prepare(`SELECT countdown FROM recorder_settings WHERE profile_id = ?`);
+    this.deleteSettingsForProfile = db.prepare(`DELETE FROM recorder_settings WHERE profile_id = ?`);
+    this.upsertSettings = db.prepare(
+      `INSERT INTO recorder_settings (profile_id, countdown) VALUES (?, ?)
+       ON CONFLICT(profile_id) DO UPDATE SET countdown = excluded.countdown`,
     );
   }
 
@@ -447,6 +497,63 @@ export class RecorderStore {
     }
   }
 
+  /**
+   * How many recording rows reference this hash, across EVERY profile — what
+   * `main/index.ts`'s `blobRefCount` sums before a blob is garbage-collected.
+   *
+   * A SOFT-DELETED recording still counts, and that is the point rather than an
+   * oversight: `softDelete` is an UPDATE, `restore` brings the row back, and a
+   * GC that ignored the trash would delete the bytes an undo is about to point
+   * at again. Only a hard delete (a profile delete, which cascades) drops a
+   * recording's reference.
+   */
+  refCount(sha256: string): number {
+    const { n } = this.countBySha.get(sha256) as { n: number };
+    return n;
+  }
+
+  /**
+   * The mime `nx-blob:` must announce for this hash, or `null` when no
+   * recording row anywhere names it — the serve gate, exactly as
+   * `NoteAttachmentStore.mimeForHash` is for attachments. What it announces is
+   * the mime `MediaRecorder` reported for the bytes (one of the four in
+   * `@nexus/core`'s closed list, which migration 077 CHECKs), never a mime
+   * sniffed from a container this store cannot parse.
+   */
+  mimeForHash(sha256: string): string | null {
+    const row = this.mimeBySha.get(sha256) as { mime: string } | undefined;
+    return row?.mime ?? null;
+  }
+
+  /** This profile's preference, or the store's own default when it has no row — `TimersStore.settings`' arrangement one module over. */
+  settings(): RecorderSettings {
+    const row = this.selectSettings.get(this.profileId) as { countdown: number } | undefined;
+    return { countdown: row?.countdown === 1 };
+  }
+
+  /** Writes the module's one preference, replacing whatever stood there. */
+  setCountdown(countdown: boolean, now: string): RecorderSettings {
+    // The timestamp is validated even though no column holds it: the caller's
+    // clock is the same one `create` takes, and a store that accepted an
+    // unreadable instant here would be the one place in this module where a
+    // caller's clock went unchecked.
+    validateDateTime(now, "now");
+    this.upsertSettings.run(this.profileId, countdown ? 1 : 0);
+    return { countdown };
+  }
+
+  /**
+   * The settings the archive carries, written as a REPLACEMENT: an archive that
+   * carries none (`null`) deletes the row, so the profile answers the store's own
+   * default rather than a value restated by the importer.
+   */
+  replaceFromArchive(settings: RecorderSettings | null): RecorderSettings {
+    this.deleteSettingsForProfile.run(this.profileId);
+    if (settings === null) return { countdown: false };
+    this.upsertSettings.run(this.profileId, settings.countdown ? 1 : 0);
+    return { countdown: settings.countdown };
+  }
+
   /** One live recording's markers, oldest first. */
   listMarkers(recordingId: string): RecordingMarker[] {
     this.requireRecording(recordingId);
@@ -508,15 +615,27 @@ export class RecorderStore {
 
   /**
    * This profile's recorder data as one versioned, plain-JSON value: live
-   * recordings and their markers, metadata only (see `RecorderExport`). Stage 2
-   * resolves each `sha256` into the archive's `blobs/<sha256>` entry.
+   * recordings, their markers and the module's one preference — metadata only
+   * (see `RecorderExport`).
+   *
+   * **The bytes do not travel, and that is a gap recorded here rather than
+   * hidden.** The module kit's archive section is a versioned JSON value with
+   * no vocabulary for a blob (ADR-090 §5), so nothing declares a recording's
+   * `sha256` among the archive's `blobs/` entries the way `note_attachments`'
+   * rows do. A restore onto ANOTHER machine therefore brings a profile's
+   * recordings back as rows whose bytes its blob store does not have (a restore
+   * over the same install is whole: the bytes are still on disk). Closing it is
+   * a kit-level change — `ExportModuleData` gaining a declared blob inventory,
+   * `collectExports` filling it, and `main/restore.ts` writing those hashes
+   * beside the attachments it already writes — and it belongs to whoever owns
+   * the interchange, not to this module alone.
    */
   exportData(): RecorderExport {
     const recordings = (this.selectExport.all(this.profileId) as RecordingRow[]).map((row) =>
       toExportedRecording(this.toRecording(row)),
     );
     const markers = (this.selectExportMarkers.all(this.profileId) as MarkerRow[]).map(toMarker);
-    return { version: RECORDER_EXPORT_VERSION, recordings, markers };
+    return { version: RECORDER_EXPORT_VERSION, recordings, markers, settings: this.settings() };
   }
 
   /**
@@ -540,6 +659,10 @@ export class RecorderStore {
     this.db.transaction(() => {
       this.deleteMarkersForProfile.run(this.profileId);
       this.deleteRecordingsForProfile.run(this.profileId);
+      // The preference is replaced too, and NOT by leaning on the recording
+      // wipe: it lives in its own table, so an archive that carries recordings
+      // but says nothing about settings must still land in a known state.
+      this.replaceFromArchive(parsed.settings);
       for (const row of parsed.recordings) {
         this.insertRecording.run(
           row.id, this.profileId, row.kind, row.title, row.createdAt, row.durationMs, row.mime,
@@ -598,6 +721,30 @@ export class RecorderStore {
 
 /** A recording's own fields, minus the ones the row rather than the caller decides. */
 type ResolvedRecording = Omit<Recording, "id" | "profileId" | "createdAt" | "updatedAt">;
+
+/**
+ * Reads a whole archive value into the payload `importData` writes, and writes
+ * nothing itself.
+ *
+ * **Why this is exported rather than reached through a store.** The module kit
+ * runs an import in two moments with two promises (`ModuleImport`): `parse` at
+ * the PREVIEW, so a refusal reaches the user before they confirm a restore that
+ * replaces their profile, and again at apply time before anything is written.
+ * Both halves have to be the SAME validation, or an archive the preview cleared
+ * could still fail half-written: so the pure half is this function, and
+ * `importData` calls it rather than the other way round. A caller that wants to
+ * read an archive with no profile database in hand (a preview, a test) has
+ * exactly one door, and it is this one.
+ */
+export function parseRecorderExport(value: unknown): RecorderExport {
+  const parsed = parseExport(value);
+  return {
+    version: RECORDER_EXPORT_VERSION,
+    recordings: parsed.recordings,
+    markers: parsed.markers,
+    settings: parsed.settings,
+  };
+}
 
 /**
  * Validates and resolves a whole recording's fields — the ONE place every refusal
@@ -862,7 +1009,9 @@ function toExportedRecording(recording: Recording): ExportedRecording {
   };
 }
 
-const EXPORT_KEYS = ["version", "recordings", "markers"] as const;
+const EXPORT_KEYS = ["version", "recordings", "markers", "settings"] as const;
+
+const EXPORT_SETTINGS_KEYS = ["countdown"] as const;
 
 const EXPORTED_RECORDING_KEYS = [
   "id",
@@ -905,6 +1054,7 @@ const EXPORTED_MARKER_KEYS = [
 function parseExport(value: unknown): {
   recordings: ExportedRecording[];
   markers: RecordingMarker[];
+  settings: RecorderSettings;
 } {
   const root = asRecord(value, "the recorder archive");
   if (root.version !== RECORDER_EXPORT_VERSION) {
@@ -920,6 +1070,12 @@ function parseExport(value: unknown): {
   const markers = asList(root.markers, "markers").map((row, index) =>
     parseExportedMarker(row, `markers[${index}]`),
   );
+  const settingsRow = asRecord(root.settings, "settings");
+  requireExactKeys(settingsRow, EXPORT_SETTINGS_KEYS, "settings");
+  const countdown = settingsRow.countdown;
+  if (typeof countdown !== "boolean") {
+    throw new RecorderValidationError('"settings.countdown" must be a boolean.');
+  }
 
   const recordingsById = uniqueById(recordings, "The archive's recordings");
   uniqueById(markers, "The archive's markers");
@@ -937,7 +1093,7 @@ function parseExport(value: unknown): {
     }
   }
 
-  return { recordings, markers };
+  return { recordings, markers, settings: { countdown } };
 }
 
 function parseExportedRecording(value: unknown, where: string): ExportedRecording {

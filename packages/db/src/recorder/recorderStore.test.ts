@@ -17,6 +17,7 @@ import {
   RecorderStore,
   RecorderValidationError,
   openDatabase,
+  parseRecorderExport,
   uuidv7,
 } from "../index.js";
 import type { CreateRecordingInput } from "../index.js";
@@ -538,5 +539,153 @@ describe("RecorderStore.exportData and importData", () => {
 
     expect(() => recorder.importData(base)).toThrow(RecorderValidationError);
     expect(recorder.listActive()).toEqual([]);
+  });
+});
+
+/**
+ * The two reverse lookups on `recordings_sha` (migration 077) that main's blob
+ * store runs through `blobRefCount`/`blobMimeForHash`, and the PURE half of the
+ * archive import the module kit runs at a preview.
+ */
+describe("RecorderStore.refCount / mimeForHash", () => {
+  it("counts every recording that names a hash, across profiles and across a soft delete", () => {
+    const first = store(createProfile("A"));
+    const second = store(createProfile("B"));
+    const row = first.create(audioMemo(), NOW);
+    second.create(audioMemo(), NOW);
+
+    // Two profiles recorded byte-identical audio: one file on disk, two rows
+    // naming it, and a count that saw one profile would be the same bug one
+    // profile smaller.
+    expect(first.refCount(SHA)).toBe(2);
+    expect(second.refCount(SHA)).toBe(2);
+    expect(first.refCount(OTHER_SHA)).toBe(0);
+
+    // A soft delete is an UPDATE: the bytes an undo is about to point at again
+    // must not be collected in the meantime.
+    first.softDelete(row.id, LATER);
+    expect(first.refCount(SHA)).toBe(2);
+  });
+
+  it("answers the mime the capture side reported, and null for a hash nothing names", () => {
+    const recorder = store();
+    recorder.create(audioMemo(), NOW);
+    recorder.create(
+      audioMemo({ kind: "video", mime: "video/webm;codecs=vp9,opus", sha256: OTHER_SHA }),
+      NOW,
+    );
+
+    expect(recorder.mimeForHash(SHA)).toBe("audio/webm;codecs=opus");
+    expect(recorder.mimeForHash(OTHER_SHA)).toBe("video/webm;codecs=vp9,opus");
+    expect(recorder.mimeForHash("c".repeat(64))).toBeNull();
+  });
+
+  it("picks one mime deterministically when two rows share a hash", () => {
+    const recorder = store();
+    // The same bytes recorded twice: the oldest row (a UUIDv7, so also the
+    // smallest) is the answer, whatever order the rows were written in.
+    const first = recorder.create(audioMemo({ sha256: SHA }), NOW);
+    const second = recorder.create(audioMemo({ sha256: SHA }), LATER);
+    expect(second.id > first.id).toBe(true);
+    expect(recorder.mimeForHash(SHA)).toBe("audio/webm;codecs=opus");
+  });
+});
+
+describe("parseRecorderExport", () => {
+  it("carries the module's one preference, and answers it back through a round trip", () => {
+    const source = store();
+    // No row yet: the store's own default, which is what an absent preference
+    // means (a countdown nobody asked for would delay a recording the user
+    // just asked for).
+    expect(source.settings()).toEqual({ countdown: false });
+    expect(source.setCountdown(true, NOW)).toEqual({ countdown: true });
+    expect(source.settings()).toEqual({ countdown: true });
+
+    const exported = source.exportData();
+    expect(exported.settings).toEqual({ countdown: true });
+
+    const target = store();
+    target.importData(exported);
+    expect(target.settings()).toEqual({ countdown: true });
+    // And replacing from an archive that carries none deletes the row rather
+    // than restating a default: the store answers it.
+    expect(target.replaceFromArchive(null)).toEqual({ countdown: false });
+    expect(target.settings()).toEqual({ countdown: false });
+  });
+
+  it("answers the payload a valid archive carries, writing nothing", () => {
+    const source = store();
+    source.create(audioMemo({ tags: ["glas"], notes: "nota" }), NOW);
+    const exported = source.exportData();
+
+    const parsed = parseRecorderExport(exported);
+
+    expect(parsed).toEqual(exported);
+    // "Answers, and shows it" rather than "does not throw": a parse that wrote
+    // would have put a row in a profile that asked only to READ the archive.
+    expect(parsed.recordings[0]).toMatchObject({ sha256: SHA, sizeBytes: 1_000_000 });
+  });
+
+  it("refuses the same values importData does, and names the version it will not take", () => {
+    expect(() =>
+      parseRecorderExport({ version: 99, recordings: [], markers: [], settings: { countdown: false } }),
+    ).toThrow(
+      /version must be 2/,
+    );
+    expect(() =>
+      parseRecorderExport({ version: 2, recordings: [], markers: [], settings: { countdown: false } }),
+    ).not.toThrow();
+    // The exact-key rule is what refuses the shapes this module never wrote: a
+    // payload without `settings` (stage 1's, which never shipped), one without
+    // `markers`, and one whose settings object carries a stranger's key.
+    expect(() => parseRecorderExport({ version: 2, recordings: [], markers: [] })).toThrow(
+      RecorderValidationError,
+    );
+    expect(() => parseRecorderExport({ version: 2, recordings: [] })).toThrow(
+      RecorderValidationError,
+    );
+    expect(() =>
+      parseRecorderExport({
+        version: 2,
+        recordings: [],
+        markers: [],
+        settings: { countdown: false, extra: 1 },
+      }),
+    ).toThrow(RecorderValidationError);
+  });
+});
+
+/**
+ * The archive round trip in the house's OTHER shape (`RestoreStore`'s T1): a
+ * genuinely fresh install — its own database file, its own profile id — which is
+ * the only place an archive's ids are free, because they are reproduced.
+ */
+describe("RecorderStore.importData into a fresh install", () => {
+  it("reproduces the archived recording whole, under its own id", () => {
+    const source = store();
+    const created = source.create(audioMemo({ tags: ["glas"], notes: "nota" }), NOW);
+    const exported = source.exportData();
+
+    const freshDir = mkdtempSync(join(tmpdir(), "nexus-recorder-fresh-"));
+    const freshDb = openDatabase({ path: join(freshDir, "fresh.db") });
+    try {
+      const profileId = uuidv7();
+      freshDb.raw
+        .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+        .run(profileId, "personal", "Svež", NOW);
+      const target = new RecorderStore(freshDb.raw, profileId);
+
+      expect(target.importData(exported)).toEqual({ recordings: 1, markers: 0 });
+      // Byte for byte, the id included: an archive reproduces rows, it does not
+      // re-mint them.
+      expect(target.listActive()).toEqual([{ ...created, profileId }]);
+      // A reference count is a fact about ONE database file, which is why
+      // `blobRefCount` is handed the same handle every other store gets.
+      expect(target.refCount(SHA)).toBe(1);
+      expect(source.refCount(SHA)).toBe(1);
+    } finally {
+      freshDb.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    }
   });
 });

@@ -115,6 +115,9 @@ describe("createModuleRegistry", () => {
       // And the second one, after it: the discovered modules sort by their
       // manifests' own `order` (ADR-090).
       "cookbook",
+      // The second: the voice and camera diary, ordered after the first by its
+      // own `order` (170 against the timer's 100).
+      "recorder",
     ]);
   });
 
@@ -197,6 +200,10 @@ describe("createModuleRegistry", () => {
       // „Automobil" (ADR-093) takes its own prefix: PRD 22 is its own entry,
       // not a second reading of another module's subject.
       CAR: ["car"],
+      // The recorder takes its own prefix rather than borrowing another
+      // section's: a prefix is traceability to ONE PRD entry, and the brief
+      // names none for a voice and camera diary (see the module's manifest).
+      REC: ["recorder"],
     });
   });
 
@@ -241,6 +248,9 @@ describe("createModuleRegistry", () => {
       "study",
       // The second discovered module, in the group it declares (ADR-100).
       "reader",
+      // The recorder is Knowledge, on ADR-093's own reading of the group: it is
+      // the handling of what somebody wrote down, not an area of a life.
+      "recorder",
     ]);
     expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
       "priv",
@@ -326,6 +336,9 @@ describe("createModuleRegistry", () => {
       // And the cookbook, on the same terms: nothing is written until a recipe
       // is saved.
       "cookbook",
+      // Likewise: a recorder writes nothing until somebody records, so there is
+      // nothing to opt into either.
+      "recorder",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -519,6 +532,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The second, on the same terms.
       "pantry",
       "cookbook",
+      // And the second discovered card, on the same terms: declared in the
+      // recorder's own manifest, drawn by its own body.
+      "recorder",
     ]);
   });
 

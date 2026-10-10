@@ -151,7 +151,11 @@ export type IconName =
   // else. It is deliberately not a wheel and not a wrench â€” both of those are
   // already in the set and both mean a REPAIR, while this module is a whole
   // vehicle's book.
-  | "car";
+  | "car"
+  // The recorder's mark: a microphone, which is the one shape that says
+  // "capture sound" rather than "play it back" (`play`) or "a picture"
+  // (`image`). Added with the RECORDER module.
+  | "mic";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -854,6 +858,17 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M14.2 4.6v2.6" />
       <path d="M7.4 9.8a2.6 2.6 0 0 1 2.6-2.6h4a2.6 2.6 0 0 1 2.6 2.6v7.8a2.4 2.4 0 0 1-2.4 2.4H9.8a2.4 2.4 0 0 1-2.4-2.4z" />
       <path d="M9.8 14.6h4.4" />
+    </>
+  ),
+  // A capsule, the cradle it sits in, and a stem: the three strokes every
+  // microphone has been drawn with since the shape was a radio part. The
+  // capsule is 6 wide and 11 tall starting at y=3, so it touches neither edge
+  // and the cradle's arc (radius 6.4 from y=11.4) bottoms out at 17.8.
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0" />
+      <path d="M12 17.8V21" />
     </>
   ),
 };

@@ -74,6 +74,21 @@ export const MODULE_VALIDATORS = {
 
 export type ModuleValidators = typeof MODULE_VALIDATORS;
 
+/**
+ * What writing bytes into the content-addressed blob store answers.
+ *
+ * Deliberately the SAME shape `main/attachments.ts`'s `saveBlob` returns and
+ * `main/index.ts` already hands the restore path: a module that stores bytes
+ * (a photo, a recording, a receipt) gets a plaintext sha256 to name them by and
+ * nothing else — no path, no key, no container.
+ */
+export interface ModuleBlobWrite {
+  /** The plaintext SHA-256 the bytes are named by, lowercase hex. */
+  readonly sha256: string;
+  /** False when byte-identical content was already in the store: a repeated write is a cheap no-op. */
+  readonly created: boolean;
+}
+
 /** Everything one module's handler is given beyond its own payload. */
 export interface ModuleCall {
   /** The shared payload validators (SEC-EL-02). */
@@ -108,6 +123,15 @@ export interface ModuleCall {
   ): Promise<ModuleAttachmentsResult>;
   /** Gives a hash back once the module's own row naming it is gone — see `ModuleContext.releaseBlob`. */
   releaseBlob(sha256: string): Promise<void>;
+  /**
+   * Writes bytes into the app's one content-addressed blob store — the same
+   * store every attachment uses (ADR-019) — and answers the plaintext sha256
+   * that names them, which is what the module's own row then holds. `undefined`
+   * when this build supplied no writer (a test harness with no blob roots, or a
+   * main process that has not opened an account yet): a module that needs one
+   * says so in its own refusal rather than writing a row pointing at nothing.
+   */
+  readonly saveBlob: ((bytes: Uint8Array) => Promise<ModuleBlobWrite>) | undefined;
   /** Current wall-clock milliseconds. Injected so a test can move the clock. */
   now(): number;
 }
@@ -295,6 +319,14 @@ export interface ModulePlatform {
   ): Promise<ModuleAttachmentsResult>;
   /** Removes a blob no row references any more — `main/index.ts`'s own count decides. */
   releaseBlob(sha256: string): Promise<void>;
+  /**
+   * The blob store's write half, when `index.ts` supplies one. OPTIONAL because
+   * the write needs the account's key material and its blob roots, which only
+   * `index.ts` holds — and because a harness that tests the rules of this file
+   * needs no blob store at all. It is exactly
+   * `saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes)` there.
+   */
+  saveBlob?(bytes: Uint8Array): Promise<ModuleBlobWrite>;
   /** The app's notification path: one OS toast, in the active locale. */
   notify(copy: { readonly title: string; readonly body: string; readonly silent: boolean }): void;
   /** A timer main owns. `atMs` is wall-clock milliseconds (`Date.now()`). */
@@ -620,6 +652,9 @@ export class ModuleHost implements ModuleHostSurface {
       packs: () => requirePacks(this.platform),
       attachFiles: (maxBytes, record) => this.platform.attachFiles(maxBytes, record),
       releaseBlob: (sha256) => this.platform.releaseBlob(sha256),
+      // Bound once per call rather than read from the platform at the call
+      // site, so a module's handler cannot reach anything else `index.ts` holds.
+      saveBlob: this.platform.saveBlob?.bind(this.platform),
       now: () => this.platform.now(),
     };
   }

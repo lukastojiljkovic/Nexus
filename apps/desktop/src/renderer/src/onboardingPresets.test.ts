@@ -221,6 +221,7 @@ describe("resolveModuleSelection", () => {
       pantry: true,
       // And the second, on the same terms.
       cookbook: true,
+      recorder: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -271,6 +272,8 @@ describe("moduleFlagWrites", () => {
       // ...and the second, in the order the registry holds them.
       { moduleId: "pantry", enabled: true },
       { moduleId: "cookbook", enabled: true },
+      // And the second discovered one after it, on the same terms.
+      { moduleId: "recorder", enabled: true },
     ]);
   });
 

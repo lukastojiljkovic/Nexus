@@ -1,8 +1,11 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 77 — the RECORDER's storage (voice and video diary, slice a). Two
- * tables: one recording, and the markers inside it.
+ * Migration 77 — the RECORDER's storage (voice and video diary, slice a). Three
+ * tables: one recording, the markers inside it, and the module's one preference
+ * (which stage 2 extended this migration with, while it is still unreleased:
+ * the numbering rule is that a NEW table for an unreleased module is a line
+ * here, not a second migration beside it).
  *
  * **A recording is an INDEX ROW, never its bytes.** The media lives in the same
  * content-addressed, encrypted blob store every attachment uses
@@ -124,6 +127,17 @@ export const migration077: Migration = {
       -- A recording's markers, in time order — the only marker read there is.
       CREATE INDEX recording_markers_recording
         ON recording_markers (recording_id, at_ms, id);
+
+      -- The module's one preference (REC stage 2): whether a capture on this
+      -- profile waits a few seconds before it starts. A PROFILE row rather than
+      -- a device one, on the rule the kit's settings card states — what a module
+      -- archives travels in the profile's own archive, and the „Vrati na
+      -- podrazumevano" link belongs to the DEVICE-only cards (SET §5). Zero or
+      -- one row per profile, so an absent row is answered by the store's default.
+      CREATE TABLE recorder_settings (
+        profile_id TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+        countdown  INTEGER NOT NULL CHECK (countdown IN (0, 1))
+      );
     `);
   },
 };

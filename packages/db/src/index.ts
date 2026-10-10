@@ -989,6 +989,7 @@ export {
   MAX_RECORDING_TITLE_LENGTH,
   MAX_RECORDING_TRANSCRIPT_LENGTH,
   RECORDER_EXPORT_VERSION,
+  parseRecorderExport,
   RecorderStore,
 } from "./recorder/recorderStore.js";
 export type {
