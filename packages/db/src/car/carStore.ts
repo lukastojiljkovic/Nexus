@@ -82,7 +82,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 /**
  * Serbian Latin ordering for the vehicle list, on `FIN_COLLATOR`'s terms: plain
  * `"sr"` mis-tailors the Latin digraphs and diacritics, and SQLite's BINARY
- * collation would put „Å koda" after „Žuti".
+ * collation would put „Škoda" after „Toyota".
  */
 const CAR_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 

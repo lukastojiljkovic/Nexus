@@ -94,8 +94,9 @@ const isMojibakeContinuation = (code) => code >= 0x0080 && code <= 0x009f;
  * punctuation and Serbian letters on their own, so this half is strict about the
  * SHAPE instead: a lead followed by exactly the continuations its width needs,
  * where a two-byte lead is one of the capitals whose sequences are Latin, Greek
- * or Cyrillic letters (C2-D3) and its continuation is one of the 27.
- * „Ä‡" (ć) and „â€”" (—) are caught; „×“", „é“" and „café…" are not.
+ * or Cyrillic letters (C2-D3) and its continuation is one of the 27 or a Latin-1
+ * sign (U+00A0-U+00BF, which 0xA0-0xBF decode to unchanged).
+ * „Ä‡" (ć), „Å¡" (š) and „â€”" (—) are caught; „×“", „é“" and „café…" are not.
  */
 const CP1252_HIGH = new Set([
   0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039, 0x0152,
@@ -107,7 +108,7 @@ const isCp1252Continuation = (code) => CP1252_HIGH.has(code) || (code >= 0x00a0 
 /** Whether `codes[at]` starts a UTF-8 sequence that was read as Windows-1252. */
 function isCp1252Mojibake(codes, at) {
   const lead = codes[at];
-  if (lead >= 0x00c2 && lead <= 0x00d3) return CP1252_HIGH.has(codes[at + 1]);
+  if (lead >= 0x00c2 && lead <= 0x00d3) return isCp1252Continuation(codes[at + 1]);
   const width = lead >= 0x00e0 && lead <= 0x00ef ? 3 : lead >= 0x00f0 && lead <= 0x00f4 ? 4 : 0;
   if (width === 0) return false;
   for (let next = 1; next < width; next += 1) {
@@ -129,6 +130,8 @@ export const MOJIBAKE_ALLOWLIST = [
   { file: "apps/desktop/src/renderer/src/strings/pro.tekst.en.ts", contains: "“Å¡” or “Ä‡”" },
   { file: "packages/core/src/pro/tekst.test.ts", contains: "Å¡ -> š, Ä‡ -> ć" },
   { file: "packages/core/src/pro/tekst.test.ts", contains: 'text: "Ä‡"' },
+  { file: "packages/core/src/pro/tekst.test.ts", contains: 'text: "Å¡", writtenAs: "utf-8"' },
+  { file: "packages/core/src/pro/tekst.test.ts", contains: 'when reading "Å¡" as ISO-8859-2' },
 ];
 
 const MOJIBAKE_WHY =

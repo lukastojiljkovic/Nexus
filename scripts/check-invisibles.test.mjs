@@ -104,10 +104,11 @@ describe("scanText — what must NOT trip it", () => {
     // And the drawer's own `mojibake-repair` tool, whose Serbian copy and test
     // fixtures are mojibake ON PURPOSE — „Å¡" is how the user recognises the
     // problem the tool solves, so it can never be „fixed" out of the strings.
-    // „Å¡" passes on its shape; „Ä‡" passes only on the allowlisted line.
+    // Both „Å¡" and „Ä‡" are caught on their shape; the line passes only where
+    // it is allowlisted.
     const hint = `textHint: "Nalepi pokvaren tekst, na primer „Å¡“ ili „Ä‡“."`;
     expect(scanText(hint, "apps/desktop/src/renderer/src/strings/pro.tekst.ts")).toEqual([]);
-    expect(ids(hint)).toEqual(["MOJIBAKE"]);
+    expect(ids(hint)).toEqual(["MOJIBAKE", "MOJIBAKE"]);
   });
 
   it("leaves a multiplication sign or an accented letter before a curly quote alone", () => {
