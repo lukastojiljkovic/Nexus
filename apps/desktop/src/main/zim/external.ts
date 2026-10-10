@@ -10,28 +10,36 @@
  *     working as intended, and the frame loads it;
  *   - **`http`/`https` opens in the user's own browser**: the attribution links
  *     and the citations in a Wikipedia pack are the case this exists for, and the
- *     page they point at is the user's to read wherever they read things;
+ *     page they point at is the user's to read wherever they read things. WHICH
+ *     schemes those are is not a second rule stated here — it is
+ *     `allowsDocumentExternalUrl`, the document variant of the app's one
+ *     external-link rule (ADR-107), and its `http` is exactly the one an old
+ *     encyclopedia's own links need;
  *   - **anything else is refused**: `file:`, `mailto:`, a custom scheme, a data
  *     URL — none of them is a link a ZIM should be able to make this app follow,
  *     and a refusal that says nothing is the right answer for content this app
  *     is rendering rather than trusting.
  *
- * The handler is passed in rather than imported so this file has no Electron
- * import and the rule is testable — the same split the update feature's
- * `openReleasePage` is on the other side of.
+ * The handler is passed in rather than imported so this file has nothing to do
+ * with a browser itself and the rule is testable — the same split the update
+ * feature's `openReleasePage` is on the other side of. The hand-off the handler
+ * performs is the one door's (`external.ts`), so a link this file selects can
+ * still be refused where it is opened.
  */
 
+import { allowsDocumentExternalUrl } from "../external.js";
 import { ZIM_SCHEME } from "./scheme.js";
 
-/** The URL a frame navigation should hand to the OS browser, or `null` when it should not. */
+/**
+ * The URL a frame navigation should hand to the OS browser, or `null` when it
+ * should not.
+ *
+ * The scheme decision is the external-link rule's, not a copy of it: this
+ * function normalises what that rule accepted, and nothing more. A malformed
+ * address cannot reach `new URL` here, because the rule parsed it already.
+ */
 export function externalUrlFor(url: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
+  return allowsDocumentExternalUrl(url) ? new URL(url).toString() : null;
 }
 
 /** What one `will-frame-navigate` event needs of it, so the rule can be driven from a test. */

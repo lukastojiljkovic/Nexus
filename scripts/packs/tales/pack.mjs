@@ -68,12 +68,10 @@ export async function fetchSource({ packId, cacheRoot, file, url, offline = fals
  * One article file: its heading, the source's text, and the Source line the
  * content layout asks every article to end with.
  *
- * The line carries the URL as TEXT rather than as a markdown link, because
- * there is no vetted `shell.openExternal` wrapper in main yet: a link the app
- * cannot open is worse than a URL the user can read and copy.
+ * The line carries the URL as TEXT rather than as a markdown link: it is the
+ * attribution a reader copies, not a control — the pages that draw a link do it
+ * through the app's one door (ADR-107).
  */
-// TODO(external-links): when the one wrapper is built after the merge, this
-// URL can become a link.
 export function articleFile({ title, markdown, sourceLine }) {
   return `# ${title}\n\n${markdown}\n\n---\n\n${sourceLine}\n`;
 }

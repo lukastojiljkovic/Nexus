@@ -62,8 +62,6 @@ export const en: typeof sr = {
   },
   sentences: {
     title: "Sentences",
-    needsPack: "Sentence translation needs the translation pack.",
-    hint: "Once the sentence-translation pack is installed, whole sentences are translated here.",
   },
   notInstalled: {
     title: "The dictionary is not installed yet",

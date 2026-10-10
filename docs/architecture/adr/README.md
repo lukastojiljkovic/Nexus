@@ -118,3 +118,4 @@ directory is the decision log behind it.
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
 | [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
 | [108](108-kit-blobs.md) | Module attachments travel in the archive and count in the blob store | Accepted; extends ADR-090 §5 | 2026-10-10 |
+| [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |

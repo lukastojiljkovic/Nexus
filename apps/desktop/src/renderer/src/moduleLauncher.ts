@@ -6,6 +6,7 @@ import {
   orderedGroupMembers,
   type ShellVisibility,
 } from "../../shared/moduleVisibility.js";
+import { moduleDescription, moduleName } from "./moduleName.js";
 
 /**
  * The launcher's index and its search (ADR-093 §4): every ENABLED module, by
@@ -39,6 +40,24 @@ export interface LauncherGroup {
 }
 
 /**
+ * The two lines a tile draws, for any module in the registry — the one resolver
+ * the rail, the Settings gallery and the onboarding row already use
+ * (`moduleName.ts`).
+ *
+ * **Why this is the default rather than a component's private copy.** It was a
+ * private copy in `ModuleLauncherDialog.tsx`, and it read `strings.modules` and
+ * `strings.settings.moduleDescriptions` directly — which only know the
+ * COMPILED-IN modules, so a kit module's tile drew its raw id
+ * (`workshop`, `timers`, `translator`) while its rail entry and its Settings row
+ * drew the name its manifest declares. Two surfaces, one module, two names: the
+ * exact drift `moduleName.ts` exists to prevent, in the one place that had
+ * restated the lookup instead of calling it.
+ */
+export function launcherTileCopy(moduleId: string): { name: string; description: string } {
+  return { name: moduleName(moduleId), description: moduleDescription(moduleId) };
+}
+
+/**
  * Every enabled module, grouped, in `MODULE_GROUPS` order; a group with no
  * enabled member is omitted rather than drawn empty — Culture and Play are
  * empty in this build and their names would be headings over nothing.
@@ -47,16 +66,14 @@ export interface LauncherGroup {
  * registry's: the rail and this overlay are two pictures of one app, so a group
  * or a module moved in „Prikaz" moves in both.
  *
- * `describe` is the caller's, because the two lines are COPY and `@nexus/core`
- * must not learn any: the component hands in `moduleName` and the gallery's own
- * one-line description, which is the table the Settings page and the onboarding
- * chooser already draw — the house rule that a module has one name and one
- * sentence everywhere.
+ * `describe` is a parameter because the two lines are COPY and `@nexus/core`
+ * must not learn any; it defaults to `launcherTileCopy`, which is the house rule
+ * that a module has one name and one sentence everywhere.
  */
 export function launcherGroups(
   registry: ModuleRegistry,
   enabled: ReadonlySet<string>,
-  describe: (moduleId: string) => { name: string; description: string },
+  describe: (moduleId: string) => { name: string; description: string } = launcherTileCopy,
   visibility: ShellVisibility = DEFAULT_SHELL_VISIBILITY,
 ): LauncherGroup[] {
   const groups: LauncherGroup[] = [];

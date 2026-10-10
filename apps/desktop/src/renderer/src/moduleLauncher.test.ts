@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { resolveEnabled } from "@nexus/core";
 
-import { createModuleRegistry } from "../../shared/modules.js";
+import { createModuleRegistry, kitManifest } from "../../shared/modules.js";
 import {
   filterLauncherGroups,
   launcherGroups,
@@ -10,7 +10,7 @@ import {
   nextLauncherIndex,
   type LauncherGroup,
 } from "./moduleLauncher.js";
-import { lookup, strings } from "./strings.js";
+import { applyLocale, DEFAULT_LOCALE, strings } from "./strings.js";
 
 /**
  * The launcher's index and search (ADR-093 §4). What is pinned here is what the
@@ -22,17 +22,26 @@ import { lookup, strings } from "./strings.js";
 const registry = createModuleRegistry();
 
 /**
- * The real copy, exactly as the component hands it in — the search runs over
- * what is DRAWN. Named `copyFor` and not `describe`: a local helper called
- * `describe` shadows Vitest's, and the suite then registers no tests at all
- * while the run reports a file it could not read a suite out of.
+ * One kit module's declared pair, read straight off its manifest — the oracle
+ * for the test below. A manifest may declare a label as a dotted `strings` path
+ * instead (a compiled-in module's form); a kit module never does, and the throw
+ * says so rather than letting the comparison pass against a string path.
  */
-function copyFor(moduleId: string): { name: string; description: string } {
-  return {
-    name: lookup(strings.modules, moduleId) ?? moduleId,
-    description: lookup(strings.settings.moduleDescriptions, moduleId) ?? "",
-  };
+function declaredCopy(id: string): {
+  name: { sr: string; en: string };
+  description: { sr: string; en: string };
+} {
+  const copy = kitManifest(id)?.copy;
+  if (copy === undefined || typeof copy.name === "string" || typeof copy.description === "string") {
+    throw new Error(`The "${id}" manifest declares no { sr, en } name and description.`);
+  }
+  return { name: copy.name, description: copy.description };
 }
+
+afterEach(() => {
+  // The English case below switches the ONE live table (see `localeEnglish.test.ts`).
+  applyLocale(DEFAULT_LOCALE);
+});
 
 /**
  * The set the app actually draws: the registry resolved against no flags, which
@@ -54,7 +63,9 @@ function allEnabled(...off: string[]): Set<string> {
 }
 
 function groups(enabled = enabledNow()): LauncherGroup[] {
-  return launcherGroups(registry, enabled, copyFor);
+  // No `describe`: the DEFAULT is what the component gets, so the search below
+  // runs over exactly the two lines a tile draws in the app.
+  return launcherGroups(registry, enabled);
 }
 
 describe("launcherGroups", () => {
@@ -144,6 +155,37 @@ describe("launcherGroups", () => {
     expect(calendar?.description).toBe(strings.settings.moduleDescriptions.calendar);
   });
 
+  /**
+   * The bug this test was written for: the launcher read `strings.modules` and
+   * `strings.settings.moduleDescriptions` itself, and those tables only know the
+   * COMPILED-IN modules — so a kit module's tile drew its raw id (`workshop`,
+   * `timers`) while its rail entry and its Settings row drew the name its own
+   * manifest declares.
+   *
+   * The oracle is the MANIFEST, read here rather than through the component's
+   * resolver: a test that asked `moduleName` what the name is would agree with a
+   * wrong answer happily.
+   */
+  it("draws a kit module's DECLARED name and description, in the language being read", () => {
+    const declared = declaredCopy("workshop");
+    const tile = (): { name: string; description: string } | undefined =>
+      groups()
+        .flatMap((group) => group.tiles)
+        .find((entry) => entry.id === "workshop");
+
+    expect(tile()?.name).toBe(declared.name.sr);
+    expect(tile()?.description).toBe(declared.description.sr);
+    // And not the id, which is what the two lookup-only tables produced.
+    expect(tile()?.name).not.toBe("workshop");
+
+    applyLocale("en");
+    expect(tile()?.name).toBe(declared.name.en);
+    expect(tile()?.description).toBe(declared.description.en);
+    // The two languages are really two words: a pair that had been filled with
+    // the Serbian text on both sides would pass everything above.
+    expect(declared.name.en).not.toBe(declared.name.sr);
+  });
+
   it("names every tile's module id exactly once, in draw order", () => {
     const ids = launcherTileIds(groups());
     expect(new Set(ids).size).toBe(ids.length);
@@ -162,7 +204,7 @@ describe("filterLauncherGroups", () => {
   /**
    * Diacritic-insensitivity is `foldSearchText`'s, and it is the property the
    * index itself rests on: „ucenje" finds „UČenje", „beleske" finds
-   * „Beleške", „djordje" would find „Äorđe", and a Cyrillic query finds the
+   * „Beleške", „djordje" would find „Đorđe", and a Cyrillic query finds the
    * Latin copy. Both locales go through it, so an English name is matched by an
    * English query and a Serbian one by a Serbian query, with the diacritics
    * optional in either.

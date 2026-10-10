@@ -196,8 +196,8 @@ export const OMITTED = [
 
 /** The article's own bibliography line, outside the fidelity test: the pack's attribution, not the source's text. */
 export function sourceLine(source, article) {
-  // TODO(external-links): the URL is plain selectable text until the shell has
-  // one vetted `shell.openExternal` wrapper; then it becomes the anchor.
+  // The URL stays plain text: this is a line of a document the reader copies,
+  // and the pages that draw a link do it through the app's one door (ADR-107).
   return `*Source: ${source.credit}. Section: ${article.title}. ${source.url}*`;
 }
 

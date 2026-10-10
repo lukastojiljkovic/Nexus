@@ -87,10 +87,8 @@ export function packTools(deps: PackToolDeps): readonly Tool[] {
 
 /**
  * One pack as a line. The licence URL is shown as text rather than as a link:
- * main has no vetted way to open an external page yet.
- *
- * TODO(external-links): when main grows the one vetted `shell.openExternal`
- * wrapper, the licence URL below becomes that link instead of selectable text.
+ * this is text the MODEL reads, and the chat page is where a link is drawn
+ * (ADR-107) — a URL in a tool's answer is a citation, not a control.
  */
 function packLine(locale: AssistantLocale, pack: InstalledPackView): string {
   const licence = pack.licence;

@@ -4,7 +4,7 @@ import { defineModuleContract, type ModuleApiOf } from "../../../shared/moduleAp
  * TRANSLATOR's contract (ADR-090): the channels it answers on, the payload each
  * one takes, and the API its page calls.
  *
- * **Why these three ops take no `profileId`.** Every other kit module's ops name
+ * **Why these four ops take no `profileId`.** Every other kit module's ops name
  * the profile whose rows they read, because its data is that profile's. This
  * module's data is a signed content pack on the machine (ADR-091) — the same
  * dictionary for every profile — and a lookup writes nothing anywhere, so a
@@ -90,6 +90,25 @@ export interface TranslatorPhrasesView {
   readonly topics: readonly TranslatorTopicView[];
 }
 
+/**
+ * One installed pack, as the sentence translator needs it: its id, and what kind
+ * of content it carries.
+ *
+ * Deliberately NOT the shell's `InstalledPackView`: a translation model is a
+ * pack of kind `model`, and the only two questions this module asks about one
+ * are "is it here" and "what is it" — a title in two languages, a size and a
+ * licence would be fields main validated and no screen read.
+ */
+export interface TranslatorPackView {
+  readonly id: string;
+  readonly kind: string;
+}
+
+/** What `packs` answers: the installed packs this machine has, in registry order. */
+export interface TranslatorPacksView {
+  readonly packs: readonly TranslatorPackView[];
+}
+
 /** One search: which way, what to look up, and how many neighbours to answer with. */
 interface SearchPayload {
   direction: TranslatorDirectionChoice;
@@ -101,6 +120,7 @@ type TranslatorOps = {
   status: { request: Record<string, never>; response: TranslatorStatusView };
   search: { request: SearchPayload; response: TranslatorSearchView };
   phrases: { request: Record<string, never>; response: TranslatorPhrasesView };
+  packs: { request: Record<string, never>; response: TranslatorPacksView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -114,6 +134,7 @@ export const contract = defineModuleContract<"translator", TranslatorOps>("trans
   "status",
   "search",
   "phrases",
+  "packs",
 ]);
 
 /**

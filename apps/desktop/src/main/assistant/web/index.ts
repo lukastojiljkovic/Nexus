@@ -82,9 +82,11 @@ import { fenceUntrusted } from "./untrusted.js";
  *     request returned and nothing survives it, which is also why „user data
  *     never leaves" needs no exception here - what this feature sends is a
  *     query the user approved, and what it keeps is nothing.
- *   - **No external link.** A URL is shown as selectable text with its host
- *     named, and opening it is the user's own browser's job (there is no
- *     vetted `shell.openExternal` in main yet, and ADR-097 does not build one).
+ *   - **No external link.** A URL is text with its host named, because this is
+ *     what the MODEL reads: a citation in an answer is not a control, and the
+ *     chat page is where a link is drawn (`ExternalLink`, ADR-107). Opening an
+ *     address is the user's own browser's job and goes through the app's one
+ *     door.
  */
 
 export interface WebServiceDeps {
@@ -224,8 +226,7 @@ function formatResults(locale: AssistantLocale, query: string, results: readonly
     const position = index + 1;
     const snippet = result.snippet === "" ? [] : [result.snippet];
     // The URL is plain text on its own line: it is what the model cites and what
-    // the user copies, and it is deliberately not a link.
-    // TODO(external-links)
+    // the user copies, and the chat page is where a link is drawn (ADR-107).
     return [`${String(position)}. ${result.title}`, `   ${result.url}`, ...snippet.map((line) => `   ${line}`)].join("\n");
   });
   return [searchHeading(locale, query), ...lines].join("\n");

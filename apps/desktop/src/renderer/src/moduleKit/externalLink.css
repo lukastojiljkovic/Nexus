@@ -1,0 +1,33 @@
+/* The kit's external link (ADR-107). A button that reads as a link, because the
+   renderer may not navigate itself: the visual is `settings.css`'s own
+   `packs__link` recipe, restated here rather than imported because a kit module
+   must not depend on a compiled-in module's stylesheet. Every value is a token,
+   and the focus ring is the house's 2px accent outline. */
+.nx-external-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nx-accent);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.nx-external-link:hover {
+  color: var(--nx-text);
+}
+.nx-external-link:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+/* Refused: the address as selectable text, in the muted ink of prose, with no
+   affordance a reader could mistake for a control. */
+.nx-external-link--refused {
+  color: var(--nx-text-muted);
+  text-decoration: none;
+  cursor: text;
+}
+.nx-external-link__address {
+  user-select: text;
+}

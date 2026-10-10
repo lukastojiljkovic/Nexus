@@ -1,12 +1,14 @@
 import { looksSerbian, matchDictionaryKeys, serbianLatin } from "@nexus/core";
 
 import type { ModuleHostSurface } from "../../../main/moduleIpc.js";
+import { readInstalled } from "../../../main/packs/registry.js";
 import {
   TRANSLATOR_DIRECTION_CHOICES,
   contract,
   type TranslatorDirection,
   type TranslatorDirectionChoice,
   type TranslatorEntryView,
+  type TranslatorPacksView,
   type TranslatorPhrasesView,
   type TranslatorSearchView,
   type TranslatorStatusView,
@@ -22,7 +24,8 @@ import {
 import { installedPacksRoot } from "./packDir.js";
 
 /**
- * TRANSLATOR in the main process (ADR-090): three reads over a content pack.
+ * TRANSLATOR in the main process (ADR-090): three reads over a content pack, and
+ * the list of installed packs the sentence translator's models come from.
  *
  * **Why there is no store here.** The dictionary is not the user's data — it is
  * a signed pack on the machine (ADR-091), the same for every profile — and a
@@ -150,6 +153,30 @@ export function register(host: ModuleHostSurface): void {
         phrases: topic.phrases.slice(0, MAX_PHRASES_PER_TOPIC),
       }));
     return { topics } satisfies TranslatorPhrasesView;
+  });
+
+  /**
+   * The installed packs, for the sentence translator's model lookup.
+   *
+   * **Why main lists them rather than the renderer.** A pack is a signed folder
+   * on this machine (ADR-091), and the kit's whole point is that a renderer never
+   * names one to read: the list comes from the registry — the same
+   * `readInstalled` the Packs card draws — and what crosses the wire is an id and
+   * a kind, never a path. The sentence surface turns those into `nx-pack://`
+   * URLs, which `protocol.handle` answers out of the signed folder.
+   *
+   * The dictionary this module searches is read through `packDir.ts` (its own
+   * `about.json` format, not the ADR-091 manifest), which is why the two readers
+   * are different: the *model* packs this answers about are ordinary content
+   * packs, and their manifests are the registry's business.
+   */
+  ctx.handle("packs", (payload, call) => {
+    call.as.asRecord(payload);
+    const access = ctx.packs();
+    const installed = readInstalled(access.userData(), access.publicKeyPem);
+    return {
+      packs: installed.map((entry) => ({ id: entry.manifest.id, kind: entry.manifest.kind })),
+    } satisfies TranslatorPacksView;
   });
 }
 

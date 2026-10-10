@@ -19,6 +19,11 @@ export const sr = {
     toolpath: "G-kod",
     board: "Gerber",
   },
+  /** The two tool sets, as the switcher's own segments read them. */
+  views: {
+    pdf: "PDF",
+    images: "Slike",
+  },
   open: {
     model: "Otvori STL",
     toolpath: "Otvori G-kod",

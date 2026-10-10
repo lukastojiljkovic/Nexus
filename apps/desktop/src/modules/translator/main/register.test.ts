@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { dictionaryKey, serbianLatin } from "@nexus/core";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
+import { baseManifest, entry, makeKey, writePack } from "../../../main/packs/fixtures.js";
 import { register } from "./register.js";
 
 /**
@@ -40,6 +41,16 @@ const GOLDEN = fileURLToPath(new URL("../../../../../../scripts/packs/dictionary
 
 let dir = "";
 
+/**
+ * The key the harness's throwaway model pack is SIGNED with.
+ *
+ * `readInstalled` re-verifies every manifest against the key it is handed, so a
+ * pack written for this test has to be signed by the key the platform supplies —
+ * which is the point of the arrangement rather than a complication: the app's
+ * real key is the release key's public half, and a test may never use it.
+ */
+const packKey = makeKey();
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "nexus-translator-"));
   state.root = join(dir, "packs");
@@ -71,6 +82,9 @@ function harness(): ModuleHost {
     schedule: () => {
       throw new Error("the translator arms no timers");
     },
+    // The pack registry's own two inputs, which is what the `packs` op reads the
+    // installed list through: this module never names a path or a key of its own.
+    packs: { userData: () => dir, publicKeyPem: packKey.publicKeyPem },
     now: () => Date.now(),
   };
   const host = new ModuleHost(platform);
@@ -101,7 +115,15 @@ interface SearchView {
 
 describe("the translator handler surface", () => {
   it("registers exactly the ops its contract declares", () => {
-    expect(harness().channels()).toEqual(["translator:status", "translator:search", "translator:phrases"]);
+    expect(harness().channels()).toEqual([
+      "translator:status",
+      "translator:search",
+      "translator:phrases",
+      // The sentence translator's model lookup: the installed packs, by id and
+      // kind, so a pack the user installs makes a direction offerable without a
+      // reload (ADR-107's wiring of `sentences/SentenceTranslator.tsx`).
+      "translator:packs",
+    ]);
   });
 
   it("answers the pack's state, and says there is none rather than throwing", async () => {
@@ -305,6 +327,42 @@ describe("the phrasebook", () => {
     const basics = view.topics.find((topic) => topic.id === "basics");
     expect(basics?.phrases[0]?.en).toBe("Hello.");
     expect(view.topics.reduce((sum, topic) => sum + topic.phrases.length, 0)).toBe(59);
+  });
+});
+
+/**
+ * The sentence translator's model lookup.
+ *
+ * What is asserted is the boundary rather than the engine: the list is the
+ * REGISTRY's — a signed folder on this machine, verified against the key main
+ * holds — and what crosses the wire is an id and a kind, never a path. The pack
+ * is a real one written by the pack suite's own fixture builder, so this drives
+ * the same `readInstalled` the Packs card does.
+ */
+describe("the installed packs the sentence translator reads", () => {
+  it("answers nothing when no pack is installed, rather than refusing", async () => {
+    expect(await call(harness(), "translator:packs", {})).toEqual({ packs: [] });
+  });
+
+  it("answers every installed pack by id and kind, and not by path", async () => {
+    const contents = { "model.bin": "not a real model, and not read here" };
+    writePack({
+      dir: join(state.root, "translate-sr-en", "1.0.0"),
+      key: packKey.privateKey,
+      contents,
+      manifest: baseManifest([entry("model.bin", contents["model.bin"])], {
+        id: "translate-sr-en",
+        kind: "model",
+      }),
+    });
+    // The dictionary the word search reads lives in the SAME root, and it is not
+    // in this answer: it is a `about.json` pack (the converter's format), not an
+    // ADR-091 manifest, so the registry — which is what this op asks — has never
+    // seen it. That is the reader split the module's header records.
+    installPack();
+    expect(await call(harness(), "translator:packs", {})).toEqual({
+      packs: [{ id: "translate-sr-en", kind: "model" }],
+    });
   });
 });
 

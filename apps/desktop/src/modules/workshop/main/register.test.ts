@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { GERBER_MAX_BYTES, parseStl } from "@nexus/core";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
 import type { WorkshopResult } from "../shared/ipc.js";
+import { WORKSHOP_MAX_BATCH_FILES } from "../shared/workshopFiles.js";
 import { dialogFilterName } from "./dialogCopy.js";
+import { WORKSHOP_NAME_MAX_LENGTH } from "./filesPure.js";
 import { register, type WorkshopPicker } from "./register.js";
 
 /**
@@ -123,7 +125,17 @@ afterEach(() => {
 describe("the workshop handler surface", () => {
   it("registers exactly the ops its contract declares", () => {
     const { host } = harness();
-    expect(host.channels()).toEqual(["workshop:open", "workshop:reopen"]);
+    // Five, and the order is the registration order: the two viewers' ops, then
+    // the three the PDF and image tools call (ADR-107's merge of the fragment in
+    // `shared/workshopFiles.ts`). A verbatim list, because a channel this module
+    // DID register and a channel it did not are the two states that matter here.
+    expect(host.channels()).toEqual([
+      "workshop:open",
+      "workshop:reopen",
+      "workshop:pickFiles",
+      "workshop:saveFile",
+      "workshop:saveBatch",
+    ]);
   });
 
   it("refuses a payload the wire should never carry, before any file is read", async () => {
@@ -283,6 +295,68 @@ describe("the workshop handler surface", () => {
   it("puts nothing in the profile's archive, because a viewer stores nothing", () => {
     const { host } = harness();
     expect(host.collectExports(["profile-1"])).toEqual([]);
+  });
+});
+
+/**
+ * The tool sets' three channels (ADR-107's wiring).
+ *
+ * What can be proved here is the BOUNDARY, which is the half a hostile renderer
+ * meets: every payload below is refused by the handler's own validators, before
+ * a dialog is opened or a file is touched — which also runs under Vitest, where
+ * this process has no Electron at all. The dialog and the write themselves are
+ * `files.ts`'s, and they run in the app.
+ */
+describe("the PDF and image tools' file channels", () => {
+  it("refuses a pick kind this module does not offer, before any dialog is opened", async () => {
+    const { host } = harness();
+    // The refusal names the field, which is also the evidence that the channel
+    // EXISTS: an unregistered one answers "No module answers channel".
+    await expect(call(host, "workshop:pickFiles", { kind: "exe" })).rejects.toThrow(
+      /"kind" must be "pdf" or "image"/,
+    );
+    await expect(call(host, "workshop:pickFiles", { kind: 7 })).rejects.toThrow(/must be a string/);
+  });
+
+  it("refuses bytes that are not a real, non-empty Uint8Array", async () => {
+    const { host } = harness();
+    for (const bytes of [undefined, "UERG", { 0: 37, byteLength: 1 }, new Uint8Array(0)]) {
+      await expect(
+        call(host, "workshop:saveFile", { suggestedName: "report.pdf", bytes }),
+      ).rejects.toThrow(/"bytes" must be a non-empty Uint8Array/);
+    }
+  });
+
+  it("refuses a name that is not a string, and one longer than a name may be", async () => {
+    const { host } = harness();
+    await expect(
+      call(host, "workshop:saveFile", { suggestedName: 7, bytes: new Uint8Array([1]) }),
+    ).rejects.toThrow(/"suggestedName" must be a string/);
+    await expect(
+      call(host, "workshop:saveFile", {
+        suggestedName: "a".repeat(WORKSHOP_NAME_MAX_LENGTH + 1),
+        bytes: new Uint8Array([1]),
+      }),
+    ).rejects.toThrow(
+      new RegExp(`"suggestedName" must not exceed ${String(WORKSHOP_NAME_MAX_LENGTH)} characters`),
+    );
+  });
+
+  it("refuses a batch over its file count, from the count alone", async () => {
+    const { host } = harness();
+    // `null` members on purpose: the count is what is refused, so the handler
+    // must not have looked INSIDE the list to say so — and a test that had to
+    // build twenty real files to prove a count would be a test nobody runs.
+    const tooMany = new Array<null>(WORKSHOP_MAX_BATCH_FILES + 1).fill(null);
+    await expect(call(host, "workshop:saveBatch", { files: tooMany })).rejects.toThrow(
+      new RegExp(`must not hold more than ${String(WORKSHOP_MAX_BATCH_FILES)} files`),
+    );
+    await expect(call(host, "workshop:saveBatch", { files: [] })).rejects.toThrow(
+      /must not be empty/,
+    );
+    await expect(call(host, "workshop:saveBatch", { files: "x" })).rejects.toThrow(
+      /must be an array/,
+    );
   });
 });
 

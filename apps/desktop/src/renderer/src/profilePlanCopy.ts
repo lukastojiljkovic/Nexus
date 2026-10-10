@@ -1,5 +1,6 @@
 import type { PlanReason, ProfilePlan, ToolPack } from "@nexus/core";
 
+import { moduleName } from "./moduleName.js";
 import { ACCENT_FOR_SHAPE } from "./profilePlanApply.js";
 import { countUnit, fill, lookup, strings } from "./strings.js";
 
@@ -35,11 +36,6 @@ export function joinList(parts: readonly string[]): string {
 export function packName(pack: string): string {
   const copy = strings.pro.packs[pack as ToolPack] as { name: string } | undefined;
   return copy?.name ?? pack;
-}
-
-/** A module's sidebar label. */
-function moduleLabel(moduleId: string): string {
-  return lookup(strings.modules, moduleId) ?? moduleId;
 }
 
 /** What the calendar's opening view is called, in the words its own toggle uses. */
@@ -83,7 +79,12 @@ export function planReasonLine(reason: PlanReason): string | null {
     case "packs":
       return fill(s.packs, { packs: joinList(reason.values.map(packName)) });
     case "nav":
-      return fill(s.nav, { modules: joinList(reason.values.map(moduleLabel)) });
+      // `moduleName` rather than a lookup of `strings.modules`: a module the
+      // plan turns on may be one of the DISCOVERED ones (ADR-090), whose name
+      // lives in its own manifest and not in the shell's table. The plan's
+      // sentence named such a module by its raw id, which is the same defect the
+      // launcher's tiles had.
+      return fill(s.nav, { modules: joinList(reason.values.map(moduleName)) });
     case "priv":
       return s.priv;
     case "calendar":
