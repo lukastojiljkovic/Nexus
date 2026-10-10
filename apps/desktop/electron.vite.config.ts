@@ -40,7 +40,7 @@ function rendererHardening(): Plugin {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: nx-blob: priv-blob:", // ADR-014 inline previews; ADR-057 private attachments (unlocked-only)
+    "img-src 'self' data: nx-blob: priv-blob: nx-pack:", // ADR-014 inline previews; ADR-057 private attachments (unlocked-only); CULTURE's arts guide (ADR-091)
     "font-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",
@@ -230,7 +230,7 @@ export default defineConfig({
           // the dev origin. No 'unsafe-eval' — Vite dev is native ESM.
           "script-src 'self' 'unsafe-inline'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: nx-blob: priv-blob:",
+          "img-src 'self' data: blob: nx-blob: priv-blob: nx-pack:",
           // THE LINE THIS BLOCK EXISTS FOR.
           "font-src 'self' data:",
           // The HMR socket, and nothing else. Not `ws:` — that would admit any

@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second DISCOVERED module: `order: 120` sorts it after `timers`
+      // (100), and a tie would be broken by id.
+      "culture",
     ]);
   });
 
@@ -159,6 +162,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // CULTURE's own PRD entry, so it takes its own prefix rather than joining
+      // one of the groups above.
+      CULT: ["culture"],
     });
   });
 
@@ -188,7 +194,7 @@ describe("createModuleRegistry", () => {
    */
   it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
     const grouped = createModuleRegistry().byGroup();
-    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "make", "shell"]);
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "life", "culture", "make", "shell"]);
     expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
@@ -213,13 +219,13 @@ describe("createModuleRegistry", () => {
       "electronics",
       "pro",
     ]);
+    // â€žKultura" is its own group (ADR-093), and the first module to fill it.
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
     expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
-    // Culture and Play have no module yet, so they draw nothing rather than an
-    // empty heading.
-    expect(grouped.has("culture")).toBe(false);
+    // Play has no module yet, so it draws nothing rather than an empty heading.
     expect(grouped.has("play")).toBe(false);
   });
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
@@ -254,6 +260,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // And the same is true of the culture corner: it writes nothing until a
+      // visit, a plan or a file is added.
+      "culture",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +449,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      "culture",
     ]);
   });
 

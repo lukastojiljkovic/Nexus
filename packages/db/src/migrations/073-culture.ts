@@ -4,14 +4,19 @@ import type { Migration } from "./migrations.js";
  * Migration 73 - the culture corner's storage: where you went, what you
  * listened to, and the tracks you own.
  *
- * **Six tables, one module, and the shape follows the diagram.** `culture_visits`
+ * **Nine tables, one module, and the shape follows the diagram.** `culture_visits`
  * and `culture_music_entries` are the two LOGS (two rows per evening, not one
  * row with a kind switch: a play and an exhibition have almost no columns in
  * common, and a single table would be half NULLs and every query filtered by
  * kind). `culture_tracks` is the LIBRARY the log may point at, and
  * `culture_playlists` + `culture_playlist_items` are a hand-ordered list over
  * the library. `culture_visit_photos` is the visit's attachment index, the
- * `note_attachments` arrangement (migration 013) one module over.
+ * `note_attachments` arrangement (migration 013) one module over. Three more
+ * landed with stage 2, when the page needed them: `culture_venues` (a place
+ * remembered once, which the visits it gathers point back at), `culture_plans`
+ * (the programme - something to see that is not a visit yet) and
+ * `culture_settings` (the module's one preference, a PROFILE row like
+ * `timers_settings` so it travels in the archive).
  *
  * **A track's duration is milliseconds, `INTEGER`, and the whole music side
  * counts in them.** `duration_ms` is what a decoder reports and what a player
@@ -83,6 +88,22 @@ import type { Migration } from "./migrations.js";
  * validated in their stores rather than in SQL: `2026-02-30` is a value
  * `length()` cannot judge, and the real-calendar-day rule already has one home
  * (`isBareDate` in `@nexus/db`'s `finance/money.ts`).
+ *
+ * **`venue_id` is a LINK, not the visit's record of where it was.** A visit
+ * keeps its own `venue` and `city` TEXT - that is what the user typed and what
+ * the archive carries - and `venue_id` says which remembered place it belongs
+ * to, or NULL for a place nothing has remembered. The pair can therefore not
+ * contradict itself into a lost row: deleting (`softDeleteVenue`) or renaming a
+ * venue leaves every visit's own words where they are, and the store writes the
+ * two together when the caller names a venue. `culture_plans.venue_id` is the
+ * same link, and `culture_plans.visit_id` is the other one: set by
+ * `completePlan`, which is what makes "whether you went" answerable exactly
+ * once.
+ *
+ * **A plan's `link` is a URL the user pasted, and the store refuses anything
+ * that is not `http:`/`https:`.** The column is a length CHECK and nothing
+ * more: which schemes are safe to render as an anchor is a rule with one home,
+ * in the store's validator, where it is tested.
  */
 export const migration073: Migration = {
   version: 73,
@@ -229,6 +250,71 @@ export const migration073: Migration = {
       -- BY. NOT unique: a playlist may hold one track twice.
       CREATE INDEX culture_playlist_items_order ON culture_playlist_items (playlist_id, rank, id);
       CREATE INDEX culture_playlist_items_track ON culture_playlist_items (track_id);
+
+      CREATE TABLE culture_venues (
+        id         TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL CHECK (length(name) > 0 AND length(name) <= 120),
+        city       TEXT CHECK (city IS NULL OR (length(city) > 0 AND length(city) <= 80)),
+        kind       TEXT NOT NULL
+                     CHECK (kind IN ('museum', 'gallery', 'exhibition', 'theatre', 'opera',
+                                     'ballet', 'concert', 'cinema', 'festival', 'other')),
+        notes      TEXT NOT NULL DEFAULT '' CHECK (length(notes) <= 2000),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT
+      );
+
+      -- The venue list's read: everything live in this profile. The ORDER is
+      -- applied in the store, by the sr-Latn collator - SQLite here cannot do it
+      -- - so this index is the profile filter and nothing more.
+      CREATE INDEX culture_venues_profile
+        ON culture_venues (profile_id, id)
+        WHERE deleted_at IS NULL;
+
+      -- Deliberately NOT in the same statement as the visit table above: the
+      -- link's target has to exist first, and the visit table is written before
+      -- the venues that gather it only because it shipped first.
+      ALTER TABLE culture_visits
+        ADD COLUMN venue_id TEXT REFERENCES culture_venues(id) ON DELETE SET NULL;
+
+      CREATE TABLE culture_plans (
+        id           TEXT PRIMARY KEY,
+        profile_id   TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        title        TEXT NOT NULL CHECK (length(title) > 0 AND length(title) <= 200),
+        kind         TEXT NOT NULL
+                       CHECK (kind IN ('museum', 'gallery', 'exhibition', 'theatre', 'opera',
+                                       'ballet', 'concert', 'cinema', 'festival', 'other')),
+        venue        TEXT NOT NULL CHECK (length(venue) > 0 AND length(venue) <= 120),
+        venue_id     TEXT REFERENCES culture_venues(id) ON DELETE SET NULL,
+        city         TEXT CHECK (city IS NULL OR (length(city) > 0 AND length(city) <= 80)),
+        planned_date TEXT NOT NULL,
+        start_time   TEXT,
+        -- A pasted address. The scheme rule (http/https only) lives in the
+        -- store's validator; a length CHECK is all SQL can honestly say about a
+        -- URL, and the scheme plus a host is longer than zero characters.
+        link         TEXT CHECK (link IS NULL OR (length(link) > 0 AND length(link) <= 2000)),
+        notes        TEXT NOT NULL DEFAULT '' CHECK (length(notes) <= 2000),
+        -- Set once the question "did you go" has been answered, by the store's
+        -- own completePlan, which writes the visit and this pointer in one
+        -- transaction. NULL means the plan is still a plan.
+        visit_id     TEXT REFERENCES culture_visits(id) ON DELETE SET NULL,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL,
+        deleted_at   TEXT
+      );
+
+      -- The programme's read: one profile's live plans, in date order. The page
+      -- draws "upcoming" and "past" from one indexed read rather than two.
+      CREATE INDEX culture_plans_profile_date
+        ON culture_plans (profile_id, planned_date, id)
+        WHERE deleted_at IS NULL;
+
+      CREATE TABLE culture_settings (
+        profile_id        TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+        prompt_past_plans INTEGER NOT NULL CHECK (prompt_past_plans IN (0, 1)),
+        updated_at        TEXT NOT NULL
+      );
     `);
   },
 };

@@ -67,6 +67,9 @@ const LOCAL_SCHEMES: readonly string[] = [
   // `protocol.handle`. They never leave the process.
   "nx-blob:",
   "priv-blob:",
+  // CULTURE's arts guide (ADR-091): an image inside an installed content pack,
+  // served by the same kind of handler, from the disk, never from the network.
+  "nx-pack:",
 ];
 
 /**

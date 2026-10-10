@@ -59,7 +59,13 @@ function groups(enabled = enabledNow()): LauncherGroup[] {
 
 describe("launcherGroups", () => {
   it("lists every enabled module by group, in registry order", () => {
-    expect(groups().map((group) => group.key)).toEqual(["plan", "knowledge", "life", "make"]);
+    expect(groups().map((group) => group.key)).toEqual([
+      "plan",
+      "knowledge",
+      "life",
+      "culture",
+      "make",
+    ]);
     expect(groups()[0]?.tiles.map((tile) => tile.id)).toEqual([
       "tasks",
       "calendar",
@@ -67,6 +73,8 @@ describe("launcherGroups", () => {
       "focus",
       "timers",
     ]);
+    // â€žKultura" is a group of its own, with the one module in it.
+    expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["culture"]);
   });
 
   /**
@@ -90,7 +98,9 @@ describe("launcherGroups", () => {
       "focus",
       "timers",
     ]);
-    const withoutPlan = groups(allEnabled("tasks", "calendar", "habits", "focus", "timers"));
+    const withoutPlan = groups(
+      allEnabled("tasks", "calendar", "habits", "focus", "timers", "culture"),
+    );
     expect(withoutPlan.map((group) => group.key)).toEqual(["knowledge", "life", "make"]);
     // PRIV is off by default, so it is absent until its flag says otherwise â€”
     // the same `resolveEnabled` set the rail is filtered through.
