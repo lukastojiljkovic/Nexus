@@ -2716,3 +2716,5 @@ export {
   step as stepBricks,
 } from "./games/bricks/bricks.js";
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
+export type * from "./assistant/contract.js";
+export type * from "./sky/contract.js";
