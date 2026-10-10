@@ -195,6 +195,88 @@ export interface ModuleImport<T> {
 }
 
 /**
+ * One blob a module's own rows name: the content hash its store holds, and the
+ * size the row states.
+ *
+ * Deliberately the same two fields the archive's manifest already uses for
+ * every other blob, so a module's file joins that union without a shape of its
+ * own - and so nothing here has to describe where the bytes live (SEC-FILE-02,
+ * on `ModuleCall.saveBlob`'s terms).
+ */
+export interface ModuleBlobRef {
+  readonly sha256: string;
+  readonly sizeBytes: number;
+}
+
+/**
+ * One blob an archive's kit-module section names, and the module whose rows
+ * name it. The module id is what lets a restore say WHICH module's file the
+ * archive is missing, the way the built-in rows' own `missing-blob` problem
+ * names the row it belongs to. The size rides because it is the same shape a
+ * module answers for its export; a restore reads only the hash.
+ */
+export interface ModuleImportBlob extends ModuleBlobRef {
+  readonly moduleId: string;
+}
+
+/**
+ * What a module that keeps bytes in the app's one content-addressed blob store
+ * registers once (ADR-108).
+ *
+ * **Why this exists.** `main/index.ts`'s `blobRefCount` and the mime lookup
+ * beside it are the single place that answers "does anything still name this
+ * file", and until ADR-108 a module widened them by hand: culture, cookbook, car
+ * and recorder each added a line to both. A module that forgot to was not
+ * refused - it lost its files to the garbage collector, silently. The same list
+ * built the archive's `blobs/` union, which knew only the built-in tables, so an
+ * exported recipe carried its row and not its photo. One registration answers
+ * all three questions, and a module that names blobs is asked for it by the kit
+ * rather than by a reviewer.
+ *
+ * **What each half answers, and why there are four of them.**
+ *
+ *  - `refCount` is how many of the module's own rows - across every profile, the
+ *    blob store being content-addressed across the whole database - hold this
+ *    hash. Main adds it to the built-in tables' counts; zero from every table is
+ *    what makes a file collectable.
+ *  - `mimeForHash` is what `nx-blob:` must announce for a hash the module's rows
+ *    hold, or null when none of them does. The same union, on `refCount`'s
+ *    terms: the first module that answers wins, exactly as the store order in
+ *    `main/index.ts` decided before.
+ *  - `exportBlobs` is every blob ONE export of the session's profiles carries,
+ *    read off the same live rows `exportData` reads. Main hands the union to
+ *    `buildExportArchive`, which is what puts the file in the zip beside the row
+ *    that names it.
+ *  - `importBlobs` is every blob one IMPORT of this payload names, read off the
+ *    payload - the LIVE rows cannot answer it, because a restore reads the
+ *    archive into a profile whose module tables still hold the previous owner's
+ *    state. It is what lets `main/restore.ts` write a module's bytes BEFORE the
+ *    module's own `apply` writes the rows that name them, and what lets the
+ *    preview report a blob the archive lacks.
+ *
+ * The first two take a `ModuleSession` because the store they read lives behind
+ * the session's own `profileDb`, exactly as a handler's does; the last is a pure
+ * function of the payload. A module with a store but no blobs registers nothing,
+ * and the kit never asks it a question.
+ */
+export interface ModuleBlobSource {
+  /**
+   * How many rows name the hash, across every profile: the store's own count,
+   * on `NoteAttachmentStore.refCount`'s contract.
+   */
+  refCount(session: ModuleSession, profileId: string, sha256: string): number;
+  /** The mime this module stored for the hash, or null when none of its rows names it. */
+  mimeForHash(session: ModuleSession, profileId: string, sha256: string): string | null;
+  /** Every blob one export of the session's profiles carries, with the size each row states. */
+  exportBlobs(session: ModuleSession): readonly ModuleBlobRef[];
+  /**
+   * Every blob one import of this payload names. The value is this module's own
+   * `parse` result, exactly as `apply` receives it.
+   */
+  importBlobs(value: unknown): readonly ModuleBlobRef[];
+}
+
+/**
  * Why a kit section was refused: a module id this build did not adopt (or one
  * it cannot restore), or a payload the module's own `parse` will not take.
  *
@@ -302,6 +384,22 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
    * write shares.
    */
   importData<T>(spec: ModuleImport<T>): void;
+  /**
+   * Registers this module's blob source (ADR-108): the count, the mime and the
+   * export/import hashes of the files its rows name in the app's one
+   * content-addressed store.
+   *
+   * **Why a module registers rather than main enumerating.** The three lists
+   * built from it - `blobRefCount`, the mime lookup, and the archive's `blobs/`
+   * union - were hand-written, one line per module, and a module that forgot its
+   * line lost its files to the garbage collector with no error anywhere. Here
+   * the registration is a line in the module's own folder, beside the handlers
+   * that write the rows, and a module that names blobs and forgets it is a code
+   * review of one file rather than of the largest one in the repository.
+   *
+   * A module with no blobs registers nothing, which is most of them.
+   */
+  blobs(source: ModuleBlobSource): void;
 }
 
 /**
@@ -443,6 +541,7 @@ export class ModuleHost implements ModuleHostSurface {
   private readonly sessionEnds: (() => void)[] = [];
   private readonly exporters = new Map<string, (session: ModuleSession) => unknown>();
   private readonly importers = new Map<string, ModuleImport<unknown>>();
+  private readonly blobSources = new Map<string, ModuleBlobSource>();
   private readonly armed: Armed[] = [];
   /** Every module this build adopted - which is what "a module id this build knows" means. */
   private readonly adoptedIds = new Set<string>();
@@ -530,6 +629,9 @@ export class ModuleHost implements ModuleHostSurface {
           apply: spec.apply as (parsed: unknown, session: ModuleSession) => void,
         });
       },
+      blobs: (source) => {
+        this.blobSources.set(contract.id, source);
+      },
     };
     return context;
   }
@@ -575,11 +677,7 @@ export class ModuleHost implements ModuleHostSurface {
 
   /** Hands every module the just-unlocked session. */
   sessionStart(profileIds: readonly string[]): void {
-    const session: ModuleSession = {
-      profileIds,
-      profileDb: (profileId, open) => open(this.platform.database(), profileId),
-      now: () => this.platform.now(),
-    };
+    const session = this.session(profileIds);
     for (const run of this.sessionStarts) run(session);
   }
 
@@ -597,17 +695,90 @@ export class ModuleHost implements ModuleHostSurface {
    * day a module is added.
    */
   collectExports(profileIds: readonly string[]): ExportModuleData[] {
-    const session: ModuleSession = {
-      profileIds,
-      profileDb: (profileId, open) => open(this.platform.database(), profileId),
-      now: () => this.platform.now(),
-    };
+    const session = this.session(profileIds);
     const section: ExportModuleData[] = [];
     for (const [moduleId, exportData] of this.exporters) {
       const value = exportData(session);
       if (value !== undefined) section.push({ moduleId, payload: value });
     }
     return section;
+  }
+
+  /**
+   * Every blob the registered modules carry in one export of these profiles, in
+   * registration order — what `main/index.ts` hands `buildExportArchive` beside
+   * the module section itself.
+   *
+   * Read off the SAME live rows `collectExports` reads, one call apart, and both
+   * are synchronous: the rows a module claims are the rows the archive carries.
+   * Deduplication is the archive's own (`declareBlob`), so a hash two modules
+   * both name travels once however many times it appears here.
+   */
+  collectBlobs(profileIds: readonly string[]): ModuleBlobRef[] {
+    const session = this.session(profileIds);
+    const blobs: ModuleBlobRef[] = [];
+    for (const source of this.blobSources.values()) blobs.push(...source.exportBlobs(session));
+    return blobs;
+  }
+
+  /**
+   * Every blob an archive's module section names, with the module that names it:
+   * what `main/restore.ts` writes into the store before any module's `apply`
+   * runs, and what it reports against when the archive does not carry one.
+   *
+   * Parsed first, exactly as the apply is: a module id this build does not know,
+   * or a payload its own `parse` refuses, throws here — which is why the restore
+   * asks this only after `assertImportable` has passed, and why the answer is
+   * read off the PARSED payload rather than the live rows (a profile about to be
+   * replaced still holds the previous owner's state).
+   */
+  collectImportBlobs(section: readonly ExportModuleData[]): ModuleImportBlob[] {
+    const parsed = this.parseImports(section);
+    const blobs: ModuleImportBlob[] = [];
+    for (const { moduleId } of section) {
+      const source = this.blobSources.get(moduleId);
+      if (source === undefined) continue;
+      const seen = new Set<string>();
+      for (const ref of source.importBlobs(parsed.get(moduleId))) {
+        // One row's hash twice (a photo and a track over the same bytes, say) is
+        // one entry here: this list is what a restore writes and reports, and a
+        // duplicate would be a second write of the same file.
+        if (seen.has(ref.sha256)) continue;
+        seen.add(ref.sha256);
+        blobs.push({ moduleId, sha256: ref.sha256, sizeBytes: ref.sizeBytes });
+      }
+    }
+    return blobs;
+  }
+
+  /**
+   * How many of the registered modules' rows name this hash, for one profile —
+   * which `main/index.ts`'s `blobRefCount` adds to the built-in tables it unions.
+   * Zero from every table is what makes a file on disk collectable, so a module
+   * that registers here is what keeps its own bytes alive.
+   */
+  blobRefCount(profileId: string, sha256: string): number {
+    const session = this.session([profileId]);
+    let total = 0;
+    for (const source of this.blobSources.values()) {
+      total += source.refCount(session, profileId, sha256);
+    }
+    return total;
+  }
+
+  /**
+   * The mime one of the registered modules stored for this hash, or null when
+   * none of their rows names it — the serve gate the `nx-blob:` protocol asks
+   * (it passes no profile, which is why every source's lookup is the
+   * database-wide one its contract already states).
+   */
+  blobMimeForHash(profileId: string, sha256: string): string | null {
+    const session = this.session([profileId]);
+    for (const source of this.blobSources.values()) {
+      const mime = source.mimeForHash(session, profileId, sha256);
+      if (mime !== null) return mime;
+    }
+    return null;
   }
 
   /**
@@ -692,11 +863,7 @@ export class ModuleHost implements ModuleHostSurface {
   applyImports(section: readonly ExportModuleData[], profileIds: readonly string[]): void {
     const parsed = this.parseImports(section);
     if (this.importers.size === 0) return;
-    const session: ModuleSession = {
-      profileIds,
-      profileDb: (profileId, open) => open(this.platform.database(), profileId),
-      now: () => this.platform.now(),
-    };
+    const session = this.session(profileIds);
     this.platform.database().transaction(() => {
       for (const [moduleId, importer] of this.importers) {
         importer.apply(parsed.get(moduleId), session);
@@ -715,6 +882,21 @@ export class ModuleHost implements ModuleHostSurface {
       // Bound once per call rather than read from the platform at the call
       // site, so a module's handler cannot reach anything else `index.ts` holds.
       saveBlob: this.platform.saveBlob?.bind(this.platform),
+      now: () => this.platform.now(),
+    };
+  }
+
+  /**
+   * The session a module's export, import or blob source is handed: one database
+   * handle, one clock, and the profiles the call is about. Built per call for
+   * the reason `call()` is — a captured handle would outlive the account switch
+   * that replaced it — and shared by the four readers above so a session means
+   * the same thing wherever a module meets one.
+   */
+  private session(profileIds: readonly string[]): ModuleSession {
+    return {
+      profileIds,
+      profileDb: (profileId, open) => open(this.platform.database(), profileId),
       now: () => this.platform.now(),
     };
   }

@@ -246,6 +246,39 @@ ctx.importData({
   written one profile at a time). Answer `undefined` rather than guessing if it
   ever names more.
 
+### If your module stores FILES
+
+A module that keeps bytes in the app's one content-addressed blob store
+(`ctx.attachFiles`, `call.saveBlob`) registers them once, beside the archive
+hooks above (ADR-108):
+
+```ts
+ctx.blobs({
+  refCount: (session, profileId, sha256) => store(session, profileId).refCount(sha256),
+  mimeForHash: (session, profileId, sha256) => store(session, profileId).mimeForHash(sha256),
+  // The same value `exportData` above produced: the module's own section.
+  exportBlobs: (session) => hashesOf(sectionFor(session)),
+  // And what your own `parse` answers - `apply` is handed the same value.
+  importBlobs: (payload) => hashesOf(parseYourSection(payload as YourExport | undefined)),
+});
+```
+
+* **The store's two lookups must be database-wide.** The blob store is
+  content-addressed across the whole database, so a count or a mime scoped to
+  one profile reports zero for a file another profile still names, and
+  `nx-blob:` — which asks for a mime with no profile at all — stops serving it.
+  Every other member of that union has this shape; write yours the same way.
+* **`exportBlobs` reads the same rows your `exportData` does** (ideally the
+  value it just produced), so the file a module declares is the file beside the
+  row it declares.
+* **`importBlobs` reads the payload**, because a restore reads an archive into a
+  profile whose tables still hold the previous owner's rows. Hand it the same
+  value your `apply` is handed.
+* **Without this, the failure is silent.** Your rows restore and your files do
+  not, and the files you do have are collected the moment their last row goes.
+  There is no gate that catches a missing registration, which is why this
+  paragraph is here.
+
 ## 7. Tests
 
 Write them where the code is: the folders are in the app's Vitest include list,

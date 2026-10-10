@@ -967,25 +967,31 @@ export class CultureStore {
     // hash-naming tables - a photo and a track may hold byte-identical content,
     // so the count has to see both before main's union can be asked whether a
     // file on disk is orphaned.
+    //
+    // Deliberately PROFILE-AGNOSTIC, like every other member of that union: the
+    // blob store is content-addressed across the whole database, so a count
+    // scoped to one profile would report zero for a file another profile's row
+    // still names and the collector would delete it under that row's feet. The
+    // join to `culture_visits` existed only to reach `profile_id`; the photo
+    // table's own `visit_id` is the reference, so it is gone with it.
     this.countBlobReferences = db.prepare(
       `SELECT
-         (SELECT count(*) FROM culture_visit_photos p
-            JOIN culture_visits v ON v.id = p.visit_id
-           WHERE p.sha256 = ? AND v.profile_id = ?) +
+         (SELECT count(*) FROM culture_visit_photos p WHERE p.sha256 = ?) +
          (SELECT count(*) FROM culture_tracks t
-           WHERE t.sha256 = ? AND t.profile_id = ?) AS n`,
+           WHERE t.sha256 = ?) AS n`,
     );
     // What the bytes are served as. The photo table is asked first, which is the
     // order main's own mime union asks these two in - and the track table is the
     // fallback, because a hash may be named by a track alone, or by both (in
-    // which case the photo's mime is the one the served bytes are).
+    // which case the photo's mime is the one the served bytes are). Read with NO
+    // profile, on the count's own rule: `nx-blob:` asks for a hash and has no
+    // profile to ask with.
     this.selectBlobMime = db.prepare(
       `SELECT COALESCE(
          (SELECT p.mime FROM culture_visit_photos p
-            JOIN culture_visits v ON v.id = p.visit_id
-           WHERE p.sha256 = ? AND v.profile_id = ? LIMIT 1),
+           WHERE p.sha256 = ? LIMIT 1),
          (SELECT t.mime FROM culture_tracks t
-           WHERE t.sha256 = ? AND t.profile_id = ? LIMIT 1)
+           WHERE t.sha256 = ? LIMIT 1)
        ) AS mime`,
     );
 
@@ -1558,30 +1564,23 @@ export class CultureStore {
   // --- the blobs ------------------------------------------------------------
 
   /**
-   * How many of this profile's rows name a blob hash - photos and tracks
-   * together. The store's own count, which main adds to its other tables' before
-   * deciding a file on disk is orphaned (`blobRefCount`).
+   * How many rows - photos and tracks together, and across EVERY profile - name
+   * this blob hash. The store's own count, which main adds to its other tables'
+   * before deciding a file on disk is orphaned (`blobRefCount`).
    *
-   * Profile-scoped, like `NoteAttachmentStore.refCount`, and asked for THIS
-   * profile while main's union is asked with the profile whose file is being
-   * removed. A hash shared with another profile is protected by that profile's
-   * own store, which is the shape every other member of the union has.
+   * Profile-agnostic, like `NoteAttachmentStore.refCount`: the blob store is
+   * content-addressed across the whole database, so a count that saw one
+   * profile's rows would report zero for a file another profile still names and
+   * the collector would take it.
    */
   refCount(sha256: string): number {
-    const { n } = this.countBlobReferences.get(sha256, this.profileId, sha256, this.profileId) as {
-      n: number;
-    };
+    const { n } = this.countBlobReferences.get(sha256, sha256) as { n: number };
     return n;
   }
 
-  /** The mime this profile's rows registered for a hash, or null when none of them names it. */
+  /** The mime any row registered for a hash, or null when none of them names it - profile-agnostic, like the count above. */
   mimeForHash(sha256: string): string | null {
-    const row = this.selectBlobMime.get(
-      sha256,
-      this.profileId,
-      sha256,
-      this.profileId,
-    ) as { mime: string | null };
+    const row = this.selectBlobMime.get(sha256, sha256) as { mime: string | null };
     return row.mime;
   }
 

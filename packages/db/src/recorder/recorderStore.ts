@@ -202,9 +202,10 @@ export const RECORDER_EXPORT_VERSION = 2;
  * `blobs/<sha256>` binary entry resolved by main's blob reader, and a recording
  * travels the same way for the same reason — but the JSON this store produces is
  * the INDEX, exactly as `note_attachments`' rows are the index half of a note's
- * files. Stage 2 declares one binary entry per `sha256` here; this store never
- * sees a byte. That split is what keeps `packages/db` free of I/O and what makes
- * the round trip testable without a filesystem.
+ * files. The module declares one binary entry per `sha256` through the kit's own
+ * blob hook (ADR-108); this store never sees a byte. That split is what keeps
+ * `packages/db` free of I/O and what makes the round trip testable without a
+ * filesystem.
  *
  * Only LIVE recordings are exported, and only their markers: the profile
  * archive's own posture is that a soft delete is a local fact (the archive
@@ -618,17 +619,13 @@ export class RecorderStore {
    * recordings, their markers and the module's one preference — metadata only
    * (see `RecorderExport`).
    *
-   * **The bytes do not travel, and that is a gap recorded here rather than
-   * hidden.** The module kit's archive section is a versioned JSON value with
-   * no vocabulary for a blob (ADR-090 §5), so nothing declares a recording's
-   * `sha256` among the archive's `blobs/` entries the way `note_attachments`'
-   * rows do. A restore onto ANOTHER machine therefore brings a profile's
-   * recordings back as rows whose bytes its blob store does not have (a restore
-   * over the same install is whole: the bytes are still on disk). Closing it is
-   * a kit-level change — `ExportModuleData` gaining a declared blob inventory,
-   * `collectExports` filling it, and `main/restore.ts` writing those hashes
-   * beside the attachments it already writes — and it belongs to whoever owns
-   * the interchange, not to this module alone.
+   * **The bytes travel beside this value, and not through it.** A recording's
+   * `sha256` reaches the archive's `blobs/` union through the module's own blob
+   * hook (ADR-108, `ctx.blobs` in the module's `main/register.ts`), which reads
+   * the hashes off this same value and hands them to main; the restore writes the
+   * bytes back before the module's `apply` writes the rows that name them. So
+   * this store still produces metadata only — no byte ever reaches
+   * `packages/db` — and the section needs no blob field of its own.
    */
   exportData(): RecorderExport {
     const recordings = (this.selectExport.all(this.profileId) as RecordingRow[]).map((row) =>

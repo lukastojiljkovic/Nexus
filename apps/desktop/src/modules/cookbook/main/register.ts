@@ -32,6 +32,7 @@ import {
   MAX_RECIPE_TITLE_LENGTH,
   RecipeStore,
   foldIngredientName,
+  type CookbookExport,
   type CreateRecipeInput,
   type Recipe,
   type RecipeIngredientInput,
@@ -864,6 +865,35 @@ export function register(host: ModuleHostSurface): void {
       }
     },
   });
+
+  // The blob hook (ADR-108): a recipe's photo is the one file this module keeps
+  // in the shared store, and these four answers are what main builds its blob
+  // union, its mime lookup and the archive's `blobs/` list from - one
+  // registration in this module's own folder rather than two lines naming
+  // COOK's tables in `main/index.ts`.
+  ctx.blobs({
+    refCount: (session, profileId, sha256) => store(session, profileId).refCount(sha256),
+    mimeForHash: (session, profileId, sha256) => store(session, profileId).mimeForHash(sha256),
+    exportBlobs: (session) => {
+      const profileId = soleProfile(session.profileIds);
+      return profileId === null ? [] : photoBlobs(store(session, profileId).exportData());
+    },
+    importBlobs: (payload) =>
+      photoBlobs((payload as CookbookExport | undefined) ?? emptyCookbookExport()),
+  });
+}
+
+/**
+ * Every photo one COOKBOOK section names, with the size its row states - read
+ * off the EXPORT value rather than the raw table, so the list is exactly the
+ * recipes the archive carries (a soft-deleted one is in neither).
+ */
+function photoBlobs(section: CookbookExport): { sha256: string; sizeBytes: number }[] {
+  return section.recipes.flatMap((recipe) =>
+    recipe.photo === null
+      ? []
+      : [{ sha256: recipe.photo.sha256, sizeBytes: recipe.photo.sizeBytes }],
+  );
 }
 
 /**

@@ -63,7 +63,7 @@ import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { CsvReadError, readCsvText } from "./csvReader.js";
 import { IcsReadError, readIcsText } from "./icsReader.js";
-import { ModuleImportError } from "./moduleIpc.js";
+import { ModuleImportError, type ModuleImportBlob } from "./moduleIpc.js";
 import { cancelIdleCompactions } from "./notes.js";
 import type { PrivResealOutcome } from "./priv.js";
 import {
@@ -377,6 +377,21 @@ export interface RestoreDeps extends ProfileDataDeps {
    * it, with no module's rows written.
    */
   restoreModuleData(profileId: string, modules: readonly ExportModuleData[]): void;
+  /**
+   * Every blob the archive's kit-module section names, with the module that
+   * names it (ADR-108). Injected because neither this module nor `@nexus/core`
+   * can read a module's payload: the module itself answers the question, off the
+   * same parsed value its own `apply` is handed.
+   *
+   * Read once per apply, for the two things this file owes the section's bytes:
+   * writing each one into the store BEFORE any module's `apply` writes the row
+   * that names it (a row pointing at nothing is the one failure the attachment
+   * loop above already refuses), and reporting - at the preview, exactly as the
+   * reader reports a built-in row's missing blob - the ones the archive does not
+   * carry. Called only after `assertImportable` has passed, so a payload that
+   * module's own `parse` refuses never reaches it.
+   */
+  moduleBlobs(modules: readonly ExportModuleData[]): readonly ModuleImportBlob[];
   /** Whether `profileId`'s private section is set up AND unlocked right now — the preview's `willRestore` fact, re-checked at apply time by the re-seal itself. */
   privUnlocked(profileId: string): boolean;
   /**
@@ -736,7 +751,9 @@ export async function previewRestore(
     };
   }
   const incoming = countProfileModules(parsed.data);
-  const warnings = parsed.problems.filter((problem) => problem.severity === "warning").map(toRestoreProblem);
+  const warnings: RestoreProblem[] = parsed.problems
+    .filter((problem) => problem.severity === "warning")
+    .map(toRestoreProblem);
   const token = randomBytes(16).toString("hex");
 
   // The kit's section (ADR-090), refused HERE rather than at apply: a module
@@ -767,6 +784,35 @@ export async function previewRestore(
         },
       ],
     };
+  }
+
+  // The kit section's own files (ADR-108), on `parseImportArchive`'s rule-8
+  // terms exactly: a blob the archive does not carry is a WARNING naming the
+  // path, the row still restores, and the module's page draws the file it cannot
+  // find. The module's rows live inside a payload neither core nor this file can
+  // read, so the module is asked which hashes they name - and asked only now,
+  // after `assertImportable` has passed, so a payload its own `parse` refuses
+  // never reaches the question.
+  let moduleBlobs: readonly ModuleImportBlob[];
+  try {
+    moduleBlobs = deps.moduleBlobs(parsed.data.modules);
+  } catch (error) {
+    // A module's own `importBlobs` throwing is a bug in that module, not a fact
+    // about the archive - so it propagates as an exception rather than through
+    // the two kit problem codes above. The handle is released first, on
+    // `countProfileModules`' own rule: nothing else holds this archive yet, so a
+    // throw through here would keep the user's file locked on Windows.
+    await archive.close().catch(() => {});
+    throw error;
+  }
+  for (const blob of moduleBlobs) {
+    if (archive.blobNames.has(blob.sha256)) continue;
+    warnings.push({
+      severity: "warning",
+      code: "missing-blob",
+      path: `blobs/${blob.sha256}`,
+      detail: blob.moduleId,
+    });
   }
 
   picked.ready = {
@@ -898,6 +944,15 @@ export async function applyRestore(
   ) {
     shasToWrite.add(ready.profilePicture.hash);
   }
+  // The kit section's own files (ADR-108), joining the same set on the same
+  // rule: written when the archive carries them, counted when it does not. They
+  // are written HERE, before the replace and before `restoreModuleData` below
+  // writes the rows that name them - the order that makes a row pointing at
+  // nothing impossible, exactly as for the attachments above.
+  const moduleBlobs = deps.moduleBlobs(ready.data.modules);
+  for (const blob of moduleBlobs) {
+    if (ready.archive.blobNames.has(blob.sha256)) shasToWrite.add(blob.sha256);
+  }
   const addedBlobs: string[] = [];
   for (const sha256 of shasToWrite) {
     const bytes = await ready.archive.readBlob(sha256);
@@ -955,7 +1010,13 @@ export async function applyRestore(
   const missingBlobs =
     restoredAttachments.filter(
       (attachment) => !ready.archive.blobNames.has(attachment.sha256),
-    ).length + missingPrivateBlobs;
+    ).length +
+    // A kit module's file the archive lacks (ADR-108) is the same fact one
+    // section over: the module's row comes back and its bytes do not, which the
+    // module's own page draws as a missing file (`previewRestore` raised the
+    // warning naming it).
+    moduleBlobs.filter((blob) => !ready.archive.blobNames.has(blob.sha256)).length +
+    missingPrivateBlobs;
 
   const summary: RestoreApplyResult = {
     restored: countProfileModules(ready.data),

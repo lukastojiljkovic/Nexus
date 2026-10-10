@@ -15,6 +15,7 @@ import {
   MAX_RECORDING_TAGS,
   MAX_RECORDING_TITLE_LENGTH,
   RecorderStore,
+  type RecorderExport,
 } from "@nexus/db";
 import type { ModuleCall, ModuleHostSurface } from "../../../main/moduleIpc.js";
 import {
@@ -285,6 +286,35 @@ export function register(host: ModuleHostSurface): void {
       }
     },
   });
+
+  // The blob hook (ADR-108): a recording's media is the file this module keeps
+  // in the shared store, and these four answers are what main builds its blob
+  // union, its mime lookup and the archive's `blobs/` list from. Before this
+  // registration `index.ts` named RECORDER's table by hand in two functions, and
+  // the archive carried the index row without the media (see `./imex.ts`).
+  ctx.blobs({
+    refCount: (session, profileId, sha256) => recorderStore(session, profileId).refCount(sha256),
+    mimeForHash: (session, profileId, sha256) =>
+      recorderStore(session, profileId).mimeForHash(sha256),
+    exportBlobs: (session) => {
+      const profileId = soleProfile(session.profileIds);
+      return profileId === null ? [] : mediaBlobs(recorderStore(session, profileId).exportData());
+    },
+    importBlobs: (payload) =>
+      mediaBlobs((payload as RecorderExport | undefined) ?? EMPTY_RECORDER_EXPORT),
+  });
+}
+
+/**
+ * Every media file one RECORDER section names, with the size its row states —
+ * read off the EXPORT value rather than the raw table, so the list is exactly
+ * the recordings the archive carries (only live ones, `exportData`'s own rule).
+ */
+function mediaBlobs(section: RecorderExport): { sha256: string; sizeBytes: number }[] {
+  return section.recordings.map((recording) => ({
+    sha256: recording.sha256,
+    sizeBytes: recording.sizeBytes,
+  }));
 }
 
 /**

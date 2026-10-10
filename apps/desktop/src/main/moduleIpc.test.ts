@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ExportModuleData } from "@nexus/core";
 import { openDatabase, type NexusDatabase } from "@nexus/db";
-import { ModuleHost, ModuleImportError, type ModulePlatform } from "./moduleIpc.js";
+import {
+  ModuleHost,
+  ModuleImportError,
+  type ModuleBlobSource,
+  type ModulePlatform,
+} from "./moduleIpc.js";
 import { defineModuleContract } from "../shared/moduleApi.js";
 
 /**
@@ -501,5 +506,127 @@ describe("ModuleHost's session hooks", () => {
 
     expect(starts).toEqual([["profile-1", "profile-2"]]);
     expect(ends).toBe(1);
+  });
+});
+
+/**
+ * ADR-108's hook, against the real host. What a module registers here is what
+ * main's blob union, its `nx-blob:` mime lookup and the archive's `blobs/` list
+ * are built from, so the three properties pinned below are the ones a module
+ * that forgot to register would silently break: its file survives collection,
+ * its bytes reach an export, and its rows' hashes reach a restore.
+ */
+describe("ModuleHost's blob hook (ADR-108)", () => {
+  const PHOTO = { sha256: "a".repeat(64), sizeBytes: 4_096 };
+  /** A hash no module ever names — the one a collector may take. */
+  const STRANGER = "b".repeat(64);
+
+  /** One registered module whose two rows name `PHOTO`; `counts` is how many, so a test can move it. */
+  function withPhotoBlobs(
+    host: ModuleHost,
+    ctx: { blobs: (source: ModuleBlobSource) => void },
+    counts = 2,
+  ): void {
+    ctx.blobs({
+      refCount: (_session, _profileId, sha256) => (sha256 === PHOTO.sha256 ? counts : 0),
+      mimeForHash: (_session, _profileId, sha256) =>
+        sha256 === PHOTO.sha256 ? "image/jpeg" : null,
+      exportBlobs: () => [PHOTO],
+      importBlobs: () => [PHOTO],
+    });
+  }
+
+  it("counts a registered module's rows, and answers zero and null for a hash none of them names", () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    withPhotoBlobs(host, ctx);
+
+    expect(host.blobRefCount("profile-1", PHOTO.sha256)).toBe(2);
+    expect(host.blobMimeForHash("profile-1", PHOTO.sha256)).toBe("image/jpeg");
+    // Zero is the whole of what makes a file collectable: `blobRefCount` sums
+    // this answer with the built-in tables', so an unregistered hash is one
+    // nothing protects - which is the behaviour a module that names blobs and
+    // forgets this registration would get for its own files.
+    expect(host.blobRefCount("profile-1", STRANGER)).toBe(0);
+    expect(host.blobMimeForHash("profile-1", STRANGER)).toBeNull();
+  });
+
+  it("hands the module a session over the real database and the profiles it was asked about", () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    let seen: readonly string[] = [];
+    let openedTheRealDatabase = false;
+    ctx.blobs({
+      refCount: (session, profileId) => {
+        seen = session.profileIds;
+        // The handle is the platform's own, one `prepare` away from a real row:
+        // a source reads a module's tables through exactly this call.
+        const row = session.profileDb(profileId, (db) =>
+          db.prepare("SELECT 1 AS one").get() as { one: number },
+        );
+        openedTheRealDatabase = row.one === 1;
+        return 1;
+      },
+      mimeForHash: () => null,
+      exportBlobs: () => [],
+      importBlobs: () => [],
+    });
+
+    expect(host.blobRefCount("profile-9", PHOTO.sha256)).toBe(1);
+    expect(seen).toEqual(["profile-9"]);
+    expect(openedTheRealDatabase).toBe(true);
+  });
+
+  it("answers the export's blobs from every registered module, and the import's by module", () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    withPhotoBlobs(host, ctx);
+    // The import half is asked only of a section this build can already restore:
+    // the host parses every payload first, so a module with no importer is
+    // refused before any blob question is put to it.
+    ctx.importData({ parse: (value) => value, apply: () => undefined });
+
+    expect(host.collectBlobs(["profile-1"])).toEqual([PHOTO]);
+    const section = [{ moduleId: "sample", payload: { photo: PHOTO.sha256 } }];
+    expect(host.collectImportBlobs(section)).toEqual([
+      { moduleId: "sample", sha256: PHOTO.sha256, sizeBytes: PHOTO.sizeBytes },
+    ]);
+    // A section this build adopted but has no blob source for names no blob: a
+    // module with no files is not a missing answer, it is an empty one.
+    expect(host.collectImportBlobs([])).toEqual([]);
+  });
+
+  it("counts a hash one module names twice once, so a restore writes the file once", () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    ctx.importData({ parse: (value) => value, apply: () => undefined });
+    ctx.blobs({
+      refCount: () => 0,
+      mimeForHash: () => null,
+      exportBlobs: () => [],
+      importBlobs: () => [PHOTO, { ...PHOTO, sizeBytes: PHOTO.sizeBytes }],
+    });
+
+    expect(host.collectImportBlobs([{ moduleId: "sample", payload: {} }])).toEqual([
+      { moduleId: "sample", sha256: PHOTO.sha256, sizeBytes: PHOTO.sizeBytes },
+    ]);
+  });
+
+  it("refuses a section a module's own parse will not take, before it answers any blob", () => {
+    const host = new ModuleHost(harness().platform);
+    const ctx = host.adopt(contract);
+    ctx.importData({
+      parse: () => {
+        throw new Error("sample data is not a value this build reads");
+      },
+      apply: () => undefined,
+    });
+    withPhotoBlobs(host, ctx);
+
+    // The same refusal the preview and the apply run, from the same code: the
+    // blob question is asked only of a payload that build can read.
+    expect(() => host.collectImportBlobs([{ moduleId: "sample", payload: {} }])).toThrow(
+      ModuleImportError,
+    );
   });
 });

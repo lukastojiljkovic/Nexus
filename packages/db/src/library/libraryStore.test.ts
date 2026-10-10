@@ -321,6 +321,29 @@ describe("LibraryStore covers", () => {
     );
     expect(() => library.setCover(uuidv7(), COVER, NOW)).toThrow(LibraryNotFoundError);
   });
+
+  it("counts a cover hash another profile's row names, and answers its mime for any store", () => {
+    const mine = store();
+    const theirs = store();
+    const theirBook = theirs.createItem({ kind: "book", title: "Solaris" }, NOW);
+    theirs.setCover(theirBook.id, COVER, NOW);
+
+    // The blob union's contract, on `NoteAttachmentStore.refCount`'s terms: the
+    // store is content-addressed across the whole database, so a count scoped to
+    // the profile whose file is being removed would report zero here and the
+    // collector would take bytes this other profile still shows (hand-counted:
+    // exactly one cover row anywhere names COVER.sha256). A soft-deleted work
+    // keeps counting too, which is why the query is blind to `deleted_at`.
+    expect(mine.refCount(COVER.sha256)).toBe(1);
+    expect(mine.refCount("f".repeat(64))).toBe(0);
+    // And the mime, which the `nx-blob:` protocol asks for with no profile at
+    // all - so a lookup scoped to one profile could not serve this cover.
+    expect(mine.mimeForHash(COVER.sha256)).toBe("image/jpeg");
+    expect(mine.mimeForHash("f".repeat(64))).toBeNull();
+
+    theirs.softDeleteItem(theirBook.id, LATER);
+    expect(mine.refCount(COVER.sha256)).toBe(1);
+  });
 });
 
 describe("LibraryStore passes", () => {

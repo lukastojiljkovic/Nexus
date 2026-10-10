@@ -362,7 +362,6 @@ import {
   PROFILE_KINDS,
   ProfileStore,
   rebuildSearchIndex,
-  RecorderStore,
   RestoreStore,
   type ScopeCutProposal,
   SearchHistoryStore,
@@ -435,18 +434,6 @@ import {
   SyncProgressStore,
   syncStoreFor,
   uuidv7,
-  // CULTURE (stage 2): what counts this module's two blob-naming tables and
-  // says which mime their bytes are served as.
-  CultureStore,
-  // CAR (migration 074): the module's own store, imported here for the ONE
-  // thing only main can answer about it — whether a receipt's blob is still
-  // named by a row (the two functions below). The module's own handlers reach
-  // it through the kit, in `modules/car/main/register.ts`.
-  CarStore,
-  // COOK (the cookbook, migration 076): the store its blob union below counts,
-  // appended here rather than threaded into the alphabetical run above so a
-  // parallel run's addition and this one cannot collide.
-  RecipeStore,
 } from "@nexus/db";
 import {
   blobStorePaths,
@@ -5512,7 +5499,11 @@ function requireDocAttachment(
 // content-addressed across the whole database, so a count that saw one
 // profile's rows would be the same bug one profile smaller.
 //
-// A module that gains blobs widens exactly these two functions.
+// The five built-in stores below are this file's own; every KIT module that
+// names blobs is asked through `moduleHost` (ADR-108), so a module that gains
+// blobs registers one hook in its own folder rather than widening these two
+// functions - which is what a module forgetting its hand-written line here used
+// to cost: its files, silently, to the collector below.
 
 /** How many rows — across every blob-naming table and every profile — hold this hash. */
 function blobRefCount(profileId: string, sha256: string): number {
@@ -5520,28 +5511,18 @@ function blobRefCount(profileId: string, sha256: string): number {
     noteAttachmentStore(profileId).refCount(sha256) +
     taskAttachmentStore(profileId).refCount(sha256) +
     subjectAttachmentStore(profileId).refCount(sha256) +
-    // A visit's ticket and the user's own track (CULTURE, migration 073): the
-    // module's one store counts its two hash-naming tables together, so a file
-    // it stops naming is still protected by every other member of this union.
-    cultureStore(profileId).refCount(sha256) +
     dashboardSettingsStore(profileId).refCount(sha256) +
-    // COOK's recipe photo (migration 076): the module that joined this union
-    // with its screens, on the terms this block's own comment states.
-    recipeStore(profileId).refCount(sha256) +
-    // The `profiles` table itself (SET-001, migration 040) — the fifth member,
-    // and the only one whose store takes no profile id, because that table IS
-    // the profile list. Its count is profile-agnostic like every other here.
+    // The `profiles` table itself (SET-001, migration 040) — the fifth and last
+    // built-in member, and the only one whose store takes no profile id, because
+    // that table IS the profile list. Its count is profile-agnostic like every
+    // other here.
     profileStore().refCount(sha256) +
-    // The CAR module's receipts (migration 074), the sixth member and the second
-    // that is profile-agnostic by its own design: `service_attachments` is
-    // content-addressed across the whole database, so its own count has to see
-    // every row that names the hash.
-    carStore(profileId).attachmentRefCount(sha256) +
-    // RECORDER (migration 077): a recording's media is a blob in this same
-    // store, so a recording deleted for good is another row that can make a
-    // file an orphan — and a count that forgot it would delete a file some
-    // recording still plays.
-    recorderStore(profileId).refCount(sha256)
+    // Every kit module that stores bytes — CULTURE's tickets and tracks, the
+    // cookbook's recipe photos, the CAR's receipts, RECORDER's media and the
+    // library's covers (ADR-108) — through the one registration each of them
+    // makes in its own folder. One call, so this union cannot fall behind a
+    // module again.
+    moduleHost.blobRefCount(profileId, sha256)
   );
 }
 
@@ -5551,60 +5532,26 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     noteAttachmentStore(profileId).mimeForHash(sha256) ??
     taskAttachmentStore(profileId).mimeForHash(sha256) ??
     subjectAttachmentStore(profileId).mimeForHash(sha256) ??
-    // CULTURE serves a photo through `nx-blob:` exactly as an inline note image
-    // is served; a track's bytes go to the player through its own op instead,
-    // and this line is what keeps one row's mime from being the other's.
-    cultureStore(profileId).mimeForHash(sha256) ??
     dashboardSettingsStore(profileId).mimeForHash(sha256) ??
-    // And a recipe's photo is servable by `nx-blob:` on the same terms.
-    recipeStore(profileId).mimeForHash(sha256) ??
     // A profile picture is served by `nx-blob:` on exactly the terms an inline
     // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
     // hash whose mime resolves to null, so a picture becomes servable at the
     // moment `profiles` joins this union and not before.
     profileStore().mimeForHash(sha256) ??
-    // A receipt's own sniffed MIME (migration 074), the sixth member of the same
-    // union, and the reason `nx-blob:` can serve one the moment CAR joins it.
-    carStore(profileId).attachmentMimeForHash(sha256) ??
-    // RECORDER (migration 077), and last on purpose: a recording's mime is what
-    // `MediaRecorder` reported, while every member above it is a mime main
-    // sniffed from the bytes themselves — so if one hash is somehow both, the
-    // sniffed answer is the one served.
-    recorderStore(profileId).mimeForHash(sha256)
+    // The kit modules last (ADR-108), and for the reason RECORDER's line used to
+    // be last: a recording's mime is what `MediaRecorder` reported, while every
+    // built-in member above it is a mime main sniffed from the bytes themselves —
+    // so if one hash is somehow both, the sniffed answer is the one served.
+    moduleHost.blobMimeForHash(profileId, sha256)
   );
-}
-
-/** This profile's recorder store — the rows that name a recording's bytes (`blobRefCount`), and what the module's own handlers build on. */
-function recorderStore(profileId: string): RecorderStore {
-  return new RecorderStore(requireDb().raw, profileId);
 }
 
 function flagStore(profileId: string): SqliteFlagStore {
   return new SqliteFlagStore(requireDb().raw, profileId);
 }
 
-/** CULTURE's store over the open database, on the module's own terms (`TimersStore`'s helper one module over). */
-function cultureStore(profileId: string): CultureStore {
-  return new CultureStore(requireDb().raw, profileId);
-}
-
 function dashboardSettingsStore(profileId: string): DashboardSettingsStore {
   return new DashboardSettingsStore(requireDb().raw, profileId);
-}
-
-/**
- * The CAR module's store, opened here for the ONE question only main can answer
- * about it: whether a receipt's blob is still named by a row, in
- * `blobRefCount`/`blobMimeForHash` below. The module's own handlers reach their
- * store through the kit, in `modules/car/main/register.ts`.
- */
-function carStore(profileId: string): CarStore {
-  return new CarStore(requireDb().raw, profileId);
-}
-
-/** COOK's store (migration 076), built the way every store here is: a fresh handle per call, because a database locked between two calls must not be written through a captured one. */
-function recipeStore(profileId: string): RecipeStore {
-  return new RecipeStore(requireDb().raw, profileId);
 }
 
 function dashboardWidgetStore(profileId: string): DashboardWidgetStore {
@@ -7234,6 +7181,11 @@ function restoreDeps(): ImportDeps {
     moduleExports: (profileId) => moduleHost.collectExports([profileId]),
     assertImportable: (modules) => moduleHost.assertImportable(modules),
     restoreModuleData: (profileId, modules) => moduleHost.applyImports(modules, [profileId]),
+    // The module section's own blobs (ADR-108): which hashes its payloads name,
+    // read by the modules that wrote them - the only things that can read those
+    // payloads at all. `restore.ts` writes those bytes before any module's
+    // `apply` writes the rows, and reports the ones the archive lacks.
+    moduleBlobs: (modules) => moduleHost.collectImportBlobs(modules),
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -7316,6 +7268,11 @@ function imexArchiveDeps(): ImexArchiveDeps {
     // than a store getter, because a kit module's payload is produced by the
     // module itself - see `ProfileDataDeps.moduleExports`.
     moduleExports: (profileId) => moduleHost.collectExports([profileId]),
+    // And the files that section names (ADR-108), read from the same live rows
+    // by the modules that own them. The manual export and the scheduled backup
+    // share this literal, so neither can drift into carrying rows without their
+    // bytes.
+    moduleBlobs: (profileId) => moduleHost.collectBlobs([profileId]),
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open

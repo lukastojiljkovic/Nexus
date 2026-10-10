@@ -9,18 +9,14 @@ import { CULTURE_EXPORT_VERSION, parseCultureExportPayload, type CultureExport }
  * nothing about CULTURE, and the statement that the section carries ROWS rather
  * than bytes.
  *
- * **Why the section carries no blobs, and why that is not a hole.** A visit's
- * ticket and a track's audio live content-addressed in the blob store, and the
- * archive's `blobs/` union is assembled by `@nexus/core` from `ProfileData` -
- * which core carries WITHOUT reading (ADR-090 §5 says a module's payload is
- * opaque to it, and this one is). So the section restores every row exactly as
- * it was, hashes and names included, and the bytes stay in the local store
- * where `blobRefCount` protects them from collection. What that means for a
- * restore onto ANOTHER machine is stated rather than hidden: the rows arrive
- * and the files do not, which is the same shape a missing attachment has in
- * every other module, and the page draws a file it cannot find as a missing
- * one. Carrying kit-module bytes would be a change to core's archive union, and
- * this run does not own it.
+ * **The files ride beside the rows (ADR-108).** A visit's ticket and a track's
+ * audio live content-addressed in the blob store, and this file still carries
+ * only ROWS - the hashes and the sizes. The bytes travel because the module
+ * registers what its rows name with the kit (`ctx.blobs`, in `register.ts`):
+ * main adds those hashes to the archive's `blobs/` union, and a restore writes
+ * them back before this module's own `apply` writes the rows that name them.
+ * The section's own payload therefore needs no blob field - core still carries
+ * it without reading it (ADR-090 §5).
  *
  * **Why an absent section means the SHIPPED default, not "empty".** A restore
  * replaces a profile whole, so a profile restored from an archive written

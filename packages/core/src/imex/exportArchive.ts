@@ -633,6 +633,16 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * silently missing from a restore that reported success. The record type is
  * additive in this build's own direction (nothing above changed), which is why
  * the bump is minor and not major.
+ *
+ * **ADR-108 then lets that section's BLOBS ride, and there is no bump of its
+ * own - which is the difference between this and every entry above.** A module
+ * that names files declares them through the kit, and the hashes join the
+ * `blobs/` union and the manifest's blob list: the same shapes, the same
+ * checksum rule, no new record type and no changed field. An older reader
+ * handed such an archive parses every part it knows and writes only the bytes
+ * its own rows name, so the module's rows come back exactly as a 1.42.0 archive
+ * restored them - the module's own missing-file state. Nothing is refused and
+ * nothing is misread, so a bump would claim a break that does not exist.
  */
 const SCHEMA_VERSION = "1.42.0";
 
@@ -2193,6 +2203,21 @@ export interface ExportModuleData {
 }
 
 /**
+ * One blob a kit module's rows name, as the module declares it for an archive
+ * (ADR-108): the content hash, and the size the module's own row states.
+ *
+ * It rides as a PARALLEL input beside `ProfileData.modules` rather than inside
+ * `ExportModuleData`, for `payload: unknown`'s own reason: core carries a
+ * module's payload without reading it, so it cannot look inside one to find the
+ * hashes. The module reads them off its own rows and main hands the list over
+ * (`ModuleContext.blobs`, `ModuleHost.collectBlobs`).
+ */
+export interface ExportModuleBlob {
+  sha256: string;
+  sizeBytes: number;
+}
+
+/**
  * Every non-derived row of one profile: what an archive carries, what the
  * exporter gathers, and what a restore writes. One shape, deliberately shared
  * by all three, so a module that one of them forgets is a type error in the
@@ -2608,6 +2633,22 @@ export interface ExportArchiveInput {
    * (`RestoreStore.replaceProfileData`, ADR-023).
    */
   modules?: ReadonlySet<ArchiveModuleId>;
+  /**
+   * The blobs the archive's kit-module section names (ADR-108) — the hashes the
+   * exported profiles' registered modules declare, with the sizes their own rows
+   * state. A parallel input beside `data.modules` for exactly `privateNotes`'
+   * reason one field down: core carries a module's payload without reading it,
+   * so the module is the only thing that can answer which files its rows name.
+   *
+   * ABSENT whenever no module names one, which writes byte for byte the archive
+   * every earlier build wrote: the `blobs/` union and the manifest's blob list
+   * are unchanged in SHAPE, and this input only ever adds an entry to them. They
+   * ride with every subset, on the module section's own terms (ADR-090 §5) — a
+   * module's payload belongs to no archive module, so neither does the file
+   * beside it, and a tasks-only export still carries the tickets the module
+   * section it always carries names.
+   */
+  moduleBlobs?: readonly ExportModuleBlob[];
   /**
    * The profile's private notes, DECRYPTED (ADR-057 §6) — a parallel input
    * beside `data`, deliberately NOT a `ProfileData` member: `ProfileData` is
@@ -3319,6 +3360,15 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // still carries the picture of the profile it is an export of.
   if (input.profile.picture !== null) {
     declareBlob(input.profile.picture.hash, input.profile.picture.sizeBytes);
+  }
+  // The module section's own blobs (ADR-108), joining the SAME union on the
+  // picture's terms one block up: no `ProfileData` row names them — the rows
+  // that do live inside a module payload core deliberately does not read — so
+  // the module declares them through the kit and main hands the list over. The
+  // deduplication is this map's, so a recipe photo identical to a culture
+  // ticket travels once, exactly as a note's image and a task's file already do.
+  for (const blob of input.moduleBlobs ?? []) {
+    declareBlob(blob.sha256, blob.sizeBytes);
   }
 
   // --- Private notes (ADR-057 §6): Markdown mirrors + decrypted blob entries.

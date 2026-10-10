@@ -14,18 +14,17 @@ import type { RecorderExport, RecorderStore } from "@nexus/db";
  * store that CHECKs them, and no file under `shared/` may import `@nexus/db` to
  * restate them.
  *
- * **Why the bytes are not here, and what that costs.** The payload is the INDEX:
- * each recording carries the `sha256` naming its bytes and the mime to serve
- * them as, exactly as `note_attachments`' rows are the index half of a note's
- * files. The blob store holds the bytes, `main/index.ts`'s `blobRefCount` counts
- * this module's rows among their references, and the `nx-blob:` protocol plays
- * them back. What the archive therefore does NOT carry is the media itself:
- * ADR-090 §5 gives a kit module's section a JSON value and no way to declare a
- * `blobs/<sha256>` entry, so a restore onto another machine writes rows whose
- * bytes its blob store does not have (a restore over the same install is whole —
- * the bytes are still on disk). `RecorderStore.exportData` records the same
- * limit beside the payload it produces, and closing it is a change to the
- * interchange and to `main/restore.ts`, not to this module.
+ * **Why the bytes are not in here, and where they travel instead.** The payload
+ * is the INDEX: each recording carries the `sha256` naming its bytes and the mime
+ * to serve them as, exactly as `note_attachments`' rows are the index half of a
+ * note's files. The blob store holds the bytes, `main/index.ts`'s `blobRefCount`
+ * counts this module's rows among their references, and the `nx-blob:` protocol
+ * plays them back. Since ADR-108 the media ALSO rides the archive: the module
+ * registers what its rows name with the kit (`ctx.blobs`, at the bottom of
+ * `./register.ts`), main adds those hashes to the archive's `blobs/` union, and a
+ * restore writes them back before this module's `apply` writes the rows that name
+ * them. The section's own payload therefore needs no blob field - core still
+ * carries it without reading it (ADR-090 §5).
  *
  * **Why `version` is checked rather than assumed.** `ProfileData.modules` holds
  * `payload: unknown`, and core says out loud that the shape belongs to the module.
