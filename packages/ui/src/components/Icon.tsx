@@ -130,7 +130,18 @@ export type IconName =
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The car (the CAR module's own mark). Appended at the end rather than filed
+  // into the navigation group above on purpose: a wave adds one module per
+  // folder, and two runs appending a line under different groups is a merge
+  // that has to be read, where two runs appending to the same end of one list
+  // is a merge that cannot be got wrong.
+  //
+  // A car in side view: the three parts anybody draws it with, and nothing
+  // else. It is deliberately not a wheel and not a wrench â€” both of those are
+  // already in the set and both mean a REPAIR, while this module is a whole
+  // vehicle's book.
+  | "car";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -794,6 +805,18 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  // A car, in the same vocabulary: a body, a cabin and two wheels, all of them
+  // strokes inside 3â€¦21. The wheels are `circle`s rather than dots because a car
+  // has to read as a car at 72px as well as at 18px, and a dot has no wheel in
+  // it at either size.
+  car: (
+    <>
+      <rect x="3.4" y="9.4" width="17.2" height="6.6" rx="2" />
+      <path d="M7.4 9.4 9.2 5.2h5.6l1.8 4.2" />
+      <circle cx="7.6" cy="16.8" r="1.8" />
+      <circle cx="16.4" cy="16.8" r="1.8" />
+    </>
+  ),
 };
 
 /**

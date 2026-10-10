@@ -46,6 +46,11 @@ function harness(): Harness {
       if (event !== TRUSTED) throw new Error("Nexus: that message did not come from this app.");
     },
     database: () => db.raw,
+    // The kit's attach path (ADR-090): a timer stores no blobs, so this module
+    // never calls it — but the platform is what main supplies, and a double of
+    // it has to carry every member the real one does.
+    attachFiles: async () => ({ canceled: true }),
+    releaseBlob: async () => undefined,
     notify: (copy) => toasts.push(copy),
     schedule: (atMs, run) => {
       const entry = { atMs, run, cancelled: false };

@@ -3,7 +3,32 @@ import type { Migration } from "./migrations.js";
 /**
  * Migration 74 â€” the CAR module's storage (stage 1: the core, no UI).
  *
- * Seven tables, and the shape of the module is in the first one.
+ * Eight tables, and the shape of the module is in the first one.
+ *
+ * **The eighth table is `car_settings`, and it arrived with stage 2** (the
+ * module kit), by `ALTER`-free extension of this file rather than a migration of
+ * its own, because 074 is UNRELEASED: no shipped build has ever stamped
+ * `user_version` 74, so extending it in place reaches every database that will
+ * ever have it and invents no history. What it holds is the module's one
+ * preference, and it is a PROFILE row rather than a device one for
+ * `timers_settings`' own reason: main reads it to decide when to remind, and it
+ * therefore travels in the profile's archive.
+ *
+ * The two columns are `whatIsDue`'s thresholds, and the bounds below are the
+ * domain's rather than a policy: a "due soon" window is days and distance, and
+ * the distance bound is `MAX_INTERVAL_KM` -- the same ceiling an interval uses,
+ * so no threshold can be set that no interval could ever exceed.
+ *
+ * **Neither this row nor the seven content tables join `RESTORE_WIPE_TABLES`,
+ * and that is the opposite of what the stage-1 note further down expected.** The
+ * note predicted stage 2 would move them there; stage 2 landed the module on the
+ * KIT instead, and the kit's rule is the other one, stated in
+ * `ModuleContext.importData`: `main/restore.ts` calls `restoreModuleData`
+ * immediately after the replace, and every adopted module replaces its OWN rows
+ * there, in one transaction, with one the archive does not name resetting what it
+ * owns. The wipe list stays tied to `@nexus/sync`'s collection map, which sync's
+ * hold freezes. That stale paragraph is left where it stands rather than edited,
+ * because the file it sits in is a migration other runs read; this is the record.
  *
  * **A `vehicles` row is the anchor of everything else, and it carries the two
  * choices the rest of the module reads off it:** `fuel_type` (which decides
@@ -252,6 +277,23 @@ export const migration074: Migration = {
       -- Deliberately NOT scoped by profile: the blob store is content-addressed
       -- across the whole database, so a reference count has to see every row.
       CREATE INDEX service_attachments_sha ON service_attachments (sha256);
+
+      CREATE TABLE car_settings (
+        profile_id        TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+        -- Days ahead that counts as "due soon". One year at most, because a
+        -- window longer than the interval it is judging would call every
+        -- interval soon.
+        due_soon_days     INTEGER NOT NULL
+                            CHECK (typeof(due_soon_days) = 'integer'
+                                   AND due_soon_days >= 1 AND due_soon_days <= 365),
+        -- The same bound service_intervals.every_km carries, so a threshold
+        -- can always be exceeded by some interval this schema allows.
+        due_soon_distance INTEGER NOT NULL
+                            CHECK (typeof(due_soon_distance) = 'integer'
+                                   AND due_soon_distance >= 1
+                                   AND due_soon_distance <= 1000000),
+        updated_at        TEXT NOT NULL
+      );
     `);
   },
 };

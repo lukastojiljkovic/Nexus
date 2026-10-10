@@ -24,3 +24,18 @@ export { activeLocale } from "../strings.js";
 export { declaredText } from "./labels.js";
 export type { SettingsPanelProps } from "../moduleSettingsPanels.js";
 export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashboardWidgets.js";
+
+// --- What a module needs to DRAW a value (ADR-090) ---------------------------
+//
+// The four above are what a module needs to be DISCOVERED and to read its own
+// declared words. These are what it needs to print a number: the app has exactly
+// one door to `Intl` and exactly one function that turns minor units into money,
+// and a module that reached past them would be a second opinion about the
+// locale's decimal mark or about how many para a dinar has. The car module is
+// the first to reach for them (a service book prints dates, distances and
+// prices); every module with a quantity or an amount will, which is why they
+// belong on this list rather than in one module's own folder.
+
+export { dateTimeFormat, numberFormat } from "../intl.js";
+export { formatMoney, formatMoneyPlain } from "../money.js";
+export { ConfirmDialog, type ConfirmDialogProps } from "../ConfirmDialog.js";

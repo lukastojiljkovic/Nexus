@@ -85,9 +85,43 @@ export interface ModuleCall {
    * store is a store like any other and never a second connection.
    */
   profileDb<T>(profileId: string, open: (db: DatabaseHandle, profileId: string) => T): T;
+  /**
+   * The blob store's attach path, on a handler's own call object: a handler is
+   * where a module records the row, so a handler is what has to trigger the
+   * dialog. See `ModuleContext.attachFiles` for the whole contract — the two are
+   * the same function, offered at the two places a module can ask from.
+   */
+  attachFiles(
+    maxBytes: number,
+    record: (file: ModuleAttachmentFile) => void,
+  ): Promise<ModuleAttachmentsResult>;
+  /** Gives a hash back once the module's own row naming it is gone — see `ModuleContext.releaseBlob`. */
+  releaseBlob(sha256: string): Promise<void>;
   /** Current wall-clock milliseconds. Injected so a test can move the clock. */
   now(): number;
 }
+
+/**
+ * One file main picked and stored, as the module that owns the row records it:
+ * the four facts an attachment index row carries and nothing else. The BYTES
+ * never cross this seam in either direction (SEC-FILE-02), which is what makes
+ * a module's receipts as safe as a task's or a subject's.
+ */
+export interface ModuleAttachmentFile {
+  readonly fileName: string;
+  readonly mime: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+}
+
+/**
+ * What one `attachFiles` call produced. `skippedTooLarge` is reported rather
+ * than thrown for `TaskAttachmentsAddResult`'s reason: refusing one oversize
+ * file must not lose the others the same pick succeeded with.
+ */
+export type ModuleAttachmentsResult =
+  | { readonly canceled: true }
+  | { readonly canceled: false; readonly added: number; readonly skippedTooLarge: number };
 
 /** An unlocked session, as the session hooks and the archive see it. */
 export interface ModuleSession {
@@ -160,6 +194,39 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
     ) => Ops[K]["response"] | Promise<Ops[K]["response"]>,
   ): void;
   /**
+   * Attaches files the way every compiled-in attachment surface does: main opens
+   * its ONE native "pick files" dialog, reads what the user chose, sniffs each
+   * file's real MIME from its bytes (SEC-FILE-02) and writes the bytes into the
+   * content-addressed blob store — then calls `record` per file so the MODULE
+   * writes the index row that names it.
+   *
+   * **Why `record` is a callback rather than a returned list.** The blob is
+   * written before the row exists, so a row that fails to insert has to take the
+   * blob with it or the profile accumulates files nothing names. Handing the
+   * file back for a second call would put that compensation in every module;
+   * called here, main deletes the blob again itself when `record` throws —
+   * `main/index.ts`'s `note-attachments:add` arrangement, for a reason that has
+   * not changed.
+   *
+   * A module has no `BrowserWindow`, no dialog and no blob keys, and this is
+   * deliberately the whole of what it gets instead: it can never name a
+   * filesystem path (SEC-EL), and it never learns how a blob is stored. A
+   * module that stores no blobs simply never calls it.
+   */
+  attachFiles(
+    maxBytes: number,
+    record: (file: ModuleAttachmentFile) => void,
+  ): Promise<ModuleAttachmentsResult>;
+  /**
+   * Gives a hash back after the module removed the row that named it: the blob
+   * is deleted unless some row anywhere still holds it (`main/index.ts`'s
+   * `blobRefCount`, the one place that knows which tables name a hash).
+   *
+   * Called AFTER the row is gone, never before — the count is what decides, and
+   * a module that released first would be asking about its own live row.
+   */
+  releaseBlob(sha256: string): Promise<void>;
+  /**
    * An OS notification through the app's one notification path, in the language
    * main is writing in (`main/locale.ts`). `silent` is the one thing a module
    * may decide: whether this toast carries the OS's own notification sound.
@@ -190,13 +257,27 @@ export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
 
 /**
  * What main supplies that this file must not import: the two Electron-shaped
- * facts (a toast and the sender check) and the database's own handle.
+ * facts (a toast and the sender check), the database's own handle, and the blob
+ * store's attach path — the last one because a module that stores receipts,
+ * photos or audio needs main's dialog and main's blob keys and has neither.
  */
 export interface ModulePlatform {
   /** Main's `assertTrustedSender` - the renderer is untrusted (SEC-EL-02). */
   assertTrustedSender(event: unknown): void;
   /** The open database's raw handle (`requireDb().raw`). */
   database(): DatabaseHandle;
+  /**
+   * The blob store's own attach path, in one call: pick, sniff, write, record —
+   * see `ModuleContext.attachFiles` for what it promises a module. Electron-free
+   * here like everything else in this file, so the orphan-blob compensation is
+   * testable (`./moduleAttachments.ts` is the implementation `index.ts` wires).
+   */
+  attachFiles(
+    maxBytes: number,
+    record: (file: ModuleAttachmentFile) => void,
+  ): Promise<ModuleAttachmentsResult>;
+  /** Removes a blob no row references any more — `main/index.ts`'s own count decides. */
+  releaseBlob(sha256: string): Promise<void>;
   /** The app's notification path: one OS toast, in the active locale. */
   notify(copy: { readonly title: string; readonly body: string; readonly silent: boolean }): void;
   /** A timer main owns. `atMs` is wall-clock milliseconds (`Date.now()`). */
@@ -295,6 +376,8 @@ export class ModuleHost implements ModuleHostSurface {
           silent: silent ?? false,
         });
       },
+      attachFiles: (maxBytes, record) => this.platform.attachFiles(maxBytes, record),
+      releaseBlob: (sha256) => this.platform.releaseBlob(sha256),
       armUntil: (atMs, run) => this.armUntil(atMs, run),
       onSessionStart: (run) => {
         this.sessionStarts.push(run);
@@ -494,6 +577,8 @@ export class ModuleHost implements ModuleHostSurface {
     return {
       as: MODULE_VALIDATORS,
       profileDb: (profileId, open) => open(this.platform.database(), profileId),
+      attachFiles: (maxBytes, record) => this.platform.attachFiles(maxBytes, record),
+      releaseBlob: (sha256) => this.platform.releaseBlob(sha256),
       now: () => this.platform.now(),
     };
   }

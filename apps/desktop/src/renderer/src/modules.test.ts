@@ -98,6 +98,9 @@ describe("createModuleRegistry", () => {
       // here rather than derived because this test IS the declaration — what the
       // registry holds is what the app shows.
       "timers",
+      // The second discovered module (ADR-090), and the first in the life
+      // group: a service book for a car somebody owns.
+      "car",
     ]);
   });
 
@@ -159,6 +162,9 @@ describe("createModuleRegistry", () => {
       // twice rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
       PRO: ["pro"],
+      // „Automobil" (ADR-093) takes its own prefix: PRD 22 is its own entry,
+      // not a second reading of another module's subject.
+      CAR: ["car"],
     });
   });
 
@@ -206,6 +212,9 @@ describe("createModuleRegistry", () => {
       "priv",
       "finance",
       "fitness",
+      // The discovered life module (ADR-090 / ADR-093): a car is a subject
+      // somebody HAS, which is what the group means.
+      "car",
     ]);
     expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
@@ -254,6 +263,9 @@ describe("createModuleRegistry", () => {
       // ON by default, like every module but PRIV and PRO: a timer writes
       // nothing until somebody starts one, so there is nothing to opt into.
       "timers",
+      // The discovered life module, on for the same reason one group over: it
+      // writes nothing until somebody adds a vehicle.
+      "car",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -440,6 +452,9 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      // The discovered card: the two thresholds, declared in the module's own
+      // manifest and drawn by its own body.
+      "car",
     ]);
   });
 

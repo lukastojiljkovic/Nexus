@@ -414,6 +414,11 @@ import {
   SyncProgressStore,
   syncStoreFor,
   uuidv7,
+  // CAR (migration 074): the module's own store, imported here for the ONE
+  // thing only main can answer about it — whether a receipt's blob is still
+  // named by a row (the two functions below). The module's own handlers reach
+  // it through the kit, in `modules/car/main/register.ts`.
+  CarStore,
 } from "@nexus/db";
 import {
   blobStorePaths,
@@ -536,6 +541,10 @@ import {
   asString,
 } from "./ipcValidators.js";
 import { createModuleHost } from "./moduleHost.js";
+// The kit's attach path, implemented where it can be read on its own
+// (`moduleAttachments.ts`) — this file supplies it with what only this file
+// holds, in the module host's platform literal below.
+import { attachFilesForModule, releaseBlobForModule } from "./moduleAttachments.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1355,6 +1364,22 @@ let activeProfileId: string | null = null;
 const moduleRegistry = createModuleRegistry();
 
 /**
+ * The profile a module's blob count is taken for, as MAIN resolves it (ADR-058).
+ *
+ * A module never supplies this, and that is the point: `attachFiles` and
+ * `releaseBlob` DELETE files, and a count taken against a profile the renderer
+ * chose would let a caller drive it to zero while another profile still holds
+ * the bytes. The unlocked session always has one profile, so the null arm is a
+ * locked session reaching a module's handler, which the sender check and the
+ * open database have already refused.
+ */
+function activeProfileForAttachments(): string {
+  const id = resolveActiveProfileId(listProfiles(requireDb()), activeProfileId);
+  if (id === null) throw new Error("The attachment store has no profile to count against.");
+  return id;
+}
+
+/**
  * The module kit's host: every module discovered from `src/modules/<id>/`, its
  * channels registered and its session hooks held (ADR-090). Built once, at
  * module load, because `ipcMain.handle` has to be called before the renderer
@@ -1370,6 +1395,32 @@ const moduleRegistry = createModuleRegistry();
 const moduleHost = createModuleHost({
   assertTrustedSender,
   database: () => requireDb().raw,
+  // The kit's attach path (ADR-090), wired to the ONE blob store every
+  // compiled-in attachment surface writes through. The logic is
+  // `./moduleAttachments.ts`'s, because the kit's rules live where they can be
+  // tested and this file supplies only what only this file holds: the window,
+  // the paths, the keys and the database-wide reference count.
+  attachFiles: (maxBytes, record) =>
+    attachFilesForModule(
+      {
+        window: mainWindow,
+        paths: blobStorePathsFor(),
+        keys: requireBlobKeys(),
+        refCount: (sha256) => blobRefCount(activeProfileForAttachments(), sha256),
+      },
+      maxBytes,
+      record,
+    ),
+  releaseBlob: (sha256) =>
+    releaseBlobForModule(
+      {
+        window: mainWindow,
+        paths: blobStorePathsFor(),
+        keys: requireBlobKeys(),
+        refCount: (counted) => blobRefCount(activeProfileForAttachments(), counted),
+      },
+      sha256,
+    ),
   notify: ({ title, body, silent }) => {
     // `Notification.isSupported()` rather than a try/catch: on a platform with
     // no notification service the honest answer is "no toast", and a module's
@@ -5253,7 +5304,12 @@ function blobRefCount(profileId: string, sha256: string): number {
     // The `profiles` table itself (SET-001, migration 040) — the fifth member,
     // and the only one whose store takes no profile id, because that table IS
     // the profile list. Its count is profile-agnostic like every other here.
-    profileStore().refCount(sha256)
+    profileStore().refCount(sha256) +
+    // The CAR module's receipts (migration 074), the sixth member and the second
+    // that is profile-agnostic by its own design: `service_attachments` is
+    // content-addressed across the whole database, so its own count has to see
+    // every row that names the hash.
+    carStore(profileId).attachmentRefCount(sha256)
   );
 }
 
@@ -5268,7 +5324,10 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
     // hash whose mime resolves to null, so a picture becomes servable at the
     // moment `profiles` joins this union and not before.
-    profileStore().mimeForHash(sha256)
+    profileStore().mimeForHash(sha256) ??
+    // A receipt's own sniffed MIME (migration 074), the sixth member of the same
+    // union, and the reason `nx-blob:` can serve one the moment CAR joins it.
+    carStore(profileId).attachmentMimeForHash(sha256)
   );
 }
 
@@ -5278,6 +5337,16 @@ function flagStore(profileId: string): SqliteFlagStore {
 
 function dashboardSettingsStore(profileId: string): DashboardSettingsStore {
   return new DashboardSettingsStore(requireDb().raw, profileId);
+}
+
+/**
+ * The CAR module's store, opened here for the ONE question only main can answer
+ * about it: whether a receipt's blob is still named by a row, in
+ * `blobRefCount`/`blobMimeForHash` below. The module's own handlers reach their
+ * store through the kit, in `modules/car/main/register.ts`.
+ */
+function carStore(profileId: string): CarStore {
+  return new CarStore(requireDb().raw, profileId);
 }
 
 function dashboardWidgetStore(profileId: string): DashboardWidgetStore {
