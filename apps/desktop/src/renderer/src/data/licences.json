@@ -208,6 +208,15 @@
       "source": "LICENSE"
     },
     {
+      "id": "npm:@noble/ciphers@2.4.0",
+      "name": "@noble/ciphers",
+      "version": "2.4.0",
+      "licence": "MIT",
+      "notice": "The MIT License (MIT)\n\nCopyright (c) 2022 Paul Miller (https://paulmillr.com)\nCopyright (c) 2016 Thomas Pornin <pornin@bolet.org>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the “Software”), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
+      "status": "file",
+      "source": "LICENSE"
+    },
+    {
       "id": "npm:@radix-ui/primitive@1.0.0",
       "name": "@radix-ui/primitive",
       "version": "1.0.0",
@@ -1432,6 +1441,15 @@
       "source": "LICENSE"
     },
     {
+      "id": "npm:hash-wasm@4.12.0",
+      "name": "hash-wasm",
+      "version": "4.12.0",
+      "licence": "MIT",
+      "notice": "MIT License\n\nCopyright (c) 2020 Dani Biró\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n\nEmbedded C implementations might use other, similarly permissive licenses.\nCheck the beginning of the files from the /src directory.\n\nSpecial thank you to the authors of original C algorithms:\n- Alexander Peslyak <solar@openwall.com>\n- Aleksey Kravchenko <rhash.admin@gmail.com>\n- Colin Percival\n- Stephan Brumme <create@stephan-brumme.com>\n- Steve Reid <steve@edmweb.com>\n- Samuel Neves <sneves@dei.uc.pt>\n- Solar Designer <solar@openwall.com>\n- Project Nayuki\n- ARM Limited\n- Yanbo Li dreamfly281@gmail.com, goldboar@163.comYanbo Li\n- Mark Adler\n- Yann Collet",
+      "status": "file",
+      "source": "LICENSE"
+    },
+    {
       "id": "npm:iconv-lite@0.6.3",
       "name": "iconv-lite",
       "version": "0.6.3",
@@ -2130,6 +2148,15 @@
       "version": "2.3.0",
       "licence": "MIT",
       "notice": "MIT License\n\nCopyright (c) 2018 Tamino Martinius\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
+      "status": "file",
+      "source": "LICENSE"
+    },
+    {
+      "id": "npm:ts-fsrs@5.4.2",
+      "name": "ts-fsrs",
+      "version": "5.4.2",
+      "licence": "MIT",
+      "notice": "MIT License\n\nCopyright (c) 2026 Open Spaced Repetition\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
       "status": "file",
       "source": "LICENSE"
     },
