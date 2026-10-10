@@ -33,6 +33,11 @@ export type IconName =
   | "electronics"
   | "tools"
   | "pro"
+  // The drawing viewer's mark, and the only one drawn as an INSTRUMENT rather
+  // than as the thing it produces. A sheet with a line on it is `notes` at 16px
+  // and `image` at 24; a pair of dividers says what the module is for - reading
+  // and measuring a drawing - the way the tray in `pro` says what a toolkit is.
+  | "drawing"
   | "priv"
   | "settings"
   | "search"
@@ -296,6 +301,17 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M11 8.4v4.4" />
       <path d="M15 8.4v3" />
       <path d="M19 8.4v4.4" />
+    </>
+  ),
+  // A drafting compass: the knob, the hinge and the two legs. It says DRAWING
+  // where `tools`' ruler says MEASURING, which is the pair of things this
+  // module does and the reason the two marks are not the same shape.
+  drawing: (
+    <>
+      <path d="M12 3.2v2" />
+      <circle cx="12" cy="7.1" r="1.7" />
+      <path d="m11.1 8.4-4.4 12" />
+      <path d="m12.9 8.4 4.4 12" />
     </>
   ),
   // A case with a handle. This mark used to be angle brackets around a slash —

@@ -591,6 +591,7 @@ import {
 // The kit's one PDF capability (ADR-090's `ModulePlatform.savePdf`), which is
 // Electron-shaped and therefore lives beside the window rather than in a module.
 import { saveCardPdf } from "./cardPdf.js";
+import { installDrawingsPlatform } from "../modules/drawings/main/desktop.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -1635,6 +1636,18 @@ configureCookbook({
     refCount: (profileId, sha256) => blobRefCount(profileId, sha256),
   }),
 });
+
+/**
+ * The one Electron-shaped capability the DRAWINGS module cannot hold itself:
+ * its native picker and the window's `printToPDF`.
+ *
+ * The module keeps its handlers electron-free (`modules/drawings/main/register.ts`)
+ * so the kit's register test can run them under Vitest, and takes its two
+ * effects through a slot this call fills - the getter rather than the window,
+ * because the window is replaced over the app's life and a captured one would
+ * go stale on the first reopen.
+ */
+installDrawingsPlatform(() => mainWindow);
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
   return app.getPath("userData");

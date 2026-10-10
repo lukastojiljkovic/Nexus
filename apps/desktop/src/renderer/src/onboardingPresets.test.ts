@@ -245,6 +245,9 @@ describe("resolveModuleSelection", () => {
       // And the arcade (ADR-090, PRD 31): selectable, and off in „Osnovno"
       // because the entertainment section is never suggested on the way in.
       arcade: false,
+      // The second discovered module, decided the same way and read from its own
+      // manifest default.
+      drawings: true,
     });
   });
 
@@ -310,6 +313,8 @@ describe("moduleFlagWrites", () => {
       { moduleId: "chess", enabled: true },
       { moduleId: "scanner", enabled: true },
       { moduleId: "workshop", enabled: true },
+      // Then the second one, in registry order.
+      { moduleId: "drawings", enabled: true },
     ]);
   });
 

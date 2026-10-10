@@ -106,6 +106,9 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // nothing until the user records a first item, so there is nothing to opt into
   // and „Osnovno" turns it on exactly as its manifest says.
   pantry: true,
+  // The second module built on the kit (ADR-090), decided here like every other
+  // selectable one: the viewer reads a file and stores nothing, so it is on.
+  drawings: true,
 };
 
 /**

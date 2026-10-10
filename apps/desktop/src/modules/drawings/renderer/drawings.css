@@ -1,0 +1,231 @@
+/* CRTEZI (ADR-090). Tokens exclusively - raw colour values are forbidden outside
+   @nexus/tokens, and this stylesheet is checked by the same gates the shell's
+   own are (`check:colours`, `check:tokens`, `check:layers`, `check:css`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, so the rules
+ * arrive with the module's chunk the first time somebody opens a drawing.
+ *
+ * Class prefix `drawings__`. The three elements that carry the DRAWING's own
+ * colours - the stage's canvas and a layer's swatch - are painted from values
+ * the module reads (`themes` for the ground, the file for a layer), never from
+ * anything in this file.
+ */
+
+.drawings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-5);
+}
+
+.drawings__problem {
+  color: var(--nx-danger);
+}
+
+/* The toolbar wraps rather than shrinks: every control here is a thing the user
+   reaches for, and a control squeezed to its own minimum is a control that reads
+   as disabled. `__file` takes the free space, so the buttons stay together at
+   the trailing end at every width. */
+.drawings__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.drawings__file {
+  margin-inline-end: auto;
+  overflow-wrap: anywhere;
+}
+
+.drawings__group {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+/* The drawing gets the room: the stage is the flexible column and the layers
+   panel a fixed, narrow one. `minmax(0, 1fr)` rather than `1fr` because the
+   canvas' own intrinsic width is not a width the grid may grow to. */
+.drawings__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 14rem);
+  gap: var(--nx-space-4);
+  align-items: stretch;
+}
+
+/* Before anything is open there is no layers column to show, so the stage takes
+   the whole width rather than leaving an empty track beside it. */
+.drawings__body--framed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.drawings__stage {
+  position: relative;
+  min-height: 22rem;
+  overflow: hidden;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface-alt);
+}
+
+/* The library sizes the canvas to its container in CSS pixels (`SetSize` ->
+   `renderer.setSize`), and this only stops the inline canvas from sitting on the
+   text baseline, which would show a strip of the stage under it. */
+.drawings__stage canvas {
+  display: block;
+}
+
+.drawings__stage--picking {
+  cursor: crosshair;
+}
+
+/* The empty state sits in the FRAME rather than replacing it, so the drawing's
+   own placeholder is where the drawing will be - and so the element the viewer
+   creates its canvas in exists from the first paint. */
+.drawings__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-4);
+}
+
+/* The phase line, over the drawing being replaced or inside the empty frame.
+   Named layer, never a number: the scale lives in the tokens. */
+.drawings__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--nx-layer-raised);
+  background: var(--nx-surface);
+}
+
+/* A skeleton is as wide as its container, which inside a centring flex box is
+   its own content - so the measure it is read at is stated here. */
+.drawings__overlay .nx-skeleton {
+  width: min(24rem, 100%);
+  padding: 0 var(--nx-space-4);
+}
+
+.drawings__layers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+
+.drawings__layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+/* A row is a checkbox with the layer's name beside its own colour. The name
+   wraps rather than eliding: a Serbian layer name is the one thing on the row a
+   user is looking for, and a clipped one is a row with no content. */
+.drawings__layer-name {
+  overflow-wrap: anywhere;
+}
+
+.drawings__swatch {
+  display: inline-block;
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  margin-inline-end: var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-xs);
+  vertical-align: middle;
+}
+
+.drawings__readout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.drawings__pairs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2) var(--nx-space-5);
+  margin: 0;
+}
+
+.drawings__pair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+/* The label tier, on this page's own terms: `caption`'s size with `label`'s
+   uppercase treatment, exactly as `nx-card__title` draws a card's caption. */
+.drawings__pair dt {
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+  color: var(--nx-text-subtle);
+}
+
+/* Figures line up: every measured number is a column of digits. */
+.drawings__pair dd,
+.drawings__cursor {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below a comfortable two-column width the layers move under the drawing rather
+   than squeezing it: the drawing is what the page is for, and a stage 400px wide
+   shows a drawing the size of a thumbnail. */
+@media (max-width: 1100px) {
+  .drawings__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drawings__layer-list {
+    max-height: 12rem;
+  }
+}
+
+/* PRINTING, and the one rule here that names a class outside `drawings__`.
+ *
+ * The page prints the CURRENT WINDOW (`main/desktop.ts` calls `printToPDF`), and
+ * what has to leave the sheet is everything that is not the drawing - including
+ * the shell's own rail, which lives in `apps/desktop/src/renderer/src/app.css`
+ * and has no print rule of its own (`packages/ui` hides only the star field and
+ * the horizon). A module may not edit the shell's stylesheet, so this hides it
+ * for the duration of one print, keyed on a class the page puts on `<body>` and
+ * takes off again in a `finally`. Nothing about the app ON SCREEN moves.
+ */
+@media print {
+  body.nx-drawings-print .app__sidebar,
+  body.nx-drawings-print .nx-page-header,
+  body.nx-drawings-print .drawings__toolbar,
+  body.nx-drawings-print .drawings__layers,
+  body.nx-drawings-print .drawings__readout,
+  body.nx-drawings-print .drawings__problem {
+    display: none;
+  }
+
+  body.nx-drawings-print .drawings {
+    gap: 0;
+    padding: 0;
+  }
+
+  body.nx-drawings-print .drawings__body {
+    display: block;
+  }
+
+  body.nx-drawings-print .drawings__stage {
+    min-height: 0;
+    height: 100vh;
+    border: none;
+    border-radius: 0;
+  }
+}

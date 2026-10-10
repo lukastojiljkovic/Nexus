@@ -147,6 +147,9 @@ describe("createModuleRegistry", () => {
       "scanner",
       // The maker's file viewers, ordered by their manifest's `order` (310).
       "workshop",
+      // The second discovered module, ordered after TIMERS by its own
+      // `ModuleManifest.order`.
+      "drawings",
     ]);
   });
 
@@ -265,6 +268,9 @@ describe("createModuleRegistry", () => {
       // MAPS' own, on the same terms: the PRD registry has no row for a map, so
       // a map declares its own prefix rather than borrowing a tool drawer's.
       MAP: ["maps"],
+      // Opening an AutoCAD drawing is its own subject rather than a second
+      // reading of another prefix, so DRAW is this module's own entry.
+      DRAW: ["drawings"],
     });
   });
 
@@ -365,6 +371,8 @@ describe("createModuleRegistry", () => {
       "scanner",
       // The second discovered module, in the group it declares.
       "workshop",
+      // The second discovered module, in the group it declares (ADR-090).
+      "drawings",
     ]);
     // â€žKultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
@@ -462,6 +470,9 @@ describe("createModuleRegistry", () => {
       "scanner",
       // And the viewers ON the same terms: they store nothing at all.
       "workshop",
+      // The drawings viewer stores nothing at all - it reads a file and prints
+      // one - so there is nothing about it to opt into either.
+      "drawings",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
