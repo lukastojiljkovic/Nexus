@@ -100,6 +100,7 @@ import { migration091 } from "./091-boards.js";
 // renumbers at merge, which is why the number appears in exactly three places —
 // this import, the list entry below, and the file name.
 import { migration087 } from "./087-maps.js";
+import { migration088 } from "./088-wiki.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -203,6 +204,7 @@ export const MIGRATIONS: readonly Migration[] = [
   // exactly three places — the import above, this entry, and the file name.
   migration091,
   migration087,
+  migration088,
 ];
 
 /**

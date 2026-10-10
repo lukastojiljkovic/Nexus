@@ -1859,6 +1859,17 @@ describe("RestoreStore", () => {
       "puzzles_saves",
       "puzzles_stats",
       "puzzles_settings",
+      //  - wiki_history / wiki_bookmarks (migration 088, ADR-098): the WIKI
+      //    module's two tables, exempt on the TIMERS section's exact reasoning
+      //    above — a kit module replaces ITS OWN rows inside the same restore
+      //    (`WikiStore.replaceFromArchive`, called by the module's own
+      //    `importData`), and neither table may join `RESTORE_WIPE_TABLES`
+      //    because that list is DERIVED into `@nexus/sync`'s collection map. The
+      //    archive carries the marks and deliberately not the reading log, so a
+      //    restore EMPTIES the log: a profile restored here says nothing about
+      //    what this machine once read.
+      "wiki_history",
+      "wiki_bookmarks",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

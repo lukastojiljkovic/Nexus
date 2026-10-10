@@ -1354,3 +1354,28 @@ export {
   PIN_COLORS,
 } from "./maps/mapsStore.js";
 export type { MapsPin, PinColor } from "./maps/mapsStore.js";
+
+// The WIKI module's storage (migration 088): the reading log and the marks, both
+// profile-scoped. The ZIM files themselves are device-level and live in
+// `apps/desktop/src/main/zim/libraries.ts` — a 119 GB pack is one file on one
+// disk, and this table only records what a person did inside it. These two tables
+// are deliberately NOT in `RESTORE_WIPE_TABLES`: that list and `@nexus/sync`'s
+// collection map are held equal by `sync/collectionGuard.test.ts`, sync is on
+// hold, and the wiki module replaces its own rows in its own `importData`
+// (ADR-090's kit rule). `ON DELETE CASCADE` takes them when a profile goes.
+export {
+  MAX_WIKI_BOOKMARKS,
+  MAX_WIKI_HISTORY,
+  MAX_WIKI_LIBRARY_ID_LENGTH,
+  MAX_WIKI_PATH_LENGTH,
+  MAX_WIKI_TITLE_LENGTH,
+  WikiNotFoundError,
+  WikiStore,
+  WikiValidationError,
+} from "./wiki/wikiStore.js";
+export type {
+  WikiArchive,
+  WikiBookmark,
+  WikiHistoryEntry,
+  WikiPlaceInput,
+} from "./wiki/wikiStore.js";
