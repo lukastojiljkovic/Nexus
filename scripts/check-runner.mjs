@@ -428,6 +428,26 @@ export const ALLOWLIST = new Map([
     "scripts/check-runner.test.mjs",
     ["toolchain-name"],
   ],
+  [
+    // ADR-094's tool runner — the third file allowed to reach `node:child_process`,
+    // and a third SHAPE rather than a widening of either entry above. The program
+    // is not chosen from a table and cannot be: it is the `entry` of a signed
+    // pack's manifest, whose SHA-256 is read back and checked against that same
+    // manifest immediately before the first spawn of a session, and whose path is
+    // joined under the installed pack's folder and nowhere else. The argument list
+    // is the manifest's fixed `args` plus what a caller in MAIN appends — no
+    // renderer reaches this file, and no path, host or argument it carries ever
+    // came from one. `spawn-literal` is what keeps that true: a literal here would
+    // be a program this app wrote down rather than one the release key signed.
+    //
+    // `toolchain-name` is not exempted, for the reason the entries above give, and
+    // it costs nothing: a pack's entry is a name this file never needs to spell.
+    // `shell` and the exec family are exempted for nobody, and this file is held
+    // to them — `shell: false` is the whole of why its argv elements reach the
+    // program as a list.
+    "apps/desktop/src/main/tools/run.ts",
+    ["child-process"],
+  ],
 ]);
 
 /**

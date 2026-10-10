@@ -30,8 +30,16 @@ import { isSafePackIdSegment, isSafePackPath, packPathProblem } from "./paths.js
 /** The only `format` this build knows. */
 export const PACK_FORMAT = 1;
 
-/** The five kinds of content a pack may carry. */
-export const PACK_KINDS = ["zim", "map", "dataset", "model", "content"] as const;
+/**
+ * The six kinds of content a pack may carry.
+ *
+ * `tool` is ADR-094's kind and the one that is not content: it carries a
+ * program the app runs as a separate process, and it is the one kind that must
+ * state which of its files that program is (`tool.entry`) and how to speak to
+ * it (`tool.protocol`). ADR-091 said a pack carries no code and is never
+ * executed; ADR-094 amends that for this kind and for this kind only.
+ */
+export const PACK_KINDS = ["zim", "map", "dataset", "model", "content", "tool"] as const;
 export type PackKind = (typeof PACK_KINDS)[number];
 
 /**
@@ -46,6 +54,10 @@ export type PackKind = (typeof PACK_KINDS)[number];
  */
 export const PACK_NOTICES = ["safety"] as const;
 export type PackNotice = (typeof PACK_NOTICES)[number];
+
+/** How a tool pack's entry is driven. UCI engines speak a line protocol; everything else is a plain stdin/stdout filter. */
+export const TOOL_PROTOCOLS = ["uci", "stdio"] as const;
+export type ToolProtocol = (typeof TOOL_PROTOCOLS)[number];
 
 /** One string per language, both required: the copy is Serbian and English, always. */
 export interface PackText {
@@ -70,6 +82,22 @@ export interface PackSource {
   readonly url: string;
 }
 
+/**
+ * A tool pack's program, as the signed manifest states it.
+ *
+ * `entry` is one of the pack's own `files` — the same path, exactly — and it is
+ * the only thing the app ever starts from a pack. `args` are the program's fixed
+ * argument list, written by whoever built the pack and covered by the release
+ * key's signature; a caller may append its own arguments, and nothing a
+ * renderer sends ever reaches argv.
+ */
+export interface ToolSpec {
+  /** The pack-relative path of the executable, which must be one of `files`. */
+  readonly entry: string;
+  readonly protocol: ToolProtocol;
+  readonly args?: readonly string[];
+}
+
 export interface PackManifest {
   readonly format: number;
   readonly id: string;
@@ -88,6 +116,8 @@ export interface PackManifest {
    * notice", never "unknown".
    */
   readonly notice: PackNotice | null;
+  /** Present on a `tool` pack, refused on every other kind. */
+  readonly tool?: ToolSpec;
 }
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -106,6 +136,7 @@ const MANIFEST_KEYS: readonly string[] = [
   "licence",
   "source",
   "minAppVersion",
+  "tool",
 ];
 /**
  * Keys the format defines but does not require. Kept apart from the required
@@ -117,6 +148,7 @@ const TEXT_KEYS: readonly string[] = ["sr", "en"];
 const FILE_KEYS: readonly string[] = ["path", "size", "sha256"];
 const LICENCE_KEYS: readonly string[] = ["spdx", "attribution", "url"];
 const SOURCE_KEYS: readonly string[] = ["name", "url"];
+const TOOL_KEYS: readonly string[] = ["entry", "protocol", "args"];
 
 export function asObject(value: unknown, where: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -317,6 +349,62 @@ function asFiles(value: unknown): readonly PackFileEntry[] {
 }
 
 /**
+ * A tool pack's `tool`, or the refusal that names the rule it broke.
+ *
+ * The field is refused on every kind but `tool` rather than ignored: a
+ * `content` pack carrying one is a pack whose author expected it to be run, and
+ * reading past the field would install a pack that does nothing the author
+ * meant. `entry` must be one of `files` exactly, because it is the path
+ * `tools/run.ts` joins under the installed folder and then hashes: an `entry`
+ * that is not a listed file is a path whose bytes nothing ever promised.
+ */
+function asTool(
+  value: unknown,
+  kind: PackKind,
+  files: readonly PackFileEntry[],
+): ToolSpec | undefined {
+  if (kind !== "tool") {
+    if (value !== undefined) {
+      throw new PackError("tool-invalid", `"tool" is only defined for a pack of kind "tool" (this one is "${kind}").`);
+    }
+    return undefined;
+  }
+  if (value === undefined) {
+    throw new PackError("tool-invalid", 'a pack of kind "tool" must carry "tool".');
+  }
+
+  const record = asObject(value, '"tool"');
+  requireKnownKeys(record, TOOL_KEYS, '"tool"');
+
+  const entry = asRequiredString(record, "entry", "tool-invalid", '"tool".entry');
+  if (!files.some((file) => file.path === entry)) {
+    throw new PackError("tool-invalid", `"tool".entry "${entry}" is not one of the manifest's files.`);
+  }
+
+  const protocol = record["protocol"];
+  if (!(TOOL_PROTOCOLS as readonly unknown[]).includes(protocol)) {
+    throw new PackError("tool-invalid", `"tool".protocol must be one of ${TOOL_PROTOCOLS.join(", ")}.`);
+  }
+
+  const rawArgs = record["args"];
+  if (rawArgs === undefined) {
+    return { entry, protocol: protocol as ToolProtocol };
+  }
+  if (!Array.isArray(rawArgs) || rawArgs.length > PACK_LIMITS.toolArgs) {
+    throw new PackError("tool-invalid", `"tool".args must be an array of at most ${String(PACK_LIMITS.toolArgs)} strings.`);
+  }
+  const argumentProblem = `every entry of "tool".args must be a non-empty string of at most ${String(PACK_LIMITS.toolArgChars)} characters, with no control characters.`;
+  for (const argument of rawArgs) {
+    if (typeof argument !== "string" || argument === "" || argument.length > PACK_LIMITS.toolArgChars) {
+      throw new PackError("tool-invalid", argumentProblem);
+    }
+    // eslint-disable-next-line no-control-regex -- a C0 character inside an argument is exactly what this refuses.
+    if (/[\u0000-\u001f\u007f]/.test(argument)) throw new PackError("tool-invalid", argumentProblem);
+  }
+  return { entry, protocol: protocol as ToolProtocol, args: rawArgs as readonly string[] };
+}
+
+/**
  * The manifest, validated field by field, or a `PackError` naming the rule that
  * was broken. Never a partial manifest: a caller that gets one back has a shape
  * it can use without re-checking anything.
@@ -329,11 +417,15 @@ export function parsePackManifest(value: unknown): PackManifest {
     throw new PackError("format-unknown", `pack.json: this build reads format ${String(PACK_FORMAT)} only.`);
   }
 
+  const kind = asKind(record["kind"]);
+  const files = asFiles(record["files"]);
+  const tool = asTool(record["tool"], kind, files);
+
   return {
     format: PACK_FORMAT,
     id: asPackId(record["id"]),
     version: asVersion(record["version"], "version-invalid", '"version"'),
-    kind: asKind(record["kind"]),
+    kind,
     title: asCappedCopy(record["title"], "title-invalid", '"title"', PACK_LIMITS.titleChars),
     description: asCappedCopy(
       record["description"],
@@ -341,11 +433,15 @@ export function parsePackManifest(value: unknown): PackManifest {
       '"description"',
       PACK_LIMITS.descriptionChars,
     ),
-    files: asFiles(record["files"]),
+    files,
     licence: asLicence(record["licence"]),
     source: asSource(record["source"]),
     minAppVersion: asVersion(record["minAppVersion"], "min-app-version-invalid", '"minAppVersion"'),
     notice: asNotice(record["notice"]),
+    // Spread rather than `tool: undefined`, which `exactOptionalPropertyTypes`
+    // forbids and which would also put an absent key back into a manifest that
+    // a later `JSON.stringify` would then serialise.
+    ...(tool === undefined ? {} : { tool }),
   };
 }
 

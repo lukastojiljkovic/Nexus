@@ -7843,6 +7843,7 @@ export const en = {
         "downloads-off": "Downloads are off. Turn on Downloads in Privacy.",
         "download-failed": "The download failed. Try again.",
         busy: "Another download is already in progress, or this one already is.",
+        "tool-invalid": "The program this pack carries is not described in a way this build accepts.",
       } satisfies Record<PackRefusalCode, string>,
       /** ADR-103: the catalogue the card draws and the download it can start. */
       catalogueTitle: "Pack catalogue",

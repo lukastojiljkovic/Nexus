@@ -7882,6 +7882,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "downloads-off": "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti.",
         "download-failed": "Preuzimanje nije uspelo. Pokušaj ponovo.",
         busy: "Drugo preuzimanje je već u toku, ili je ovo već pokrenuto.",
+        "tool-invalid": "Podaci o programu koji paket nosi nisu ispravni.",
       } satisfies Record<PackRefusalCode, string>,
       /** ADR-103: the catalogue the card draws and the download it can start. */
       catalogueTitle: "Katalog paketa",

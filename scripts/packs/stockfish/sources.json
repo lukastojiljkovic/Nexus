@@ -1,0 +1,46 @@
+{
+  "id": "stockfish",
+  "version": "19.0.0",
+  "release": {
+    "tag": "sf_19",
+    "published": "2026-09-05T08:33:17Z",
+    "url": "https://github.com/official-stockfish/Stockfish/releases/tag/sf_19"
+  },
+  "sources": {
+    "stockfish-windows-x86-64-universal.zip": {
+      "url": "https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-windows-x86-64-universal.zip",
+      "fetched": "2026-10-10",
+      "bytes": 81431614,
+      "sha256": "3c8bf1f9ea66a09350a40df4f632288285ac206d99f33ab5842c408fc30b48a7",
+      "sha256From": {
+        "url": "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/sf_19",
+        "what": "The release asset's own digest, as GitHub publishes it for the tag the builder downloads from."
+      },
+      "licence": {
+        "spdx": "GPL-3.0-or-later",
+        "evidence": [
+          {
+            "url": "https://github.com/official-stockfish/Stockfish/blob/sf_19/src/benchmark.cpp",
+            "quote": "  Stockfish is free software: you can redistribute it and/or modify\n  it under the terms of the GNU General Public License as published by\n  the Free Software Foundation, either version 3 of the License, or\n  (at your option) any later version."
+          },
+          {
+            "url": "https://github.com/official-stockfish/Stockfish/blob/sf_19/README.md",
+            "quote": "* [Copying.txt][license-link], a text file containing the GNU General Public\n    License version 3."
+          }
+        ]
+      },
+      "provides": [
+        "engine/stockfish-windows-x86-64-universal.exe",
+        "COPYING",
+        "AUTHORS",
+        "README.md",
+        "source/stockfish-windows-x86-64-universal.zip"
+      ],
+      "notes": {
+        "what": "The GPL-3.0 text the pack ships as COPYING is the archive's own Copying.txt; the version fetched here for comparison is the repository's copy at the same tag.",
+        "url": "https://github.com/official-stockfish/Stockfish/blob/sf_19/Copying.txt",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+      }
+    }
+  }
+}

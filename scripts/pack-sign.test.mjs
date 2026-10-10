@@ -9,6 +9,7 @@ import {
   PACK_SIGNATURE_CONTEXT,
   buildManifest,
   checkMeta,
+  checkToolEntry,
   collectFiles,
   parseArgs,
   signCatalogue,
@@ -167,6 +168,80 @@ describe("the metadata it is willing to sign", () => {
       "notice",
       "files",
     ]);
+  });
+
+  it("refuses `tool` on a kind that is not `tool`", () => {
+    expect(() => checkMeta(meta({ tool: { entry: "top.zim", protocol: "uci" } }))).toThrow(
+      /kind "tool"/,
+    );
+  });
+
+  it("refuses a tool pack with no `tool`", () => {
+    expect(() => checkMeta(meta({ kind: "tool" }))).toThrow(/"tool"/);
+  });
+
+  it("refuses a protocol the format does not define, and a field inside `tool` it does not", () => {
+    expect(() =>
+      checkMeta(meta({ kind: "tool", tool: { entry: "top.zim", protocol: "json" } })),
+    ).toThrow(/protocol/);
+    expect(() =>
+      checkMeta(meta({ kind: "tool", tool: { entry: "top.zim", protocol: "uci", cwd: "/tmp" } })),
+    ).toThrow(/unknown field/);
+  });
+
+  it("accepts a well-formed `tool` record, with and without fixed arguments", () => {
+    expect(
+      checkMeta(meta({ kind: "tool", tool: { entry: "top.zim", protocol: "uci" } })).tool,
+    ).toEqual({ entry: "top.zim", protocol: "uci" });
+    expect(
+      checkMeta(meta({ kind: "tool", tool: { entry: "top.zim", protocol: "stdio", args: ["-y"] } }))
+        .tool,
+    ).toEqual({ entry: "top.zim", protocol: "stdio", args: ["-y"] });
+  });
+});
+
+describe("the tool entry against the folder", () => {
+  const files = [{ path: "top.zim", size: 1, sha256: "a".repeat(64) }];
+
+  it("refuses an entry the folder does not hold, which would be a program that does not exist", () => {
+    expect(() =>
+      checkToolEntry({ kind: "tool", tool: { entry: "engine.exe", protocol: "uci" } }, files),
+    ).toThrow(/is not one of the folder's files/);
+  });
+
+  it("accepts an entry the folder holds, and says nothing about any other kind", () => {
+    expect(() =>
+      checkToolEntry({ kind: "tool", tool: { entry: "top.zim", protocol: "uci" } }, files),
+    ).not.toThrow();
+    expect(() => checkToolEntry({ kind: "zim" }, files)).not.toThrow();
+  });
+});
+
+describe("signing a tool pack", () => {
+  it("writes the `tool` record into the manifest it signs", () => {
+    const dir = packFolder();
+    const tool = { entry: "top.zim", protocol: "stdio", args: ["-y"] };
+    signPack({ dir, meta: meta({ kind: "tool", tool }), key: keyPath });
+    const manifest = JSON.parse(readFileSync(join(dir, "pack.json"), "utf8"));
+    expect(manifest.kind).toBe("tool");
+    expect(manifest.tool).toEqual(tool);
+    // The entry's own digest is the computed one, so the record and the file
+    // list agree about which file is the program.
+    const listed = manifest.files.find((file) => file.path === tool.entry);
+    expect(listed.sha256).toBe(createHash("sha256").update("top level content").digest("hex"));
+  });
+
+  it("refuses an entry that is not in the folder BEFORE the key is used", () => {
+    const dir = packFolder();
+    // A key path that cannot be read: if the tool read it, this would fail with
+    // an ENOENT rather than with the entry's own message.
+    expect(() =>
+      signPack({
+        dir,
+        meta: meta({ kind: "tool", tool: { entry: "engine.exe", protocol: "uci" } }),
+        key: join(root, "no-such-key.pem"),
+      }),
+    ).toThrow(/is not one of the folder's files/);
   });
 });
 
