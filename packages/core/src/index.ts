@@ -2718,3 +2718,69 @@ export {
 export type { BricksInput, BricksState } from "./games/bricks/bricks.js";
 export type * from "./assistant/contract.js";
 export type * from "./sky/contract.js";
+
+// --- the assistant's loop, prompts, budget and workflows (ADR-095) -----------
+// The module that wires these into the page is the next wave; until then this
+// block is the whole public surface of `src/assistant`, so the evals harness and
+// that module reach it through the package root rather than a deep path.
+export {
+  DEFAULT_MAX_STEPS,
+  KNOWLEDGE_HIT_LIMIT,
+  createAgentTurn,
+  runAgentTurn,
+} from "./assistant/loop.js";
+export type { AgentLoopOptions } from "./assistant/loop.js";
+export {
+  CHARACTERS_PER_TOKEN,
+  CHARACTERS_PER_TOKEN_STRUCTURED,
+  CHAT_MESSAGE_OVERHEAD_TOKENS,
+  MIN_TOOL_RESULT_CHARS,
+  REQUEST_OVERHEAD_TOKENS,
+  answerReserveTokens,
+  createEstimator,
+  createToolEstimator,
+  estimateTokens,
+  planContext,
+  requestTokens,
+} from "./assistant/budget.js";
+export type {
+  ContextPlan,
+  ContextPlanFit,
+  ContextPlanFull,
+  ContextPlanInput,
+  MeasuredUsage,
+  TokenEstimator,
+} from "./assistant/budget.js";
+export {
+  SAFETY_NOTICE,
+  SYSTEM_PROMPT_VERSION,
+  buildSystemPrompt,
+  hasSafetyNotice,
+  renderKnowledgeBlock,
+} from "./assistant/prompts.js";
+export type { SystemPromptOptions } from "./assistant/prompts.js";
+export {
+  countBoundary,
+  createFenceBoundary,
+  fenceUntrusted,
+  isFenced,
+  sanitizeForFence,
+} from "./assistant/fence.js";
+export type { FenceOptions } from "./assistant/fence.js";
+export { validateToolArguments } from "./assistant/schema.js";
+export type {
+  ToolArgumentsCheck,
+  ToolArgumentsInvalid,
+  ToolArgumentsValid,
+} from "./assistant/schema.js";
+export { parseToolCalls } from "./assistant/toolCalls.js";
+export type { ParsedToolCall, ParsedToolCalls } from "./assistant/toolCalls.js";
+export {
+  ASSISTANT_WORKFLOWS,
+  findWorkflow,
+  renderWorkflowBrief,
+  toolsForWorkflow,
+} from "./assistant/workflows.js";
+export type { AssistantWorkflow } from "./assistant/workflows.js";
+export { createScriptedModel } from "./assistant/fakeModel.js";
+export type { ScriptedChatModel, ScriptedModelOptions, ScriptedStep } from "./assistant/fakeModel.js";
