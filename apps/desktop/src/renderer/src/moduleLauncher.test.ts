@@ -73,6 +73,8 @@ describe("launcherGroups", () => {
       "focus",
       "timers",
     ]);
+    // â€žKultura" is a group of its own, with the one module in it.
+    expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["culture"]);
   });
 
   /**

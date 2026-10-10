@@ -87,6 +87,21 @@ export const MAX_CULTURE_PHOTO_BYTES = 52_428_800;
 /** The export format's version - the one number `importData` reads first and refuses to guess. */
 export const CULTURE_EXPORT_VERSION = 1;
 
+/**
+ * The longest address a plan may paste. A URL is not a note: 2000 characters is
+ * past any ticket page, event page or map link, and it is the same bound the
+ * notes column has, so a plan cannot hold a body-sized "link".
+ */
+export const MAX_CULTURE_LINK_LENGTH = 2000;
+
+/**
+ * A plan's own kind: the ten visit kinds. A plan is a visit that has not
+ * happened, so it is the same closed list rather than a second one that agrees
+ * with it today - which is also what makes `completePlan` able to turn one into
+ * the other without a translation table.
+ */
+export type CulturePlanKind = VisitKind;
+
 /** Serbian Latin ordering for the lists a person reads (CLAUDE.md's house rule; plain `"sr"` mis-tailors the Latin š, č and ć). */
 const CULTURE_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -116,6 +131,13 @@ export interface CultureVisit {
   kind: VisitKind;
   title: string;
   venue: string;
+  /**
+   * The remembered venue this visit belongs to, or null. The `venue`/`city`
+   * strings above stay the visit's own record of where it was (migration 073) -
+   * this is only the link, so a venue renamed or deleted leaves the visit
+   * saying exactly what the user typed.
+   */
+  venueId: string | null;
   city: string | null;
   /** The bare local day, `YYYY-MM-DD`. */
   date: string;
@@ -146,6 +168,71 @@ export interface CultureVisitPhoto {
   sizeBytes: number;
   sha256: string;
   createdAt: string;
+}
+
+/**
+ * A place, remembered once: `Museum of Contemporary Art`, `Beograd`, a kind,
+ * and the module's own notes about it (which are the venue's, not a visit's -
+ * "sit in the balcony" is true of every evening there).
+ *
+ * Two spellings of one name are one venue, folded the way `summarizeCulture`
+ * counts one (`trim`, collapse inner whitespace, lowercase) at the store's own
+ * find-or-create, so a visit typed `narodni muzej` yesterday points at the same
+ * row as one typed `Narodni muzej` today.
+ */
+export interface CultureVenue {
+  id: string;
+  profileId: string;
+  name: string;
+  city: string | null;
+  kind: VisitKind;
+  /** Never null: "no notes" has exactly one spelling here, the empty string. */
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Something to see that has not happened yet. `visitId` is null while it is
+ * still a plan and set once `completePlan` answered "I went" - which is what
+ * makes the question askable exactly once.
+ */
+export interface CulturePlan {
+  id: string;
+  profileId: string;
+  kind: VisitKind;
+  title: string;
+  venue: string;
+  venueId: string | null;
+  city: string | null;
+  /** The bare local day, `YYYY-MM-DD`. */
+  date: string;
+  /** Wall-clock `HH:MM` it starts, or null when nobody recorded it. */
+  startTime: string | null;
+  /**
+   * The address the user pasted, already checked to be `http:`/`https:`. Kept
+   * verbatim (a URL is data, never prose): never trimmed, never folded.
+   */
+  link: string | null;
+  notes: string;
+  visitId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The module's one preference, as the settings card and the page read it. */
+export interface CultureSettings {
+  /**
+   * Whether the programme asks about plans whose date has passed. True when no
+   * row has been written, which is what the module shipped with.
+   */
+  promptPastPlans: boolean;
+}
+
+/** What one `completePlan` wrote: the linked plan and the visit it became. */
+export interface CulturePlanCompletion {
+  plan: CulturePlan;
+  visit: CultureVisit;
 }
 
 export interface CultureTrack {
@@ -248,6 +335,44 @@ export interface CulturePhotoInput {
   sha256: string;
 }
 
+export interface CreateVenueInput {
+  name: string;
+  city?: string | null;
+  kind: VisitKind;
+  notes?: string;
+}
+
+/** A partial patch. An omitted key is left untouched; an explicit `null` clears a nullable field. */
+export interface UpdateVenueFields {
+  name?: string;
+  city?: string | null;
+  kind?: VisitKind;
+  notes?: string;
+}
+
+export interface CreateCulturePlanInput {
+  kind: VisitKind;
+  title: string;
+  venue: string;
+  city?: string | null;
+  date: string;
+  startTime?: string | null;
+  link?: string | null;
+  notes?: string;
+}
+
+/** A partial patch. An omitted key is left untouched; an explicit `null` clears a nullable field. */
+export interface UpdateCulturePlanFields {
+  kind?: VisitKind;
+  title?: string;
+  venue?: string;
+  city?: string | null;
+  date?: string;
+  startTime?: string | null;
+  link?: string | null;
+  notes?: string;
+}
+
 export interface CreateTrackInput {
   title: string;
   artist?: string | null;
@@ -306,6 +431,7 @@ export interface CultureExportVisit {
   readonly kind: VisitKind;
   readonly title: string;
   readonly venue: string;
+  readonly venueId: string | null;
   readonly city: string | null;
   readonly date: string;
   readonly startTime: string | null;
@@ -316,6 +442,34 @@ export interface CultureExportVisit {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly photos: readonly CultureExportPhoto[];
+}
+
+/** One remembered place, as the archive carries it: the row's own fields, and no count. */
+export interface CultureExportVenue {
+  readonly id: string;
+  readonly name: string;
+  readonly city: string | null;
+  readonly kind: VisitKind;
+  readonly notes: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** One plan, as the archive carries it. `visitId` rides along, so a restored profile does not ask again about a plan it already answered. */
+export interface CultureExportPlan {
+  readonly id: string;
+  readonly kind: VisitKind;
+  readonly title: string;
+  readonly venue: string;
+  readonly venueId: string | null;
+  readonly city: string | null;
+  readonly date: string;
+  readonly startTime: string | null;
+  readonly link: string | null;
+  readonly notes: string;
+  readonly visitId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 export interface CultureExportTrack {
@@ -367,16 +521,21 @@ export interface CultureExportPlaylist {
 /** The module as one plain JSON value. `version` is read before anything else and any other value is refused. */
 export interface CultureExport {
   readonly version: typeof CULTURE_EXPORT_VERSION;
+  readonly venues: readonly CultureExportVenue[];
   readonly visits: readonly CultureExportVisit[];
+  readonly plans: readonly CultureExportPlan[];
   readonly tracks: readonly CultureExportTrack[];
   readonly entries: readonly CultureExportEntry[];
   readonly playlists: readonly CultureExportPlaylist[];
+  readonly settings: CultureSettings;
 }
 
 /** What one `importData` wrote, so a caller can report what an archive carried. */
 export interface CultureImportSummary {
+  readonly venues: number;
   readonly visits: number;
   readonly photos: number;
+  readonly plans: number;
   readonly tracks: number;
   readonly entries: number;
   readonly playlists: number;
@@ -389,6 +548,7 @@ interface VisitRow {
   kind: string;
   title: string;
   venue: string;
+  venue_id: string | null;
   city: string | null;
   visit_date: string;
   start_time: string | null;
@@ -409,6 +569,34 @@ interface PhotoRow {
   size_bytes: number;
   sha256: string;
   created_at: string;
+}
+
+interface VenueRow {
+  id: string;
+  profile_id: string;
+  name: string;
+  city: string | null;
+  kind: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PlanRow {
+  id: string;
+  profile_id: string;
+  title: string;
+  kind: string;
+  venue: string;
+  venue_id: string | null;
+  city: string | null;
+  planned_date: string;
+  start_time: string | null;
+  link: string | null;
+  notes: string;
+  visit_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface TrackRow {
@@ -461,10 +649,16 @@ interface ItemRow {
 }
 
 const VISIT_COLUMNS =
-  "id, profile_id, kind, title, venue, city, visit_date, start_time, rating, notes, " +
+  "id, profile_id, kind, title, venue, venue_id, city, visit_date, start_time, rating, notes, " +
   "price_minor, price_currency, companions, created_at, updated_at";
 
 const PHOTO_COLUMNS = "id, visit_id, file_name, mime, size_bytes, sha256, created_at";
+
+const VENUE_COLUMNS = "id, profile_id, name, city, kind, notes, created_at, updated_at";
+
+const PLAN_COLUMNS =
+  "id, profile_id, title, kind, venue, venue_id, city, planned_date, start_time, link, notes, " +
+  "visit_id, created_at, updated_at";
 
 const TRACK_COLUMNS =
   "id, profile_id, title, artist, album, track_number, release_year, duration_ms, " +
@@ -478,17 +672,24 @@ const PLAYLIST_COLUMNS = "id, profile_id, name, created_at, updated_at";
 const ITEM_COLUMNS = "id, playlist_id, track_id, rank, created_at";
 
 /**
- * The culture corner's whole store: visits with their photos, the listening
- * log, the user's own tracks, and playlists over them.
+ * The culture corner's whole store: the places (venues), what went to see
+ * (visits with their photos), what is planned (plans), the listening log, the
+ * user's own tracks, and playlists over them.
  *
- * **One store over six tables, because it is one module with one archive
+ * **One store over nine tables, because it is one module with one archive
  * entry.** The groups are read together (the period statistics take visits,
  * entries and tracks at once) and they travel together (`exportData` is one
- * versioned value, which is what stage 2 plugs into the profile archive), so
- * splitting them into four stores would mean four constructors per profile and
- * an archive section assembled from four answers. What keeps that from becoming
- * a bag is that each group has its own statement block below and its own
- * section in the tests.
+ * versioned value), so splitting them into four stores would mean four
+ * constructors per profile and an archive section assembled from four answers.
+ * What keeps that from becoming a bag is that each group has its own statement
+ * block below and its own section in the tests.
+ *
+ * **A visit's `venue` text and its `venue_id` are not two answers to one
+ * question.** The text is what the user wrote and what the archive carries; the
+ * id is the link to a remembered place, and `findOrCreateVenue` is the ONE
+ * place the two are written together. Everything else (`updateVisit` with a
+ * venue id, `updateVenue`'s rename) deliberately leaves the other where it is,
+ * so a renamed or deleted place can never rewrite a memory.
  *
  * **Every statement is scoped by `profile_id`, and a row that carries none is
  * reached through its parent.** `culture_visit_photos` and
@@ -538,6 +739,30 @@ export class CultureStore {
   private readonly selectAllPhotos: Database.Statement;
   private readonly selectPhoto: Database.Statement;
   private readonly deletePhoto: Database.Statement;
+  // --- venues ---------------------------------------------------------------
+  private readonly insertVenue: Database.Statement;
+  private readonly selectVenues: Database.Statement;
+  private readonly selectDeletedVenues: Database.Statement;
+  private readonly selectAllVenues: Database.Statement;
+  private readonly selectVenueById: Database.Statement;
+  private readonly updateVenueFields: Database.Statement;
+  private readonly markVenueDeleted: Database.Statement;
+  private readonly markVenueRestored: Database.Statement;
+  // --- plans ----------------------------------------------------------------
+  private readonly insertPlan: Database.Statement;
+  private readonly selectPlans: Database.Statement;
+  private readonly selectAllPlans: Database.Statement;
+  private readonly selectPlanById: Database.Statement;
+  private readonly updatePlanFields: Database.Statement;
+  private readonly linkPlanToVisit: Database.Statement;
+  private readonly markPlanDeleted: Database.Statement;
+  private readonly markPlanRestored: Database.Statement;
+  // --- settings -------------------------------------------------------------
+  private readonly selectSettings: Database.Statement;
+  private readonly upsertSettings: Database.Statement;
+  // --- blobs ----------------------------------------------------------------
+  private readonly countBlobReferences: Database.Statement;
+  private readonly selectBlobMime: Database.Statement;
   // --- tracks ---------------------------------------------------------------
   private readonly insertTrack: Database.Statement;
   private readonly selectTracks: Database.Statement;
@@ -572,6 +797,9 @@ export class CultureStore {
   private readonly updateItemRank: Database.Statement;
   private readonly deleteItem: Database.Statement;
   // --- the archive ----------------------------------------------------------
+  private readonly deletePlans: Database.Statement;
+  private readonly deleteVenues: Database.Statement;
+  private readonly deleteSettings: Database.Statement;
   private readonly deleteVisits: Database.Statement;
   private readonly deleteVisitPhotos: Database.Statement;
   private readonly deleteTracks: Database.Statement;
@@ -585,9 +813,9 @@ export class CultureStore {
   ) {
     this.insertVisit = db.prepare(
       `INSERT INTO culture_visits
-         (id, profile_id, kind, title, venue, city, visit_date, start_time, rating, notes,
-          price_minor, price_currency, companions, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, kind, title, venue, venue_id, city, visit_date, start_time, rating,
+          notes, price_minor, price_currency, companions, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectVisits = db.prepare(
       `SELECT ${VISIT_COLUMNS} FROM culture_visits
@@ -606,9 +834,9 @@ export class CultureStore {
     );
     this.updateVisitFields = db.prepare(
       `UPDATE culture_visits
-          SET kind = ?, title = ?, venue = ?, city = ?, visit_date = ?, start_time = ?,
-              rating = ?, notes = ?, price_minor = ?, price_currency = ?, companions = ?,
-              updated_at = ?
+          SET kind = ?, title = ?, venue = ?, venue_id = ?, city = ?, visit_date = ?,
+              start_time = ?, rating = ?, notes = ?, price_minor = ?, price_currency = ?,
+              companions = ?, updated_at = ?
         WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markVisitDeleted = db.prepare(
@@ -643,6 +871,122 @@ export class CultureStore {
     );
     this.deletePhoto = db.prepare(
       `DELETE FROM culture_visit_photos WHERE id = ? AND visit_id = ?`,
+    );
+
+    this.insertVenue = db.prepare(
+      `INSERT INTO culture_venues
+         (id, profile_id, name, city, kind, notes, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    this.selectVenues = db.prepare(
+      `SELECT ${VENUE_COLUMNS} FROM culture_venues
+        WHERE profile_id = ? AND deleted_at IS NULL`,
+    );
+    // The second half of `rememberVenue`: a place the user deleted and then
+    // visited again comes BACK rather than becoming a second row with the same
+    // name, so one place stays one row for as long as the profile exists.
+    this.selectDeletedVenues = db.prepare(
+      `SELECT ${VENUE_COLUMNS} FROM culture_venues
+        WHERE profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+    // The export's read: every live venue in one query, ordered by the key the
+    // archive's own canonical order uses.
+    this.selectAllVenues = db.prepare(
+      `SELECT ${VENUE_COLUMNS} FROM culture_venues
+        WHERE profile_id = ? AND deleted_at IS NULL ORDER BY id`,
+    );
+    this.selectVenueById = db.prepare(
+      `SELECT ${VENUE_COLUMNS} FROM culture_venues
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.updateVenueFields = db.prepare(
+      `UPDATE culture_venues SET name = ?, city = ?, kind = ?, notes = ?, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.markVenueDeleted = db.prepare(
+      `UPDATE culture_venues SET deleted_at = ?, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.markVenueRestored = db.prepare(
+      `UPDATE culture_venues SET deleted_at = NULL, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+
+    this.insertPlan = db.prepare(
+      `INSERT INTO culture_plans
+         (id, profile_id, title, kind, venue, venue_id, city, planned_date, start_time, link,
+          notes, visit_id, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)`,
+    );
+    this.selectPlans = db.prepare(
+      `SELECT ${PLAN_COLUMNS} FROM culture_plans
+        WHERE profile_id = ? AND deleted_at IS NULL
+        ORDER BY planned_date, id`,
+    );
+    this.selectAllPlans = db.prepare(
+      `SELECT ${PLAN_COLUMNS} FROM culture_plans
+        WHERE profile_id = ? AND deleted_at IS NULL ORDER BY id`,
+    );
+    this.selectPlanById = db.prepare(
+      `SELECT ${PLAN_COLUMNS} FROM culture_plans
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.updatePlanFields = db.prepare(
+      `UPDATE culture_plans
+          SET title = ?, kind = ?, venue = ?, venue_id = ?, city = ?, planned_date = ?,
+              start_time = ?, link = ?, notes = ?, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    // The plan's own "I went": the pointer is written once, and a second
+    // `completePlan` refuses rather than minting a second visit.
+    this.linkPlanToVisit = db.prepare(
+      `UPDATE culture_plans SET visit_id = ?, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND visit_id IS NULL AND deleted_at IS NULL`,
+    );
+    this.markPlanDeleted = db.prepare(
+      `UPDATE culture_plans SET deleted_at = ?, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
+    );
+    this.markPlanRestored = db.prepare(
+      `UPDATE culture_plans SET deleted_at = NULL, updated_at = ?
+        WHERE id = ? AND profile_id = ? AND deleted_at IS NOT NULL`,
+    );
+
+    this.selectSettings = db.prepare(
+      `SELECT prompt_past_plans AS prompt FROM culture_settings WHERE profile_id = ?`,
+    );
+    this.upsertSettings = db.prepare(
+      `INSERT INTO culture_settings (profile_id, prompt_past_plans, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT (profile_id)
+       DO UPDATE SET prompt_past_plans = excluded.prompt_past_plans,
+                     updated_at = excluded.updated_at`,
+    );
+
+    // The ONE place this module's blob references are counted, across its two
+    // hash-naming tables - a photo and a track may hold byte-identical content,
+    // so the count has to see both before main's union can be asked whether a
+    // file on disk is orphaned.
+    this.countBlobReferences = db.prepare(
+      `SELECT
+         (SELECT count(*) FROM culture_visit_photos p
+            JOIN culture_visits v ON v.id = p.visit_id
+           WHERE p.sha256 = ? AND v.profile_id = ?) +
+         (SELECT count(*) FROM culture_tracks t
+           WHERE t.sha256 = ? AND t.profile_id = ?) AS n`,
+    );
+    // What the bytes are served as. The photo table is asked first, which is the
+    // order main's own mime union asks these two in - and the track table is the
+    // fallback, because a hash may be named by a track alone, or by both (in
+    // which case the photo's mime is the one the served bytes are).
+    this.selectBlobMime = db.prepare(
+      `SELECT COALESCE(
+         (SELECT p.mime FROM culture_visit_photos p
+            JOIN culture_visits v ON v.id = p.visit_id
+           WHERE p.sha256 = ? AND v.profile_id = ? LIMIT 1),
+         (SELECT t.mime FROM culture_tracks t
+           WHERE t.sha256 = ? AND t.profile_id = ? LIMIT 1)
+       ) AS mime`,
     );
 
     this.insertTrack = db.prepare(
@@ -794,7 +1138,9 @@ export class CultureStore {
 
     // Children before parents, and never leaning on `ON DELETE CASCADE` to
     // reach a row - `RESTORE_WIPE_TABLES`' own rule. The items and the entries
-    // go before the tracks they may name.
+    // go before the tracks they may name; the plans go before the visits and
+    // venues they point at, and the tracks before nothing that names them here.
+    this.deletePlans = db.prepare(`DELETE FROM culture_plans WHERE profile_id = ?`);
     this.deletePlaylistItems = db.prepare(
       `DELETE FROM culture_playlist_items
         WHERE playlist_id IN (SELECT id FROM culture_playlists WHERE profile_id = ?)`,
@@ -806,6 +1152,10 @@ export class CultureStore {
         WHERE visit_id IN (SELECT id FROM culture_visits WHERE profile_id = ?)`,
     );
     this.deleteVisits = db.prepare(`DELETE FROM culture_visits WHERE profile_id = ?`);
+    // AFTER the visits and plans that name them: a venue is a parent, and this
+    // list never leans on its `ON DELETE SET NULL` to reach a row.
+    this.deleteVenues = db.prepare(`DELETE FROM culture_venues WHERE profile_id = ?`);
+    this.deleteSettings = db.prepare(`DELETE FROM culture_settings WHERE profile_id = ?`);
     this.deleteTracks = db.prepare(`DELETE FROM culture_tracks WHERE profile_id = ?`);
   }
 
@@ -818,6 +1168,11 @@ export class CultureStore {
       kind: input.kind,
       title: input.title,
       venue: input.venue,
+      // A visit REMEMBERS the place it was at: the venue row is found by the
+      // folded name and city, or written, in the same transaction as the visit
+      // that names it. That is the whole of "a venue is remembered once" - the
+      // page has no second step to forget.
+      venueId: null,
       city: input.city ?? null,
       date: input.date,
       startTime: input.startTime ?? null,
@@ -826,23 +1181,21 @@ export class CultureStore {
       price: input.price ?? null,
       companions: input.companions ?? null,
     });
-    const id = uuidv7();
-
-    this.insertVisit.run(
-      id, this.profileId, resolved.kind, resolved.title, resolved.venue, resolved.city,
-      resolved.date, resolved.startTime, resolved.rating, resolved.notes,
-      resolved.price === null ? null : resolved.price.minorUnits,
-      resolved.price === null ? null : resolved.price.currency,
-      resolved.companions, validNow, validNow,
-    );
-
-    return {
-      id,
-      profileId: this.profileId,
-      ...resolved,
-      createdAt: validNow,
-      updatedAt: validNow,
-    };
+    return this.db.transaction((): CultureVisit => {
+      const linked: ResolvedVisit = {
+        ...resolved,
+        venueId: this.rememberVenue(resolved.venue, resolved.city, resolved.kind, validNow).id,
+      };
+      const id = uuidv7();
+      this.insertVisit.run(
+        id, this.profileId, linked.kind, linked.title, linked.venue, linked.venueId, linked.city,
+        linked.date, linked.startTime, linked.rating, linked.notes,
+        linked.price === null ? null : linked.price.minorUnits,
+        linked.price === null ? null : linked.price.currency,
+        linked.companions, validNow, validNow,
+      );
+      return { id, profileId: this.profileId, ...linked, createdAt: validNow, updatedAt: validNow };
+    })();
   }
 
   /** Applies a partial patch to a live visit. An omitted key is left alone; an explicit `null` clears a nullable field. */
@@ -853,6 +1206,7 @@ export class CultureStore {
       kind: fields.kind ?? current.kind,
       title: fields.title ?? current.title,
       venue: fields.venue ?? current.venue,
+      venueId: current.venueId,
       city: "city" in fields ? (fields.city ?? null) : current.city,
       date: fields.date ?? current.date,
       startTime: "startTime" in fields ? (fields.startTime ?? null) : current.startTime,
@@ -861,15 +1215,26 @@ export class CultureStore {
       price: "price" in fields ? (fields.price ?? null) : current.price,
       companions: "companions" in fields ? (fields.companions ?? null) : current.companions,
     });
-
-    this.updateVisitFields.run(
-      resolved.kind, resolved.title, resolved.venue, resolved.city, resolved.date,
-      resolved.startTime, resolved.rating, resolved.notes,
-      resolved.price === null ? null : resolved.price.minorUnits,
-      resolved.price === null ? null : resolved.price.currency,
-      resolved.companions, validNow, id, this.profileId,
-    );
-    return { ...current, ...resolved, updatedAt: validNow };
+    // The place is re-remembered on every edit rather than carried through, and
+    // that is deliberate: the text and the link are one fact about the visit, so
+    // whichever of them the patch changed, the pair is rewritten together. It is
+    // also what gives a visit whose link was never written - an archive from
+    // before `venue_id`, a place deleted since - its venue back on the next
+    // write.
+    return this.db.transaction((): CultureVisit => {
+      const linked: ResolvedVisit = {
+        ...resolved,
+        venueId: this.rememberVenue(resolved.venue, resolved.city, resolved.kind, validNow).id,
+      };
+      this.updateVisitFields.run(
+        linked.kind, linked.title, linked.venue, linked.venueId, linked.city, linked.date,
+        linked.startTime, linked.rating, linked.notes,
+        linked.price === null ? null : linked.price.minorUnits,
+        linked.price === null ? null : linked.price.currency,
+        linked.companions, validNow, id, this.profileId,
+      );
+      return { ...current, ...linked, updatedAt: validNow };
+    })();
   }
 
   /**
@@ -945,6 +1310,281 @@ export class CultureStore {
     return toPhoto(row);
   }
 
+  // --- the places -----------------------------------------------------------
+
+  /**
+   * Remembers one place and returns the stored row.
+   *
+   * `rememberVenue` is the one the visits use (find by folded name and city, or
+   * create); this is the explicit "I am adding a place" the Places section
+   * offers, where a name that is already remembered is REFUSED rather than
+   * quietly merged - a user who typed a name they already have wants to be told
+   * which row they mean, and the row is right there in the list.
+   */
+  createVenue(input: CreateVenueInput, now: string): CultureVenue {
+    const validNow = validateNow(now);
+    const resolved = resolveVenue({
+      name: input.name,
+      city: input.city ?? null,
+      kind: input.kind,
+      notes: input.notes ?? "",
+    });
+    return this.db.transaction((): CultureVenue => {
+      const existing = this.findVenueByName(resolved.name, resolved.city);
+      if (existing !== null) {
+        throw new CultureValidationError(
+          `A venue named "${existing.name}"${existing.city === null ? "" : ` in ${existing.city}`} is already remembered.`,
+        );
+      }
+      const id = uuidv7();
+      this.insertVenue.run(
+        id, this.profileId, resolved.name, resolved.city, resolved.kind, resolved.notes,
+        validNow, validNow,
+      );
+      return { id, profileId: this.profileId, ...resolved, createdAt: validNow, updatedAt: validNow };
+    })();
+  }
+
+  /** Applies a partial patch to a live place. An omitted key is left alone; an explicit `null` clears a nullable field. */
+  updateVenue(id: string, fields: UpdateVenueFields, now: string): CultureVenue {
+    const validNow = validateNow(now);
+    const current = this.requireVenue(id);
+    const resolved = resolveVenue({
+      name: fields.name ?? current.name,
+      city: "city" in fields ? (fields.city ?? null) : current.city,
+      kind: fields.kind ?? current.kind,
+      notes: fields.notes ?? current.notes,
+    });
+    this.db.transaction((): void => {
+      const clash = this.findVenueByName(resolved.name, resolved.city, id);
+      if (clash !== null) {
+        throw new CultureValidationError(
+          `Another venue named "${clash.name}"${clash.city === null ? "" : ` in ${clash.city}`} is already remembered.`,
+        );
+      }
+      this.updateVenueFields.run(
+        resolved.name, resolved.city, resolved.kind, resolved.notes, validNow, id, this.profileId,
+      );
+    })();
+    // The visits' own `venue` text is deliberately NOT rewritten: it is what the
+    // user wrote on that evening, and a renamed place leaves the memory of it
+    // alone (the class comment's rule). What follows the rename is the LINK,
+    // which is by id and therefore needs nothing written here.
+    return { ...current, ...resolved, updatedAt: validNow };
+  }
+
+  /** This profile's live places, sr-Latn alphabetical by name then city, with an id tiebreak. */
+  listVenues(): CultureVenue[] {
+    return (this.selectVenues.all(this.profileId) as VenueRow[])
+      .map(toVenue)
+      .sort(
+        (left, right) =>
+          CULTURE_COLLATOR.compare(left.name, right.name) ||
+          CULTURE_COLLATOR.compare(left.city ?? "", right.city ?? "") ||
+          left.id.localeCompare(right.id),
+      );
+  }
+
+  /** Soft-deletes a live place. The visits it gathered keep their own words and their link comes back with it. */
+  softDeleteVenue(id: string, now: string): void {
+    const validNow = validateNow(now);
+    const { changes } = this.markVenueDeleted.run(validNow, validNow, id, this.profileId);
+    if (changes === 0) {
+      throw new CultureNotFoundError(`No live venue "${id}" to delete in this profile.`);
+    }
+  }
+
+  restoreVenue(id: string, now: string): void {
+    const validNow = validateNow(now);
+    const { changes } = this.markVenueRestored.run(validNow, id, this.profileId);
+    if (changes === 0) {
+      throw new CultureNotFoundError(`No deleted venue "${id}" to restore in this profile.`);
+    }
+  }
+
+  // --- the programme --------------------------------------------------------
+
+  /** Records one plan - something to see that has not happened yet. */
+  createPlan(input: CreateCulturePlanInput, now: string): CulturePlan {
+    const validNow = validateNow(now);
+    const resolved = resolvePlan({
+      kind: input.kind,
+      title: input.title,
+      venue: input.venue,
+      venueId: null,
+      city: input.city ?? null,
+      date: input.date,
+      startTime: input.startTime ?? null,
+      link: input.link ?? null,
+      notes: input.notes ?? "",
+    });
+    return this.db.transaction((): CulturePlan => {
+      const linked: ResolvedPlan = {
+        ...resolved,
+        venueId: this.rememberVenue(resolved.venue, resolved.city, resolved.kind, validNow).id,
+      };
+      const id = uuidv7();
+      this.insertPlan.run(
+        id, this.profileId, linked.title, linked.kind, linked.venue, linked.venueId, linked.city,
+        linked.date, linked.startTime, linked.link, linked.notes, validNow, validNow,
+      );
+      return { id, profileId: this.profileId, ...linked, visitId: null, createdAt: validNow, updatedAt: validNow };
+    })();
+  }
+
+  /** Applies a partial patch to a live plan. Its `visitId` is not editable here: `completePlan` is the only writer. */
+  updatePlan(id: string, fields: UpdateCulturePlanFields, now: string): CulturePlan {
+    const validNow = validateNow(now);
+    const current = this.requirePlan(id);
+    const resolved = resolvePlan({
+      kind: fields.kind ?? current.kind,
+      title: fields.title ?? current.title,
+      venue: fields.venue ?? current.venue,
+      venueId: current.venueId,
+      city: "city" in fields ? (fields.city ?? null) : current.city,
+      date: fields.date ?? current.date,
+      startTime: "startTime" in fields ? (fields.startTime ?? null) : current.startTime,
+      link: "link" in fields ? (fields.link ?? null) : current.link,
+      notes: fields.notes ?? current.notes,
+    });
+    return this.db.transaction((): CulturePlan => {
+      const linked: ResolvedPlan = {
+        ...resolved,
+        venueId: this.rememberVenue(resolved.venue, resolved.city, resolved.kind, validNow).id,
+      };
+      this.updatePlanFields.run(
+        linked.title, linked.kind, linked.venue, linked.venueId, linked.city, linked.date,
+        linked.startTime, linked.link, linked.notes, validNow, id, this.profileId,
+      );
+      return { ...current, ...linked, updatedAt: validNow };
+    })();
+  }
+
+  /**
+   * This profile's live plans, in date order - the order a programme is read in,
+   * past and future alike. One read and no window: the page draws "upcoming" and
+   * "went by" from the same list, split against the clock it already has, so a
+   * second range statement would be a second answer to a question the caller is
+   * better placed to ask.
+   */
+  listPlans(): CulturePlan[] {
+    return (this.selectPlans.all(this.profileId) as PlanRow[]).map(toPlan);
+  }
+
+  softDeletePlan(id: string, now: string): void {
+    const validNow = validateNow(now);
+    const { changes } = this.markPlanDeleted.run(validNow, validNow, id, this.profileId);
+    if (changes === 0) {
+      throw new CultureNotFoundError(`No live plan "${id}" to delete in this profile.`);
+    }
+  }
+
+  restorePlan(id: string, now: string): void {
+    const validNow = validateNow(now);
+    const { changes } = this.markPlanRestored.run(validNow, id, this.profileId);
+    if (changes === 0) {
+      throw new CultureNotFoundError(`No deleted plan "${id}" to restore in this profile.`);
+    }
+  }
+
+  /**
+   * The plan's one question, answered: writes the visit it became and points
+   * the plan at it, in one transaction.
+   *
+   * The visit is built from the plan's OWN fields - the date the plan named is
+   * the date the visit happened, which is the whole reason the two rows are one
+   * errand - and the caller may correct anything the evening turned out
+   * differently about (the title, the rating, the companions, the notes) through
+   * `fields`, which is a `CreateVisitInput` minus the two things the plan
+   * already is (its venue and its kind are NOT re-asked unless the caller
+   * overrides them).
+   *
+   * A plan that already answered is REFUSED rather than converted twice: the
+   * pointer is the answer, and a second visit would be a copy of the evening.
+   */
+  completePlan(
+    id: string,
+    fields: Partial<CreateVisitInput>,
+    now: string,
+  ): CulturePlanCompletion {
+    const validNow = validateNow(now);
+    const plan = this.requirePlan(id);
+    if (plan.visitId !== null) {
+      throw new CultureValidationError(`Plan "${id}" has already become a visit.`);
+    }
+    return this.db.transaction((): CulturePlanCompletion => {
+      const visit = this.createVisit(
+        {
+          kind: fields.kind ?? plan.kind,
+          title: fields.title ?? plan.title,
+          venue: fields.venue ?? plan.venue,
+          city: fields.city ?? plan.city,
+          date: fields.date ?? plan.date,
+          startTime: fields.startTime ?? plan.startTime,
+          rating: fields.rating ?? null,
+          notes: fields.notes ?? plan.notes,
+          price: fields.price ?? null,
+          companions: fields.companions ?? null,
+        },
+        validNow,
+      );
+      const { changes } = this.linkPlanToVisit.run(visit.id, validNow, id, this.profileId);
+      if (changes === 0) {
+        throw new CultureNotFoundError(`No live plan "${id}" to complete in this profile.`);
+      }
+      return { plan: { ...plan, visitId: visit.id, updatedAt: validNow }, visit };
+    })();
+  }
+
+  // --- the module's own preference ------------------------------------------
+
+  /** The module's one preference, answered from the profile's row or the shipped default. */
+  settings(): CultureSettings {
+    const row = this.selectSettings.get(this.profileId) as { prompt: number } | undefined;
+    return { promptPastPlans: row === undefined || row.prompt !== 0 };
+  }
+
+  /**
+   * Writes the module's one preference. True is stored as a row too rather than
+   * as the absence of one: the archive carries a boolean, and "this profile
+   * answered yes" is a different fact from "this profile has never been asked".
+   */
+  setPromptPastPlans(value: boolean, now: string): CultureSettings {
+    const validNow = validateNow(now);
+    this.upsertSettings.run(this.profileId, value ? 1 : 0, validNow);
+    return { promptPastPlans: value };
+  }
+
+  // --- the blobs ------------------------------------------------------------
+
+  /**
+   * How many of this profile's rows name a blob hash - photos and tracks
+   * together. The store's own count, which main adds to its other tables' before
+   * deciding a file on disk is orphaned (`blobRefCount`).
+   *
+   * Profile-scoped, like `NoteAttachmentStore.refCount`, and asked for THIS
+   * profile while main's union is asked with the profile whose file is being
+   * removed. A hash shared with another profile is protected by that profile's
+   * own store, which is the shape every other member of the union has.
+   */
+  refCount(sha256: string): number {
+    const { n } = this.countBlobReferences.get(sha256, this.profileId, sha256, this.profileId) as {
+      n: number;
+    };
+    return n;
+  }
+
+  /** The mime this profile's rows registered for a hash, or null when none of them names it. */
+  mimeForHash(sha256: string): string | null {
+    const row = this.selectBlobMime.get(
+      sha256,
+      this.profileId,
+      sha256,
+      this.profileId,
+    ) as { mime: string | null };
+    return row.mime;
+  }
+
   // --- the library ----------------------------------------------------------
 
   /** Imports one audio file's metadata into the library and returns the stored track. */
@@ -1017,6 +1657,16 @@ export class CultureStore {
     return (this.selectTracks.all(this.profileId) as TrackRow[])
       .map(toTrack)
       .sort(compareTracks);
+  }
+
+  /**
+   * One live track by id, or null. The read main makes when it is about to hand
+   * the track's BYTES to the player: it needs the hash and the mime, and it must
+   * not ask the page's own (possibly stale) copy of the library for them.
+   */
+  track(id: string): CultureTrack | null {
+    const row = this.selectTrackById.get(id, this.profileId) as TrackRow | undefined;
+    return row === undefined ? null : toTrack(row);
   }
 
   /**
@@ -1317,6 +1967,21 @@ export class CultureStore {
 
     return {
       version: CULTURE_EXPORT_VERSION,
+      // The places first, because every `venueId` below names one: a section a
+      // reader walks in order should be able to resolve a link it has already
+      // met, which is the rule this store's own `parseCultureExport` enforces.
+      venues: (this.selectAllVenues.all(this.profileId) as VenueRow[]).map((row) => {
+        const venue = toVenue(row);
+        return {
+          id: venue.id,
+          name: venue.name,
+          city: venue.city,
+          kind: venue.kind,
+          notes: venue.notes,
+          createdAt: venue.createdAt,
+          updatedAt: venue.updatedAt,
+        };
+      }),
       visits: (this.selectVisits.all(this.profileId) as VisitRow[]).map((row) => {
         const visit = toVisit(row);
         return {
@@ -1324,6 +1989,7 @@ export class CultureStore {
           kind: visit.kind,
           title: visit.title,
           venue: visit.venue,
+          venueId: visit.venueId,
           city: visit.city,
           date: visit.date,
           startTime: visit.startTime,
@@ -1334,6 +2000,24 @@ export class CultureStore {
           createdAt: visit.createdAt,
           updatedAt: visit.updatedAt,
           photos: photosByVisit.get(visit.id) ?? [],
+        };
+      }),
+      plans: (this.selectAllPlans.all(this.profileId) as PlanRow[]).map((row) => {
+        const plan = toPlan(row);
+        return {
+          id: plan.id,
+          kind: plan.kind,
+          title: plan.title,
+          venue: plan.venue,
+          venueId: plan.venueId,
+          city: plan.city,
+          date: plan.date,
+          startTime: plan.startTime,
+          link: plan.link,
+          notes: plan.notes,
+          visitId: plan.visitId,
+          createdAt: plan.createdAt,
+          updatedAt: plan.updatedAt,
         };
       }),
       tracks: (this.selectTracks.all(this.profileId) as TrackRow[]).map((row) => {
@@ -1381,6 +2065,7 @@ export class CultureStore {
           items: itemsByPlaylist.get(playlist.id) ?? [],
         };
       }),
+      settings: this.settings(),
     };
   }
 
@@ -1404,21 +2089,31 @@ export class CultureStore {
    * exactly as they were. `restoreStore.test.ts` pins the same rule for the
    * profile archive itself.
    */
-  importData(value: unknown): CultureImportSummary {
+  importData(value: unknown, now: string): CultureImportSummary {
+    const validNow = validateNow(now);
     const parsed = parseCultureExport(value);
 
     return this.db.transaction((): CultureImportSummary => {
+      this.deletePlans.run(this.profileId);
       this.deletePlaylistItems.run(this.profileId);
       this.deletePlaylists.run(this.profileId);
       this.deleteEntries.run(this.profileId);
       this.deleteVisitPhotos.run(this.profileId);
       this.deleteVisits.run(this.profileId);
+      this.deleteVenues.run(this.profileId);
+      this.deleteSettings.run(this.profileId);
       this.deleteTracks.run(this.profileId);
 
+      for (const venue of parsed.venues) {
+        this.insertVenue.run(
+          venue.id, this.profileId, venue.name, venue.city, venue.kind, venue.notes,
+          venue.createdAt, venue.updatedAt,
+        );
+      }
       for (const visit of parsed.visits) {
         this.insertVisit.run(
-          visit.id, this.profileId, visit.kind, visit.title, visit.venue, visit.city,
-          visit.date, visit.startTime, visit.rating, visit.notes,
+          visit.id, this.profileId, visit.kind, visit.title, visit.venue, visit.venueId,
+          visit.city, visit.date, visit.startTime, visit.rating, visit.notes,
           visit.price === null ? null : visit.price.minorUnits,
           visit.price === null ? null : visit.price.currency,
           visit.companions, visit.createdAt, visit.updatedAt,
@@ -1429,6 +2124,15 @@ export class CultureStore {
             photo.createdAt,
           );
         }
+      }
+      for (const plan of parsed.plans) {
+        this.insertPlan.run(
+          plan.id, this.profileId, plan.title, plan.kind, plan.venue, plan.venueId, plan.city,
+          plan.date, plan.startTime, plan.link, plan.notes, plan.createdAt, plan.updatedAt,
+        );
+        // The plan's own answer is a fact the archive carries (its `visitId`),
+        // and the insert's default would flatten it.
+        if (plan.visitId !== null) this.linkPlanToVisit.run(plan.visitId, plan.updatedAt, plan.id, this.profileId);
       }
       for (const track of parsed.tracks) {
         this.insertTrack.run(
@@ -1458,10 +2162,16 @@ export class CultureStore {
           this.insertItem.run(item.id, playlist.id, item.trackId, item.rank, item.createdAt);
         }
       }
+      // The preference is written LAST and unconditionally: an archive says what
+      // the profile answered, and a section carrying the shipped default writes
+      // the shipped default rather than leaving the target's own answer behind.
+      this.upsertSettings.run(this.profileId, parsed.settings.promptPastPlans ? 1 : 0, validNow);
 
       return {
+        venues: parsed.venues.length,
         visits: parsed.visits.length,
         photos: parsed.visits.reduce((sum, visit) => sum + visit.photos.length, 0),
+        plans: parsed.plans.length,
         tracks: parsed.tracks.length,
         entries: parsed.entries.length,
         playlists: parsed.playlists.length,
@@ -1479,6 +2189,67 @@ export class CultureStore {
       throw new CultureNotFoundError(`No live visit "${id}" in this profile.`);
     }
     return toVisit(row);
+  }
+
+  /** Reads a live place in this profile or throws - what `updateVenue` and the link resolvers pass. */
+  private requireVenue(id: string): CultureVenue {
+    const row = this.selectVenueById.get(id, this.profileId) as VenueRow | undefined;
+    if (row === undefined) {
+      throw new CultureNotFoundError(`No live venue "${id}" in this profile.`);
+    }
+    return toVenue(row);
+  }
+
+  /**
+   * The live place whose folded name and city match, or null. Folding is
+   * `foldVenueKey`'s (trim, collapse inner whitespace, lowercase) - the same
+   * fold `summarizeCulture` counts one venue by, so "one place remembered once"
+   * and "one place counted once" cannot disagree.
+   */
+  private findVenueByName(name: string, city: string | null, exceptId?: string): CultureVenue | null {
+    const wanted = foldVenueKey(name, city);
+    for (const row of this.selectVenues.all(this.profileId) as VenueRow[]) {
+      if (row.id === exceptId) continue;
+      if (foldVenueKey(row.name, row.city) === wanted) return toVenue(row);
+    }
+    return null;
+  }
+
+  /**
+   * The place a visit or a plan was at: the remembered row, a deleted one
+   * brought back, or a new row. Called inside the caller's transaction, so the
+   * link and the row it points at are written together or not at all.
+   */
+  private rememberVenue(
+    name: string,
+    city: string | null,
+    kind: VisitKind,
+    now: string,
+  ): CultureVenue {
+    const live = this.findVenueByName(name, city);
+    if (live !== null) return live;
+
+    const wanted = foldVenueKey(name, city);
+    const deleted = (this.selectDeletedVenues.all(this.profileId) as VenueRow[]).find(
+      (row) => foldVenueKey(row.name, row.city) === wanted,
+    );
+    if (deleted !== undefined) {
+      this.markVenueRestored.run(now, deleted.id, this.profileId);
+      return { ...toVenue(deleted), updatedAt: now };
+    }
+
+    const id = uuidv7();
+    this.insertVenue.run(id, this.profileId, name, city, kind, "", now, now);
+    return { id, profileId: this.profileId, name, city, kind, notes: "", createdAt: now, updatedAt: now };
+  }
+
+  /** Reads a live plan in this profile or throws. */
+  private requirePlan(id: string): CulturePlan {
+    const row = this.selectPlanById.get(id, this.profileId) as PlanRow | undefined;
+    if (row === undefined) {
+      throw new CultureNotFoundError(`No live plan "${id}" in this profile.`);
+    }
+    return toPlan(row);
   }
 
   /** Reads a live track in this profile or throws - the gate a log entry's and a playlist item's `trackId` both pass. */
@@ -1522,6 +2293,7 @@ function toVisit(row: VisitRow): CultureVisit {
     kind: row.kind as VisitKind,
     title: row.title,
     venue: row.venue,
+    venueId: row.venue_id,
     city: row.city,
     date: row.visit_date,
     startTime: row.start_time,
@@ -1535,6 +2307,54 @@ function toVisit(row: VisitRow): CultureVisit {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function toVenue(row: VenueRow): CultureVenue {
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    name: row.name,
+    city: row.city,
+    kind: row.kind as VisitKind,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toPlan(row: PlanRow): CulturePlan {
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    kind: row.kind as VisitKind,
+    title: row.title,
+    venue: row.venue,
+    venueId: row.venue_id,
+    city: row.city,
+    date: row.planned_date,
+    startTime: row.start_time,
+    link: row.link,
+    notes: row.notes,
+    visitId: row.visit_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * The key two spellings of one place share: trim, collapse inner whitespace,
+ * lowercase, over the name AND the city.
+ *
+ * The same fold `summarizeCulture`'s `nameKey` applies to a counted venue, and
+ * deliberately a second, smaller function rather than a shared one: the
+ * statistics fold a single string and this folds a pair, and a helper with a
+ * "join these two, then fold" contract would be a shape neither caller needs.
+ * A place with no city folds to the name alone, so `Muzej` and `muzej` are one
+ * row wherever they were typed.
+ */
+function foldVenueKey(name: string, city: string | null): string {
+  const fold = (value: string): string => value.trim().replace(/\s+/g, " ").toLowerCase();
+  return `${fold(name)}\u0000${city === null ? "" : fold(city)}`;
 }
 
 function toPhoto(row: PhotoRow): CultureVisitPhoto {
@@ -1658,6 +2478,7 @@ function resolveVisit(fields: ResolvedVisit): ResolvedVisit {
     kind: validateVisitKind(fields.kind),
     title: validateText(fields.title, "title", MAX_CULTURE_TITLE_LENGTH),
     venue: validateText(fields.venue, "venue", MAX_CULTURE_VENUE_LENGTH),
+    venueId: validateOptionalId(fields.venueId, "venueId"),
     city: validateOptionalText(fields.city, "city", MAX_CULTURE_CITY_LENGTH),
     date: validateDay(fields.date, "date"),
     startTime: validateStartTime(fields.startTime),
@@ -1669,6 +2490,43 @@ function resolveVisit(fields: ResolvedVisit): ResolvedVisit {
       "companions",
       MAX_CULTURE_COMPANIONS_LENGTH,
     ),
+  };
+}
+
+/** The place's own fields, minus the ones the row rather than the caller decides. */
+type ResolvedVenue = Omit<CultureVenue, "id" | "profileId" | "createdAt" | "updatedAt">;
+
+/**
+ * Validates a whole place - one home for every refusal, so `createVenue`,
+ * `updateVenue` and `importData` cannot drift on what a place may be.
+ */
+function resolveVenue(fields: ResolvedVenue): ResolvedVenue {
+  return {
+    name: validateText(fields.name, "name", MAX_CULTURE_VENUE_LENGTH),
+    city: validateOptionalText(fields.city, "city", MAX_CULTURE_CITY_LENGTH),
+    kind: validateVisitKind(fields.kind),
+    notes: validateNotes(fields.notes),
+  };
+}
+
+/** The plan's own fields, minus the ones the row rather than the caller decides. */
+type ResolvedPlan = Omit<CulturePlan, "id" | "profileId" | "visitId" | "createdAt" | "updatedAt">;
+
+/**
+ * Validates a whole plan. `visitId` is not here: it is the ANSWER to the plan's
+ * question and only `completePlan` and `importData` ever write it.
+ */
+function resolvePlan(fields: ResolvedPlan): ResolvedPlan {
+  return {
+    kind: validateVisitKind(fields.kind),
+    title: validateText(fields.title, "title", MAX_CULTURE_TITLE_LENGTH),
+    venue: validateText(fields.venue, "venue", MAX_CULTURE_VENUE_LENGTH),
+    venueId: validateOptionalId(fields.venueId, "venueId"),
+    city: validateOptionalText(fields.city, "city", MAX_CULTURE_CITY_LENGTH),
+    date: validateDay(fields.date, "date"),
+    startTime: validateStartTime(fields.startTime),
+    link: validateLink(fields.link),
+    notes: validateNotes(fields.notes),
   };
 }
 
@@ -1893,6 +2751,61 @@ function validateStartTime(value: string | null): string | null {
   return value;
 }
 
+/**
+ * A foreign key the caller may name, or null. The shape is `@nexus/core`'s
+ * `MAX_ID_LENGTH` bound and no outer whitespace - the same rule `asId` applies
+ * on the wire, applied again here because a store never assumes its caller
+ * validated anything (SEC-EL-02).
+ */
+function validateOptionalId(value: string | null, field: string): string | null {
+  if (value === null) return null;
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAX_ID_LENGTH ||
+    value !== value.trim()
+  ) {
+    throw new CultureValidationError(`"${field}" must be a well-formed id or null.`);
+  }
+  return value;
+}
+
+/**
+ * The address a plan pasted, or null. Kept VERBATIM - a URL is data, and
+ * trimming or folding one is how a link stops resolving - and refused unless it
+ * parses as `http:`/`https:`.
+ *
+ * The scheme rule is the point: this string becomes an anchor's `href` in the
+ * renderer, and `javascript:`, `data:` and `file:` are all one pasted address
+ * away from being something other than a link to a page. Only the two schemes
+ * that name a document over the network are accepted, and anything else is
+ * refused BY NAME rather than normalised into something that happens to be
+ * safe.
+ */
+function validateLink(value: string | null): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string") {
+    throw new CultureValidationError(`"link" must be a string or null.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.length > MAX_CULTURE_LINK_LENGTH) {
+    throw new CultureValidationError(
+      `"link" must be at most ${MAX_CULTURE_LINK_LENGTH} characters.`,
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new CultureValidationError(`"link" must be an absolute http(s) address.`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new CultureValidationError(`"link" must be an http(s) address.`);
+  }
+  return trimmed;
+}
+
 function validateDay(value: string, field: string): string {
   if (typeof value !== "string" || !isBareDate(value)) {
     throw new CultureValidationError(`"${field}" must be a real bare date (YYYY-MM-DD).`);
@@ -1925,11 +2838,22 @@ function validateNow(value: string): string {
  * version bump, so there is nothing legitimate on the other side of this rule.
  */
 const VISIT_KEYS = [
-  "id", "kind", "title", "venue", "city", "date", "startTime", "rating", "notes", "price",
-  "companions", "createdAt", "updatedAt", "photos",
+  "id", "kind", "title", "venue", "venueId", "city", "date", "startTime", "rating", "notes",
+  "price", "companions", "createdAt", "updatedAt", "photos",
 ] as const;
 
 const PHOTO_KEYS = ["id", "fileName", "mime", "sizeBytes", "sha256", "createdAt"] as const;
+
+const VENUE_KEYS = [
+  "id", "name", "city", "kind", "notes", "createdAt", "updatedAt",
+] as const;
+
+const PLAN_KEYS = [
+  "id", "kind", "title", "venue", "venueId", "city", "date", "startTime", "link", "notes",
+  "visitId", "createdAt", "updatedAt",
+] as const;
+
+const SETTINGS_KEYS = ["promptPastPlans"] as const;
 
 const TRACK_KEYS = [
   "id", "title", "artist", "album", "trackNumber", "releaseYear", "durationMs", "fileName",
@@ -1946,7 +2870,9 @@ const ITEM_KEYS = ["id", "trackId", "rank", "createdAt"] as const;
 
 const PRICE_KEYS = ["minorUnits", "currency"] as const;
 
-const EXPORT_KEYS = ["version", "visits", "tracks", "entries", "playlists"] as const;
+const EXPORT_KEYS = [
+  "version", "venues", "visits", "plans", "tracks", "entries", "playlists", "settings",
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -2083,6 +3009,7 @@ function parseExportVisit(value: unknown, where: string): CultureExportVisit {
     kind: asString(row["kind"], `${where}.kind`) as VisitKind,
     title: asString(row["title"], `${where}.title`),
     venue: asString(row["venue"], `${where}.venue`),
+    venueId: asNullableString(row["venueId"], `${where}.venueId`),
     city: asNullableString(row["city"], `${where}.city`),
     date: asString(row["date"], `${where}.date`),
     startTime: asNullableString(row["startTime"], `${where}.startTime`),
@@ -2099,6 +3026,56 @@ function parseExportVisit(value: unknown, where: string): CultureExportVisit {
     photos: asArray(row["photos"], `${where}.photos`).map((photo, index) =>
       parseExportPhoto(photo, `${where}.photos[${index}]`),
     ),
+  };
+}
+
+function parseExportVenue(value: unknown, where: string): CultureExportVenue {
+  const row = exportRow(value, VENUE_KEYS, where);
+  const resolved = resolveVenue({
+    name: asString(row["name"], `${where}.name`),
+    city: asNullableString(row["city"], `${where}.city`),
+    kind: asString(row["kind"], `${where}.kind`) as VisitKind,
+    notes: asString(row["notes"], `${where}.notes`),
+  });
+  return {
+    id: asId(row["id"], `${where}.id`),
+    ...resolved,
+    createdAt: asTimestamp(row["createdAt"], `${where}.createdAt`),
+    updatedAt: asTimestamp(row["updatedAt"], `${where}.updatedAt`),
+  };
+}
+
+function parseExportPlan(
+  value: unknown,
+  where: string,
+  visitIds: ReadonlySet<string>,
+): CultureExportPlan {
+  const row = exportRow(value, PLAN_KEYS, where);
+  const resolved = resolvePlan({
+    kind: asString(row["kind"], `${where}.kind`) as VisitKind,
+    title: asString(row["title"], `${where}.title`),
+    venue: asString(row["venue"], `${where}.venue`),
+    venueId: asNullableString(row["venueId"], `${where}.venueId`),
+    city: asNullableString(row["city"], `${where}.city`),
+    date: asString(row["date"], `${where}.date`),
+    startTime: asNullableString(row["startTime"], `${where}.startTime`),
+    link: asNullableString(row["link"], `${where}.link`),
+    notes: asString(row["notes"], `${where}.notes`),
+  });
+  const visitId = asNullableString(row["visitId"], `${where}.visitId`);
+  // A plan carries the answer to its own question, so the visit it names has to
+  // be in the same value - the same reference rule the entries' `trackId` keeps.
+  if (visitId !== null && !visitIds.has(visitId)) {
+    throw new CultureValidationError(
+      `${where}.visitId names the visit "${visitId}", which this value does not carry.`,
+    );
+  }
+  return {
+    id: asId(row["id"], `${where}.id`),
+    ...resolved,
+    visitId,
+    createdAt: asTimestamp(row["createdAt"], `${where}.createdAt`),
+    updatedAt: asTimestamp(row["updatedAt"], `${where}.updatedAt`),
   };
 }
 
@@ -2203,6 +3180,22 @@ function parseExportPlaylist(
 }
 
 /**
+ * The archive reader, as a PUBLIC function: the same validation `importData`
+ * runs, reachable on its own.
+ *
+ * This is what a kit module's `importData.parse` needs (ADR-090 §5): the kit
+ * runs `parse` at the restore PREVIEW, where nothing may be written, and again
+ * immediately before any module writes, so the reader has to be callable
+ * without a store and without a transaction. It is deliberately the same
+ * function `importData` calls rather than a second opinion about the same
+ * bytes: a preview that accepted what the write then refused would be a
+ * promise the module could not keep.
+ */
+export function parseCultureExportPayload(value: unknown): CultureExport {
+  return parseCultureExport(value);
+}
+
+/**
  * The archive reader: validates a whole exported value and returns it in the
  * form `importData` writes. Nothing here touches the database, which is what
  * makes "validate the whole value, then write" a property of the code rather
@@ -2223,16 +3216,46 @@ function parseCultureExport(value: unknown): CultureExport {
   assertUniqueIds(tracks, "The export's tracks");
   const trackIds = new Set(tracks.map((track) => track.id));
 
+  const venues = asArray(row["venues"], "venues").map((venue, index) =>
+    parseExportVenue(venue, `venues[${index}]`),
+  );
+  assertUniqueIds(venues, "The export's venues");
+  const venueIds = new Set(venues.map((venue) => venue.id));
+
   const visits = asArray(row["visits"], "visits").map((visit, index) =>
     parseExportVisit(visit, `visits[${index}]`),
   );
   assertUniqueIds(visits, "The export's visits");
+  // A visit's link and a plan's link both name a place this value has to
+  // carry, exactly as an entry's `trackId` has to name one of its tracks: a
+  // dangling link would be written as-is, because the store's INSERTs are
+  // bound statements and the foreign key's `SET NULL` is never leaned on.
+  for (const [index, visit] of visits.entries()) {
+    if (visit.venueId !== null && !venueIds.has(visit.venueId)) {
+      throw new CultureValidationError(
+        `visits[${index}].venueId names the venue "${visit.venueId}", which this value does not carry.`,
+      );
+    }
+  }
   // Photos are one table, so their ids have to be unique across the WHOLE
   // export and not merely within one visit's own array.
   assertUniqueIds(
     visits.flatMap((visit) => visit.photos),
     "The export's visit photos",
   );
+  const visitIds = new Set(visits.map((visit) => visit.id));
+
+  const plans = asArray(row["plans"], "plans").map((plan, index) =>
+    parseExportPlan(plan, `plans[${index}]`, visitIds),
+  );
+  assertUniqueIds(plans, "The export's plans");
+  for (const [index, plan] of plans.entries()) {
+    if (plan.venueId !== null && !venueIds.has(plan.venueId)) {
+      throw new CultureValidationError(
+        `plans[${index}].venueId names the venue "${plan.venueId}", which this value does not carry.`,
+      );
+    }
+  }
 
   const entries = asArray(row["entries"], "entries").map((entry, index) =>
     parseExportEntry(entry, `entries[${index}]`, trackIds),
@@ -2248,5 +3271,19 @@ function parseCultureExport(value: unknown): CultureExport {
     "The export's playlist items",
   );
 
-  return { version: CULTURE_EXPORT_VERSION, visits, tracks, entries, playlists };
+  const settings = exportRow(row["settings"], SETTINGS_KEYS, "settings");
+  if (typeof settings["promptPastPlans"] !== "boolean") {
+    throw new CultureValidationError(`"settings.promptPastPlans" must be a boolean.`);
+  }
+
+  return {
+    version: CULTURE_EXPORT_VERSION,
+    venues,
+    visits,
+    plans,
+    tracks,
+    entries,
+    playlists,
+    settings: { promptPastPlans: settings["promptPastPlans"] },
+  };
 }

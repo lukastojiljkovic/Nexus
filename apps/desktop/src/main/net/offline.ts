@@ -73,6 +73,9 @@ const LOCAL_SCHEMES: readonly string[] = [
   // request whose scheme is not named here, so a pack's images would be blocked
   // in the app's DEFAULT mode - offline - without this line.
   "nx-pack:",
+  // CULTURE's arts guide (ADR-091): an image inside an installed content pack,
+  // served by the same kind of handler, from the disk, never from the network.
+  "nx-pack:",
 ];
 
 /**

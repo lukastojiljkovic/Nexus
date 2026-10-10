@@ -1,0 +1,294 @@
+/* KULTURA (ADR-090). Tokens exclusively - raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (check:colours, check:tokens, check:layers).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, and that is the
+ * point of the kit stated in CSS: the shell's stylesheet is part of the startup
+ * chunk, so a rule for a page nobody has opened would be paid for on every
+ * launch. Vite turns this import into a chunk of its own.
+ *
+ * Class prefix `culture__`, because a rule belongs to the module whose prefix
+ * it carries.
+ */
+
+.culture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-5);
+}
+
+/* The five areas, as the app's own segmented row: a group of ordinary buttons
+   whose pressed state is `aria-pressed`, so the announced state and the painted
+   one cannot drift. It wraps rather than scrolling: at 900px the five labels
+   fit, and at a narrow window two rows are better than a hidden control. */
+.culture__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+.culture__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* Every toolbar is a wrapping flex row whose children are stacked fields, and
+   `end` is what lines their CONTROLS up rather than their boxes (check:rows). */
+.culture__toolbar,
+.culture__actions,
+.culture__row-actions,
+.culture__switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: end;
+}
+
+.culture__actions,
+.culture__row-actions,
+.culture__switch {
+  align-items: center;
+}
+
+.culture__switch {
+  gap: var(--nx-space-1);
+}
+
+.culture__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.culture__fields > * {
+  min-width: var(--nx-layout-field-min);
+}
+
+.culture__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+}
+
+.culture__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.culture__row-title {
+  display: block;
+  color: var(--nx-text);
+}
+
+.culture__row-meta {
+  display: block;
+  color: var(--nx-text-muted);
+}
+
+/* A note is prose the user wrote, so it keeps its own line breaks and is
+   clamped rather than scrolled: a row is a row. */
+.culture__row-notes {
+  display: block;
+  color: var(--nx-text-subtle);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.culture__row-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+
+.culture__photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.culture__photo-link,
+.culture__link {
+  color: var(--nx-accent-strong);
+}
+
+/* The `type="file"` input is a real control the page draws itself - the OS owns
+   the picker - and the button beside it is what the user sees and clicks. It
+   stays in the tab order rather than being `display: none`, because a hidden
+   input cannot be reached by a keyboard, and `sr-only`-style clipping is what
+   the app's own file pickers do. */
+.culture__file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+}
+
+.culture__field-error {
+  color: var(--nx-danger);
+}
+
+.culture__error {
+  color: var(--nx-danger);
+}
+
+/* The year: twelve month cards that reflow, never a thirteen-column table the
+   window has to scroll sideways. */
+.culture__year {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.culture__year-label {
+  color: var(--nx-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.culture__months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--nx-space-3);
+}
+
+.culture__month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.culture__days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--nx-space-1);
+}
+
+.culture__day-slot {
+  display: flex;
+  justify-content: center;
+}
+
+.culture__day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--nx-space-6);
+  min-height: var(--nx-space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--nx-radius-xs);
+  background: none;
+  color: var(--nx-text-muted);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A day with a visit is marked by WEIGHT and INK, never by colour alone: the
+   count is in the button's own title, and the shape it draws is the same box. */
+.culture__day--visited {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+  cursor: pointer;
+}
+
+.culture__ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+/* The gallery: picture cards that reflow. The image keeps its own aspect ratio
+   inside a bounded box, so a tall portrait cannot make one column taller than
+   the page. */
+.culture__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--nx-space-3);
+}
+
+.culture__work {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-2);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.culture__work-image {
+  width: 100%;
+  height: auto;
+  max-height: 14rem;
+  object-fit: contain;
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-alt);
+}
+
+/* The full-size viewer: the house dialog recipe's overlay and backdrop (the
+   same `--nx-bg` at 0.75 the recurrence and task dialogs use), on the module's
+   own layer so it sits above the page and below every dialog the shell owns. */
+.culture__viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nx-layer-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nx-space-5);
+}
+
+.culture__viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-bg);
+  opacity: 0.75;
+}
+
+.culture__viewer-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: var(--nx-layout-measure);
+  max-height: 100%;
+  padding: var(--nx-space-4);
+  overflow: auto;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface);
+  box-shadow: var(--nx-elevation-overlay);
+}
+
+.culture__viewer-image {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+}
+
+.culture__now-playing {
+  color: var(--nx-text);
+}
+
+.culture__seek {
+  width: 100%;
+}
+
+.culture__widget {
+  display: flex;
+  flex-direction: column;
+}

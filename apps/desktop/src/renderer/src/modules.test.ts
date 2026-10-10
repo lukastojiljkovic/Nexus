@@ -104,6 +104,9 @@ describe("createModuleRegistry", () => {
       // compiled-in one, ordered by its manifest's `order` - Tajmeri declares
       // 100 and Biblioteka 110.
       "library",
+      // The second DISCOVERED module: `order: 120` sorts it after `timers`
+      // (100), and a tie would be broken by id.
+      "culture",
     ]);
   });
 
@@ -173,6 +176,9 @@ describe("createModuleRegistry", () => {
       // PRD 27, and the module that finally puts a member in the `culture`
       // group: `LIB` is its own PRD entry, so it is shared with nobody.
       LIB: ["library"],
+      // CULTURE's own PRD entry, so it takes its own prefix rather than joining
+      // one of the groups above.
+      CULT: ["culture"],
     });
   });
 
@@ -232,6 +238,8 @@ describe("createModuleRegistry", () => {
       "electronics",
       "pro",
     ]);
+    // â€žKultura" is its own group (ADR-093), and the first module to fill it.
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
     // the one caller that splits it: its first member heads the rail, the rest
     // close it (`navPrefs.sidebarGroups`).
@@ -279,6 +287,9 @@ describe("createModuleRegistry", () => {
       // library asks to be opted into, and the module writes nothing until a
       // first title is added.
       "library",
+      // And the same is true of the culture corner: it writes nothing until a
+      // visit, a plan or a file is added.
+      "culture",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -465,6 +476,7 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       // The first DISCOVERED card (ADR-090): declared in the module's own
       // manifest and drawn by its own body, with no line in this file's map.
       "timers",
+      "culture",
     ]);
   });
 

@@ -217,6 +217,7 @@ describe("resolveModuleSelection", () => {
       // any other selectable module, from its own manifest default.
       timers: true,
       reader: true,
+      culture: true,
       pro: false,
       // The second discovered module, in registry order after Tajmeri.
       library: true,
@@ -263,6 +264,7 @@ describe("moduleFlagWrites", () => {
       // And the SECOND discovered module, after it for the same reason: a kit
       // module registers after every compiled-in one, ordered by `order`.
       { moduleId: "library", enabled: true },
+      { moduleId: "culture", enabled: true },
     ]);
   });
 

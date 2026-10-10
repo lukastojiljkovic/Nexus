@@ -1605,19 +1605,26 @@ describe("RestoreStore", () => {
 //    which `collectionGuard.test.ts` holds EQUAL to that list and which a
 //    module built on the kit may not edit; the kit's own rule is the opposite
 //    one, and the TIMERS entry below states it in full.
-    //  - the six culture tables (migration 073) are exempt, and this is the
-    //    entry to remove when stage 2 lands. They ARE ordinary user content,
-    //    but their archive section does not exist yet: stage 1 built the store
-    //    and its own versioned `exportData`/`importData`, and stage 2 wires
-    //    that section into the profile archive. Until then a restore neither
-    //    wipes nor refills them. They are absent from `RESTORE_WIPE_TABLES` for
-    //    the reason they also carry no journal triggers — sync is on hold, and
-    //    that list is tied to `@nexus/sync`'s map by
-    //    `collectionGuard.test.ts`, which goes red the moment one side names a
-    //    table the other does not. The profile DELETE is unaffected: these
-    //    tables cascade from `profiles` like every other content table, which
-    //    the cascade audit in `profileStore.test.ts` proves for all six,
-    //    photos and playlist items included.
+    //  - the nine culture tables (migration 073) are exempt on the TIMERS
+    //    module's terms, and stage 2 turns what was a deferral into the
+    //    permanent answer. CULTURE is a KIT module: its archive section rides
+    //    `data/modules.ndjson` and its own `importData` replaces its own rows,
+    //    inside the same restore and immediately after this list's wipe has
+    //    run. So these tables must NOT be on that list - which is DERIVED into
+    //    `@nexus/sync`'s collection map (`collectionGuard.test.ts` holds the
+    //    two equal) and which a kit module may not edit - and they carry no
+    //    journal triggers for the same reason.
+    //
+    //    SUPERSEDED (the stage-1 record, kept: six tables, before the archive
+    //    learned to carry CULTURE): but their archive section does not exist
+    //    yet: stage 1 built the store and its own versioned
+    //    `exportData`/`importData`, and stage 2 wires that section into the
+    //    profile archive. Until then a restore neither wipes nor refills them.
+    //    They are absent from `RESTORE_WIPE_TABLES` for the reason above; the
+    //    profile DELETE was never in question, because all of these tables
+    //    cascade from `profiles` like every other content table, which the
+    //    cascade audit in `profileStore.test.ts` proves table by table, photos
+    //    and playlist items included.
     //  - CAR's seven tables (migration 074): the module arrived in two stages,
     //    and this is the boundary between them. Stage 1 built the store and the
     //    logic and deliberately left `RESTORE_WIPE_TABLES` ALONE, because a wipe
@@ -1739,10 +1746,13 @@ describe("RestoreStore", () => {
       "library_collection_items",
       "culture_visits",
       "culture_visit_photos",
+      "culture_venues",
       "culture_tracks",
       "culture_music_entries",
       "culture_playlists",
       "culture_playlist_items",
+      "culture_plans",
+      "culture_settings",
       "vehicles",
       "odometer_readings",
       "service_entries",

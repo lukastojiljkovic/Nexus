@@ -10,7 +10,7 @@ import {
   openDatabase,
   uuidv7,
 } from "../index.js";
-import type { CreateVisitInput, CulturePrice } from "../index.js";
+import type { CreateCulturePlanInput, CreateVisitInput, CulturePrice } from "../index.js";
 
 const NOW = "2026-06-01T08:00:00.000Z";
 const LATER = "2026-06-02T09:00:00.000Z";
@@ -926,6 +926,9 @@ describe("CultureStore export and import", () => {
     const exported = culture.exportData();
     expect(exported.version).toBe(1);
     expect(exported.visits).toHaveLength(2);
+    // Three live places: the two the live visits name, and the one the deleted
+    // visit still names - a soft delete keeps its photos AND its place.
+    expect(exported.venues).toHaveLength(3);
     expect(exported.tracks).toHaveLength(2);
     expect(exported.entries).toHaveLength(2);
     expect(exported.playlists).toHaveLength(1);
@@ -945,11 +948,15 @@ describe("CultureStore export and import", () => {
     const exported = source.exportData();
 
     const target = freshStore();
-    const summary = target.importData(exported);
+    const summary = target.importData(exported, LAST);
 
     expect(summary).toEqual({
+      // Two visits, and the two places they were at: a place is remembered by
+      // the visit that names it (stage 2), and the seed visits two of them.
+      venues: 2,
       visits: 2,
       photos: 1,
+      plans: 0,
       tracks: 2,
       entries: 2,
       playlists: 1,
@@ -976,12 +983,12 @@ describe("CultureStore export and import", () => {
       NOW,
     );
     target.createTrack({ title: "Stara", durationMs: 1_000, ...MP3 }, NOW);
-    target.importData(exported);
+    target.importData(exported, LAST);
     const once = target.exportData();
     expect(once.visits.some((visit) => visit.title === "Ostaje samo do uvoza")).toBe(false);
     expect(target.listTracks()).toHaveLength(2);
 
-    target.importData(exported);
+    target.importData(exported, LAST);
     expect(target.exportData()).toEqual(once);
   });
 
@@ -996,7 +1003,7 @@ describe("CultureStore export and import", () => {
 
     const target = freshStore();
     seed(target);
-    target.importData(source.exportData());
+    target.importData(source.exportData(), LAST);
     expect(target.listVisits().map((visit) => visit.id)).not.toContain(deleted.id);
   });
 
@@ -1012,7 +1019,7 @@ describe("CultureStore export and import", () => {
     seed(target);
     const before = target.exportData();
 
-    expect(() => target.importData(exported)).toThrow(/UNIQUE constraint failed/);
+    expect(() => target.importData(exported, LAST)).toThrow(/UNIQUE constraint failed/);
     // The deletes ran inside the same transaction, so they rolled back with the
     // inserts: half an archive is never written.
     expect(target.exportData()).toEqual(before);
@@ -1023,7 +1030,7 @@ describe("CultureStore export and import", () => {
     seed(culture);
     const value = broken(culture.exportData());
     value["version"] = 2;
-    expect(() => culture.importData(value)).toThrow(CultureValidationError);
+    expect(() => culture.importData(value, LAST)).toThrow(CultureValidationError);
   });
 
   it.each([["not an object", "kultura"], ["an array", []]])(
@@ -1031,7 +1038,7 @@ describe("CultureStore export and import", () => {
     (_label, value) => {
       const culture = store();
       culture.createVisit(EXHIBITION, NOW);
-      expect(() => culture.importData(value)).toThrow(CultureValidationError);
+      expect(() => culture.importData(value, LAST)).toThrow(CultureValidationError);
       expect(culture.listVisits()).toHaveLength(1);
     },
   );
@@ -1087,7 +1094,7 @@ describe("CultureStore export and import", () => {
     const culture = store();
     const existing = culture.createVisit(EXHIBITION, NOW);
 
-    expect(() => culture.importData(brokenSection(mutate))).toThrow(CultureValidationError);
+    expect(() => culture.importData(brokenSection(mutate), LAST)).toThrow(CultureValidationError);
     // Nothing was written and nothing was dropped: the profile is exactly as it
     // was, which is the whole point of validating before the transaction.
     expect(culture.listVisits()).toEqual([existing]);
@@ -1104,7 +1111,7 @@ describe("CultureStore export and import", () => {
     const entries = value["entries"] as Record<string, unknown>[];
     entries[entries.length - 1]!["rating"] = 42;
 
-    expect(() => target.importData(value)).toThrow(CultureValidationError);
+    expect(() => target.importData(value, LAST)).toThrow(CultureValidationError);
     expect(target.listVisits()).toEqual([existing]);
     expect(target.listPlaylists()).toEqual([]);
   });
@@ -1113,19 +1120,277 @@ describe("CultureStore export and import", () => {
     const culture = store();
     expect(culture.exportData()).toEqual({
       version: 1,
+      venues: [],
       visits: [],
+      plans: [],
       tracks: [],
       entries: [],
       playlists: [],
+      settings: { promptPastPlans: true },
     });
-    expect(culture.importData(culture.exportData())).toEqual({
+    expect(culture.importData(culture.exportData(), LAST)).toEqual({
+      venues: 0,
       visits: 0,
       photos: 0,
+      plans: 0,
       tracks: 0,
       entries: 0,
       playlists: 0,
       items: 0,
     });
+  });
+});
+
+// --- Stage 2: the places, the programme and the module's preference ---------
+//
+// The three tables the page needed. They are tested here rather than in the
+// module's own folder because this is where the store's rules live: what a
+// place is, what a plan may carry, what "one place remembered once" means, and
+// the two counts main's blob union reads.
+
+const PLAN: CreateCulturePlanInput = {
+  kind: "theatre",
+  title: "Hamlet",
+  venue: "Narodno pozorište",
+  city: "Beograd",
+  date: "2026-07-01",
+  startTime: "19:30",
+  link: "https://example.org/hamlet",
+  notes: "Loža 4.",
+};
+
+describe("CultureStore places", () => {
+  it("remembers a place once, folding the spellings of its name", () => {
+    const culture = store();
+    const first = culture.createVisit(
+      { kind: "museum", title: "Tesla", venue: "Narodni muzej", city: "Beograd", date: "2026-05-01" },
+      NOW,
+    );
+    const second = culture.createVisit(
+      { kind: "exhibition", title: "Praistorija", venue: "  narodni   MUZEJ ", city: "beograd", date: "2026-05-02" },
+      NOW,
+    );
+
+    expect(culture.listVenues()).toHaveLength(1);
+    expect(first.venueId).toBe(second.venueId);
+    // The VISIT keeps the words the user typed; only the link is shared.
+    expect(first.venue).toBe("Narodni muzej");
+    expect(second.venue).toBe("narodni MUZEJ");
+    // The place keeps the spelling it was FIRST seen with.
+    expect(culture.listVenues()[0]?.name).toBe("Narodni muzej");
+  });
+
+  it("refuses a second place with a name it already remembers, and lets it be renamed", () => {
+    const culture = store();
+    const venue = culture.createVenue(
+      { name: "Narodni muzej", city: "Beograd", kind: "museum", notes: "Loža je najbolja." },
+      NOW,
+    );
+    expect(culture.settings()).toEqual({ promptPastPlans: true });
+    expect(() =>
+      culture.createVenue({ name: "narodni  MUZEJ", city: "beograd", kind: "museum" }, NOW),
+    ).toThrow(CultureValidationError);
+
+    const visit = culture.createVisit(
+      { kind: "museum", title: "Tesla", venue: "Narodni muzej", city: "Beograd", date: "2026-05-01" },
+      NOW,
+    );
+    const renamed = culture.updateVenue(venue.id, { name: "Narodni muzej Srbije" }, LATER);
+    expect(renamed.name).toBe("Narodni muzej Srbije");
+    expect(renamed.updatedAt).toBe(LATER);
+    // The visit's own words are untouched: a rename is not a rewrite of memory.
+    expect(culture.listVisits()[0]?.venue).toBe("Narodni muzej");
+    expect(culture.listVisits()[0]?.venueId).toBe(visit.venueId);
+    // The place's notes are the place's, and they survive the rename.
+    expect(renamed.notes).toBe("Loža je najbolja.");
+  });
+
+  it("brings a deleted place back rather than remembering it twice", () => {
+    const culture = store();
+    const venue = culture.createVenue({ name: "Muzej savremene umetnosti", kind: "museum" }, NOW);
+    culture.softDeleteVenue(venue.id, LATER);
+    expect(culture.listVenues()).toEqual([]);
+
+    const visit = culture.createVisit(
+      { kind: "museum", title: "Izložba", venue: "Muzej savremene umetnosti", date: "2026-06-01" },
+      LAST,
+    );
+    expect(visit.venueId).toBe(venue.id);
+    expect(culture.listVenues()).toHaveLength(1);
+    expect(culture.listVenues()[0]?.updatedAt).toBe(LAST);
+    expect(() => culture.restoreVenue(venue.id, LAST)).toThrow(CultureNotFoundError);
+  });
+});
+
+describe("CultureStore plans", () => {
+  it("stores a plan with the address the user pasted", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    expect(plan).toMatchObject({
+      kind: "theatre",
+      title: "Hamlet",
+      link: "https://example.org/hamlet",
+      visitId: null,
+      createdAt: NOW,
+    });
+    // The place it names is remembered, exactly as a visit's is.
+    expect(plan.venueId).not.toBeNull();
+    expect(culture.listPlans().map((row) => row.title)).toEqual(["Hamlet"]);
+  });
+
+  it("reads plans in date order, past and future together", () => {
+    const culture = store();
+    culture.createPlan({ ...PLAN, title: "Kasnije", date: "2026-09-01" }, NOW);
+    culture.createPlan({ ...PLAN, title: "Ranije", date: "2026-06-01" }, NOW);
+    expect(culture.listPlans().map((row) => row.date)).toEqual(["2026-06-01", "2026-09-01"]);
+  });
+
+  it("refuses an address that is not http(s), and one that is not an address", () => {
+    const culture = store();
+    for (const link of ["file:///etc/passwd", "javascript:alert(1)", "nije link"]) {
+      expect(() => culture.createPlan({ ...PLAN, link }, NOW)).toThrow(CultureValidationError);
+    }
+    // A blank link is "no link", not a refused one.
+    expect(culture.createPlan({ ...PLAN, link: "   " }, NOW).link).toBeNull();
+    expect(culture.createPlan({ ...PLAN, link: null }, NOW).link).toBeNull();
+  });
+
+  it("turns a plan into a visit once, and refuses the second time", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    const completion = culture.completePlan(plan.id, { rating: 9, companions: "Ana" }, LATER);
+
+    expect(completion.visit).toMatchObject({
+      kind: "theatre",
+      title: "Hamlet",
+      venue: "Narodno pozorište",
+      date: "2026-07-01",
+      startTime: "19:30",
+      rating: 9,
+      companions: "Ana",
+    });
+    expect(completion.plan.visitId).toBe(completion.visit.id);
+    expect(culture.listPlans()[0]?.visitId).toBe(completion.visit.id);
+    expect(culture.listVisits()).toHaveLength(1);
+    expect(() => culture.completePlan(plan.id, {}, LAST)).toThrow(CultureValidationError);
+  });
+
+  it("soft-deletes a plan and restores it", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    culture.softDeletePlan(plan.id, LATER);
+    expect(culture.listPlans()).toEqual([]);
+    culture.restorePlan(plan.id, LATER);
+    expect(culture.listPlans()).toHaveLength(1);
+    expect(() => culture.softDeletePlan(plan.id, LAST)).not.toThrow();
+  });
+});
+
+describe("CultureStore's own preference and blob counts", () => {
+  it("answers the shipped default until a row says otherwise", () => {
+    const culture = store();
+    expect(culture.settings()).toEqual({ promptPastPlans: true });
+    expect(culture.setPromptPastPlans(false, NOW)).toEqual({ promptPastPlans: false });
+    expect(culture.settings()).toEqual({ promptPastPlans: false });
+    expect(culture.setPromptPastPlans(true, LATER)).toEqual({ promptPastPlans: true });
+    expect(culture.settings()).toEqual({ promptPastPlans: true });
+  });
+
+  it("counts a hash once per row that names it, across photos and tracks together", () => {
+    const culture = store();
+    const visit = culture.createVisit(
+      { kind: "museum", title: "Tesla", venue: "Narodni muzej", date: "2026-05-01" },
+      NOW,
+    );
+    culture.addVisitPhoto(
+      visit.id,
+      { fileName: "karta.jpg", mime: "image/jpeg", sizeBytes: 1_024, sha256: HASH },
+      NOW,
+    );
+    culture.createTrack({ title: "Isti bajtovi", durationMs: 1_000, ...MP3, sha256: HASH }, NOW);
+
+    expect(culture.refCount(HASH)).toBe(2);
+    expect(culture.refCount(OTHER_HASH)).toBe(0);
+    // The photo table is asked first, which is the order main's own mime union
+    // asks these two in.
+    expect(culture.mimeForHash(HASH)).toBe("image/jpeg");
+    expect(culture.mimeForHash(OTHER_HASH)).toBeNull();
+
+    culture.removeVisitPhoto(visit.id, culture.listVisitPhotos(visit.id)[0]?.id ?? "");
+    expect(culture.refCount(HASH)).toBe(1);
+    expect(culture.mimeForHash(HASH)).toBe("audio/mpeg");
+  });
+
+  it("reads one live track, and answers null once it is deleted", () => {
+    const culture = store();
+    const track = culture.createTrack({ title: "Pesma", durationMs: 90_000, ...MP3 }, NOW);
+    expect(culture.track(track.id)?.title).toBe("Pesma");
+    culture.softDeleteTrack(track.id, LATER);
+    expect(culture.track(track.id)).toBeNull();
+  });
+
+  it("refuses a track row whose mime is not one of the five audio formats", () => {
+    const culture = store();
+    expect(() =>
+      culture.createTrack({ title: "Nije audio", durationMs: 1_000, ...MP3, mime: "application/pdf" }, NOW),
+    ).toThrow(CultureValidationError);
+  });
+});
+
+describe("the stage 2 archive members", () => {
+  it("carries the places, the plans and the preference, and restores them whole", () => {
+    const source = store();
+    const venue = source.createVenue(
+      { name: "Sava centar", city: "Beograd", kind: "concert", notes: "Parking je iza." },
+      NOW,
+    );
+    const plan = source.createPlan(PLAN, NOW);
+    const answered = source.createPlan({ ...PLAN, title: "Prošlo", date: "2026-05-01" }, NOW);
+    source.completePlan(answered.id, {}, LATER);
+    source.setPromptPastPlans(false, LAST);
+
+    const exported = source.exportData();
+    expect(exported.venues.map((row) => row.id)).toContain(venue.id);
+    expect(exported.plans.map((row) => row.id)).toContain(plan.id);
+    expect(exported.plans.find((row) => row.id === answered.id)?.visitId).not.toBeNull();
+    expect(exported.settings).toEqual({ promptPastPlans: false });
+
+    const target = freshStore();
+    target.importData(exported, LAST);
+    const restored = target.exportData();
+    expect(restored).toEqual(exported);
+    expect(target.settings()).toEqual({ promptPastPlans: false });
+    expect(target.listPlans()).toHaveLength(2);
+  });
+
+  it("refuses a value whose links dangle, rather than writing half of it", () => {
+    const source = store();
+    source.createVisit(
+      { kind: "museum", title: "Tesla", venue: "Narodni muzej", date: "2026-05-01" },
+      NOW,
+    );
+    source.createPlan(PLAN, NOW);
+    const exported = source.exportData();
+
+    const danglingVenue = broken(exported);
+    const visits = danglingVenue["visits"] as Mutable[];
+    visits[0] = { ...visits[0], venueId: "nema-ovog-mesta" };
+    const target = freshStore();
+    expect(() => target.importData(danglingVenue, LAST)).toThrow(/does not carry/);
+    expect(target.listVisits()).toEqual([]);
+
+    const danglingVisit = broken(exported);
+    const plans = danglingVisit["plans"] as Mutable[];
+    plans[0] = { ...plans[0], visitId: "nema-ove-posete" };
+    expect(() => target.importData(danglingVisit, LAST)).toThrow(/does not carry/);
+    expect(target.listPlans()).toEqual([]);
+  });
+
+  it("refuses a preference that is not a boolean", () => {
+    const source = store();
+    const exported = broken(source.exportData());
+    exported["settings"] = { promptPastPlans: "da" };
+    expect(() => freshStore().importData(exported, LAST)).toThrow(/boolean/);
   });
 });
 

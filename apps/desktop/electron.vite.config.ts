@@ -43,7 +43,8 @@ function rendererHardening(): Plugin {
     // ADR-014 inline previews; ADR-057 private attachments (unlocked-only);
     // ADR-100 a content pack's own images, and `connect-src` for the same
     // scheme because a map reads its tiles through `fetch`, not through an
-    // `<img>` - see `main/packs/protocol.ts`.
+    // `<img>` - see `main/packs/protocol.ts`. CULTURE's arts guide
+    // (ADR-091) reads its images through the same scheme.
     "img-src 'self' data: nx-blob: priv-blob: nx-pack:",
     "font-src 'self' data:",
     "connect-src 'self' nx-pack:",

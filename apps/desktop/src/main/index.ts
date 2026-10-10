@@ -418,6 +418,9 @@ import {
   SyncProgressStore,
   syncStoreFor,
   uuidv7,
+  // CULTURE (stage 2): what counts this module's two blob-naming tables and
+  // says which mime their bytes are served as.
+  CultureStore,
 } from "@nexus/db";
 import {
   blobStorePaths,
@@ -546,6 +549,13 @@ import {
   asString,
 } from "./ipcValidators.js";
 import { createModuleHost } from "./moduleHost.js";
+// CULTURE's two main-process seams (ADR-090 §3): the services its handlers need
+// (blob store, blob-reference union, packs root) and the `nx-pack:` read
+// protocol its arts guide draws from. Both live in the module's own folder -
+// this file only wires them, which is why they are two calls and no logic.
+import { registerPackProtocol } from "../modules/culture/main/packProtocol.js";
+import { configureCultureServices } from "../modules/culture/main/services.js";
+import { packsRoot } from "./packs/registry.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -903,6 +913,11 @@ protocol.registerSchemesAsPrivileged([
   // not list, are both 404s. `standard` gives the URL normal parsing (the pack id
   // is the host and the rest is the pack path), and `stream` is what lets a media
   // client read it by ranges.
+  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // The arts guide's read protocol (CULTURE, ADR-091): serves an IMAGE out of an
+  // installed, signature-verified content pack, and nothing else. Same
+  // privileges for the same reason - a URL that parses, that a CSP may allow,
+  // and that a `<img>` may load - with the handler registering below.
   { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
@@ -1488,6 +1503,20 @@ const moduleHost = createModuleHost({
   // renderer never sees either value.
   packs: { userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM },
   now: () => Date.now(),
+});
+
+// CULTURE's main-process services (ADR-090 §3): the blob store, main's own
+// blob-reference union, and the two facts a content pack needs - all closures,
+// because the account's directories and key material move with the selected
+// account (ADR-044) and every one of them is resolved at use time.
+configureCultureServices({
+  saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
+  readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
+  deleteBlobIfOrphaned: (sha256, refCount) =>
+    deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
+  blobRefCount,
+  packsRoot: () => packsRoot(userDataDir()),
+  releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
 });
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
@@ -5355,6 +5384,10 @@ function blobRefCount(profileId: string, sha256: string): number {
     noteAttachmentStore(profileId).refCount(sha256) +
     taskAttachmentStore(profileId).refCount(sha256) +
     subjectAttachmentStore(profileId).refCount(sha256) +
+    // A visit's ticket and the user's own track (CULTURE, migration 073): the
+    // module's one store counts its two hash-naming tables together, so a file
+    // it stops naming is still protected by every other member of this union.
+    cultureStore(profileId).refCount(sha256) +
     dashboardSettingsStore(profileId).refCount(sha256) +
     // The `profiles` table itself (SET-001, migration 040) — the fifth member,
     // and the only one whose store takes no profile id, because that table IS
@@ -5369,6 +5402,10 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     noteAttachmentStore(profileId).mimeForHash(sha256) ??
     taskAttachmentStore(profileId).mimeForHash(sha256) ??
     subjectAttachmentStore(profileId).mimeForHash(sha256) ??
+    // CULTURE serves a photo through `nx-blob:` exactly as an inline note image
+    // is served; a track's bytes go to the player through its own op instead,
+    // and this line is what keeps one row's mime from being the other's.
+    cultureStore(profileId).mimeForHash(sha256) ??
     dashboardSettingsStore(profileId).mimeForHash(sha256) ??
     // A profile picture is served by `nx-blob:` on exactly the terms an inline
     // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
@@ -5380,6 +5417,11 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
 
 function flagStore(profileId: string): SqliteFlagStore {
   return new SqliteFlagStore(requireDb().raw, profileId);
+}
+
+/** CULTURE's store over the open database, on the module's own terms (`TimersStore`'s helper one module over). */
+function cultureStore(profileId: string): CultureStore {
+  return new CultureStore(requireDb().raw, profileId);
 }
 
 function dashboardSettingsStore(profileId: string): DashboardSettingsStore {
@@ -14207,6 +14249,14 @@ app.whenReady().then(async () => {
     installReaderEnvironment();
     registerPackProtocol(protocol, {
       userData: userDataDir(),
+      publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    });
+
+    // CULTURE's `nx-pack:` read protocol: an image from an installed content
+    // pack, and only that (`packProtocol.ts` owns the four refusals). The packs
+    // directory is read lazily for the same reason the blob roots are.
+    registerPackProtocol({
+      userData: userDataDir,
       publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
     });
 

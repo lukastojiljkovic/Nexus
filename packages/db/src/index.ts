@@ -1156,3 +1156,25 @@ export type {
   ReaderSettings,
   ReaderTextSize,
 } from "./reader/readerStore.js";
+
+// --- CULTURE stage 2 (migration 073's three later tables) --------------------
+//
+// Appended rather than folded into the CULTURE block above so the edit stays one
+// mechanical block at the end of the file: the places, the programme and the
+// module's one preference arrived with stage 2, and a second block over one
+// module has a precedent here already (a store whose later slice added exports
+// beside its own earlier ones).
+export { MAX_CULTURE_LINK_LENGTH, parseCultureExportPayload } from "./culture/cultureStore.js";
+export type {
+  CreateCulturePlanInput,
+  CreateVenueInput,
+  CultureExportPlan,
+  CultureExportVenue,
+  CulturePlan,
+  CulturePlanCompletion,
+  CulturePlanKind,
+  CultureSettings,
+  CultureVenue,
+  UpdateCulturePlanFields,
+  UpdateVenueFields,
+} from "./culture/cultureStore.js";

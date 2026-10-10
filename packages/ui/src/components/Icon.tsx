@@ -130,7 +130,12 @@ export type IconName =
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The culture corner's own mark: a pediment over three columns, which is what
+  // a person means by „going to see something". `book` is STUDY's (a library
+  // shelf) and `palette` says nothing about leaving the house, so the module
+  // brought this one rather than borrowing either.
+  | "museum";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -794,6 +799,15 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  museum: (
+    <>
+      <path d="M4 10 12 4l8 6" />
+      <path d="M8 10.5v8" />
+      <path d="M12 10.5v8" />
+      <path d="M16 10.5v8" />
+      <path d="M5.5 19h13" />
+    </>
+  ),
 };
 
 /**
