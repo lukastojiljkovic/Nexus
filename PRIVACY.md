@@ -1,122 +1,142 @@
 # Privacy
 
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-09
 
-Nexus is built so that the answer to "what does this app send?" is short, and so
-that the short answer can be checked in the source rather than believed.
+Nexus is a desktop application with no server. It is built so that the answer to
+"what does this app send?" is short, and so that the short answer can be checked
+in the source rather than believed.
 
 ## The short version
 
-- Everything you write lives in **one encrypted database on your own device**.
+- Everything you write lives in **one encrypted database per local account**, on
+  your own device, with the files you attach stored encrypted beside it.
 - **There is no telemetry, no analytics and no crash reporting.** None is built,
   and none can be added quietly: `scripts/check-egress.mjs` fails CI on a new
   network construct in the desktop app.
-- **Cloud is off by default.** A user who never turns it on is running the
-  local-only product, and the local-only path cannot reach the network at all —
-  that is a runtime assertion in `apps/desktop/src/main/net/offline.ts`, not a
-  setting somebody remembered to check.
-- **Update checks are off by default too.** Nexus asks once, on the first start
-  after 1.5.0, whether it may check for new versions of itself; a user who says
-  no is in exactly the product 1.4.0 was, with no network call of any kind.
-- **The app requires no online account.** Local accounts are passcode-protected
-  profiles on your machine.
-- **In the build you can download today, sync cannot be turned on.** No backend
-  project is compiled into it, so the sync screen says there is no server
-  configured and every round refuses before making a request. No hosted backend
-  exists for this project at all.
+- **Nexus contacts nothing by default.** On the first start after 1.5.0 it asks
+  once what it may use the network for, and the default — and the fail-closed
+  answer — is **Offline only**, in which no connection is opened at all, not
+  even a version check.
+- **The app requires no online account.** A Nexus "account" is a local,
+  passcode-protected set of profiles on your machine; it is not registered
+  anywhere and there is nothing to sign up for.
+- **No Nexus server exists to send anything to.** No hosted backend has ever
+  run, and Nexus has no online service to sign into.
+- **Which parts of Nexus may touch the network is a mode of the whole device**,
+  not a per-feature setting: the only network exception this product has is the
+  update check described below.
+
+## What Nexus stores, and where
+
+Everything the application writes lives under its own data folder. On Windows
+that is `%APPDATA%\Nexus`; on Linux it is `~/.config/Nexus`. The **About** card in
+Settings prints the exact path for your installation.
+
+| What | Where | Encrypted at rest? |
+| --- | --- | --- |
+| Your notes, tasks, calendar, documents, study cards, finances, habits, focus sessions and the rest | One database per local account: `accounts/<accountId>/nexus.db` | **Yes** — SQLCipher, opened with a raw 256-bit key |
+| Everything kept as a file rather than a row: attachments on notes and tasks, document previews, and your profile picture | `accounts/<accountId>/blobs/` | **Yes** — an AES-256-GCM container per file |
+| The list of local accounts, as the lock screen shows it (names and creation dates) | `accounts.json` | No, deliberately: the lock screen lists these before anything is unlocked |
+| The key chain: your data key wrapped under your passcode and under the Recovery Kit, with the salts and parameters the wrap needs | `accounts/<accountId>/keychain.json` | Wrapped; the copy of the wrap added to the OS keystore is encrypted by the OS |
+| The network mode, and whether you allowed the update check | `network.json` | No — it is a preference, not data |
+| When the last update check ran | `updates/last-check.json` | No — a timestamp |
+| Device preferences: theme, accent, language, week start, calendar view, and the in-progress onboarding questionnaire | Chromium's own storage for the app (its profile data) | No — preferences only, never content |
+| A decrypted copy of a file you asked to open in another application | `accounts/<accountId>/tmp-open/` | No — it is the plaintext file the other application needs. It is deleted when Nexus locks and swept again at the next start |
+
+Nothing else is stored. The application keeps **no record of the window's
+position or size**, and it writes **no log file**: diagnostics go to the
+developer console, not to a file beside your data.
+
+## What leaves the machine
+
+**Offline only (the default).** Nexus makes no network call of any kind. This is
+enforced where a packet would have to pass, not by a setting somebody checks:
+every request whose scheme is not local is cancelled, the proxy is pointed at a
+dead loopback port, DNS is mapped to `NOTFOUND` at the Chromium command line,
+and the spellchecker (the one client Chromium runs without being asked) is off.
+See `apps/desktop/src/main/net/offline.ts`.
+
+**Offline + update checks.** Nexus contacts GitHub, and only GitHub, for one
+purpose: checking for and downloading a new version of Nexus itself. The
+connection is limited to three hosts, matched exactly, over `https` and nothing
+else:
+
+- `api.github.com` — the release API the check reads;
+- `github.com` — the release download URL the API names;
+- `release-assets.githubusercontent.com` — where GitHub redirects a release
+  asset.
+
+The check itself is a single `GET` of
+`https://api.github.com/repos/lukastojiljkovic/Nexus/releases/latest` with the
+two headers GitHub's API asks for (`Accept: application/vnd.github+json` and
+`X-GitHub-Api-Version: 2022-11-28`). As with any HTTP request, GitHub also sees
+the device's IP address and the user agent the request went out with. **Nothing
+about your notes, your files or your settings is in that request or in any
+other.** The automatic check runs at most once a day, and a check downloads the
+release description and nothing else — an installer is fetched only after you
+press Install.
+
+**In either mode there is no telemetry, no analytics, no crash reporting and no
+update channel.** No dependency provides one, no code implements one, and the
+egress gate above would fail CI on the first network construct added to the app.
 
 ## Update checks
 
-On the first start after 1.5.0, Nexus asks one question — what may it use the
-network for? — and offers two answers. The question is asked of a new install
-and of a device upgrading from an older version alike, because no earlier
-version ever recorded a choice.
+Nexus asks the network question once, on the first start after 1.5.0, of a new
+installation and of a device upgrading from an older version alike, because no
+earlier version ever recorded a choice. The question is asked before any
+account is unlocked.
 
-**Offline only (the default).** Nexus makes no network call at all. This is
-the 1.4.0 product, unchanged: a request allowlist, a dead proxy, a resolver that
-maps every name to `NOTFOUND`, and the spellchecker off.
+**Offline only (the default).** No network call. A device that has never
+answered the question, or whose answer is missing or unreadable, is in this
+mode — "I could not tell" and "it is off" are the same outcome.
 
-**Offline + update checks.** Nexus contacts GitHub, and only GitHub, for one
-purpose: checking for and downloading a new version of Nexus itself. When this
-mode is on, GitHub sees the device's IP address and the request headers (the
-user agent), as any server does — and Nexus sends nothing else. **Your notes and
-data never leave the computer** — there is no telemetry, no analytics and no
-crash reporting in either mode, and the update check has no channel to carry
-any.
-
-The download itself is accepted only over https from `github.com` (and the
-`release-assets.githubusercontent.com` host GitHub redirects release assets to),
-and only when the installer's SHA-256 appears in a `SHA256SUMS.txt` whose
-detached Ed25519 signature verifies against a public key compiled into the app.
-Anything that does not verify is deleted and never run.
+**Offline + update checks.** Only the update check described above.
 
 You can change the mode at any time in **Settings → Privacy → Network and
 updates**. The change takes effect after a restart, because the network boundary
-is installed while the app is starting.
+is installed while the application is starting; that is a property of the
+boundary, not an inconvenience to be removed later.
 
-There is no cloud option yet. When one is added, it will be a third mode in the
-same place, and this document will describe it before it ships.
+## Backups and exports
 
-## If you turn sync on
-
-Sync is an optional feature for carrying the same data between two devices. It
-is end-to-end encrypted: the server stores and returns ciphertext, and the keys
-that open it never leave your devices.
-
-**What the server holds, once sync is enabled for an account:**
-
-| What | Why | In the clear? |
-| --- | --- | --- |
-| Your account email address | Sign-in, and confirming the account | Yes — it is your login |
-| A device record: platform, an encrypted device name, a public key, when it was created and last seen, and whether it was revoked | Deciding which sessions may read your data | Mostly no: the name is encrypted; the rest is metadata |
-| Your data, row by row: collection name, object id, version, a deleted flag, a nonce and the ciphertext | Moving changes between devices, and resolving conflicts | **No — content is ciphertext** |
-| Wrapped keys: the master key wrapped under a key derived from your password, and per-profile content keys wrapped under the master key | Letting a new device open your data without the server ever holding a key that opens it | No — these are wrapped, and the wrapping key is derived on your device |
-| Sync bookkeeping: which device has seen which change, per collection | Knowing what a device still needs | Yes — sequence numbers and timestamps, no content |
-| Pairing records while a pairing code is live | Connecting a second device | No — opaque values that expire |
-
-**What the server never receives:**
-
-- The content of a note, task, calendar entry, document, photo or attachment —
-  those are encrypted on your device before they are sent.
-- Your **local data key**, and the passcode that opens it. The local database
-  stays local.
-- **Your password.** Sign-in sends a value derived from it with Argon2id, not
-  the password itself; the password never leaves the client.
-- The **Recovery Kit** code, except at the moment you use it to adopt a new
-  device.
-
-Metadata in the clear is an accepted trade-off, and it is deliberate: the server
-has to be able to route a change and count it. What it cannot do is read one.
+- **A manual export** writes a portable archive to the path you choose in the
+  system save dialog. You can protect it with a passphrase at creation time, in
+  which case the archive is sealed under a key derived from it (Argon2id). If
+  you leave the passphrase empty, the archive is a plain file — that is a
+  deliberate, confirmed choice, and the copy is then no better protected than
+  the folder you put it in.
+- **A scheduled backup** copies the same archive to a folder you choose, and it
+  is always encrypted: a schedule cannot ask for confirmation, so this surface
+  has no plaintext branch at all. The passphrase is stored wrapped under your
+  data key and is only readable while the application is unlocked.
+- **Neither form is sent anywhere.** Both are written to a location you named,
+  on this device or on a drive you mounted.
 
 ## Retention and deletion
 
-- **Local accounts.** Deleting an account from the app deletes its local
-  database and key material, after offering an export. This is implemented
-  (ADR-048) and it is immediate.
-- **A synced account.** The server rows for an account are tied to the account
-  itself and are removed with it: every table references the account and
-  cascades on delete. **There is no self-service way to delete the server
-  account from inside the app today** — that is a gap to close before sync is
-  hosted, and it is listed as such in the project's own status notes.
-- **Deleting a note or a task** is a soft delete, so the change can travel to
-  your other devices. The row stops carrying content the moment it is deleted
-  server-side; the ciphertext of the previous version is not kept by this
-  project, though a hosting provider's own backups may retain a snapshot for
-  the retention window of the plan it runs on.
-- **Pairing records** expire ten minutes after they are created, and expired
-  ones are cleaned up.
+- **Deleting a local account** from the application erases that account's
+  directory — its database, its attachment store and its key chain — after
+  offering an export. It is immediate, and there is no grace period and no undo.
+- **Deleting a note, a task or another record** removes it from your database.
+  Whether a previous version is kept inside the file is a property of SQLite's
+  own page handling, not a feature of Nexus: the application does not maintain a
+  server-side copy of anything, because there is no server.
+- **Uninstalling** the application does not delete your data folder. The
+  uninstaller offers to remove it and keeps it by default.
 
 ## Your rights, and the law
 
-If you run Nexus entirely locally, **no personal data reaches anybody** — there
-is no controller and no processor, because nothing is transmitted.
+Everything you put into Nexus stays on your device. **No personal data reaches
+anybody**: there is no controller and no processor, because nothing is
+transmitted. If you are in the EU or in Serbia, that also means there is no
+transmission of your personal data to exercise a right about; the remedies you
+have are the ones your local law gives you over your own equipment.
 
-If a hosted sync service is offered later, the operator of that service is its
-controller, and the rules that apply to it are the **General Data Protection
-Regulation** (EU 2016/679) and the Serbian **Zakon o zaštiti podataka o
-ličnosti** (Personal Data Protection Act, "ZZPL"). This document will name the
-controller, the hosting region and the retention window **before** any such
-service is offered, not after.
+Nexus is not "in the cloud", and there is no Nexus service to sign into.
+Should Nexus ever offer an online service, this document will name the
+controller, the hosting region and the retention window **before** that release,
+not after.
 
 Requests about personal data, and questions about this document, go to
 **stojiljkovic.d.luka@gmail.com**.
@@ -131,4 +151,3 @@ Every material change gets an entry in [CHANGELOG.md](CHANGELOG.md) and a new
 "last updated" date here. If telemetry is ever added — it is not planned, and it
 would change the first paragraph of this document — it would have to be opt-in
 and this document would have to say so **before** the release that adds it.
-

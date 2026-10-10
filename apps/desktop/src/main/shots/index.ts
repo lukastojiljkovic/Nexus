@@ -34,6 +34,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:
 import { join, resolve } from "node:path";
 import type { BrowserWindow } from "electron";
 import { createModuleRegistry } from "../../shared/modules.js";
+import { isShotSceneHeld } from "../../shared/syncHold.js";
 import { networkModePath } from "../net/offline.js";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 
@@ -151,7 +152,7 @@ export type ShotScene = ShotPageScene | ShotShellScene;
  * order within one session, so a scene that changes state (opening a note,
  * starting a timer) is followed by scenes that do not depend on it.
  */
-export const SHOT_SCENES: readonly ShotScene[] = [
+const SCENE_PLAN: readonly ShotScene[] = [
   { id: "dashboard", module: "dashboard", fanout: null },
   {
     // „Podesi…" (DASH-004): the per-widget config form, which is the ⋯ menu
@@ -1088,6 +1089,20 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { kind: "shell", id: "onboarding", shell: "onboarding" },
   { kind: "shell", id: "lock", shell: "lock" },
 ];
+
+/**
+ * The scenes one sweep runs: the plan above minus every scene whose surface is
+ * ON HOLD (`shared/syncHold.ts`).
+ *
+ * A held surface has no card, so a scene that opened it would photograph the
+ * page top under a name that promises a fold — the silence this file keeps
+ * warning about, and worse than a missing frame because it reports as one that
+ * was taken. Filtering keeps `NEXUS_SHOTS_SCENES` honest too: the ids come from
+ * the plan itself, so a name that survives `pickBy` is a name that runs.
+ */
+export const SHOT_SCENES: readonly ShotScene[] = SCENE_PLAN.filter(
+  (scene) => !isShotSceneHeld(scene.id),
+);
 
 /** Fires a keydown on `window` — where the shell's own global handler listens. */
 function DISPATCH_KEY(key: string, modifiers: Record<string, boolean> = {}): string {

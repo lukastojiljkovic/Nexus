@@ -5705,7 +5705,7 @@ export const en = {
       keyboard: "Keyboard shortcuts",
       modules: "Which parts of Nexus are on, and each module's settings",
       notifications: "What notifies you, and when",
-      data: "Backup, restore, import, export and sync",
+      data: "Backup, restore, import and export",
       privacy: "Network and updates, what is stored and where, search history",
       about: "Version, data location and licences",
     },
@@ -7365,6 +7365,11 @@ export const en = {
      * deliberately about what to DO next; several distinct protocol refusals
      * therefore share one sentence, because the user's next move is the same
      * and the distinction is ours, not theirs.
+     *
+     * ON HOLD (2026-10-08, `shared/syncHold.ts`): `SYNC_ON_HOLD` keeps the card
+     * out of the settings page, its search index and the screenshot sweep, so
+     * no sentence here reaches a user. The table stays typed and complete
+     * because turning the work back on is flipping one constant.
      */
     sync: {
       description:
@@ -7594,8 +7599,11 @@ export const en = {
     /**
      * „Podaci i privatnost“ (SET-010, local half): six plain sentences, each
      * one a fact about how this build is put together rather than a promise.
+     * Five of them are drawn while sync is ON HOLD — `sync` below stays in the
+     * table but `SettingsPage` does not print it (`shared/syncHold.ts`) — so
+     * what a user reads is the five that are still true of this build.
      *
-     * The six sentences have deliberately nothing to operate — no toggle, no
+     * The sentences have deliberately nothing to operate — no toggle, no
      * link, no „saznaj više“. A privacy panel with a switch on it is a panel
      * about a setting; those are about what is already true, and every
      * sentence is checkable in the source:
@@ -7615,7 +7623,9 @@ export const en = {
      *  - `sync`      — the other half of the same fact, because a card that
      *                  lists what leaves the device has to name what leaves it
      *                  once the user turns sync on: ciphertext, plus the row
-     *                  metadata migration 003 keeps in the clear.
+     *                  metadata migration 003 keeps in the clear. NOT DRAWN
+     *                  while the work is on hold; the leaf is kept for the day
+     *                  it is turned back on.
      *  - `exports`   — `main/imex.ts` writes to a path chosen in the system
      *                  save dialog, sealed under a passphrase-derived key when
      *                  one is given (ADR-022).
