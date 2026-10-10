@@ -30,7 +30,10 @@ in the source rather than believed.
 
 Everything the application writes lives under its own data folder. On Windows
 that is `%APPDATA%\Nexus`; on Linux it is `~/.config/Nexus`. The **About** card in
-Settings prints the exact path for your installation.
+Settings prints the exact path for your installation. In a portable build — one
+with the `portable.txt` marker beside the executable — that folder is
+`NexusData` next to the executable instead, on the USB stick or disk it was
+started from.
 
 | What | Where | Encrypted at rest? |
 | --- | --- | --- |

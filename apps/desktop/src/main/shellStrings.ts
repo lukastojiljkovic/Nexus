@@ -50,6 +50,8 @@ export interface ShellStrings {
   imageFilterName: string;
   packDialogTitle: string;
   packDialogButton: string;
+  portableRefusedTitle: string;
+  portableRefusedBody: string;
   defaultAccountLabel: string;
   noteCopySuffix: string;
   backupProfileSlugFallback: string;
@@ -123,6 +125,16 @@ const SR: ShellStrings = {
   packDialogTitle: "Izaberi fasciklu paketa",
   packDialogButton: "Izaberi ovu fasciklu",
   /**
+   * The early-startup dialog a portable launch shows when the stick refuses to
+   * be written to (ADR-102, `index.ts`). The title names the stick, the body
+   * says why nothing can continue and what to do instead; `index.ts` adds the
+   * OS's own words for the failed write on a second paragraph, untranslated,
+   * because a diagnostic is not copy.
+   */
+  portableRefusedTitle: "Nexus ne može da piše na ovaj USB",
+  portableRefusedBody:
+    "Fascikla NexusData pored programa je samo za čitanje, pa Nexus ne sme da čuva tvoje podatke na ovom računaru. Kopiraj Nexus na disk ili na USB na koji može da se piše, pa ga pokreni ponovo.",
+  /**
    * The label given to an account nobody named (`accounts.ts`'s
    * `defaultAccountLabel`, ADR-044 section 3) - renameable from the picker, so
    * a generic name costs the user one rename and never costs them their data.
@@ -152,6 +164,9 @@ const EN: ShellStrings = {
   imageFilterName: "Image",
   packDialogTitle: "Choose a pack folder",
   packDialogButton: "Choose this folder",
+  portableRefusedTitle: "Nexus cannot write to this USB stick",
+  portableRefusedBody:
+    "The NexusData folder beside the program is read-only, so Nexus cannot keep your data on this computer. Copy Nexus to a disk or a USB stick that can be written to, then start it again.",
   defaultAccountLabel: "My account",
   noteCopySuffix: " (copy)",
   backupProfileSlugFallback: "profile",

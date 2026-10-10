@@ -96,6 +96,11 @@ export function UpdateAbout({ onOpenNetworkCard }: { onOpenNetworkCard: () => vo
               <p className="nx-hint nx-hint--prose">{s.installHint}</p>
             </>
           )}
+          {/* ADR-102: a portable build never installs, and the row says so
+              rather than leaving a missing button unexplained. */}
+          {!offer.canInstall && state?.portable === true && (
+            <p className="nx-hint nx-hint--prose">{s.portableNote}</p>
+          )}
         </>
       )}
       {problemText !== null && (

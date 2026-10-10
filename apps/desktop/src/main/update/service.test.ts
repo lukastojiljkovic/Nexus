@@ -76,6 +76,7 @@ function harness(options: {
   currentVersion?: string;
   platform?: NodeJS.Platform;
   now?: () => number;
+  portable?: boolean;
 }): Harness {
   const calls = { json: 0, bytes: 0, download: 0, launchInstaller: [] as string[], quit: 0 };
   const changes: UpdateStateView[] = [];
@@ -105,6 +106,7 @@ function harness(options: {
     currentVersion: options.currentVersion ?? "1.4.0",
     platform: options.platform ?? "win32",
     userData,
+    portable: options.portable ?? false,
     mode: () => options.mode ?? "updates",
     http,
     publicKeyPem,
@@ -356,6 +358,46 @@ describe("installing", () => {
     const view = await service.install();
     expect(view.problem).toBe("hash");
     expect(existsSync(written as unknown as string)).toBe(false);
+  });
+});
+
+describe("a portable build (ADR-102)", () => {
+  it("reports the new version and the release page, and never offers Install", async () => {
+    const { service, calls } = harness({ portable: true });
+    const view = await service.checkNow();
+    expect(view.portable).toBe(true);
+    expect(view.phase).toBe("available");
+    expect(view.offer?.version).toBe("v1.5.0");
+    expect(view.offer?.canInstall).toBe(false);
+    // The link that IS the answer in a portable build: the user fetches the
+    // release by hand and replaces the folder on the stick.
+    expect(view.releaseUrl).toBe(RELEASES_PAGE_URL);
+    // A check is a check: the small JSON, and nothing else.
+    expect(calls.download).toBe(0);
+  });
+
+  it("installs nothing, fetches nothing and quits nothing when install is called", async () => {
+    const { service, calls } = harness({ portable: true });
+    await service.checkNow();
+    const view = await service.install();
+    expect(view.problem).toBe("portable");
+    expect(calls.bytes).toBe(0);
+    expect(calls.download).toBe(0);
+    expect(calls.launchInstaller).toEqual([]);
+    expect(calls.quit).toBe(0);
+  });
+
+  it("still checks in the widest mode, so the notice survives on a stick", async () => {
+    const { service, calls, changes } = harness({ portable: true, mode: "downloads" });
+    await service.autoCheckIfDue();
+    expect(calls.json).toBe(1);
+    expect(service.view().portable).toBe(true);
+    expect(changes.at(-1)?.portable).toBe(true);
+  });
+
+  it("marks an installed build as not portable", () => {
+    const { service } = harness({});
+    expect(service.view().portable).toBe(false);
   });
 });
 

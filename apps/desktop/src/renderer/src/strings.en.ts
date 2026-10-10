@@ -269,6 +269,8 @@ export const en = {
     installing: "Downloading…",
     installHint:
       "Nothing downloads until you press this. Nexus checks the installer's signature, starts it and closes. The installation then runs quietly and opens the new version by itself when it finishes.",
+    portableNote:
+      "This copy of Nexus runs from a USB stick, so it never installs its own update: everything it keeps stays on the stick. Get the new version from the release page and replace the folder on the stick.",
     later: "Later",
     releasePage: "Release page",
     notesTitle: "What is new",
@@ -281,6 +283,8 @@ export const en = {
       signature:
         "The signature on the checksum file is not valid. The download stopped before anything was installed.",
       hash: "The downloaded file does not match its checksum. It was deleted and not started.",
+      portable:
+        "A copy that runs from a USB stick never installs its own update. Open the release page and replace the folder on the stick.",
     },
   },
 

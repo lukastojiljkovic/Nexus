@@ -272,6 +272,8 @@ export const sr = {
     installing: "Preuzimam…",
     installHint:
       "Ništa se ne preuzima pre ovog klika. Nexus proverava potpis instalacije, pokreće je i zatvara se. Instalacija se zatim izvodi tiho i, kada završi, sama otvara novu verziju.",
+    portableNote:
+      "Ovaj primerak Nexusa se pokreće sa USB-a, pa nikad ne instalira sopstveno ažuriranje: sve što čuva ostaje na USB-u. Novu verziju preuzmi sa stranice izdanja i zameni fasciklu na USB-u.",
     later: "Kasnije",
     releasePage: "Stranica izdanja",
     notesTitle: "Šta je novo",
@@ -284,6 +286,8 @@ export const sr = {
       signature:
         "Potpis datoteke sa proverom nije ispravan. Preuzimanje je zaustavljeno pre nego što je instalacija počela.",
       hash: "Preuzeta datoteka ne odgovara svojoj proveri. Obrisana je i nije pokrenuta.",
+      portable:
+        "Primerak koji se pokreće sa USB-a nikad ne instalira sopstveno ažuriranje. Otvori stranicu izdanja i zameni fasciklu na USB-u.",
     },
   },
 

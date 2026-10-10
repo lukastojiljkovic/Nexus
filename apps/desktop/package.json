@@ -20,7 +20,8 @@
     "shots:compare": "node scripts/shots-compare.mjs",
     "demo": "node scripts/launch.mjs --demo",
     "licences": "node scripts/generate-licences.mjs",
-    "dist": "node scripts/dist.mjs"
+    "dist": "node scripts/dist.mjs",
+    "dist:portable": "node scripts/dist-portable.mjs"
   },
   "dependencies": {
     "@browsermt/bergamot-translator": "^0.4.9",
