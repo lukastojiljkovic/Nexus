@@ -80,39 +80,16 @@ import { migration077 } from "./077-recorder.js";
 import { migration078 } from "./078-emergency.js";
 import { migration079 } from "./079-calculator.js";
 import { migration080 } from "./080-arcade-scores.js";
-// 081 — the GAMES card tables. The numbers between this one and 070 are reserved
-// by sibling runs in flight on the same branch, so the list has a GAP here in this
-// worktree: the maintainer renumbers at merge, which is why the number appears in
-// exactly three places — this import, the list entry below, and the file name.
 import { migration081 } from "./081-card-games.js";
 import { migration082 } from "./082-chess.js";
-import { migration086 } from "./086-reader.js";
-import { migration085 } from "./085-miniapps.js";
-// 090 — the PUZZLES module. The numbers between this one and 082 are reserved
-// by sibling runs in flight on the same branch, so the list has a GAP here in
-// this worktree: the maintainer renumbers at merge, which is why the number
-// appears in exactly three places — this import, the list entry below, and the
-// file name.
-import { migration090 } from "./090-puzzles.js";
-import { migration091 } from "./091-boards.js";
-// 087 — the MAPS module's pins. 083..086 are reserved by sibling runs in flight
-// on the same branch, so this worktree's list has a GAP here: the maintainer
-// renumbers at merge, which is why the number appears in exactly three places —
-// this import, the list entry below, and the file name.
-import { migration087 } from "./087-maps.js";
-import { migration088 } from "./088-wiki.js";
-// 089 — the LAB module's tables. The numbers between this one and 082 are
-// reserved by sibling runs in flight on the same branch, so the list has a GAP
-// here in this worktree: the maintainer renumbers at merge, which is why the
-// number appears in exactly three places — this import, the list entry below,
-// and the file name.
-import { migration089 } from "./089-lab.js";
-// 093 - the assistant's knowledge base (ADR-104). The numbers between 082 and
-// this one are reserved by sibling runs in flight on the same branch, so the list
-// has a GAP here in this worktree: the maintainer renumbers at merge, which is
-// why the number appears in exactly three places - this import, the list entry
-// below, and the file name.
-import { migration093 } from "./093-assistant-knowledge.js";
+import { migration083 } from "./083-miniapps.js";
+import { migration084 } from "./084-reader.js";
+import { migration085 } from "./085-maps.js";
+import { migration086 } from "./086-wiki.js";
+import { migration087 } from "./087-lab.js";
+import { migration088 } from "./088-puzzles.js";
+import { migration089 } from "./089-boards.js";
+import { migration090 } from "./090-assistant-knowledge.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -206,19 +183,14 @@ export const MIGRATIONS: readonly Migration[] = [
   migration080,
   migration081,
   migration082,
-  migration086,
+  migration083,
+  migration084,
   migration085,
-  migration090,
-  // 91 — the BOARD GAMES module (stage 2 of the boards run): the game in
-  // progress, the record against the computer and the module's one preference.
-  // The gap between 082 and 091 is the reserved block sibling runs hold on this
-  // branch; the maintainer renumbers at merge, which is why the number appears in
-  // exactly three places — the import above, this entry, and the file name.
-  migration091,
+  migration086,
   migration087,
   migration088,
   migration089,
-  migration093,
+  migration090,
 ];
 
 /**

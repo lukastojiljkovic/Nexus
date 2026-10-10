@@ -5,14 +5,14 @@
 // (see `docs/packs/survival.md`), and the fidelity test proves it: the
 // converter's Markdown, with its markup stripped and whitespace collapsed, is
 // the source span with whitespace collapsed. A repair in here therefore moves
-// BOTH sides of that test, which is what makes a repair safe to write down â€”
+// BOTH sides of that test, which is what makes a repair safe to write down —
 // and also why every rule is a rule about extraction, never about meaning.
 //
 // The rules are the four the brief allows and no more:
 //
 //   R1  glyph mapping    a glyph the extraction keeps as one character that is
 //                        not the character the reader sees. Two instances, one
-//                        rule: a ligature (`ï¬ï¬‚ï¬ƒ` for the letters it draws)
+//                        rule: a ligature (`ﬁﬂﬃ` for the letters it draws)
 //                        and the sources' Symbol-font bullet, which comes back
 //                        as a lone `z` in front of every list item.
 //   R2  letter spacing   a heading the source sets with tracking comes back as
@@ -34,14 +34,14 @@
 //
 // Nothing here rewrites a word, fixes an OCR slip, or "cleans up" grammar. A
 // malformed run that is not one of the four (the ATP's cover date, whose font
-// prints `6HSWHPEHU` for `SEPTEMBER`) is left exactly as extracted â€” it is
+// prints `6HSWHPEHU` for `SEPTEMBER`) is left exactly as extracted — it is
 // furniture, so R3 removes it from the text, but the rule that removes it is
 // the margin, never a guess about which letters it "meant".
 
 /**
  * Ligature glyphs, and the non-breaking space, which is whitespace.
  *
- * Nothing else is in this table on purpose. Typographic punctuation (`â€™`, `â€”`)
+ * Nothing else is in this table on purpose. Typographic punctuation (`’`, `—`)
  * is what the source PRINTS, so it stays exactly as it is; folding it to ASCII
  * would be the pack editing the source rather than undoing an extraction.
  */
@@ -75,7 +75,7 @@ export function foldControlCharacters(text) {
 /**
  * R1 (a). Every ligature glyph becomes the letters it draws; a non-breaking
  * space becomes a space. Applied before anything looks at the text, so a heading
- * cannot be missed because it carries a `ï¬` where the reader sees `ï¬‚`.
+ * cannot be missed because it carries a `ﬁ` where the reader sees `fi`.
  */
 export function foldLigatures(text) {
   let folded = "";
@@ -115,7 +115,7 @@ export function foldLetterSpacing(text) {
  * band that separates them. `bottom` is much smaller, because the Army manuals
  * print body text as close as 42 points to the bottom edge while their page
  * labels sit between 14 and 44 (FM 21-76 page B-8's label is 25 points up, its
- * text reaches 42) â€” the bottom is handled by the page-label pattern and
+ * text reaches 42) — the bottom is handled by the page-label pattern and
  * {@link FURNITURE_STRIP} instead, and the band is only the last resort for a
  * label the pattern cannot name.
  */
@@ -139,11 +139,11 @@ export const INVISIBLE_SIZE = 2;
  * the glyph onto `z`, so the extraction produces `z Look for the chest to rise
  * and fall.` The `z` is a bullet drawn as a character, which is the same kind
  * of fact as a ligature: the reader sees a marker, not a letter. The repair
- * moves it into `bullet: true` and out of the text â€” it has to leave the TEXT
+ * moves it into `bullet: true` and out of the text — it has to leave the TEXT
  * rather than the Markdown, or the fidelity test (whose source side is this
  * normaliser) would see the converter delete a character.
  */
-const BULLET_GLYPH = /^(?:z|[â€¢Â·â—¦â–ª])\s+/;
+const BULLET_GLYPH = /^(?:z|[•·◦▪])\s+/;
 
 export function foldBulletGlyph(text) {
   const match = BULLET_GLYPH.exec(text);
@@ -174,7 +174,7 @@ export function isFurniture(text, vocabulary, runningTitle) {
     let rest = trimmed;
     for (const token of vocabulary) rest = rest.split(token).join(" ");
     rest = rest.replace(PAGE_LABEL_ANYWHERE, " ");
-    if (rest.replace(/[\s:.,;()Â·â€¢\-â€“]/g, "") === "") return true;
+    if (rest.replace(/[\s:.,;()·•\-–]/g, "") === "") return true;
   }
   // The last resort for the one source whose text layer sits at an uneven
   // height: a line that carries the book's running title at one end and no more
@@ -243,7 +243,7 @@ function joinRow(items) {
  * `height` is the page's height in points; `vocabulary` is the source's own
  * running-head tokens. A line is furniture when it sits in the margin band, or
  * when it sits in the wider head/foot strip AND is one of the vocabulary
- * tokens â€” the second half is what catches a label on a page whose body text
+ * tokens — the second half is what catches a label on a page whose body text
  * comes closer to the edge than the band.
  */
 export function normalisePage(page, options) {
@@ -277,7 +277,7 @@ export function normalisePage(page, options) {
       // The page's label, wherever in its furniture it sits: the ATP's footer
       // is one line holding the label, the publication number and the date
       // together. A line that is a label and NOTHING ELSE wins over a number
-      // inside somebody else's line â€” the page's own running head "Chapter 2"
+      // inside somebody else's line — the page's own running head "Chapter 2"
       // holds a `2`, and that is not the page's label.
       if (PAGE_LABEL.test(folded.trim())) bareLabel ??= folded.trim();
       else {
@@ -357,7 +357,7 @@ export function slugify(text) {
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/['â€™]/g, "")
+    .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug === "" ? "entry" : slug.slice(0, 60).replace(/-+$/, "");

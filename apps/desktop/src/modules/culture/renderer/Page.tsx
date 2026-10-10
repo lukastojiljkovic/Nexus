@@ -1256,7 +1256,7 @@ function ArtSection() {
               >
                 <img
                   className="culture__work-image"
-                  src={`nx-pack://${work.packId}/${work.version}/${work.image}`}
+                  src={`nx-pack://${work.packId}/${work.image}`}
                   alt={work.title}
                   width={work.width}
                   height={work.height}
@@ -1286,7 +1286,7 @@ function ArtSection() {
           <div className="culture__viewer-body">
             <img
               className="culture__viewer-image"
-              src={`nx-pack://${open.packId}/${open.version}/${open.image}`}
+              src={`nx-pack://${open.packId}/${open.image}`}
               alt={open.title}
             />
             <p className="culture__row-title">{open.title}</p>

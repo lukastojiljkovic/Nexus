@@ -56,7 +56,7 @@ export const HEADING_SCALE = 1.15;
  * programmatic agent, while the federal pages (measured on Ready.gov,
  * FoodSafety.gov and NOAA/NWS) answer HTTP 403 to one and serve a desktop
  * browser. The browser string is the same one the research run used, and it is
- * a browser's because that is what those edges accept â€” the pages are
+ * a browser's because that is what those edges accept — the pages are
  * public-domain government material either way.
  */
 export const FETCH_AGENTS = {
@@ -168,8 +168,8 @@ function verify(bytes, url, expected) {
  *
  * The cache is not trusted: a cached file whose digest disagrees is treated as
  * absent. A download that disagrees is a refusal, and the message carries what
- * was found, because the two legitimate answers â€” the source really changed, or
- * something is serving another page â€” are told apart by exactly that.
+ * was found, because the two legitimate answers — the source really changed, or
+ * something is serving another page — are told apart by exactly that.
  */
 export async function fetchSource(url, expected, options) {
   let bytes = existsSync(expected.file) ? readFileSync(expected.file) : null;
@@ -384,10 +384,10 @@ export function flattenPlan(plan = PLAN) {
 /**
  * A heading's identity: its letters and digits, upper-cased.
  *
- * The sources print their headings in ways that defeat a text comparison â€”
+ * The sources print their headings in ways that defeat a text comparison —
  * FM 21-76's are upper-case and split mid-phrase ("EDIBLEAND" / "MEDICINALPLANTS"
  * over two lines), FEMA's guide prints "Landslides and Debris" / "Flow
- * (Mudslide)" across two â€” so the comparison is made on what a reader would
+ * (Mudslide)" across two — so the comparison is made on what a reader would
  * agree the heading SAYS, and the removal of punctuation and spacing is what
  * lets a two-line heading be matched at all.
  */
@@ -404,7 +404,7 @@ export function headingKey(text) {
  * size cannot be it (a table of contents names every chapter; the chapter
  * itself sets the name larger), and a heading the source prints over two or
  * three lines is matched as the one heading it is. Among the candidates that
- * remain, the largest is the heading â€” measured, FM 21-76 sets a chapter title
+ * remain, the largest is the heading — measured, FM 21-76 sets a chapter title
  * at 17.7 points over its section headings' 15.8, and FEMA's guide sets a
  * section's title at 48 over the running head's 11 that repeats it.
  * `occurrence` then picks among candidates the source sets at the same size,
@@ -495,7 +495,7 @@ export function insideFigures(figures, start, end) {
 
 /**
  * The span's text, in the order the reader meets it, from the same walk the
- * Markdown is built by â€” the walk is what decides that a figure's caption is
+ * Markdown is built by — the walk is what decides that a figure's caption is
  * the caption line rather than a paragraph, and the comparison has to be made
  * about the same walk or it would not be about anything.
  */
@@ -641,7 +641,7 @@ export async function build(options) {
  *
  * Two exclusions, both measured. The span's own heading is not an entry, and
  * neither is the rest of it when the source prints that heading over two lines
- * (`SURVIVAL USE` / `OFPLANTS`) â€” the part of it is recognised as a prefix of
+ * (`SURVIVAL USE` / `OFPLANTS`) — the part of it is recognised as a prefix of
  * the heading the plan names. And an entry with no text of its own and no
  * figure is a heading the source repeats rather than a section: it is merged
  * into the entry after it instead of becoming a one-line article.
@@ -705,7 +705,7 @@ export function bodySizeOf(lines) {
 function keep(article, articles, omitted, options) {
   const forbidden = forbiddenMatch(article);
   if (forbidden !== null) {
-    options.log(`  omitted "${article.id}": ${forbidden.rule} â€” ${JSON.stringify(forbidden.match)}`);
+    options.log(`  omitted "${article.id}": ${forbidden.rule} — ${JSON.stringify(forbidden.match)}`);
     omitted.push({ id: article.id, title: article.title, source: article.source, ...forbidden });
     return;
   }
@@ -787,9 +787,9 @@ export function buildMetadata(appVersion) {
     id: PACK_ID,
     version: "2026.10.0",
     kind: "content",
-    title: { sr: "PreÅ¾ivljavanje", en: "Survival" },
+    title: { sr: "Preživljavanje", en: "Survival" },
     description: {
-      sr: "PreÅ¾ivljavanje u prirodi, prva pomoÄ‡ i elementarne nepogode, iz ameriÄkih vojnih priruÄnika, FEMA-e, USDA i NOAA-e. Poglavlja o biljkama i Å¾ivotinjama su svetski, a ne regionalni vodiÄ.",
+      sr: "Preživljavanje u prirodi, prva pomoć i elementarne nepogode, iz američkih vojnih priručnika, FEMA-e, USDA i NOAA-e. Poglavlja o biljkama i životinjama su svetski, a ne regionalni vodič.",
       en: "Survival craft, first aid and disasters from US Army manuals, FEMA, USDA and NOAA. The plant and animal chapters are world-wide Army reference, not a regional identification guide.",
     },
     licence: {
@@ -937,7 +937,7 @@ async function main() {
       const headings = gap.headings.slice(0, 8).join(" / ");
       console.log(
         `  ${document.source.id}: ${String(gap.lines)} lines (${headings || "no heading"})` +
-          `${gap.headings.length > 8 ? " â€¦" : ""}`,
+          `${gap.headings.length > 8 ? " …" : ""}`,
       );
     }
   }

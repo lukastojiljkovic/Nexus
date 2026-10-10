@@ -4,7 +4,7 @@
  * a message from the renderer) straight into `fromJSON` and `applyMove`, so
  * both refuse rather than coerce, and the caller sees this type.
  *
- * `problem` is a short machine token (`"column-full"`, `"cells"`, â€¦), never
+ * `problem` is a short machine token (`"column-full"`, `"cells"`, …), never
  * copy: the sentence a user reads is stage 2's.
  */
 export class InvalidStateError extends Error {

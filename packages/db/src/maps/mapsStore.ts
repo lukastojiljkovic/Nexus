@@ -97,7 +97,7 @@ function pinFromRow(row: PinRow): MapsPin {
 }
 
 /**
- * MAPS' storage (migration 87): the pins of one profile.
+ * MAPS' storage (migration 85): the pins of one profile.
  *
  * **What is NOT here is the map itself.** The tiles, the style and the place
  * index live in the installed pack, which is not this profile's data and not in

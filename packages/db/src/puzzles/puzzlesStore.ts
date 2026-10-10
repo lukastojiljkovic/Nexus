@@ -18,7 +18,7 @@ import { isDateTime } from "../finance/money.js";
 type DatabaseHandle = Database.Database;
 
 /**
- * PUZZLES' storage (migration 090): the game in progress per puzzle and grade,
+ * PUZZLES' storage (migration 088): the game in progress per puzzle and grade,
  * the record per puzzle and grade, and the module's one preference.
  *
  * **Why the module owns its tables rather than sharing the games'.** Migration

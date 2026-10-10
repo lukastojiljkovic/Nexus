@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 85 - the MINI-APPS module's storage (stage 2 of the mini-apps
+ * Migration 83 - the MINI-APPS module's storage (stage 2 of the mini-apps
  * brief; the engines themselves are `@nexus/core`'s `miniapps/`).
  *
  * **ONE table, holding ONE document.** Nine small tools share this module, and
@@ -39,8 +39,8 @@ import type { Migration } from "./migrations.js";
  * One index is unnecessary here and is not created: the only read is by
  * `profile_id`, which is the primary key.
  */
-export const migration085: Migration = {
-  version: 85,
+export const migration083: Migration = {
+  version: 83,
   up(db) {
     db.exec(`
       CREATE TABLE miniapps_state (

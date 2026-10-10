@@ -122,7 +122,7 @@ export function isFigureImage(image, page) {
   return (width * height) / (page.width * page.height) < FIGURE_MAX_PAGE_SHARE;
 }
 
-/** `Figure 2-1.`, `Figure B-1.`, `Figure 12-4.` â€” the sources' caption openings. */
+/** `Figure 2-1.`, `Figure B-1.`, `Figure 12-4.` — the sources' caption openings. */
 export const FIGURE_CAPTION = /^Figure\s+[A-Z]?-?\d+[A-Z]?-\d+\s*\./;
 
 /**
@@ -148,9 +148,9 @@ export function captionFor(figure, lines, maxDistance = 130) {
  * Where a figure belongs in the reading order: the index of the first line the
  * reader meets after the box, or the end of the span when the figure is last.
  *
- * The two sources print a caption in two different places â€” the ATP puts it
+ * The two sources print a caption in two different places — the ATP puts it
  * under the figure, FM 21-76's entries put the illustration above their own
- * text â€” and this one rule handles both, because in both the next printed line
+ * text — and this one rule handles both, because in both the next printed line
  * is the one the figure belongs with. A plate page with no text of its own (FM
  * 21-76's Appendix E has six) anchors on the line after it, which is the first
  * line of the next entry, so the plate closes the entry it illustrates.

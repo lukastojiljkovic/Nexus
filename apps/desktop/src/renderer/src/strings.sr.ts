@@ -8224,17 +8224,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notesFindClose: "Zatvori traku i vrati kursor na rezultat",
     },
   },
-  /**
-   * The safety disclaimer (ADR-103), and the ONE place its sentence is written.
-   *
-   * `SafetyNotice` in `safetyNotice.tsx` draws it, and the Reader and the
-   * assistant are meant to import that component rather than retype the text: a
-   * disclaimer that exists in three slightly different versions is three
-   * different claims, and the one that drifts is the one somebody relies on.
-   */
-  safety: {
-    text: "Samo za informisanje. Nije zamena za stručnu pomoć. Proveri informacije. U hitnom slučaju pozovi 112.",
-  },
 } as const;
 
 /**

@@ -93,7 +93,7 @@ function bookmarkFromRow(row: BookmarkRow): ReaderBookmark {
 }
 
 /**
- * READER's storage (migration 086): where each profile stopped, what it
+ * READER's storage (migration 084): where each profile stopped, what it
  * bookmarked and noted, its reading size, and the safety notices it accepted.
  *
  * **Why nothing about a pack's content is here.** A pack is not one profile's

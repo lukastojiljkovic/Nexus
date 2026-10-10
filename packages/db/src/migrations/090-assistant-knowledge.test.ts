@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { MIGRATIONS, openDatabase, type NexusDatabase } from "../index.js";
 
 /**
- * Migration 93's own suite: what the assistant's knowledge tables ARE, once the
+ * Migration 90's own suite: what the assistant's knowledge tables ARE, once the
  * schema is in place.
  *
  * The interesting half is the FTS5 maintenance, because that is the half written
@@ -46,7 +46,7 @@ function insertChunk(id: number, text: string, title = "Naslov", locator: string
     .run(id, `s${String(id)}`, title, locator, text);
 }
 
-describe("migration 093 - the assistant's knowledge base", () => {
+describe("migration 090 - the assistant's knowledge base", () => {
   it("creates the four tables and stamps the newest schema version", () => {
     const tables = (
       db.raw

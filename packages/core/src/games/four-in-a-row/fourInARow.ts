@@ -1,9 +1,9 @@
 /**
- * Four in a row (`ÄŒetiri u nizu`) â€” a 7x6 board, a disc dropped down a column,
+ * Four in a row (`Četiri u nizu`) — a 7x6 board, a disc dropped down a column,
  * and four in a line (horizontal, vertical or either diagonal) to win.
  *
  * Rules source: the standard four-in-a-row rules as printed in Milton Bradley's
- * *Connect Four* rule sheet. The game is `four-in-a-row` here and `ÄŒetiri u
+ * *Connect Four* rule sheet. The game is `four-in-a-row` here and `Četiri u
  * nizu` in the copy, because *Connect Four* is a trademark; no rule depends on
  * the name.
  *
@@ -39,7 +39,7 @@ export interface FourState {
   readonly cells: readonly FourDisc[];
   readonly toMove: Player;
   readonly moveCount: number;
-  /** The disc with four in a line, or `null`. Derived â€” see the header. */
+  /** The disc with four in a line, or `null`. Derived — see the header. */
   readonly winner: FourDisc | null;
 }
 
@@ -225,9 +225,9 @@ export function result(state: FourState): Outcome {
 }
 
 /**
- * Terminal scores are `Â±MATE` shrunk by how far into the game the line landed,
+ * Terminal scores are `±MATE` shrunk by how far into the game the line landed,
  * so a quicker win outranks a slower one and every non-terminal score is far
- * below them. Mid-game the score is one side's windows minus the other's â€” a
+ * below them. Mid-game the score is one side's windows minus the other's — a
  * single pass over the 69 windows, counting each one for the mover and against
  * them, because a window holding both colours is worth nothing to either.
  */

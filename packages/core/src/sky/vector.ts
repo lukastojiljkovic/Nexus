@@ -50,7 +50,7 @@ export function scaled(v: Vector3, factor: number): Vector3 {
 
 /**
  * A unit vector from right ascension and declination, in the EQUATORIAL
- * J2000/ICRF frame â€” the frame the IAU rotation models publish a pole in.
+ * J2000/ICRF frame — the frame the IAU rotation models publish a pole in.
  */
 export function fromRightAscensionDeclination(rightAscensionDeg: number, declinationDeg: number): Vector3 {
   const cosDec = cosDeg(declinationDeg);

@@ -168,7 +168,7 @@ export type IconName =
   // is a merge that cannot be got wrong.
   //
   // A car in side view: the three parts anybody draws it with, and nothing
-  // else. It is deliberately not a wheel and not a wrench â€” both of those are
+  // else. It is deliberately not a wheel and not a wrench — both of those are
   // already in the set and both mean a REPAIR, while this module is a whole
   // vehicle's book.
   | "car"
@@ -923,7 +923,7 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   // A car, in the same vocabulary: a body, a cabin and two wheels, all of them
-  // strokes inside 3â€¦21. The wheels are `circle`s rather than dots because a car
+  // strokes inside 3…21. The wheels are `circle`s rather than dots because a car
   // has to read as a car at 72px as well as at 18px, and a dot has no wheel in
   // it at either size.
   car: (

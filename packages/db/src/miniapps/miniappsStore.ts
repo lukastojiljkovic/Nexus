@@ -22,7 +22,7 @@ import { isDateTime } from "../finance/money.js";
 type DatabaseHandle = Database.Database;
 
 /**
- * MINI-APPS' storage (migration 85): one profile, one kept document.
+ * MINI-APPS' storage (migration 83): one profile, one kept document.
  *
  * **What "kept" means here, and why it is a document.** The module is a grid of
  * nine small tools, and only six of them have anything to remember: the tally

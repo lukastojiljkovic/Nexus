@@ -546,7 +546,7 @@ function programmerView(
  *
  * This is deliberately NOT `math.smaller`. mathjs's relational functions are
  * nearly-equal based (its default epsilon is 1e-12, relative), so
- * `smaller(2^64 - 1, 2^64)` answers FALSE â€” two numbers that differ in the
+ * `smaller(2^64 - 1, 2^64)` answers FALSE — two numbers that differ in the
  * twentieth of twenty digits are "equal" to it, which is exactly the comparison
  * this bound is. A double is compared by its own exact arithmetic, and a
  * BigNumber by decimal.js's own `lessThan`, which has no epsilon at all.

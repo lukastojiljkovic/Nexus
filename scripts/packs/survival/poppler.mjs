@@ -124,7 +124,7 @@ export function runTool(exe, args, options = {}) {
  *
  * The output is columns separated by runs of spaces; this builder reads the
  * page, the image's own pixel size, and Poppler's own running number, which is
- * the number `-p` puts in the file name â€” the two are the same index, and that
+ * the number `-p` puts in the file name — the two are the same index, and that
  * is what pairs a file with the image the page's content stream draws.
  */
 export function listImages(pdfimages, pdfPath, firstPage, lastPage) {
@@ -145,7 +145,7 @@ export function listImages(pdfimages, pdfPath, firstPage, lastPage) {
  * Extracting was tried first and refused, deliberately: measured on
  * ATP 4-02.11, `pdfimages -list` reports 179 images where the page's content
  * stream draws 127, because an image with a soft mask is listed (and written)
- * as two images of identical pixel size â€” and the two cannot be told apart by
+ * as two images of identical pixel size — and the two cannot be told apart by
  * size, orientation or type, so the pairing would sometimes ship a figure's
  * ALPHA CHANNEL as the figure. A page render composites the mask, needs no
  * pairing at all (the placement comes from the text extraction's own content

@@ -14,7 +14,7 @@ import {
 } from "../index.js";
 
 /**
- * The PUZZLES store (migration 090).
+ * The PUZZLES store (migration 088).
  *
  * **Every expected value here comes from the engine or from arithmetic in the
  * comment beside it**, never from „it returned something". The sudoku fixture is

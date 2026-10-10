@@ -45,7 +45,7 @@ describe("a Project Gutenberg edition's HTML", () => {
     expect(items[1]).toMatchObject({ kind: "heading", level: 4, text: "HOW TO GRIND AND SHARPEN TOOLS" });
     expect(items[2]).toEqual({
       kind: "paragraph",
-      offset: 85,
+      offset: 83,
       text:
         "Care of Tools.\u2014Dull tools indicate the character of the workman. In an experience of over forty years, " +
         "I have never known a good workman to keep poorly sharpened tools. While it is true that the capacity to " +

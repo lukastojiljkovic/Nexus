@@ -1149,11 +1149,11 @@ export type {
   SetResumeInput,
 } from "./games/chess/chessStore.js";
 
-// --- READER (migration 086, ADR-100) -----------------------------------------
+// --- READER (migration 084, ADR-100) -----------------------------------------
 //
 // The reading positions, the bookmarks and their notes, the reading size, and
 // the safety notices a profile has accepted - one store, four tables, and not a
-// byte of a pack's own content: a pack belongs to no profile (ADR-091 Â§5), and
+// byte of a pack's own content: a pack belongs to no profile (ADR-091 §5), and
 // what this module stores is what the person WROTE while reading it.
 //
 // Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own rows
@@ -1223,7 +1223,7 @@ export type {
   RecipeUnitSystem,
 } from "./cookbook/recipeStore.js";
 
-// --- MINI-APPS (migration 085) -----------------------------------------------
+// --- MINI-APPS (migration 083) -----------------------------------------------
 //
 // ONE store over ONE table, because the nine small tools' kept state is one
 // authored document rather than a set of collections: see the migration's and
@@ -1251,10 +1251,10 @@ export type {
   MiniappsTypingRecord,
 } from "./miniapps/miniappsStore.js";
 
-// --- PUZZLES (migration 090) -------------------------------------------------
+// --- PUZZLES (migration 088) -------------------------------------------------
 //
 // THREE tables and one store, and the module owns them rather than sharing the
-// games' two, for the reason migration 090's header gives: the arcade's row is a
+// games' two, for the reason migration 088's header gives: the arcade's row is a
 // running total per game and the cards' is a seed plus a move list, and a puzzle
 // in progress is a grid or an arrangement — neither shape.
 //
@@ -1297,7 +1297,7 @@ export type {
   SudokuState,
 } from "./puzzles/puzzlesStore.js";
 
-// --- GAMES: boards (stage 2 of the boards run, migration 091) ----------------
+// --- GAMES: boards (stage 2 of the boards run, migration 089) ----------------
 //
 // The six board games' storage: the game in progress per game, the record against
 // each level, and the module's one preference. The rules are `@nexus/core`'s —
@@ -1334,7 +1334,7 @@ export type {
   BoardStats,
 } from "./games/boards/boardsStore.js";
 
-// --- MAPS (the offline map's pins, migration 87, ADR-099) --------------------
+// --- MAPS (the offline map's pins, migration 85, ADR-099) --------------------
 //
 // ONE store over ONE table, because a pin is one thing: a title, a note, a
 // colour and a point. The map itself - tiles, style, place index - is the
@@ -1355,7 +1355,7 @@ export {
 } from "./maps/mapsStore.js";
 export type { MapsPin, PinColor } from "./maps/mapsStore.js";
 
-// The WIKI module's storage (migration 088): the reading log and the marks, both
+// The WIKI module's storage (migration 086): the reading log and the marks, both
 // profile-scoped. The ZIM files themselves are device-level and live in
 // `apps/desktop/src/main/zim/libraries.ts` — a 119 GB pack is one file on one
 // disk, and this table only records what a person did inside it. These two tables
@@ -1380,12 +1380,12 @@ export type {
   WikiPlaceInput,
 } from "./wiki/wikiStore.js";
 
-// --- LAB (migration 089, ADR-090's kit) -------------------------------------
+// --- LAB (migration 087, ADR-090's kit) -------------------------------------
 //
 // THREE tables and one store: a named sensor log, the readings inside it, and
 // the profile's off-grid budget. The readings reach a profile only through their
 // log, so every sample statement here resolves that log first
-// (migration 089's `recording_markers` arrangement) — and the off-grid row is a
+// (migration 087's `recording_markers` arrangement) — and the off-grid row is a
 // single row per profile because a budget is computed from the whole list.
 //
 // Its error classes live beside it rather than in `errors.ts`, on

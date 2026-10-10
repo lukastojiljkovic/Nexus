@@ -302,7 +302,7 @@ function elementsFor(id: BodyId, jde: number): readonly [OrbitalElements, number
 
 /**
  * The heliocentric ecliptic J2000 position of one of the eight planets or Pluto,
- * in au, at a Julian Ephemeris Day: the source's own Keplerian route â€” elements,
+ * in au, at a Julian Ephemeris Day: the source's own Keplerian route — elements,
  * mean anomaly, Kepler's equation, then the orbit-to-ecliptic rotation, whose
  * three rows are the article's matrix written out.
  */
@@ -350,7 +350,7 @@ function planetPosition(id: BodyId, jde: number): Vector3 {
  * Kepler's equation `M = E - e* sin E`, solved by Newton's method exactly as the
  * article's "Solution of Kepler's Equation" prescribes: start from
  * `E = M + e* sin M`, then `dE = dM / (1 - e cos E)` until `|dE| <= 1e-6`
- * degrees. The pass limit is a guard rather than a rule â€” Pluto's e of 0.249
+ * degrees. The pass limit is a guard rather than a rule — Pluto's e of 0.249
  * converges in four passes from that start.
  */
 function solveKepler(meanAnomalyDeg: number, eccentricity: number): number {

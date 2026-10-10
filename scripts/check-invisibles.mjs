@@ -86,6 +86,51 @@ const CODES = new Set(INVISIBLES.map((entry) => entry.code));
 const isMojibakeLead = (code) => code >= 0x00c2 && code <= 0x00f4;
 const isMojibakeContinuation = (code) => code >= 0x0080 && code <= 0x009f;
 
+/**
+ * The same corruption through WINDOWS-1252 instead of latin1, which is what an
+ * editor or a patch tool on Windows does: there the bytes 0x80-0x9F decode to
+ * printable characters (`—` is E2 80 94 and comes back as „â€”"), so the rule
+ * above never sees a control character at all. Those 27 characters are ordinary
+ * punctuation and Serbian letters on their own, so this half is strict about the
+ * SHAPE instead: a lead followed by exactly the continuations its width needs,
+ * where a two-byte lead is one of the capitals whose sequences are Latin, Greek
+ * or Cyrillic letters (C2-D3) and its continuation is one of the 27.
+ * „Ä‡" (ć) and „â€”" (—) are caught; „×“", „é“" and „café…" are not.
+ */
+const CP1252_HIGH = new Set([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039, 0x0152,
+  0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a,
+  0x0153, 0x017e, 0x0178,
+]);
+const isCp1252Continuation = (code) => CP1252_HIGH.has(code) || (code >= 0x00a0 && code <= 0x00bf);
+
+/** Whether `codes[at]` starts a UTF-8 sequence that was read as Windows-1252. */
+function isCp1252Mojibake(codes, at) {
+  const lead = codes[at];
+  if (lead >= 0x00c2 && lead <= 0x00d3) return CP1252_HIGH.has(codes[at + 1]);
+  const width = lead >= 0x00e0 && lead <= 0x00ef ? 3 : lead >= 0x00f0 && lead <= 0x00f4 ? 4 : 0;
+  if (width === 0) return false;
+  for (let next = 1; next < width; next += 1) {
+    if (codes[at + next] === undefined || !isCp1252Continuation(codes[at + next])) return false;
+  }
+  return true;
+}
+
+/**
+ * Lines that carry Windows-1252 mojibake ON PURPOSE: the tool drawer's
+ * `mojibake-repair` copy, which shows the user the broken form it repairs. One
+ * literal at a time, like `check-english`'s allowlist, so the rest of each file
+ * is still judged.
+ */
+export const MOJIBAKE_ALLOWLIST = [
+  { file: "apps/desktop/src/renderer/src/strings/pro.ts", contains: "„Å¡“ i „Ä‡“" },
+  { file: "apps/desktop/src/renderer/src/strings/pro.tekst.ts", contains: "„Å¡“ ili „Ä‡“" },
+  { file: "apps/desktop/src/renderer/src/strings/pro.en.ts", contains: "“Å¡” and “Ä‡”" },
+  { file: "apps/desktop/src/renderer/src/strings/pro.tekst.en.ts", contains: "“Å¡” or “Ä‡”" },
+  { file: "packages/core/src/pro/tekst.test.ts", contains: "Å¡ -> š, Ä‡ -> ć" },
+  { file: "packages/core/src/pro/tekst.test.ts", contains: 'text: "Ä‡"' },
+];
+
 const MOJIBAKE_WHY =
   "a UTF-8 byte sequence decoded as latin1 — the file was read with the wrong " +
   "encoding and written back, so every dash, quote and Serbian letter in it is " +
@@ -99,8 +144,24 @@ const MOJIBAKE_WHY =
  * exact character rather than „something matched" — and so a future entry is one
  * row in the table above rather than an edit to a pattern.
  */
-export function scanText(text) {
+export function scanText(text, relPath = "") {
   const hits = [];
+  text.split("\n").forEach((lineText, index) => {
+    if (MOJIBAKE_ALLOWLIST.some((entry) => entry.file === relPath && lineText.includes(entry.contains))) {
+      return;
+    }
+    const codes = Array.from(lineText, (char) => char.codePointAt(0) ?? 0);
+    codes.forEach((code, at) => {
+      if (!isCp1252Mojibake(codes, at)) return;
+      hits.push({
+        line: index + 1,
+        column: at + 1,
+        id: "MOJIBAKE",
+        why: MOJIBAKE_WHY,
+        escape: `\\u${code.toString(16).padStart(4, "0")}\\u${codes[at + 1].toString(16).padStart(4, "0")}`,
+      });
+    });
+  });
   let line = 1;
   let column = 1;
   let previous;
@@ -147,8 +208,9 @@ export function auditAll(repoRoot = REPO_ROOT) {
   for (const file of findScanFiles(repoRoot)) {
     // `latin1` would never fail, but it would also mis-decode every Serbian
     // letter and report nothing useful; these files are UTF-8 by construction.
-    for (const hit of scanText(readFileSync(file, "utf8"))) {
-      findings.push({ file: relative(repoRoot, file).split(sep).join("/"), ...hit });
+    const relPath = relative(repoRoot, file).split(sep).join("/");
+    for (const hit of scanText(readFileSync(file, "utf8"), relPath)) {
+      findings.push({ file: relPath, ...hit });
     }
   }
   return findings;

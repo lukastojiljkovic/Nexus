@@ -27,7 +27,7 @@ let db: NexusDatabase;
 
 /**
  * Second, independent database files, standing in for FRESH INSTALLS. An
- * export preserves row ids (ADR-023 Â§1: a note's Yjs document embeds other
+ * export preserves row ids (ADR-023 §1: a note's Yjs document embeds other
  * rows' ids inside its own content, so re-minting them would mean rewriting ids
  * inside CRDT documents), and every one of them is a GLOBAL primary key - so
  * the only places an archive can land are the profile it came from and a

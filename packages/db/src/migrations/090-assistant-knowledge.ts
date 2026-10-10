@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 93 - the assistant's knowledge base (ADR-104), the local index the
+ * Migration 90 - the assistant's knowledge base (ADR-104), the local index the
  * assistant retrieves from.
  *
  * **It lives in the encrypted profile database, and four tables are the whole
@@ -59,8 +59,8 @@ import type { Migration } from "./migrations.js";
  * Nothing here reads a source table, and there is no backfill - a fresh table has
  * no rows to fill, and the first indexing pass fills it from the sources.
  */
-export const migration093: Migration = {
-  version: 93,
+export const migration090: Migration = {
+  version: 90,
   up(db) {
     db.exec(`
       CREATE TABLE knowledge_chunks (

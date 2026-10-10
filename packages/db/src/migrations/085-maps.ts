@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 87 — the MAPS module's storage: the pins a person dropped.
+ * Migration 85 — the MAPS module's storage: the pins a person dropped.
  *
  * **One table, because a pin is one thing.** A title, a note, a colour and a
  * point. Everything the map itself draws comes from the pack (the tiles, the
@@ -48,8 +48,8 @@ import type { Migration } from "./migrations.js";
  * and `PRAGMA foreign_keys` is a no-op inside the transaction `runMigrations`
  * wraps a migration in (ADR-042, migration 054).
  */
-export const migration087: Migration = {
-  version: 87,
+export const migration085: Migration = {
+  version: 85,
   up(db) {
     db.exec(`
       CREATE TABLE maps_pins (

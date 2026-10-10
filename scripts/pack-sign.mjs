@@ -77,27 +77,15 @@ const META_KEYS = [
 ];
 
 /**
- * Keys the format defines but does not require. `notice` is the first (ADR-103):
- * the safety flag, absent for every pack but the safety ones, and its value is
- * a closed set for the app's reason (`packs/manifest.ts`).
+ * Keys the format defines but does not require: the safety `notice` (ADR-103;
+ * its value is a closed set for the app's reason, `packs/manifest.ts`) and a tool
+ * pack's `tool` (ADR-094). A pack that carries neither carries no field at all
+ * rather than a null the app's parser would have to accept.
  */
-const OPTIONAL_META_KEYS = ["notice"];
+const OPTIONAL_META_KEYS = ["notice", "tool"];
 const NOTICES = ["safety"];
-
-/** ADR-094's one optional key, and the only `kind` that may carry it. */
-const OPTIONAL_META_KEYS = ["tool"];
 const TOOL_KEYS = ["entry", "protocol", "args"];
 const TOOL_PROTOCOLS = ["uci", "stdio"];
-
-/**
- * The keys the metadata MAY carry, written into the manifest only when they are
- * there. `notice` is the one today: a pack whose content is reference material
- * says so with `"safety"` (ADR-100), and a pack that says nothing carries no
- * field at all rather than a null the app's parser would have to accept. Optional
- * rather than required, deliberately - requiring it would mean every pack signed
- * after this line gained a field it does not mean.
- */
-const OPTIONAL_META_KEYS = ["notice"];
 
 /** The two names inside a pack that are not content, and therefore not listed. */
 const RESERVED_FILES = new Set([MANIFEST_FILE, SIGNATURE_FILE]);
@@ -158,12 +146,7 @@ export function buildManifest(meta, files) {
   }
   // Only when present, and after the required keys: a metadata file written
   // before `notice` existed produces exactly the bytes it always did.
-  for (const key of OPTIONAL_META_KEYS) {
-    if (Object.hasOwn(meta, key)) manifest[key] = meta[key];
-  }
-  for (const key of OPTIONAL_META_KEYS) {
-    if (Object.hasOwn(meta, key)) manifest[key] = meta[key];
-  }
+  if (Object.hasOwn(meta, "notice")) manifest.notice = meta.notice;
   manifest.files = files;
   if (meta.tool !== undefined) manifest.tool = meta.tool;
   return manifest;

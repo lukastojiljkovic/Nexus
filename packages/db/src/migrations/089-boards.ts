@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 91 — the BOARD GAMES module's storage: the game a profile is in the
+ * Migration 89 — the BOARD GAMES module's storage: the game a profile is in the
  * middle of, its record against the computer, and the module's one preference.
  *
  * **Three tables, and each answers a different question.** `boards_saves` is a
@@ -55,8 +55,8 @@ import type { Migration } from "./migrations.js";
  * profile's saves, most recently touched first. `boards_stats` needs none: it is
  * read by its primary key's prefix and written by its primary key.
  */
-export const migration091: Migration = {
-  version: 91,
+export const migration089: Migration = {
+  version: 89,
   up(db) {
     db.exec(`
       CREATE TABLE boards_saves (

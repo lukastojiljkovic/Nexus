@@ -4,7 +4,7 @@
 // This is the converter the fidelity test is written against, so its one rule
 // is that it may add MARKUP and may join words the compositor wrapped, and it
 // may not add, drop or reorder a word. Everything below is a decision about
-// where a paragraph, a heading, a bullet or a figure starts â€” never about what
+// where a paragraph, a heading, a bullet or a figure starts — never about what
 // the text says.
 
 import { figure, heading, list, paragraph } from "./blocks.mjs";
@@ -42,7 +42,7 @@ export function isHeadingLine(line, body) {
 
 /**
  * Per page: the left margin, and the leading. Both are read off the page rather
- * than written down, because the sources print more than one page template â€”
+ * than written down, because the sources print more than one page template —
  * FM 21-76's plant appendix sets its entries at a 32-point margin and its
  * chapters at 40, 54 or 82 depending on the entry, and an article can span
  * pages of two of them.
@@ -99,7 +99,7 @@ function endsSentence(text) {
  *
  * A figure whose caption the source prints as a line of its own CONSUMES that
  * line: the caption is the same words, and an article that carried both would
- * show the caption twice â€” once under the image and once as a paragraph. The
+ * show the caption twice — once under the image and once as a paragraph. The
  * line is dropped from the sequence here, where both the Markdown and the text
  * the fidelity test compares against are built from the same walk.
  */
@@ -248,7 +248,7 @@ function continuesItem(previous, line, current, metrics) {
   return !endsSentence(previous.text);
 }
 
-/** `3-14.`, `1-2.` â€” the Army publications number every paragraph. */
+/** `3-14.`, `1-2.` — the Army publications number every paragraph. */
 export const PARAGRAPH_NUMBER = /^\d{1,2}-\d{1,2}\.\s/;
 
 /** A line that stops well short of the page's text width is a paragraph finish. */

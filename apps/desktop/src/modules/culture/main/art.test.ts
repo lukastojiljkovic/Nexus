@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { baseManifest, entry, makeKey, writePack } from "../../../main/packs/fixtures.js";
 import { artImageMime, parseArtDataset, readArtDatasets } from "./art.js";
-import { resolveArtFile } from "./artFile.js";
 
 /**
  * The arts guide, read from a FIXTURE PACK FOLDER.
@@ -192,44 +191,6 @@ describe("artImageMime", () => {
     expect(artImageMime("images/a.avif")).toBe("image/avif");
     expect(artImageMime("images/a.svg")).toBeNull();
     expect(artImageMime("images/a")).toBeNull();
-  });
-});
-
-describe("resolveArtFile", () => {
-  it("resolves a listed image of an installed dataset pack, and nothing else", () => {
-    install({});
-    const request = { id: "art-test", version: "1.0.0" };
-    expect(resolveArtFile({ ...request, path: "images/portret.jpg" }, userData, key.publicKeyPem)).toEqual({
-      absolutePath: join(userData, "packs", "art-test", "1.0.0", "images", "portret.jpg"),
-      mime: "image/jpeg",
-    });
-    // A file on disk that the signed manifest does not list is not reachable:
-    // the folder "must match the manifest exactly" (ADR-091 §4).
-    writeFileSync(join(userData, "packs", "art-test", "1.0.0", "images", "tajno.jpg"), IMAGE);
-    expect(
-      resolveArtFile({ ...request, path: "images/tajno.jpg" }, userData, key.publicKeyPem),
-    ).toBeNull();
-    expect(resolveArtFile({ ...request, path: "art.json" }, userData, key.publicKeyPem)).toBeNull();
-    expect(
-      resolveArtFile({ ...request, path: "../../nexus.db" }, userData, key.publicKeyPem),
-    ).toBeNull();
-    expect(
-      resolveArtFile({ id: "nema-me", version: "1.0.0", path: "images/portret.jpg" }, userData, key.publicKeyPem),
-    ).toBeNull();
-    expect(
-      resolveArtFile({ ...request, version: "9.9.9", path: "images/portret.jpg" }, userData, key.publicKeyPem),
-    ).toBeNull();
-    expect(
-      resolveArtFile({ id: "art-test", version: "1.0", path: "images/portret.jpg" }, userData, key.publicKeyPem),
-    ).toBeNull();
-  });
-
-  it("refuses a pack signed by another key", () => {
-    install({});
-    const other = makeKey();
-    expect(
-      resolveArtFile({ id: "art-test", version: "1.0.0", path: "images/portret.jpg" }, userData, other.publicKeyPem),
-    ).toBeNull();
   });
 });
 

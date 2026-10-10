@@ -1,6 +1,6 @@
 // What the pack contains, and where each article comes from.
 //
-// The structure is the one `research/survival/report.md` Â§3 recommends, topic
+// The structure is the one `research/survival/report.md` §3 recommends, topic
 // by topic, in its order: the ATP's own core chapters, water, fire, shelter,
 // the plant and animal appendices of FM 21-76, food safety, clouds, tools and
 // craft, the first-aid selection from ATP 4-02.11, and the disasters, each
@@ -14,7 +14,7 @@
 // follows the source's words survives a re-print, and a heading that cannot be
 // found stops the build instead of quietly shifting every article after it.
 // The text between two spans is not shipped, which is how the omissions this
-// pack documents happen â€” the build prints every gap it left, and
+// pack documents happen — the build prints every gap it left, and
 // `docs/packs/survival.md` lists them with the source's own section numbers.
 
 /**
@@ -22,12 +22,12 @@
  *
  * `start` is the printed heading the article starts at; `end` is the heading it
  * stops before (exclusive), and defaults to the next article in the source's
- * OWN reading order â€” the plan is grouped by topic, not by book, so the order
+ * OWN reading order — the plan is grouped by topic, not by book, so the order
  * here is deliberately not the order in the document, and the builder sorts it
  * out from the headings themselves. `occurrence` picks which line, when a
  * source prints the same heading twice (FM 21-76 has a chapter and an appendix
  * both called "Poisonous Plants"). `entries: true` splits the span into one
- * article per entry heading â€” the shape FM 21-76's appendices have, where each
+ * article per entry heading — the shape FM 21-76's appendices have, where each
  * plant or animal is a heading, an illustration and a paragraph of its own.
  */
 function article(id, title, source, start, options = {}) {
@@ -320,7 +320,7 @@ export const FORBIDDEN = [
     // describes how much blood an adult has. `mg`, `mcg` and `mL` have one
     // meaning in these sources and it is a dose.
     pattern:
-      /\b\d+(?:[.,]\d+)?\s?(?:mg|mcg|Âµg|milligrams?|micrograms?|mL|millilitres?|milliliters?|tablets?|capsules?|vials?|ampoules?|syrettes?|doses?)\b|1\s?:\s?(?:1|2|5|10)\s?0{3}/i,
+      /\b\d+(?:[.,]\d+)?\s?(?:mg|mcg|µg|milligrams?|micrograms?|mL|millilitres?|milliliters?|tablets?|capsules?|vials?|ampoules?|syrettes?|doses?)\b|1\s?:\s?(?:1|2|5|10)\s?0{3}/i,
   },
   {
     id: "combat",
@@ -333,7 +333,7 @@ export const FORBIDDEN = [
     // neither sentence can be removed without editing the source. Measured the
     // other way too: FM 21-76's cooking chapter names `ammunition` three times,
     // for the cans a reader can cook in, and ATP 4-02.11's impalement section
-    // names `grenade` and `artillery` as mechanisms of injury â€” both are first
+    // names `grenade` and `artillery` as mechanisms of injury — both are first
     // aid and craft, and the terms that classify them are one or two).
     pattern:
       /\b(?:machine guns?|submachine guns?|assault rifles?|hand grenades?|fragmentation grenades?|grenades?|bayonets?|claymores?|land\s?mines?|minefields?|antipersonnel|booby traps?|explosive ordnance|artiller(?:y|ies)|mortar rounds?|ammunition|snipers?|ambush(?:es)?|hostile forces|enemy soldiers?)\b/gi,

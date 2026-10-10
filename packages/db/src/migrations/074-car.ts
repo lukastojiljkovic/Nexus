@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 74 â€” the CAR module's storage (stage 1: the core, no UI).
+ * Migration 74 — the CAR module's storage (stage 1: the core, no UI).
  *
  * Eight tables, and the shape of the module is in the first one.
  *
@@ -39,20 +39,20 @@ import type { Migration } from "./migrations.js";
  *
  * **`archived_at` and `deleted_at` are two INDEPENDENT nullable timestamps**,
  * migration 055's arrangement applied to cars and for the same reason. They
- * answer different questions â€” â€ždo I still own it" and â€žis this row still here"
- * â€” and a sold car is not a deleted one: PRD 22 says a sold vehicle is archived
+ * answer different questions — „do I still own it" and „is this row still here"
+ * — and a sold car is not a deleted one: PRD 22 says a sold vehicle is archived
  * WITH its whole history, which is exactly what a delete would take away. A
  * single status column would have to invent a precedence between them.
  *
  * **Every child table is scoped THROUGH its vehicle and carries no `profile_id`
  * of its own** (`habit_entries`' arrangement, migration 055), which is what
- * makes â€ža write naming another profile's vehicle" unrepresentable rather than
+ * makes „a write naming another profile's vehicle" unrepresentable rather than
  * merely refused: every statement in `CarStore` resolves the vehicle in this
  * profile before it touches a child row.
  *
  * **`odometer_readings.segment` is what makes an odometer replacement
  * expressible.** Readings must not decrease over time, and a replaced odometer
- * is the one legitimate reason for a number that does â€” so the replacement
+ * is the one legitimate reason for a number that does — so the replacement
  * starts a NEW segment (`CarStore.addReading` with `startsNewSegment`), and
  * nothing downstream ever subtracts across a boundary. There is no
  * `UNIQUE (vehicle_id, reading_date)`: two readings on one day is two honest
@@ -82,7 +82,7 @@ import type { Migration } from "./migrations.js";
  *
  * **`faults.service_id` points at the service that fixed it**, which makes
  * `service_entries` a referenced parent: any later column on it must land by
- * `ALTER TABLE â€¦ ADD COLUMN` and never by a table rebuild, because a rebuild's
+ * `ALTER TABLE … ADD COLUMN` and never by a table rebuild, because a rebuild's
  * `DROP TABLE` fires this `ON DELETE SET NULL` (and `service_attachments`'
  * `ON DELETE CASCADE`) inside a transaction where `PRAGMA foreign_keys` is a
  * no-op (ADR-042, migration 054's hazard).
@@ -96,7 +96,7 @@ import type { Migration } from "./migrations.js";
  * it holds `@nexus/sync`'s map against `RESTORE_WIPE_TABLES`, and neither list
  * names a CAR table. The module's archive half (`CarStore.exportData` /
  * `importData`) is plugged into the profile archive in stage 2, which is also
- * when these tables join `RESTORE_WIPE_TABLES` â€” adding them there without the
+ * when these tables join `RESTORE_WIPE_TABLES` — adding them there without the
  * refill would make a restore DESTROY car data, which is why this migration
  * leaves that list alone and `restoreStore.test.ts`'s exemption list carries a
  * CAR entry with this reasoning.

@@ -107,7 +107,7 @@ language, when it arrived), written whole through a temporary file and a rename,
 validated record by record on the way in, and answered as „the file is not where
 it was" rather than dropped when a file goes away.
 
-**What a person DID with a library is profile-level**, and that is migration 88:
+**What a person DID with a library is profile-level**, and that is migration 86:
 `wiki_history` (a visit log, one row per place, newest first, trimmed to 200) and
 `wiki_bookmarks` (what the user kept, UNIQUE per place, capped at 500). The
 archive carries the bookmarks and NOT the history, for `main/imex.ts`'s reason: a

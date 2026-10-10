@@ -13,7 +13,7 @@ import { basename, extname, join } from "node:path";
  * that is not true. This is ADR-091's arrangement for a pack (`installed.json`
  * under `<userData>/packs`) applied to a different kind of content, and ADR-098
  * records it. What IS per-profile is what a person did with the library: which
- * page they read and which they kept, which lives in migration 88.
+ * page they read and which they kept, which lives in migration 86.
  *
  * **Why the file is the source of truth and the disk is not walked.** A library
  * can be a `.zim` anywhere the user keeps files (this module accepts a plain

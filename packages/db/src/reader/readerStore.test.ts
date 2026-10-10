@@ -11,7 +11,7 @@ import {
 } from "./readerStore.js";
 
 /**
- * READER's storage (migration 086, ADR-100).
+ * READER's storage (migration 084, ADR-100).
  *
  * The assertions are about the two rules the schema is shaped around: one
  * position per pack (keyed by the pair, not accumulated), and one bookmark per

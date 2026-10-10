@@ -2,10 +2,10 @@
 
 **A `content` pack with `notice: "safety"`: survival craft, first aid and
 disasters, in English, for the moment somebody is stranded with only this
-laptop.** 541 articles and 417 figures from five sources â€” the current US Army
+laptop.** 541 articles and 417 figures from five sources — the current US Army
 survival and first-aid publications, FM 21-76's plant and animal appendices,
 FEMA's citizen guidance, USDA FSIS's food-safety chart and NOAA/NWS's cloud
-material â€” converted from the sources' own words, with the fidelity of every
+material — converted from the sources' own words, with the fidelity of every
 article proved by a test rather than asserted here.
 
 It is built by `scripts/packs/survival/build.mjs`; nothing in the pack is
@@ -45,8 +45,8 @@ the page they sit on (`pdftoppm` at 150 dpi, cropped to the box the page's
 content stream draws the image in, re-encoded as a palette PNG at 820 pixels
 wide at most). An image is treated as a figure when it is at least 120 by 80
 points and is not the page itself: measured, ATP 3-50.21 draws 312 images of
-which 143 qualify â€” the rest are its 21.5-by-8.6-point change bars in the
-margin â€” FM 21-76 draws 4 400 and 438 qualify (the rest are its decorative
+which 143 qualify — the rest are its 21.5-by-8.6-point change bars in the
+margin — FM 21-76 draws 4 400 and 438 qualify (the rest are its decorative
 rules), and ATP 4-02.11 draws 179 and 108 qualify.
 
 Each figure keeps the caption and figure number the source prints for it, as
@@ -76,13 +76,13 @@ source, its own section and the source's URL:
 
 | Source | Licence evidence |
 | --- | --- |
-| **US Army ATP 3-50.21, Survival, 2018** | *"DISTRIBUTION RESTRICTION: Approved for public release; distribution is unlimited."* â€” printed on the document, read at `archive.org/download/survival-atp-3-50-21/Survival (ATP 3-50.21)_djvu.txt` |
-| **US Army FM 21-76, Survival, 5 June 1992** | *"Approved for public release; distribution is unlimited."* â€” the authentication page of the PDF itself |
-| **US Army ATP 4-02.11, Casualty Response, Tactical Combat Casualty Care and First Aid, March 2026** | *"Distribution Restriction: Approved for public release, distribution is unlimited."* â€” printed on the document |
+| **US Army ATP 3-50.21, Survival, 2018** | *"DISTRIBUTION RESTRICTION: Approved for public release; distribution is unlimited."* — printed on the document, read at `archive.org/download/survival-atp-3-50-21/Survival (ATP 3-50.21)_djvu.txt` |
+| **US Army FM 21-76, Survival, 5 June 1992** | *"Approved for public release; distribution is unlimited."* — the authentication page of the PDF itself |
+| **US Army ATP 4-02.11, Casualty Response, Tactical Combat Casualty Care and First Aid, March 2026** | *"Distribution Restriction: Approved for public release, distribution is unlimited."* — printed on the document |
 | **FEMA, Are You Ready? An In-depth Guide to Citizen Preparedness (IS-22, August 2004)** | 17 U.S.C. 105(a), quoted from `govinfo.gov` |
 | **Ready.gov hazard pages (FEMA)** | 17 U.S.C. 105(a), quoted from `govinfo.gov`; the attribution adds that reference to FEMA/DHS material does not imply endorsement by the U.S. Government |
 | **USDA FSIS / FoodSafety.gov, Safe Minimum Internal Temperatures** | 17 U.S.C. 105(a), quoted from `govinfo.gov`; the page was reviewed 21 November 2024 |
-| **NOAA/NWS JetStream, clouds** | *"The information on National Weather Service (NWS) Web pages are in the public domain, unless specifically noted otherwise â€¦"* â€” `weather.gov/disclaimer`; the attribution adds that the material is reproduced unmodified and that the pack is not endorsed by NOAA or NWS |
+| **NOAA/NWS JetStream, clouds** | *"The information on National Weather Service (NWS) Web pages are in the public domain, unless specifically noted otherwise …"* — `weather.gov/disclaimer`; the attribution adds that the material is reproduced unmodified and that the pack is not endorsed by NOAA or NWS |
 
 FM 21-76 is served over http only, so its integrity rests on the SHA-256 this
 builder pins rather than on the transport. Where a licence sentence is the
@@ -123,7 +123,7 @@ of weapons doctrine, is not written at all:
 | Article | Rule | What it matched |
 | --- | --- | --- |
 | `medicine-illness-infection-soft-tissue-trauma` (ATP 3-50.21, chapter 2) | drug dose | `500 mg` |
-| `dangerous-to-eat` (FM 21-76, Appendix C) | drug dose | `28 milligrams` â€” a poison's dose, which is the same hazard out of context |
+| `dangerous-to-eat` (FM 21-76, Appendix C) | drug dose | `28 milligrams` — a poison's dose, which is the same hazard out of context |
 | `circulation-control-expedient` (ATP 4-02.11, chapter 7) | drug dose | `0.15 milligrams` |
 | `hypothermia-control-expedient` (ATP 4-02.11, chapter 8) | drug dose | `500mg` |
 | `eye-trauma-tier-2` (ATP 4-02.11, chapter 10) | drug dose | `400mg` |
@@ -153,7 +153,7 @@ section numbers:
 | FM 21-76, 2 280 lines | preface, introduction, **chapter 1 Survival Actions**, **chapter 2 Psychology of Survival**, **chapter 3 Survival Planning and Survival Kits**, **chapter 4 Basic Survival Medicine**, **chapter 5 Shelters**, **chapter 6 Water Procurement**, **chapter 7 Firecraft** | the ATP's chapters 1 and 2 are the current text for the first three; first aid ships from ATP 4-02.11 and shelters, water and fire from ATP 3-50.21, exactly as the research's section 3 assigns them |
 | FM 21-76, 4 238 lines | **chapters 13 to 23** (DESERT, TROPICAL, COLD WEATHER, SEA, expedient water crossings, direction finding, SIGNALING TECHNIQUES, movement in hostile areas, CAMOUFLAGE, contact with people, man-made hazards), **Appendix A Survival Kits**, **Appendix H Contingency Plan of Action Format** | the desert, jungle, arctic and sea chapters are region-specific material (the pack is not a regional guide and says so); chapters 20 to 22 are the evasion, camouflage and stalking doctrine the brief excludes; Appendix A is a kit list whose subject Ready.gov's pages cover, and Appendix H is a military reporting format |
 | FM 21-76, 336 lines | Glossary, references, authorization letter, index, Appendix H's tail | reference apparatus |
-| ATP 4-02.11, 2 102 lines | cover, authentication page, contents, preface, introduction, **Part One chapter 1 Casualty Response**, **chapter 2 Casualty Extraction and Movement**, **chapter 3 Fundamentals of TCCC**, **chapter 9 Secondary Injury Assessment Using Pain, Antibiotics, Wounds, Splintingâ€¦** (paragraphs 9-1 to 9-43), **chapter 15 Casualty Monitoring and Evacuation Preparation** | unit organisation, evacuation and medical-supply doctrine (Part One, chapters 3 and 15), and a chapter whose treatment is antibiotics and pain medication (chapter 9). The research's basis for shipping this publication at all is a selection for civilian use |
+| ATP 4-02.11, 2 102 lines | cover, authentication page, contents, preface, introduction, **Part One chapter 1 Casualty Response**, **chapter 2 Casualty Extraction and Movement**, **chapter 3 Fundamentals of TCCC**, **chapter 9 Secondary Injury Assessment Using Pain, Antibiotics, Wounds, Splinting…** (paragraphs 9-1 to 9-43), **chapter 15 Casualty Monitoring and Evacuation Preparation** | unit organisation, evacuation and medical-supply doctrine (Part One, chapters 3 and 15), and a chapter whose treatment is antibiotics and pain medication (chapter 9). The research's basis for shipping this publication at all is a selection for civilian use |
 | ATP 4-02.11, 1 919 lines | **chapter 18 Sickle Cell Trait**, **chapter 19 First Aid in a Chemical, Biological, Radiological and Nuclear Environment**, **chapter 20 Combat and Operational Stress Control**, **Appendix A First Aid Case and Kits, Authorized Medical Allowance List**, **Appendix B Rescue Equipment**, Glossary, References, Index | chapter 18 is a condition rather than a first-aid subject; chapter 19's treatment is antidotes and its subject is a weapons environment, and radiation as a civilian emergency ships from Ready.gov and FEMA instead; chapter 20 is combat-stress doctrine; Appendix A is a medical allowance list and Appendix B is equipment |
 | FEMA IS-22, 146 lines | preface, CERT, Citizen Corps, Certificate of Completion, Facilitator Guide | front matter, and course material for the guide's own training |
 | FEMA IS-22, 1 255 lines | **Part 4, Terrorism** (4.1 General Information about Terrorism to 4.7 Homeland Security Advisory System), **Part 5, Recovering from Disaster**, **Appendix A Water Conservation Tips**, **Appendix B Disaster Supplies Checklists**, **Appendix C Family Communications Plan** | Part 4 is about attacks rather than hazards a person prepares for; Part 5 and the appendices are forms and checklists a reader fills in, and the supplies checklist's subject ships from Ready.gov |
@@ -197,7 +197,7 @@ that folder.
 
 **Poppler is fetched into the cache and never shipped.** The pinned build is
 `oschwartz10612/poppler-windows` Release 26.09.0-0 (GPL-2.0-or-later), 43 709 956
-bytes, SHA-256 `7a6f256aâ€¦56c8d0`; the builder unpacks it under
+bytes, SHA-256 `7a6f256a…56c8d0`; the builder unpacks it under
 `%TEMP%\nexus-pack-cache\survival\poppler-26.09.0-0\` and runs `pdfimages` and
 `pdftoppm` from there. Nothing of it is linked into Nexus, and what it produces
 is images of pages that are themselves public domain. `pdfimages -list` is what
@@ -205,7 +205,7 @@ says a page really embeds an image at figure size; `pdftoppm` renders the page
 the figure is cropped from. Extraction with `pdfimages -extract` was tried first
 and refused on measurement: on ATP 4-02.11 it reports 179 images where the
 content stream draws 127, because an image with a soft mask is written as two
-images of identical pixel size, and the two cannot be told apart â€” so a builder
+images of identical pixel size, and the two cannot be told apart — so a builder
 that paired them would sometimes ship a figure's alpha channel as the figure.
 
 **The federal pages answer HTTP 403 to a programmatic agent** (measured on
@@ -215,7 +215,7 @@ source the digest it pins is that of the page's own `<article>` element rather
 than of the whole response, because the envelope of a federal page can move
 between two fetches while the element does not (measured on FoodSafety.gov).
 
-Then the maintainer signs it â€” this run never has the key:
+Then the maintainer signs it — this run never has the key:
 
 ```sh
 node scripts/pack-sign.mjs \
@@ -236,7 +236,7 @@ run again inside the writer (the Markdown read back equals the blocks it was
 written from). Anything else fails the build.
 
 Two things are outside that comparison, and both are the pack's own rather than
-the source's: each article's closing `*Source: â€¦*` line, and the image file
+the source's: each article's closing `*Source: …*` line, and the image file
 names.
 
 Where PDF extraction mangles text, the normaliser undoes exactly these five
@@ -245,10 +245,10 @@ things, each one listed and tested in
 
 | Rule | What it undoes | Measured example |
 | --- | --- | --- |
-| R1, glyph mapping | a glyph the extraction keeps as one character that is not the character the reader sees: a ligature, the Symbol-font bullet that arrives as a lone `z`, a control character where the page prints a space, a non-breaking space | `z Look for the chest to rise and fall.` â†’ a list item; `2-6 ATP 3-50.21 \u0003\u0014\u001B6HSWHPEHU` â†’ a footer |
-| R2, letter spacing | a heading the source sets with tracking | `F O O D  P R O C U R E M E N T` â†’ `FOOD PROCUREMENT` |
-| R3, running heads and page numbers | the furniture every page repeats, by the margin it sits in and by the publication's own tokens and page labels | `Chapter 2`, `2-6 ATP 3-50.21 â€¦`, `B-8`, `Are You Ready? Floods` |
-| R4, line-end hyphenation | a word the compositor broke across two lines | `contamina- tion` â†’ `contamination` |
+| R1, glyph mapping | a glyph the extraction keeps as one character that is not the character the reader sees: a ligature, the Symbol-font bullet that arrives as a lone `z`, a control character where the page prints a space, a non-breaking space | `z Look for the chest to rise and fall.` → a list item; `2-6 ATP 3-50.21 \u0003\u0014\u001B6HSWHPEHU` → a footer |
+| R2, letter spacing | a heading the source sets with tracking | `F O O D  P R O C U R E M E N T` → `FOOD PROCUREMENT` |
+| R3, running heads and page numbers | the furniture every page repeats, by the margin it sits in and by the publication's own tokens and page labels | `Chapter 2`, `2-6 ATP 3-50.21 …`, `B-8`, `Are You Ready? Floods` |
+| R4, line-end hyphenation | a word the compositor broke across two lines | `contamina- tion` → `contamination` |
 | R5, invisible runs | text the page does not draw: ATP 4-02.11 is a Word export whose headings carry the Word bookmark label as a run drawn at one point of an eleven-point heading | `322B` in front of `Tier 2 Skills for Army Personnel`, 1 521 runs on that source's pages |
 
 **R5 is a fifth rule, and the brief names four.** It is here because the
@@ -266,7 +266,7 @@ does not print stops the build rather than shifting every article after it.
 
 ## The tests, and the fixtures
 
-`normalise.test.mjs`, `convert.test.mjs` and `build.test.mjs` â€” 47 tests, 0.5 s
+`normalise.test.mjs`, `convert.test.mjs` and `build.test.mjs` — 47 tests, 0.5 s
 on this machine. They read five fixture files, 59 KB together, cut from the real
 sources by `--fixtures` and described in
 [`fixtures/README.md`](../../scripts/packs/survival/fixtures/README.md):

@@ -305,6 +305,11 @@ export const ENGLISH_ALLOWLIST = [
  */
 export const SERBIAN_LITERAL_ALLOWLIST = [
   {
+    file: "packages/core/src/games/cards/tablic.ts",
+    contains: "Tablić",
+    reason: "the game's own name inside the engine's developer-facing errors, which no surface shows",
+  },
+  {
     file: "apps/desktop/src/main/index.ts",
     contains: "Smoke nalog",
     reason: "the label `--smoke` gives its own disposable account, in `userData/smoke`; never a shipped profile's",

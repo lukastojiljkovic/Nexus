@@ -342,13 +342,15 @@ export interface ModulePlatform {
    * see `ModuleContext.attachFiles` for what it promises a module. Electron-free
    * here like everything else in this file, so the orphan-blob compensation is
    * testable (`./moduleAttachments.ts` is the implementation `index.ts` wires).
+   * OPTIONAL like `saveBlob`: a test's platform has no blob store, and a module
+   * that asks for one there is refused by name.
    */
-  attachFiles(
+  attachFiles?(
     maxBytes: number,
     record: (file: ModuleAttachmentFile) => void,
   ): Promise<ModuleAttachmentsResult>;
   /** Removes a blob no row references any more — `main/index.ts`'s own count decides. */
-  releaseBlob(sha256: string): Promise<void>;
+  releaseBlob?(sha256: string): Promise<void>;
   /**
    * The blob store's write half, when `index.ts` supplies one. OPTIONAL because
    * the write needs the account's key material and its blob roots, which only
@@ -495,8 +497,8 @@ export class ModuleHost implements ModuleHostSurface {
           silent: silent ?? false,
         });
       },
-      attachFiles: (maxBytes, record) => this.platform.attachFiles(maxBytes, record),
-      releaseBlob: (sha256) => this.platform.releaseBlob(sha256),
+      attachFiles: (maxBytes, record) => requireBlobs(this.platform).attachFiles(maxBytes, record),
+      releaseBlob: (sha256) => requireBlobs(this.platform).releaseBlob(sha256),
       armUntil: (atMs, run) => this.armUntil(atMs, run),
       packs: () => requirePacks(this.platform),
       savePdf: (request) => {
@@ -708,14 +710,25 @@ export class ModuleHost implements ModuleHostSurface {
       as: MODULE_VALIDATORS,
       profileDb: (profileId, open) => open(this.platform.database(), profileId),
       packs: () => requirePacks(this.platform),
-      attachFiles: (maxBytes, record) => this.platform.attachFiles(maxBytes, record),
-      releaseBlob: (sha256) => this.platform.releaseBlob(sha256),
+      attachFiles: (maxBytes, record) => requireBlobs(this.platform).attachFiles(maxBytes, record),
+      releaseBlob: (sha256) => requireBlobs(this.platform).releaseBlob(sha256),
       // Bound once per call rather than read from the platform at the call
       // site, so a module's handler cannot reach anything else `index.ts` holds.
       saveBlob: this.platform.saveBlob?.bind(this.platform),
       now: () => this.platform.now(),
     };
   }
+}
+
+/** The blob store's attach and release halves, or a refusal in a process that has no blob store. */
+function requireBlobs(
+  platform: ModulePlatform,
+): Required<Pick<ModulePlatform, "attachFiles" | "releaseBlob">> {
+  const { attachFiles, releaseBlob } = platform;
+  if (attachFiles === undefined || releaseBlob === undefined) {
+    throw new Error("This build has no blob store for module attachments.");
+  }
+  return { attachFiles: attachFiles.bind(platform), releaseBlob: releaseBlob.bind(platform) };
 }
 
 /**

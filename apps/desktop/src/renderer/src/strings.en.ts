@@ -8185,13 +8185,6 @@ export const en = {
       notesFindClose: "Close the bar and put the cursor back on the match",
     },
   },
-  /**
-   * The safety disclaimer (ADR-103). The Serbian table carries why it is one
-   * string in one place; this is the same sentence in English.
-   */
-  safety: {
-    text: "For reference only. Not a substitute for professional help. Check the information. In an emergency, call 112.",
-  },
 } as const;
 
 /**

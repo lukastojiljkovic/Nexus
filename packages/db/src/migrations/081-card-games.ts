@@ -51,7 +51,7 @@ import type { Migration } from "./migrations.js";
  * not.** `game` is the closed list of games the engines deal, so the schema states
  * it exactly as `arcade_scores` states its two — and it was extended IN PLACE on
  * 2026-10-10, before this migration ever shipped, when Pyramid, TriPeaks, Golf,
- * Hearts, Spades and TabliÄ‡ joined Klondike, FreeCell and Spider: an unreleased
+ * Hearts, Spades and Tablić joined Klondike, FreeCell and Spider: an unreleased
  * migration is not a historical record, and a second migration adding six words
  * to a CHECK would mean rebuilding the table for a vocabulary the release notes
  * never described. `variant` is a per-game vocabulary

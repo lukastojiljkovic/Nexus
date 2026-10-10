@@ -5,7 +5,7 @@
 // FoodSafety.gov's safe-temperature chart), and a pack builder may use only
 // what the repository already has, so there is no DOM here: this is a small
 // tokeniser over the tags those pages actually use. It is deliberately narrow,
-// and the fidelity test is what keeps it honest â€” every character inside the
+// and the fidelity test is what keeps it honest — every character inside the
 // article element must appear in the Markdown, and the Markdown must contain
 // nothing else.
 //

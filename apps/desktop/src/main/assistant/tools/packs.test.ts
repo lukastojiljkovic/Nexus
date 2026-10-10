@@ -18,6 +18,7 @@ const PACK: InstalledPackView = {
   id: "mapa-srbije",
   version: "2026.1",
   kind: "map",
+  notice: null,
   title: { sr: "Mapa Srbije", en: "Map of Serbia" },
   description: { sr: "Vektorska mapa za rad van mreže.", en: "A vector map for offline use." },
   licence: {

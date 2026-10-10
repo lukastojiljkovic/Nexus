@@ -40,6 +40,7 @@ function pack(): ContentPack {
       licence: { spdx: "CC0-1.0", attribution: "Niko", url: "https://example.org/l" },
       source: { name: "Izvor", url: "https://example.org/s" },
       minAppVersion: "1.0.0",
+      notice: null,
     },
     size: 0,
     fileCount: 2,

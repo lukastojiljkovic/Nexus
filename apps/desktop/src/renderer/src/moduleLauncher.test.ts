@@ -13,8 +13,8 @@ import {
 import { lookup, strings } from "./strings.js";
 
 /**
- * The launcher's index and search (ADR-093 Â§4). What is pinned here is what the
- * overlay offers and what a query does to it â€” and that the overlay and the rail
+ * The launcher's index and search (ADR-093 §4). What is pinned here is what the
+ * overlay offers and what a query does to it — and that the overlay and the rail
  * cannot disagree about which modules exist, since both read the same registry
  * and the same enabled set.
  */
@@ -22,7 +22,7 @@ import { lookup, strings } from "./strings.js";
 const registry = createModuleRegistry();
 
 /**
- * The real copy, exactly as the component hands it in â€” the search runs over
+ * The real copy, exactly as the component hands it in — the search runs over
  * what is DRAWN. Named `copyFor` and not `describe`: a local helper called
  * `describe` shadows Vitest's, and the suite then registers no tests at all
  * while the run reports a file it could not read a suite out of.
@@ -73,7 +73,7 @@ describe("launcherGroups", () => {
       "focus",
       "timers",
     ]);
-    // â€žKultura" is a group of its own, with the one module in it.
+    // „Kultura" is a group of its own, with the one module in it.
     expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["culture"]);
     expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual(["boards"]);
     // The games are a group of their own (ADR-093), and Šah is its first tile.
@@ -81,8 +81,8 @@ describe("launcherGroups", () => {
   });
 
   /**
-   * The shell group is left out on purpose: â€žKontrolna tabla" and
-   * â€žPodeÅ¡avanja" are the rail's two permanent ends, they cannot be switched
+   * The shell group is left out on purpose: „Kontrolna tabla" and
+   * „Podešavanja" are the rail's two permanent ends, they cannot be switched
    * off, and an overlay of modules you cannot lose would be offering a shortcut
    * to something already on screen.
    */
@@ -108,7 +108,7 @@ describe("launcherGroups", () => {
       "culture",
       "make",
     ]);
-    // PRIV is off by default, so it is absent until its flag says otherwise â€”
+    // PRIV is off by default, so it is absent until its flag says otherwise —
     // the same `resolveEnabled` set the rail is filtered through.
     const drawn = groups().flatMap((group) => group.tiles.map((tile) => tile.id));
     expect(drawn).not.toContain("priv");
@@ -140,8 +140,8 @@ describe("filterLauncherGroups", () => {
 
   /**
    * Diacritic-insensitivity is `foldSearchText`'s, and it is the property the
-   * index itself rests on: â€žucenje" finds â€žUÄŒenje", â€žbeleske" finds
-   * â€žBeleÅ¡ke", â€ždjordje" would find â€žÄorÄ‘e", and a Cyrillic query finds the
+   * index itself rests on: „ucenje" finds „UČenje", „beleske" finds
+   * „Beleške", „djordje" would find „Äorđe", and a Cyrillic query finds the
    * Latin copy. Both locales go through it, so an English name is matched by an
    * English query and a Serbian one by a Serbian query, with the diacritics
    * optional in either.
@@ -149,13 +149,13 @@ describe("filterLauncherGroups", () => {
   it("matches a name without its diacritics, in either locale's spelling", () => {
     expect(tileIds(filterLauncherGroups(groups(), "ucenje"))).toEqual(["study"]);
     // A hit in the DESCRIPTION counts, and it brings along every module whose
-    // sentence names the same thing â€” â€žbeleÅ¡ke" is the word FILES and PRIV
+    // sentence names the same thing — „beleške" is the word FILES and PRIV
     // both use for what they carry, which is the search working rather than
     // over-matching.
     expect(tileIds(filterLauncherGroups(groups(), "beleske"))).toContain("notes");
     expect(tileIds(filterLauncherGroups(groups(), "priv"))).toEqual([]);
     expect(tileIds(filterLauncherGroups(groups(allEnabled()), "privatno"))).toEqual(["priv"]);
-    // The description is searched too â€” that is what makes a half-remembered
+    // The description is searched too — that is what makes a half-remembered
     // sentence enough to find a module by.
     expect(tileIds(filterLauncherGroups(groups(), "pomodoro"))).toEqual(["focus"]);
   });
@@ -188,7 +188,7 @@ describe("nextLauncherIndex", () => {
   });
 });
 
-/** Every tile id a narrowed result still holds â€” the list the arrows walk. */
+/** Every tile id a narrowed result still holds — the list the arrows walk. */
 function tileIds(narrowed: readonly LauncherGroup[]): string[] {
   return launcherTileIds(narrowed);
 }

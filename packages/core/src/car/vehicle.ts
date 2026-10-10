@@ -36,7 +36,7 @@ export type DistanceUnit = (typeof DISTANCE_UNITS)[number];
 
 /**
  * What a service entry was. Ten members and no eleventh, because a service log
- * is read back by category — â€žwhen were the brakes last done" is the question
+ * is read back by category — „when were the brakes last done" is the question
  * the list exists to answer — and a free-text type would make every such
  * question a spelling exercise.
  */

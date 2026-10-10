@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 88 — the WIKI module's storage: what a person READ, and what they
+ * Migration 86 — the WIKI module's storage: what a person READ, and what they
  * KEPT.
  *
  * **Two tables, and neither holds a file.** The offline libraries themselves are
@@ -50,8 +50,8 @@ import type { Migration } from "./migrations.js";
  * Serbian collator, so it needs no second index: a profile's marks are a
  * handful of rows.
  */
-export const migration088: Migration = {
-  version: 88,
+export const migration086: Migration = {
+  version: 86,
   up(db) {
     db.exec(`
       CREATE TABLE wiki_history (

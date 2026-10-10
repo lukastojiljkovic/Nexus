@@ -20,7 +20,7 @@ import {
  * The normaliser, tested rule by rule.
  *
  * Every expectation here is a HAND CALCULATION from what the sources print or
- * from what the extraction is documented to hand over â€” never "a string came
+ * from what the extraction is documented to hand over — never "a string came
  * back". The page fixture is a real page of ATP 3-50.21 (see
  * `fixtures/README.md`), so the marginal cases are the source's own.
  */
@@ -41,7 +41,7 @@ describe("R1 glyphs that are not the characters a reader sees", () => {
     // A non-breaking space is whitespace and not a character of its own.
     expect(foldLigatures("10\u00A0minutes")).toBe("10 minutes");
     // Ordinary punctuation is what the source PRINTS and stays as it is.
-    expect(foldLigatures("man\u2019s â€” 1\u20132")).toBe("man\u2019s â€” 1\u20132");
+    expect(foldLigatures("man\u2019s — 1\u20132")).toBe("man\u2019s — 1\u20132");
   });
 
   it("reads the Symbol font's bullet, which comes back as a lone `z`", () => {

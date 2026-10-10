@@ -62,6 +62,16 @@ describe("scanText — what must trip the gate", () => {
     expect(ids(`// 0,4166${ellipsis}`)).toEqual(["MOJIBAKE"]);
     expect(ids(`// ra${serbianC}un`)).toEqual(["MOJIBAKE"]);
   });
+
+  it("catches the same file read as Windows-1252 — the 2026-10-10 corruption", () => {
+    // A patch tool on Windows wrote 196 characters of this kind into 32 files,
+    // and the latin1 rule above saw none of them: through Windows-1252 the bytes
+    // 0x80-0x9F become printable punctuation, not control characters.
+    const cp1252 = (text) => new TextDecoder("windows-1252").decode(Buffer.from(text, "utf8"));
+    expect(ids(`// a comment ${cp1252("—")} and more`)).toEqual(["MOJIBAKE"]);
+    expect(ids(`// ${cp1252("…")}`)).toEqual(["MOJIBAKE"]);
+    expect(ids(`// Pre${cp1252("ć")}i`)).toEqual(["MOJIBAKE"]);
+  });
 });
 
 describe("scanText — what must NOT trip it", () => {
@@ -94,7 +104,14 @@ describe("scanText — what must NOT trip it", () => {
     // And the drawer's own `mojibake-repair` tool, whose Serbian copy and test
     // fixtures are mojibake ON PURPOSE — „Å¡" is how the user recognises the
     // problem the tool solves, so it can never be „fixed" out of the strings.
-    expect(ids(`textHint: "Nalepi pokvaren tekst, na primer „Å¡\\" ili „Ä‡\\"."`)).toEqual([]);
+    // „Å¡" passes on its shape; „Ä‡" passes only on the allowlisted line.
+    const hint = `textHint: "Nalepi pokvaren tekst, na primer „Å¡“ ili „Ä‡“."`;
+    expect(scanText(hint, "apps/desktop/src/renderer/src/strings/pro.tekst.ts")).toEqual([]);
+    expect(ids(hint)).toEqual(["MOJIBAKE"]);
+  });
+
+  it("leaves a multiplication sign or an accented letter before a curly quote alone", () => {
+    expect(ids("/* „×“ and „café“, then café… */")).toEqual([]);
   });
 });
 

@@ -5,7 +5,7 @@
 The assistant answers from what is on this machine. This ADR fixes how it finds
 the passages it answers from: which material is indexed, where the index lives,
 how a passage is cut, how a query is matched, and what a citation is. It owns
-migration `093-assistant-knowledge.ts`, the tables in the profile's encrypted
+migration `090-assistant-knowledge.ts`, the tables in the profile's encrypted
 database, and `createKnowledgeService` under
 `apps/desktop/src/main/assistant/knowledge/`.
 
@@ -37,7 +37,7 @@ contract's `search`, `status` and `reindex`, plus `sync` (one incremental pass)
 for the module that will drive it. Everything below is inside that folder.
 
 **Four tables, in the profile's encrypted database** (migration
-`093-assistant-knowledge.ts`):
+`090-assistant-knowledge.ts`):
 
 | Table | What one row is |
 | --- | --- |

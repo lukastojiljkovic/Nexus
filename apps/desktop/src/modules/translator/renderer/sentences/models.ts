@@ -63,7 +63,7 @@ export function pairOf(direction: Direction): { readonly from: string; readonly 
   return { from, to };
 }
 
-/** A pack id as the manifest's own kebab rule bounds it (ADR-091 Â§2). */
+/** A pack id as the manifest's own kebab rule bounds it (ADR-091 §2). */
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**

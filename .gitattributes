@@ -34,3 +34,9 @@ patches/** text eol=lf
 # on CI. Linux reads the same CR as part of the interpreter name.
 .github/scripts/audit-toolchain.mjs text eol=lf
 apps/desktop/scripts/render-notices.mjs text eol=lf
+
+# The pack builders' fixtures are hashed and compared byte for byte (a golden
+# pack, the evidence pages a licence claim rests on), and the builders write LF.
+# A CRLF checkout made the dictionary's golden NOTICE.txt 7 bytes longer on
+# Windows than on CI. Binary fixtures stay binary: `text=auto` still decides.
+scripts/packs/**/fixtures/** eol=lf

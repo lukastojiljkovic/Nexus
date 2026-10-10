@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 90 — the PUZZLES module's storage (saved games, the per-grade
+ * Migration 88 — the PUZZLES module's storage (saved games, the per-grade
  * record, and the module's one preference).
  *
  * **Why this is a migration of its own rather than a row in the games tables.**
@@ -60,8 +60,8 @@ import type { Migration } from "./migrations.js";
  * travels in the profile's own archive. `settings()` answers false where there
  * is no row, so a fresh profile needs no seeding.
  */
-export const migration090: Migration = {
-  version: 90,
+export const migration088: Migration = {
+  version: 88,
   up(db) {
     db.exec(`
       CREATE TABLE puzzles_saves (

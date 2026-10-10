@@ -56,7 +56,6 @@ import {
 } from "./net/offline.js";
 import { applyPortableMode, PORTABLE_MARKER_FILE } from "./portable.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
-import { createDownloadHttp } from "./download/electron.js";
 import { openExternalUrl } from "./external.js";
 import { createPackCatalogueIpc, type PackCatalogueIpc } from "./packs/catalogueIpc.js";
 import { createDownloadHttp } from "./download/electron.js";
@@ -576,11 +575,9 @@ import {
   asString,
 } from "./ipcValidators.js";
 import { createModuleHost } from "./moduleHost.js";
-// CULTURE's two main-process seams (ADR-090 §3): the services its handlers need
-// (blob store, blob-reference union, packs root) and the `nx-pack:` read
-// protocol its arts guide draws from. Both live in the module's own folder -
-// this file only wires them, which is why they are two calls and no logic.
-import { registerPackProtocol } from "../modules/culture/main/packProtocol.js";
+// CULTURE's main-process seam (ADR-090 §3): the services its handlers need (blob
+// store, blob-reference union, packs root). Its arts guide reads images through
+// the shell's `nx-pack:` protocol (ADR-100), like every other pack reader.
 import { configureCultureServices } from "../modules/culture/main/services.js";
 import { packsRoot } from "./packs/registry.js";
 // The kit's attach path, implemented where it can be read on its own
@@ -14391,7 +14388,6 @@ app.whenReady().then(async () => {
   // decides whether the ports exist at all: „a port was built" and „its origin is
   // admitted" have to be the same decision, or one of them is a second opinion.
   const allowedRemoteOrigins: readonly string[] = syncService().allowedOrigins();
-  const devOrigin = devServerOrigin(process.env);
 
   // Layer 1: every request Chromium initiates — fetch, XHR, a stylesheet
   // `url()`, an `<img>`, a redirect, a service worker, a preconnect.
@@ -14540,14 +14536,6 @@ app.whenReady().then(async () => {
     installReaderEnvironment();
     registerPackProtocol(protocol, {
       userData: userDataDir(),
-      publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
-    });
-
-    // CULTURE's `nx-pack:` read protocol: an image from an installed content
-    // pack, and only that (`packProtocol.ts` owns the four refusals). The packs
-    // directory is read lazily for the same reason the blob roots are.
-    registerPackProtocol({
-      userData: userDataDir,
       publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
     });
 

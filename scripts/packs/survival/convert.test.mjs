@@ -11,9 +11,9 @@ import { captionFor, isFigureImage } from "./pdf-source.mjs";
 
 /**
  * The converter, tested on the fixtures: two real pages of the two Army PDFs
- * and one real page of FoodSafety.gov, so the awkward cases â€” a figure whose
+ * and one real page of FoodSafety.gov, so the awkward cases — a figure whose
  * caption is printed under it, an entry whose illustration is printed above it,
- * a table with a header row and a cell that spans two rows â€” are the source's
+ * a table with a header row and a cell that spans two rows — are the source's
  * own awkward cases and not invented ones.
  *
  * The fidelity test this proves is the pack's central promise, and it is proved

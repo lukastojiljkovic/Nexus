@@ -107,7 +107,7 @@ function headingKeyOf(headings: readonly string[]): string {
  *
  * Pure, and deterministic down to the character: the same text always produces
  * the same passages at the same ordinals, which is what lets the index replace a
- * document's rows by deleting them and writing these again (migration 093's
+ * document's rows by deleting them and writing these again (migration 090's
  * uniqueness rule depends on it).
  */
 export function chunkDocument(text: string, options: ChunkOptions = {}): ChunkDraft[] {

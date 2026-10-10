@@ -20,8 +20,8 @@ import type { ModuleCopyDeclaration } from "./copy.js";
  * live in each locale's table (`strings.app.navGroups`), for the same reason
  * `WidgetContract.title` is a strings path rather than Serbian text.
  *
- * `shell` is not a heading. Its two members are the app's own permanent rows â€”
- * â€žKontrolna tabla" and â€žPodeÅ¡avanja" â€” which the sidebar draws at its two
+ * `shell` is not a heading. Its two members are the app's own permanent rows —
+ * „Kontrolna tabla" and „Podešavanja" — which the sidebar draws at its two
  * ends, outside every group, because neither can be switched off and neither
  * belongs to a subject. It is a member of this list anyway, so that every
  * manifest declares its place and a test can assert that the shell's members

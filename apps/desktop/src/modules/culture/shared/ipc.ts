@@ -149,9 +149,10 @@ export interface CultureView {
 
 /**
  * One work of the arts guide, as an installed `dataset` pack describes it
- * (`art.json`, layout 1). `packId` and `version` are what the image URL is
- * built from - `nx-pack://<packId>/<version>/<image>` - and never a filesystem
- * path, which the renderer is not given in either direction.
+ * (`art.json`, layout 1). `packId` and `image` are what the image URL is
+ * built from - `nx-pack://<packId>/<image>`, the shell's pack protocol (ADR-100)
+ * - and never a filesystem path, which the renderer is not given in either
+ * direction.
  */
 export interface CultureArtWorkView {
   readonly id: string;

@@ -152,7 +152,7 @@ describe("the draw", () => {
 describe("the computer", () => {
   /**
    * A position with a winning move that only a real search finds: seat 0 drops
-   * into column 3 (or 4), which opens two lines at once â€” the board's `XX_XX`
+   * into column 3 (or 4), which opens two lines at once — the board's `XX_XX`
    * split in row 2 needs (3,2), and blocking that hands seat 0 the diagonal
    * (6,0)-(5,1)-(4,2)-(3,3) up column 3 instead. Seat 0 is a move ahead (8
    * discs to 8, it moved first), so the position is reachable, and neither side

@@ -160,7 +160,9 @@ function overCeiling(rows: readonly Measurement[]): readonly Measurement[] {
   return rows.filter((row) => row.perMove > LEVEL_CEILING_MS[row.level]);
 }
 
-describe("the opponents never play an illegal move", () => {
+// A thousand games per level is the point of these, so they run in seconds, not
+// milliseconds: the timeout is set for the block rather than the default 5 s.
+describe("the opponents never play an illegal move", { timeout: 120_000 }, () => {
   it("plays a thousand Hearts games at easy, then at medium, and a few at hard", () => {
     const measured: Measurement[] = [];
     for (const level of ["easy", "medium", "hard"] as const) {

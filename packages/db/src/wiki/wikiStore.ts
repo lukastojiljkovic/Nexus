@@ -120,7 +120,7 @@ function bookmarkFromRow(row: BookmarkRow): WikiBookmark {
 }
 
 /**
- * WIKI's storage (migration 88): which pages this profile read, and which it
+ * WIKI's storage (migration 86): which pages this profile read, and which it
  * kept.
  *
  * **Why a visit is an UPDATE and not an INSERT.** The table's UNIQUE index says a

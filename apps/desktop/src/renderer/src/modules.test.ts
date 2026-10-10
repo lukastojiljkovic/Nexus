@@ -236,8 +236,8 @@ describe("createModuleRegistry", () => {
       // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and the
       // other game modules of this wave (cards, chess, boards, puzzles) take it
       // too: one PRD section implemented as separate surfaces with separate
-      // toggles, exactly as UTIL is. Each one writes its own line here.
-      FUN: ["arcade"],
+      // toggles, exactly as UTIL is. Each one adds its id to this line.
+      FUN: ["arcade", "chess"],
       PRO: ["pro"],
       // PRD 27, and the module that finally puts a member in the `culture`
       // group: `LIB` is its own PRD entry, so it is shared with nobody.
@@ -264,11 +264,6 @@ describe("createModuleRegistry", () => {
       // The board games module: a board game is its own subject rather than a
       // second reading of anything above, so it takes a prefix of its own.
       BOARD: ["boards"],
-      // PRD 31 („Entertainment & Boosters", `docs/prd/31-entertainment.md`) is
-      // the second deliberate sharing, and the same shape as UTIL: one PRD entry
-      // whose games are built as separate modules, so „Šah" names FUN and the
-      // next game to arrive names it too.
-      FUN: ["chess"],
       // MAPS' own, on the same terms: the PRD registry has no row for a map, so
       // a map declares its own prefix rather than borrowing a tool drawer's.
       MAP: ["maps"],
@@ -386,7 +381,7 @@ describe("createModuleRegistry", () => {
       // The LAB declares `make`, after the professional drawer (ADR-093).
       "lab",
     ]);
-    // â€žKultura" is its own group (ADR-093), and the first module to fill it.
+    // „Kultura" is its own group (ADR-093), and the first module to fill it.
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual(["culture"]);
     // „Igra" is the group the games arrive in (ADR-093), and Šah is its first
     // member: a board is what somebody does for fun, which is what the group is

@@ -135,6 +135,25 @@ function licenceFiles(packageDir) {
     .sort();
 }
 
+/** Whether an `os` / `cpu` list (with npm's `!name` exclusions) admits `value`; an absent list admits all. */
+function admits(list, value) {
+  if (list === undefined) return true;
+  const values = Array.isArray(list) ? list : [list];
+  if (values.includes(`!${value}`)) return false;
+  return values.includes(value) || values.every((entry) => entry.startsWith("!"));
+}
+
+/**
+ * Whether the package installs on only SOME of the machines that run this file:
+ * the Linux CI that checks it and the Windows desktop that builds the installer,
+ * both x64. Such a package is in one tree and not the other, so listing it
+ * would make the generator disagree with itself across machines.
+ */
+function isPlatformBuild(packageDir) {
+  const { os, cpu } = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
+  return !(admits(os, "linux") && admits(os, "win32") && admits(cpu, "x64"));
+}
+
 /** One entry per package: what it is, what it declares, and the text we can prove. */
 function packageEntry(packageDir, declaredLicence) {
   const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
@@ -167,6 +186,12 @@ function npmEntries() {
       // Type-only and our own — see the scoping rule at the top of this file.
       if (pkg.name.startsWith("@types/") || pkg.name.startsWith("@nexus/")) continue;
       for (const packageDir of pkg.paths) {
+        // A platform build (`@img/sharp-win32-x64`, `@node-llama-cpp/linux-x64`)
+        // declares `os` or `cpu` and is installed only where it runs, so it is a
+        // different list on Windows than on the Linux CI that checks this file;
+        // the generator would never agree with itself across machines. What the
+        // Windows installer ships of them is credited by its packaging step.
+        if (isPlatformBuild(packageDir)) continue;
         const entry = packageEntry(packageDir, declaredLicence);
         // pnpm lists one path per peer-dependency variant, so the same
         // name@version arrives more than once; the directories are copies.

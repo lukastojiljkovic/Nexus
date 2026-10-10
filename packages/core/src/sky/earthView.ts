@@ -23,7 +23,7 @@
  * Sun's upper limb 34' of refraction above the geometric horizon, which is a
  * 90.8333-degree circle, and the horizon the fully-refracted centre is seen at is
  * 90.5667 degrees. The three twilight edges are the same construction at 96, 102
- * and 108 degrees â€” the Sun's centre 6, 12 and 18 degrees below the geometric
+ * and 108 degrees — the Sun's centre 6, 12 and 18 degrees below the geometric
  * horizon, which is how `horizon.ts` already defines civil, nautical and
  * astronomical twilight.
  *

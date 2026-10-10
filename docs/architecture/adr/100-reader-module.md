@@ -97,7 +97,7 @@ would cancel a pack's images in the app's default mode.
   where the reader stopped. A pack whose manifest carries `notice: "safety"`
   wears that mark, and the mark is an icon AND a word (the redundancy rule).
 - **Reading positions, bookmarks and their notes, the reading size and the
-  safety acknowledgements live in migration 086** (`reader_positions`,
+  safety acknowledgements live in migration 084** (`reader_positions`,
   `reader_bookmarks`, `reader_settings`, `reader_acknowledged`), scoped by
   profile. A pack's content is never in the database: it is not one profile's
   data, must not enter backups, and is not secret (ADR-091 section 5).

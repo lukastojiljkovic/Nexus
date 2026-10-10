@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 89 — the LAB module's storage (ADR-090's kit, the hardware drawer).
+ * Migration 87 — the LAB module's storage (ADR-090's kit, the hardware drawer).
  *
  * **Three tables, and each one is a different kind of fact.**
  *
@@ -61,8 +61,8 @@ import type { Migration } from "./migrations.js";
  * `lab_samples_log` is both the only sample read (a log's readings in time order)
  * and the delete scope the retention bound uses.
  */
-export const migration089: Migration = {
-  version: 89,
+export const migration087: Migration = {
+  version: 87,
   up(db) {
     db.exec(`
       CREATE TABLE lab_logs (

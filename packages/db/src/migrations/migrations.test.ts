@@ -34,26 +34,12 @@ import {
  */
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
-/**
- * Where this branch's reserved block begins.
- *
- * The runs in flight beside this one are each handed a migration number in a block
- * the branch holds for them (`migrations.ts` says the same thing beside the list,
- * and the maintainer renumbers every one of them at merge) — so the list has a GAP
- * here that a contiguous 1..N assertion cannot describe. What the assertion is FOR
- * survives the gap: no repeat, no reordering, no hole BELOW the block, and a list
- * that reaches the block. The rule over the reserved numbers themselves belongs to
- * whoever holds that block, not to this file.
- */
-const RESERVED_FROM = 83;
-
 describe("the migration list", () => {
-  it("is at version 86 (the reader), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(86);
+  it("is at version 90 (the assistant's knowledge base), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(90);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
-    expect(LATEST_VERSION).toBe(87);
   });
 });
 

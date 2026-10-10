@@ -1808,7 +1808,7 @@ describe("RestoreStore", () => {
       "chess_games",
       "chess_resume",
       "chess_level_stats",
-      //  - the READER module's four tables (migration 086, ADR-100): a KIT
+      //  - the READER module's four tables (migration 084, ADR-100): a KIT
       //    module's tables are deliberately not in `RESTORE_WIPE_TABLES`, and
       //    the reason is the structural one the timers entry above gives - a
       //    module built on the kit replaces its own rows inside the restore
@@ -1843,13 +1843,13 @@ describe("RestoreStore", () => {
       //    that list, because a kit module may not edit `@nexus/sync`.
       "cookbook_settings",
       "cookbook_food_matches",
-      // The MINI-APPS module's one table (migration 085). A kit module's tables
+      // The MINI-APPS module's one table (migration 083). A kit module's tables
       // are NOT in `RESTORE_WIPE_TABLES` for the TIMERS reason stated above:
       // that list is derived into `@nexus/sync`'s collection map, and this
       // module replaces its own row from its own `importData` inside the same
       // restore. One row per profile, holding the whole kept document.
       "miniapps_state",
-      //  - puzzles_saves / puzzles_stats / puzzles_settings (migration 090): the
+      //  - puzzles_saves / puzzles_stats / puzzles_settings (migration 088): the
       //    PUZZLES module's three tables, on the TIMERS entry's exact terms one
       //    screen up — a kit module's tables are deliberately NOT in
       //    `RESTORE_WIPE_TABLES`, because that list is derived into
@@ -1859,7 +1859,7 @@ describe("RestoreStore", () => {
       "puzzles_saves",
       "puzzles_stats",
       "puzzles_settings",
-      //  - wiki_history / wiki_bookmarks (migration 088, ADR-098): the WIKI
+      //  - wiki_history / wiki_bookmarks (migration 086, ADR-098): the WIKI
       //    module's two tables, exempt on the TIMERS section's exact reasoning
       //    above — a kit module replaces ITS OWN rows inside the same restore
       //    (`WikiStore.replaceFromArchive`, called by the module's own
@@ -1870,7 +1870,7 @@ describe("RestoreStore", () => {
       //    what this machine once read.
       "wiki_history",
       "wiki_bookmarks",
-      //  - the LAB module's three tables (migration 089, ADR-090's kit): the
+      //  - the LAB module's three tables (migration 087, ADR-090's kit): the
       //    same structural exemption Timers' three have, and for the same
       //    reason. `RESTORE_WIPE_TABLES` is DERIVED into `@nexus/sync`'s
       //    collection map, which `collectionGuard.test.ts` holds equal to it,
@@ -1883,7 +1883,16 @@ describe("RestoreStore", () => {
       "lab_logs",
       "lab_samples",
       "lab_offgrid",
-      //  - the assistant's knowledge tables (migration 093 / ADR-104) and the
+      //  - maps_pins (migration 085, ADR-099) and boards_saves / boards_stats /
+      //    boards_settings (migration 089): kit modules, exempt for the LAB's
+      //    reason above; each replaces its own rows through
+      //    `ModuleContext.importData` (`modules/maps/main/imex.ts`,
+      //    `modules/boards/main/imex.ts`).
+      "maps_pins",
+      "boards_saves",
+      "boards_stats",
+      "boards_settings",
+      //  - the assistant's knowledge tables (migration 090 / ADR-104) and the
       //    shadow of its FTS5 index: NOT in `RESTORE_WIPE_TABLES`, and this is
       //    classification rather than deferral. Nothing here is content - every
       //    row is derived from the user's own records, the app manual, installed

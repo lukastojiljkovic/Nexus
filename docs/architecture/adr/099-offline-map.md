@@ -39,7 +39,7 @@ by `protocol.handle` — so **no pack path ever crosses the IPC bridge**, in
 either direction (ADR-091 §6's rule, kept).
 
 What the app does NOT read from the pack is anything about a profile: the pins a
-person drops are rows in `maps_pins` (migration 87), and where the machine is
+person drops are rows in `maps_pins` (migration 85), and where the machine is
 comes from main's memory. That split is two lifetimes: a pack is replaced by
 installing a new one, and a pin survives all of them.
 

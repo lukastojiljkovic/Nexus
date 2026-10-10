@@ -1,7 +1,7 @@
 import type { Migration } from "./migrations.js";
 
 /**
- * Migration 86 - the READER module's storage (ADR-100).
+ * Migration 84 - the READER module's storage (ADR-100).
  *
  * **Four tables, and none of them holds a pack's content.** What a pack contains
  * lives in `<userData>/packs` (ADR-091) and is not this profile's data at all:
@@ -38,8 +38,8 @@ import type { Migration } from "./migrations.js";
  * Plain `CREATE TABLE` for all four: nothing references them, so a later column
  * may still land by `ALTER TABLE ... ADD COLUMN` (ADR-042).
  */
-export const migration086: Migration = {
-  version: 86,
+export const migration084: Migration = {
+  version: 84,
   up(db) {
     db.exec(`
       CREATE TABLE reader_positions (

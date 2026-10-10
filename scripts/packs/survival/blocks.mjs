@@ -3,11 +3,11 @@
 // A source is converted into `Block`s, never directly into text: every block
 // carries the source's own words, and `toMarkdown` may only add markup around
 // them. `stripMarkup` is the inverse written independently of `toMarkdown`, and
-// the two meet in the fidelity test â€”
+// the two meet in the fidelity test —
 //
 //     stripMarkup(toMarkdown(blocks)) === plainText(blocks)
 //
-// â€” which is the property the brief asks for on every article: the conversion
+// — which is the property the brief asks for on every article: the conversion
 // changes markup only. A block kind exists only if one of the sources needs it:
 // paragraphs, headings, bullet lists (the Army manuals' `z` bullets), tables
 // (the safe-temperature chart), and figures (an image plus the caption the
@@ -35,7 +35,7 @@ export function table(rows) {
 /**
  * A figure keeps the caption and figure number the source prints for it. A
  * source that prints none (FM 21-76's 1992 reprint numbers no figures) keeps
- * none: the alternative â€” writing a caption of our own â€” would be this pack
+ * none: the alternative — writing a caption of our own — would be this pack
  * authoring text, which the safety rules forbid.
  */
 export function figure(file, caption) {
@@ -118,8 +118,8 @@ export function escapeOpening(text) {
  *
  * Measured, twice: FEMA's guide has an OCR'd web address whose underscores
  * (`..._570_,00.html`) a Markdown reader takes for emphasis, which DELETES them
- * from the rendered page â€” the fidelity test saw that as words the article had
- * lost â€” and the same guide prints angle brackets around addresses, which a
+ * from the rendered page — the fidelity test saw that as words the article had
+ * lost — and the same guide prints angle brackets around addresses, which a
  * renderer takes for a tag and hides. Escaping them is the format's own answer,
  * and the backslashes never reach the reader.
  */
@@ -155,7 +155,7 @@ export function plainText(blocks) {
  * The Markdown read back into plain words: markup out, words kept.
  *
  * Deliberately a different implementation from `toMarkdown` and deliberately
- * small â€” it understands exactly the Markdown that writer emits, so a bug in
+ * small — it understands exactly the Markdown that writer emits, so a bug in
  * one is not hidden by the other sharing a helper. A line that is only a table
  * separator carries no words and is skipped whole; a figure contributes its
  * caption and not its file name.
@@ -183,7 +183,7 @@ export function stripMarkup(markdown) {
  * writer added comes back off.
  *
  * There is deliberately no emphasis pass. The writer never emits emphasis, and
- * the source's own underscores and asterisks are escaped â€” a pass that removed
+ * the source's own underscores and asterisks are escaped — a pass that removed
  * `_text_` ran BEFORE the unescape in the first version of this function and
  * ate the escaped underscores of FEMA's guide (`\_570\_` came back as `\ 570\`),
  * which the fidelity test reported as words the article had lost.

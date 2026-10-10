@@ -26,45 +26,19 @@ export { activeLocale } from "../strings.js";
 // read without spelling a tag of its own.
 export { numberFormat, dateTimeFormat, collator } from "../intl.js";
 export { declaredText } from "./labels.js";
-/**
- * The shell's `Intl` factories, for a module that draws a number, a unit or an
- * alphabetical order.
- *
- * A module may not build its own formatters: every one the shell makes reads the
- * ACTIVE locale through `intlTags`, so the tags stay the single source of the
- * spelling — `sr-Latn` first, which is what keeps Latin š/č/ć sorted correctly
- * and Serbian numbers grouped the Serbian way — and a language switch is
- * followed at the next render rather than frozen at import. `collator()` with no
- * arguments is therefore `Intl.Collator(["sr-Latn", "sr"])` for a Serbian
- * reader, which is the collation rule this repository states.
- */
-export { collator, numberFormat } from "../intl.js";
+// The shell's `Intl` factories are the line above: `collator()` with no arguments
+// is `Intl.Collator(["sr-Latn", "sr"])` for a Serbian reader, which is the
+// collation rule this repository states.
 export type { SettingsPanelProps } from "../moduleSettingsPanels.js";
 export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashboardWidgets.js";
 
 // --- What a module needs to DRAW a value (ADR-090) ---------------------------
 //
-// The four above are what a module needs to be DISCOVERED and to read its own
-// declared words. These are what it needs to print a number: the app has exactly
-// one door to `Intl` and exactly one function that turns minor units into money,
-// and a module that reached past them would be a second opinion about the
-// locale's decimal mark or about how many para a dinar has. The car module is
-// the first to reach for them (a service book prints dates, distances and
-// prices); every module with a quantity or an amount will, which is why they
-// belong on this list rather than in one module's own folder.
-
-export { dateTimeFormat, numberFormat } from "../intl.js";
+// The app has exactly one function that turns minor units into money, and a
+// module that reached past it would be a second opinion about how many para a
+// dinar has. The car module is the first to reach for it (a service book prints
+// prices); every module with an amount will.
 export { formatMoney, formatMoneyPlain } from "../money.js";
-export { ConfirmDialog, type ConfirmDialogProps } from "../ConfirmDialog.js";
-/**
- * The renderer's one door to `Intl` (`intl.ts`'s own header: every date, number
- * and collation the interface draws goes through it, so no call site spells a
- * locale tag of its own). A module that draws a ROW WITH A DATE in it needs this
- * and nothing else from that file - the calculator's history is the first such
- * surface, and the function is a factory rather than a value so it follows a
- * runtime language switch.
- */
-export { dateTimeFormat } from "../intl.js";
 /**
  * The house confirmation dialog (`ConfirmDialog`), for a kit module that removes
  * something the user made. It is the same component every compiled-in page's

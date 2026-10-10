@@ -22,7 +22,7 @@ import { packsRoot, readInstalled } from "../../../main/packs/registry.js";
  * **Why every work's image is checked against the manifest.** The pack's
  * manifest is the list of files that were hashed while the folder was copied,
  * so a path it does not carry is a path nothing verified - and the read
- * protocol that serves the bytes refuses it too (`artFile.ts`). Checking here
+ * protocol that serves the bytes refuses it too (`main/packs/protocol.ts`). Checking here
  * as well means a work with a broken image is a pack the guide REPORTS rather
  * than a gallery full of broken pictures.
  *

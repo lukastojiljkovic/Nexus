@@ -2765,7 +2765,7 @@ export type {
 
 export { resolvePackPath } from "./reader/paths.js";
 
-// --- GAMES: the BOARD GAMES module's turn protocol (stage 2, migration 091) ---
+// --- GAMES: the BOARD GAMES module's turn protocol (stage 2, migration 089) ---
 //
 // The six board engines are exported above as namespaces; this is the layer over
 // them that says what a GAME is — which seat counts it is played with, how many

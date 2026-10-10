@@ -143,7 +143,7 @@ function sampleFromRow(row: SampleRow): LabSample {
 }
 
 /**
- * The LAB's storage (migration 089): the sensor logs, the readings inside them,
+ * The LAB's storage (migration 087): the sensor logs, the readings inside them,
  * and the off-grid budget.
  *
  * **Why the validation lives here and not only on the wire.** Main re-validates

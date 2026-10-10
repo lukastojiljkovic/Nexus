@@ -23,8 +23,8 @@ import { memoryStorage } from "./testStorage.js";
  * and they are different kinds: the two stored preferences (per-profile keys
  * with a safe fallback, the `accent.ts` recipe), the pure list arithmetic the
  * pin toggle and the drag both call, and `sidebarGroups`, which is the ONE place
- * the sidebar's draw order is decided â€” `App` both renders it and counts
- * Alt+1â€¦Alt+9 along it.
+ * the sidebar's draw order is decided — `App` both renders it and counts
+ * Alt+1…Alt+9 along it.
  */
 
 const registry = createModuleRegistry();
@@ -81,7 +81,7 @@ describe("the stored preferences", () => {
   });
 
   /**
-   * â€žNothing here" has exactly ONE representation, and it is the absent key: a
+   * „Nothing here" has exactly ONE representation, and it is the absent key: a
    * stored `[]` would be a second one, and the two would then have to be kept
    * meaning the same thing by everybody who reads them. That matters twice over
    * for the folded groups, because the fallback is what makes a module arriving
@@ -146,7 +146,7 @@ describe("the pinned list", () => {
   });
 
   /**
-   * The cap is one number for the plan and for the user (ADR-086 Â§4), so a
+   * The cap is one number for the plan and for the user (ADR-086 §4), so a
    * sixth pin is REFUSED rather than replacing one: a shortlist that quietly
    * dropped the module somebody pinned first would undo their arrangement to
    * honour their newest click.
@@ -232,7 +232,7 @@ describe("sidebarGroups", () => {
     expect(groups[1]).toEqual({ key: PINNED_GROUP_KEY, moduleIds: ["finance", "study"] });
   });
 
-  /** The same row twice is a list, not a shortlist â€” so a promoted module leaves its group. */
+  /** The same row twice is a list, not a shortlist — so a promoted module leaves its group. */
   it("draws every module exactly once", () => {
     const drawn = flatten(sidebarGroups(registry, allEnabled(), ["finance", "study", "notes"]));
     expect(new Set(drawn).size).toBe(drawn.length);
@@ -241,9 +241,9 @@ describe("sidebarGroups", () => {
 
   /**
    * The stored list is never validated on read, so every way it can be stale has
-   * to die here: a module switched off in â€žNapredno", a module this build no
-   * longer registers, a duplicate, and the two rows a user cannot switch off â€”
-   * promoting â€žPodeÅ¡avanja" says nothing about anybody.
+   * to die here: a module switched off in „Napredno", a module this build no
+   * longer registers, a duplicate, and the two rows a user cannot switch off —
+   * promoting „Podešavanja" says nothing about anybody.
    */
   it("ignores a pin that is disabled, unknown, locked or repeated", () => {
     const locked = [...LOCKED_MODULE_IDS][0] ?? "settings";
@@ -259,7 +259,7 @@ describe("sidebarGroups", () => {
     expect(flatten(groups)).toContain(locked);
   });
 
-  /** A stored list longer than the cap â€” an old build's, or a hand-edited one â€” draws at most `MAX_PINNED_MODULES`. */
+  /** A stored list longer than the cap — an old build's, or a hand-edited one — draws at most `MAX_PINNED_MODULES`. */
   it("draws at most the cap when the stored list is longer than one", () => {
     const stored = ["study", "notes", "finance", "habits", "fitness", "canvas", "tools"];
     const groups = sidebarGroups(registry, allEnabled(), stored);

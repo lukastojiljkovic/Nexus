@@ -26,7 +26,7 @@ import {
 } from "../../index.js";
 
 /**
- * The board games' store (migration 091). What is pinned here is the module's
+ * The board games' store (migration 089). What is pinned here is the module's
  * whole promise about a saved game: **a game is its seed plus its event log, and
  * the position it stores is the position that log produces** — per game, because
  * six engines means six chances for the fold to be wrong.

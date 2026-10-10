@@ -180,8 +180,9 @@ describe("the metadata file", () => {
     expect(block).not.toBeNull();
     const appKeys = [...(block?.[1] ?? "").matchAll(/"([a-zA-Z]+)"/g)].map((match) => match[1]);
     // `files` is the one key the maintainer never types: `pack-sign.mjs` measures
-    // it off the folder.
-    const expected = appKeys.filter((key) => key !== "files").sort();
+    // it off the folder. `notice` is optional and only a safety pack carries it
+    // (ADR-103); a tool pack has none.
+    const expected = appKeys.filter((key) => key !== "files" && key !== "notice").sort();
     expect(Object.keys(stockfishMetadata()).sort()).toEqual(expected);
     expect(Object.keys(libredwgMetadata()).sort()).toEqual(expected);
   });

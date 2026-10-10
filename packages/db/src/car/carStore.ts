@@ -30,8 +30,8 @@ export const MAX_VEHICLE_PLATE_LENGTH = 20;
 export const MAX_VEHICLE_NOTES_LENGTH = 2_000;
 
 /**
- * The ceiling on an odometer reading. Not a semantic limit â€” a car that has
- * driven a million kilometres still reads six digits â€” but an untrusted
+ * The ceiling on an odometer reading. Not a semantic limit — a car that has
+ * driven a million kilometres still reads six digits — but an untrusted
  * caller's number goes into a column every estimate subtracts, and 10 000 000 is
  * two hundred and fifty times around the Earth. A bound is cheaper than
  * discovering the absence of one (`HabitStore`'s `MAX_HABIT_COUNT` reasoning).
@@ -51,7 +51,7 @@ export const MAX_INTERVAL_MONTHS = 600;
 /**
  * The ceiling on one fill, in the vehicle's own quantity unit. The largest car
  * tanks are under 150 L and the largest car batteries under 200 kWh, so 500 is a
- * ceiling nothing legitimate approaches â€” `MAX_ODOMETER_READING`'s reasoning.
+ * ceiling nothing legitimate approaches — `MAX_ODOMETER_READING`'s reasoning.
  */
 export const MAX_FUEL_QUANTITY = 500;
 
@@ -82,7 +82,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 /**
  * Serbian Latin ordering for the vehicle list, on `FIN_COLLATOR`'s terms: plain
  * `"sr"` mis-tailors the Latin digraphs and diacritics, and SQLite's BINARY
- * collation would put â€žÅ koda" after â€žÅ½uti".
+ * collation would put „Å koda" after „Žuti".
  */
 const CAR_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
@@ -98,7 +98,7 @@ export interface Vehicle {
   plate: string | null;
   /** Canonical upper-case ISO 3779 form, or null. Never lower-case, never a non-VIN. */
   vin: string | null;
-  /** Decides whether a fill is litres or kWh â€” see `fuelQuantityUnit`. */
+  /** Decides whether a fill is litres or kWh — see `fuelQuantityUnit`. */
   fuelType: FuelType;
   /** The unit this vehicle's odometers, intervals and distances are counted in. */
   distanceUnit: DistanceUnit;
@@ -162,7 +162,7 @@ export interface ServiceEntry {
   id: string;
   vehicleId: string;
   date: string;
-  /** Absent when nobody wrote the number down â€” a real case, and one the countdown skips rather than guesses. */
+  /** Absent when nobody wrote the number down — a real case, and one the countdown skips rather than guesses. */
   odometer: number | null;
   category: ServiceCategory;
   description: string;
@@ -495,18 +495,18 @@ const CAR_TABLES = [
  * `deleted_at` alone, exactly as `HabitStore.requireHabit` does: archiving a sold
  * car is how its history stays reachable, so the history must stay correctable
  * and its receipts still listable. The soft delete is what takes the car away,
- * and it is reversible â€” a car thrown away comes back with everything it had,
+ * and it is reversible — a car thrown away comes back with everything it had,
  * because no delete here touches a child row.
  *
  * **Nothing here computes consumption, an odometer estimate, a due date or a
  * total.** Those are pure and live in `@nexus/core` (`fuelConsumption`,
  * `estimateOdometerForDate`, `whatIsDue`, `vehicleCosts`), and this store's rows
- * are their input as they stand â€” `carStore.test.ts` pins that by feeding real
+ * are their input as they stand — `carStore.test.ts` pins that by feeding real
  * stored rows to them. What DOES live here is every refusal, because stage 2's
  * IPC layer hands this store untrusted input and a store is never the place that
  * assumes its caller validated anything (SEC-EL-02).
  *
- * `now` is supplied by the caller and validated here â€” main stamps the clock,
+ * `now` is supplied by the caller and validated here — main stamps the clock,
  * the renderer never does.
  */
 export class CarStore {
@@ -582,7 +582,7 @@ export class CarStore {
       `SELECT ${VEHICLE_COLUMNS} FROM vehicles WHERE profile_id = ? AND deleted_at IS NULL`,
     );
     // The one gate every mutation and every child write passes: live in THIS
-    // profile. Deliberately not filtered on `archived_at` â€” archiving is a fact
+    // profile. Deliberately not filtered on `archived_at` — archiving is a fact
     // about today's garage, never about whether the row is here (migration 074).
     this.selectVehicleById = db.prepare(
       `SELECT ${VEHICLE_COLUMNS} FROM vehicles
@@ -687,7 +687,7 @@ export class CarStore {
     this.deleteAttachment = db.prepare(
       `DELETE FROM service_attachments WHERE id = ? AND service_id = ?`,
     );
-    // Deliberately NOT scoped by profile â€” see the class doc comment: the blob
+    // Deliberately NOT scoped by profile — see the class doc comment: the blob
     // store is content-addressed across the whole database.
     this.countAttachmentsBySha = db.prepare(
       `SELECT count(*) AS n FROM service_attachments WHERE sha256 = ?`,
@@ -851,7 +851,7 @@ export class CarStore {
   }
 
   /**
-   * This profile's live vehicles, sr-Latn alphabetical â€” ARCHIVED ONES INCLUDED,
+   * This profile's live vehicles, sr-Latn alphabetical — ARCHIVED ONES INCLUDED,
    * each carrying its own `archivedAt`. The caller decides what to show (a sold
    * car belongs in a picker and out of today's garage), and a store that had
    * already dropped them could not offer the second view at all.
@@ -908,7 +908,7 @@ export class CarStore {
 
   /**
    * Applies a partial patch to a vehicle that is still here. An ARCHIVED one is
-   * edited on exactly these terms â€” `requireVehicle` filters on `deleted_at`
+   * edited on exactly these terms — `requireVehicle` filters on `deleted_at`
    * alone, and that is right: being unable to correct the plate of a car you have
    * sold would be a strange thing to enforce.
    */
@@ -965,7 +965,7 @@ export class CarStore {
     }
   }
 
-  /** Soft-deletes a car (reversible via `restoreVehicle`). Its history is UNTOUCHED â€” see the class comment. */
+  /** Soft-deletes a car (reversible via `restoreVehicle`). Its history is UNTOUCHED — see the class comment. */
   softDeleteVehicle(id: string, now: string): void {
     const validNow = validateNow(now);
     const { changes } = this.markVehicleDeleted.run(validNow, validNow, id, this.profileId);
@@ -983,7 +983,7 @@ export class CarStore {
     }
   }
 
-  /** This vehicle's odometer readings, oldest first â€” the order every estimate and every consumption walk wants. */
+  /** This vehicle's odometer readings, oldest first — the order every estimate and every consumption walk wants. */
   listReadings(vehicleId: string): OdometerReading[] {
     this.requireVehicle(vehicleId);
     const rows = this.selectReadings.all(vehicleId) as ReadingRow[];
@@ -996,7 +996,7 @@ export class CarStore {
    *
    * `startsNewSegment` is the user's explicit override for a replaced odometer,
    * and the refusal below NAMES it, because the number is usually right and only
-   * its segment is wrong â€” a message that merely said no would leave the user
+   * its segment is wrong — a message that merely said no would leave the user
    * with nothing to do.
    */
   addReading(vehicleId: string, input: AddOdometerReadingInput, now: string): OdometerReading {
@@ -1035,9 +1035,9 @@ export class CarStore {
   }
 
   /**
-   * Removes a reading. Removing one that is not there is not an error â€”
+   * Removes a reading. Removing one that is not there is not an error —
    * the caller asked for a row with no reading and that is what stands
-   * afterwards â€” but naming a vehicle this profile does not have still is,
+   * afterwards — but naming a vehicle this profile does not have still is,
    * because that is a question about somebody else's data.
    */
   removeReading(vehicleId: string, readingId: string): void {
@@ -1168,7 +1168,7 @@ export class CarStore {
   }
 
   /**
-   * Removes one receipt and returns it â€” the caller (main) uses the returned
+   * Removes one receipt and returns it — the caller (main) uses the returned
    * `sha256` to decide whether the on-disk blob is now orphaned. An id that does
    * not resolve under THIS service throws, because the hash is what a
    * reference-counting caller is about to act on and a silent no-op would hand
@@ -1184,7 +1184,7 @@ export class CarStore {
     return toAttachment(row);
   }
 
-  /** How many receipt rows (across every profile) name this hash â€” deliberately profile-agnostic; see the class doc comment. */
+  /** How many receipt rows (across every profile) name this hash — deliberately profile-agnostic; see the class doc comment. */
   attachmentRefCount(sha256: string): number {
     return (this.countAttachmentsBySha.get(sha256) as { n: number }).n;
   }
@@ -1195,7 +1195,7 @@ export class CarStore {
     return row ? row.mime : null;
   }
 
-  /** This vehicle's intervals, in the module's own category order â€” which is what a picker shows, so the two agree. */
+  /** This vehicle's intervals, in the module's own category order — which is what a picker shows, so the two agree. */
   listIntervals(vehicleId: string): ServiceInterval[] {
     this.requireVehicle(vehicleId);
     const rows = this.selectIntervals.all(vehicleId) as IntervalRow[];
@@ -1291,7 +1291,7 @@ export class CarStore {
   /**
    * Applies a partial patch to a live fill. The pair rule is checked on the
    * MERGED row, so clearing the last price column takes clearing the currency in
-   * the same call â€” which is the caller saying the price is gone, rather than
+   * the same call — which is the caller saying the price is gone, rather than
    * this store inferring it from a `null`.
    */
   updateFuelEntry(
@@ -1331,7 +1331,7 @@ export class CarStore {
     return { ...current, ...resolved, updatedAt: validNow };
   }
 
-  /** Soft-deletes a fill (reversible via `restoreFuelEntry`) â€” the consumption walk simply stops seeing it. */
+  /** Soft-deletes a fill (reversible via `restoreFuelEntry`) — the consumption walk simply stops seeing it. */
   softDeleteFuelEntry(vehicleId: string, id: string, now: string): void {
     const validNow = validateNow(now);
     this.requireVehicle(vehicleId);
@@ -1518,7 +1518,7 @@ export class CarStore {
    * **The WHOLE value is validated before a single row is written**, and that is
    * not politeness: the write is a wipe followed by an insert, so a value
    * rejected halfway through would leave the profile with less car data than it
-   * started with. Nothing here trusts the archive either â€” it is a file that may
+   * started with. Nothing here trusts the archive either — it is a file that may
    * have been edited, so ids are bounded, every enum, number and date is
    * re-checked through the same validators the live path uses, references are
    * resolved against the value's OWN rows, and readings are re-checked for the
@@ -1636,7 +1636,7 @@ export class CarStore {
     })();
   }
 
-  /** Reads a live vehicle in this profile or throws â€” the gate every child statement runs first. */
+  /** Reads a live vehicle in this profile or throws — the gate every child statement runs first. */
   private requireVehicle(id: string): Vehicle {
     const row = this.selectVehicleById.get(id, this.profileId) as VehicleRow | undefined;
     if (!row) {
@@ -1645,7 +1645,7 @@ export class CarStore {
     return toVehicle(row);
   }
 
-  /** Reads a live service entry of THIS vehicle or throws â€” the second gate, for everything that hangs off one. */
+  /** Reads a live service entry of THIS vehicle or throws — the second gate, for everything that hangs off one. */
   private requireService(vehicleId: string, id: string): ServiceEntry {
     const row = this.selectServiceById.get(id, vehicleId) as ServiceRow | undefined;
     if (!row) {
@@ -1680,7 +1680,7 @@ export class CarStore {
   /**
    * Confirms a fault's optional service link is a live entry of the SAME
    * vehicle, or throws. A cross-vehicle link would be a dangling reference in
-   * every read that resolves it, and no CHECK can hold a sub-query â€” the same
+   * every read that resolves it, and no CHECK can hold a sub-query — the same
    * invariant `CircuitStore` guards for a wire's ends (migration 067).
    */
   private resolveFaultLink(vehicleId: string, serviceId: string | null): string | null {
@@ -1717,7 +1717,7 @@ function wipeSqlFor(table: (typeof CAR_TABLES)[number]): string {
 }
 
 /**
- * Validates and resolves a whole vehicle â€” the ONE place every refusal lives, so
+ * Validates and resolves a whole vehicle — the ONE place every refusal lives, so
  * `createVehicle` and `updateVehicle` cannot drift on what a vehicle is allowed
  * to be.
  */
@@ -1938,7 +1938,7 @@ function toFault(row: FaultRow): Fault {
   };
 }
 
-/** Where a category sits in the module's own vocabulary â€” the picker's order, reused as the list's. */
+/** Where a category sits in the module's own vocabulary — the picker's order, reused as the list's. */
 function categoryOrder(category: ServiceCategory): number {
   return SERVICE_CATEGORIES.indexOf(category);
 }
@@ -2018,8 +2018,8 @@ function validateStatusFilter(value: FaultStatus | null): FaultStatus | null {
 }
 
 /**
- * The VIN in canonical form, or a refusal. `normalizeVin` owns the rule â€”
- * seventeen characters of an alphabet without I, O and Q â€” and this only turns
+ * The VIN in canonical form, or a refusal. `normalizeVin` owns the rule —
+ * seventeen characters of an alphabet without I, O and Q — and this only turns
  * its `null` into a sentence.
  */
 function validateVin(value: string | null): string | null {
@@ -2077,7 +2077,7 @@ function validateQuantity(value: number): number {
   return value;
 }
 
-/** Money in minor units (FIN's rule: a safe INTEGER, never a float) or null. Zero is refused â€” â€žnothing" is said by null, and a zero in a total draws a bar in the cheapest category. */
+/** Money in minor units (FIN's rule: a safe INTEGER, never a float) or null. Zero is refused — „nothing" is said by null, and a zero in a total draws a bar in the cheapest category. */
 function validateMoney(value: number | null, field: string): number | null {
   if (value === null) return null;
   if (!isMinorUnits(value) || value <= 0) {
@@ -2155,7 +2155,7 @@ function validateId(value: string, field: string): string {
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Whether a value is a bare day this module will store â€” `validateDay`'s check, usable on an untyped field. */
+/** Whether a value is a bare day this module will store — `validateDay`'s check, usable on an untyped field. */
 function isDay(value: unknown): value is string {
   return typeof value === "string" && DAY_PATTERN.test(value) && dayNumber(value) !== null;
 }
@@ -2211,12 +2211,12 @@ function asDateTime(value: unknown, field: string): string {
   return text;
 }
 
-/** An optional timestamp's check â€” `null` stays null, anything else must be an ISO date-time. */
+/** An optional timestamp's check — `null` stays null, anything else must be an ISO date-time. */
 function asNullableDateTime(value: unknown, field: string): string | null {
   return value === null ? null : asDateTime(value, field);
 }
 
-/** Every id of one table, checked for shape and for being unique â€” the identity an import relies on to keep a reference pointing at the same row. */
+/** Every id of one table, checked for shape and for being unique — the identity an import relies on to keep a reference pointing at the same row. */
 function collectIds(rows: readonly Record<string, unknown>[], field: string): Set<string> {
   const ids = new Set<string>();
   for (const row of rows) {
@@ -2237,7 +2237,7 @@ function collectIds(rows: readonly Record<string, unknown>[], field: string): Se
  *
  * Five kinds of check, in the order a reader would ask for them: the version, the
  * shape of each table, each row's own fields (through the same validators the
- * live path uses), the uniqueness of every id, and finally the references â€”
+ * live path uses), the uniqueness of every id, and finally the references —
  * including the one rule a single row cannot state, an odometer that goes
  * backwards inside a segment.
  */
@@ -2471,7 +2471,7 @@ function parseCarExport(
       fixNotes: asNullableText(row["fixNotes"], "fixNotes"),
       serviceId: asNullableText(row["serviceId"], "serviceId"),
     });
-    // A link must resolve to a service entry OF THE SAME VEHICLE â€” the rule the
+    // A link must resolve to a service entry OF THE SAME VEHICLE — the rule the
     // live path enforces in `resolveFaultLink`, restated here because an archive
     // arrives whole rather than one write at a time.
     if (resolved.serviceId !== null) {
