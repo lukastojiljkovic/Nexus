@@ -141,11 +141,11 @@ Two consequences, stated because they are deliberate:
 ```bash
 node scripts/packs/dictionary/build.mjs --update-sources   # once, to record a new source's digest
 node scripts/packs/dictionary/build.mjs                    # the build itself
-node scripts/pack-sign.mjs --dir "%TEMP%\nexus-packs\dictionary-sr-en" \
-  --meta "%TEMP%\nexus-packs\dictionary-sr-en.meta.json" --key <release-key.pem>
+node scripts/pack-sign.mjs --dir "~\.nexus-packs\dictionary-sr-en" \
+  --meta "~\.nexus-packs\dictionary-sr-en.meta.json" --key <release-key.pem>
 ```
 
-- The sources are cached in `%TEMP%\nexus-pack-cache\dictionary-sr-en\` and
+- The sources are cached in `~\.nexus-pack-cache\dictionary-sr-en\` and
   reused, so a rebuild costs no download; an interrupted download resumes with
   HTTP `Range`.
 - The build **refuses to run** when a cached source's SHA-256 differs from the

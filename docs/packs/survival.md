@@ -34,7 +34,7 @@ counts are from the build log of the run recorded below.
 
 **Measured, one full build on 2026-10-10:** 541 articles and 417 figures,
 1 154 397 characters of text, **38 020.0 KiB (37.1 MiB) in 959 files**, written
-to `%TEMP%\nexus-packs\survival\` in 197.4 s with every source already in the
+to `~\.nexus-packs\survival\` in 197.4 s with every source already in the
 cache. Six articles were refused by the safety sweep and are listed under
 "What is left out" below.
 
@@ -187,18 +187,18 @@ node scripts/packs/survival/build.mjs --fixtures   # re-cut the test fixtures
 ```
 
 The builder downloads every source `sources.json` names into
-`%TEMP%\nexus-pack-cache\survival\` (re-using the cache on the next run,
+`~\.nexus-pack-cache\survival\` (re-using the cache on the next run,
 discarding a cached file whose digest no longer matches the evidence, and
 refusing a download that does not match it), extracts the text with
 **pdfjs-dist** and the figures with **Poppler**, converts every article to
 CommonMark, proves the fidelity of every article, and writes the pack to
-`%TEMP%\nexus-packs\survival\` with the metadata `pack-sign.mjs` takes BESIDE
+`~\.nexus-packs\survival\` with the metadata `pack-sign.mjs` takes BESIDE
 that folder.
 
 **Poppler is fetched into the cache and never shipped.** The pinned build is
 `oschwartz10612/poppler-windows` Release 26.09.0-0 (GPL-2.0-or-later), 43 709 956
 bytes, SHA-256 `7a6f256a…56c8d0`; the builder unpacks it under
-`%TEMP%\nexus-pack-cache\survival\poppler-26.09.0-0\` and runs `pdfimages` and
+`~\.nexus-pack-cache\survival\poppler-26.09.0-0\` and runs `pdfimages` and
 `pdftoppm` from there. Nothing of it is linked into Nexus, and what it produces
 is images of pages that are themselves public domain. `pdfimages -list` is what
 says a page really embeds an image at figure size; `pdftoppm` renders the page
@@ -219,8 +219,8 @@ Then the maintainer signs it — this run never has the key:
 
 ```sh
 node scripts/pack-sign.mjs \
-  --dir %TEMP%/nexus-packs/survival \
-  --meta %TEMP%/nexus-packs/survival.meta.json \
+  --dir ~/.nexus-packs/survival \
+  --meta ~/.nexus-packs/survival.meta.json \
   --key <release-key.pem>
 ```
 

@@ -66,12 +66,12 @@ and the citation above.
 
 ```text
 node scripts/packs/foods/build.mjs
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\foods-usda \
-  --meta %TEMP%\nexus-packs\foods-usda.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\foods-usda \
+  --meta ~\.nexus-packs\foods-usda.meta.json --key <release-key.pem>
 ```
 
 The build downloads the two archives into
-`%TEMP%\nexus-pack-cache\foods-usda\`, reuses them on a second run, unzips them
+`~\.nexus-pack-cache\foods-usda\`, reuses them on a second run, unzips them
 with [`scripts/packs/lib/zip.mjs`](../../scripts/packs/lib/zip.mjs) (no new
 dependency), and writes the pack folder and its metadata file. It prints what it
 fetched, what it dropped and how long it took. The 2026-10-10 run took 2,679 ms

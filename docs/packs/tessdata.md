@@ -65,16 +65,16 @@ model nobody could check against upstream.
 node scripts/packs/tessdata/build.mjs
 # then, with the release key:
 node scripts/pack-sign.mjs \
-  --dir   "$TEMP/nexus-packs/tessdata-fast" \
-  --meta  "$TEMP/nexus-packs/tessdata-fast.meta.json" \
+  --dir   "~/.nexus-packs/tessdata-fast" \
+  --meta  "~/.nexus-packs/tessdata-fast.meta.json" \
   --key   <release-key.pem>
 ```
 
-The builder downloads into `%TEMP%\nexus-pack-cache\tessdata-fast\` and reuses
+The builder downloads into `~\.nexus-pack-cache\tessdata-fast\` and reuses
 that cache; a cached file whose SHA-256 no longer matches `sources.json` is
 re-downloaded rather than trusted. It writes the pack folder and the metadata
 file **beside** it (a metadata file inside the folder would be a file the
-manifest does not list, which the app refuses) under `%TEMP%\nexus-packs\`, and
+manifest does not list, which the app refuses) under `~\.nexus-packs\`, and
 prints every file's size, the total and the elapsed time. Re-running it produces
 the same bytes, so the signed manifest's digests survive a rebuild.
 

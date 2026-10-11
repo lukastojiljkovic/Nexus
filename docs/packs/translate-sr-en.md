@@ -16,7 +16,7 @@ holds Mozilla's `tiny` Serbian→English model.
 
 **Measured size: 22 591 608 bytes** of content (the three model files; the pack
 also carries the licence and the notice). Rebuilt 2026-10-10 from
-`%TEMP%\nexus-pack-cache\translate-sr-en`.
+`~\.nexus-pack-cache\translate-sr-en`.
 
 The three files are Mozilla's objects at
 `models/sr-en/spring-2024_H5GCfsx4SnqOP4YFIQdkdA/exported/`, downloaded gzipped
@@ -46,16 +46,16 @@ node scripts/packs/translate-sr-en/build.mjs
 
 The builder downloads Mozilla's registry, its delivery records, the model
 repository's README and licence, and the three model objects into
-`%TEMP%\nexus-pack-cache\translate-sr-en\`; verifies every file's size and
+`~\.nexus-pack-cache\translate-sr-en\`; verifies every file's size and
 SHA-256 against Mozilla's own record; cross-checks the registry against the
 record so a pinned directory and a pinned version cannot describe two different
 builds; writes the pack folder and `translate-sr-en.meta.json` to
-`%TEMP%\nexus-packs\`; and rewrites `sources.json`. Re-running reuses the cache
+`~\.nexus-packs\`; and rewrites `sources.json`. Re-running reuses the cache
 and re-verifies every hash.
 
 The maintainer then signs the folder:
 
 ```bash
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\translate-sr-en \
-  --meta %TEMP%\nexus-packs\translate-sr-en.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\translate-sr-en \
+  --meta ~\.nexus-packs\translate-sr-en.meta.json --key <release-key.pem>
 ```

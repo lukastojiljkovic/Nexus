@@ -77,13 +77,13 @@ in the project:
 
 ```
 node scripts/packs/libredwg/build.mjs
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\libredwg \
-  --meta %TEMP%\nexus-packs\libredwg.meta.json --key <private key>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\libredwg \
+  --meta ~\.nexus-packs\libredwg.meta.json --key <private key>
 ```
 
-As with Stockfish: the builder caches under `%TEMP%\nexus-pack-cache\libredwg\`,
+As with Stockfish: the builder caches under `~\.nexus-pack-cache\libredwg\`,
 verifies every digest before unpacking, writes the folder and its metadata file
-under `%TEMP%\nexus-packs\`, and prints each file's size and the elapsed time.
+under `~\.nexus-packs\`, and prints each file's size and the elapsed time.
 It adds no dependency: `scripts/packs/zip.mjs` reads the archive, and the `.tar.xz`
 is carried verbatim rather than unpacked (Node reads neither xz nor tar, and
 nothing in the pack needs it to).

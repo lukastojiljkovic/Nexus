@@ -62,14 +62,14 @@ it — the archive carries the GNU text itself, not a paraphrase.
 
 ```
 node scripts/packs/stockfish/build.mjs
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\stockfish \
-  --meta %TEMP%\nexus-packs\stockfish.meta.json --key <private key>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\stockfish \
+  --meta ~\.nexus-packs\stockfish.meta.json --key <private key>
 ```
 
-The builder downloads into `%TEMP%\nexus-pack-cache\stockfish\` (and reuses what
+The builder downloads into `~\.nexus-pack-cache\stockfish\` (and reuses what
 is there), verifies the digest, writes the pack folder to
-`%TEMP%\nexus-packs\stockfish\` and the metadata file `pack-sign.mjs` takes to
-`%TEMP%\nexus-packs\stockfish.meta.json`, and prints what it fetched, each file's
+`~\.nexus-packs\stockfish\` and the metadata file `pack-sign.mjs` takes to
+`~\.nexus-packs\stockfish.meta.json`, and prints what it fetched, each file's
 size and the time it took. It never signs anything; the key is the maintainer's.
 
 The builder uses Node alone — no dependency is added for it. `scripts/packs/zip.mjs`

@@ -212,14 +212,14 @@ node node_modules/vitest/vitest.mjs run --configLoader runner --maxWorkers=1 scr
 ```
 
 The build downloads every source `sources.json` names into
-`%TEMP%\nexus-pack-cache\make-by-hand\`, verifies each download against the size
+`~\.nexus-pack-cache\make-by-hand\`, verifies each download against the size
 and SHA-256 that file records, converts, proves the fidelity of every article,
-writes the figures, and writes the pack to `%TEMP%\nexus-packs\make-by-hand\`
+writes the figures, and writes the pack to `~\.nexus-packs\make-by-hand\`
 with the metadata for the signing tool beside it:
 
 ```
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\make-by-hand \
-  --meta %TEMP%\nexus-packs\make-by-hand.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\make-by-hand \
+  --meta ~\.nexus-packs\make-by-hand.meta.json --key <release-key.pem>
 ```
 
 Nothing here is signed by this run, and no key is read by anything in

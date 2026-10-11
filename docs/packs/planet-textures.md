@@ -105,12 +105,12 @@ alone would have understated what the reader owes the other half.
 node scripts/packs/planet-textures/build.mjs
 ```
 
-It downloads every source into `%TEMP%\nexus-pack-cache\planet-textures\`,
+It downloads every source into `~\.nexus-pack-cache\planet-textures\`,
 checks each one against the SHA-256 and size `sources.json` records — a cached
 file whose digest no longer matches is discarded and fetched again, and a
 download that does not match is refused rather than shipped — re-encodes each
-as WebP, and writes the pack to `%TEMP%\nexus-packs\planet-textures\` with the
-metadata beside that folder at `%TEMP%\nexus-packs\planet-textures.meta.json`.
+as WebP, and writes the pack to `~\.nexus-packs\planet-textures\` with the
+metadata beside that folder at `~\.nexus-packs\planet-textures.meta.json`.
 Nothing is written into the repository except the fixtures below.
 
 The caps are the builder's own: 2048 × 1024 for a map (half the 4096 × 2048 the
@@ -126,8 +126,8 @@ Then the maintainer signs it — this run never has the key:
 
 ```sh
 node scripts/pack-sign.mjs \
-  --dir %TEMP%/nexus-packs/planet-textures \
-  --meta %TEMP%/nexus-packs/planet-textures.meta.json \
+  --dir ~/.nexus-packs/planet-textures \
+  --meta ~/.nexus-packs/planet-textures.meta.json \
   --key <release-key.pem>
 ```
 

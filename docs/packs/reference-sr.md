@@ -74,17 +74,17 @@
 node scripts/packs/reference/build.mjs --id reference-sr
 ```
 
-- Преузима изворе у `%TEMP%\nexus-pack-cache\reference-sr\` и поново користи већ
+- Преузима изворе у `~\.nexus-pack-cache\reference-sr\` и поново користи већ
   преузето; `--refresh` поново преузима.
-- Пише фасциклу пакета у `%TEMP%\nexus-packs\reference-sr\` и метаподатке за
-  потписивање у `%TEMP%\nexus-packs\reference-sr.meta.json`.
+- Пише фасциклу пакета у `~\.nexus-packs\reference-sr\` и метаподатке за
+  потписивање у `~\.nexus-packs\reference-sr.meta.json`.
 - Поново пише `scripts/packs/reference/sources.reference-sr.json`.
 - `--fixtures` поново кроји фикстуре тестова у
   `scripts/packs/reference/fixtures/` из истих бајтова.
 
 ```bash
-node scripts/pack-sign.mjs --dir "%TEMP%\nexus-packs\reference-sr" \
-  --meta "%TEMP%\nexus-packs\reference-sr.meta.json" --key <private-key.pem>
+node scripts/pack-sign.mjs --dir "~\.nexus-packs\reference-sr" \
+  --meta "~\.nexus-packs\reference-sr.meta.json" --key <private-key.pem>
 ```
 
 ## Како се пакет држи поштеним

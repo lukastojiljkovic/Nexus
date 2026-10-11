@@ -127,9 +127,9 @@ program's name.
 
 `scripts/packs/stockfish/` and `scripts/packs/libredwg/` build the two packs the
 way ADR-091's signing tool expects: download the publisher's own Windows x64
-release into `%TEMP%\nexus-pack-cache\<id>\`, verify it against the publisher's
+release into `~\.nexus-pack-cache\<id>\`, verify it against the publisher's
 checksum, write the pack folder and the metadata file into
-`%TEMP%\nexus-packs\`, and print what it fetched, each file's size and the time
+`~\.nexus-packs\`, and print what it fetched, each file's size and the time
 it took. They use Node alone; `scripts/packs/zip.mjs` is the one small reader they
 share, and it runs only on an archive whose digest has already been checked.
 

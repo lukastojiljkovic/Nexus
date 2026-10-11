@@ -15,7 +15,7 @@ holds Mozilla's `tiny` Croatian→English model.
 | `NOTICE.txt` | — | names every file with the name Mozilla publishes it under, its version and its hash |
 
 **Measured size: 21 797 290 bytes** of content. Rebuilt 2026-10-10 from
-`%TEMP%\nexus-pack-cache\translate-hr-en`.
+`~\.nexus-pack-cache\translate-hr-en`.
 
 The three files are Mozilla's objects at
 `models/hr-en/spring-2024_eIcYjCedS26HE07kVyt5Qw/exported/`, downloaded gzipped
@@ -39,5 +39,5 @@ node scripts/packs/translate-hr-en/build.mjs
 ```
 
 Then sign the folder with `scripts/pack-sign.mjs` and
-`%TEMP%\nexus-packs\translate-hr-en.meta.json`, as in
+`~\.nexus-packs\translate-hr-en.meta.json`, as in
 [`translate-sr-en.md`](translate-sr-en.md).

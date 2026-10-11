@@ -19,7 +19,7 @@ node scripts/packs/reference/build.mjs [--id reference-en|reference-sr] [--refre
 | `lib/html.mjs` | A small HTML/XHTML reader: implicit `<p>`/`<li>`/`<td>` closing, entities, `class`/`id` selectors, byte offsets. |
 | `lib/convert.mjs` | Region in, blocks out, blocks in, CommonMark out — plus the fidelity check and the guards that refuse a page which changed shape. |
 | `lib/pdf.mjs` | A PDF's text layer as lines, through `pdfjs-dist` (the one root dev dependency this file needs). |
-| `lib/net.mjs` | The cached fetcher, `%TEMP%\nexus-pack-cache\<pack>\`. |
+| `lib/net.mjs` | The cached fetcher, `~\.nexus-pack-cache\<pack>\`. |
 | `lib/pack.mjs` | Article text, table of contents, `content.json`, the signer's metadata, `sources.json`. |
 | `convert.test.mjs`, `fidelity.test.mjs`, `pack.test.mjs` | 46 tests over fixtures cut from the real sources. |
 | `fixtures/` | 5 080 B of a UN page, 7 236 B of an Official Journal file, 5 978 B of a Serbian gazette act — the three source families, small enough to keep in the repository. |
@@ -33,11 +33,11 @@ and not a packed document because it is not one of the five laws the task names.
 
 Nothing is written into the repository except `sources.<pack>.json`, the
 fixtures, and the article files' measured sizes below. The packs themselves go
-to `%TEMP%\nexus-packs\<id>\` and are signed by the maintainer:
+to `~\.nexus-packs\<id>\` and are signed by the maintainer:
 
 ```bash
-node scripts/pack-sign.mjs --dir "%TEMP%\nexus-packs\reference-en" \
-  --meta "%TEMP%\nexus-packs\reference-en.meta.json" --key <private-key.pem>
+node scripts/pack-sign.mjs --dir "~\.nexus-packs\reference-en" \
+  --meta "~\.nexus-packs\reference-en.meta.json" --key <private-key.pem>
 ```
 
 `minAppVersion` is `1.5.0` — the build that reads `kind: "content"` is the one

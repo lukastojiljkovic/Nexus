@@ -12,19 +12,19 @@ node scripts/packs/voice/build.mjs --voice whisper-base,mms-tts-eng --update-sou
 node scripts/packs/voice/build.mjs --all
 ```
 
-It downloads each voice's files into `%TEMP%\nexus-pack-cache\<id>\` (reused on
+It downloads each voice's files into `~\.nexus-pack-cache\<id>\` (reused on
 a second run, and a cached file whose SHA-256 does not match the one
 `sources.json` records is fetched again and refuses if it still differs),
-assembles the pack folder at `%TEMP%\nexus-packs\<id>\`, writes the metadata
-file `scripts/pack-sign.mjs` takes at `%TEMP%\nexus-packs\<id>.meta.json`, and
+assembles the pack folder at `~\.nexus-packs\<id>\`, writes the metadata
+file `scripts/pack-sign.mjs` takes at `~\.nexus-packs\<id>.meta.json`, and
 prints every file it fetched, its size and the total time.
 
 **It does not sign anything.** Signing needs the release key, which lives on the
 maintainer's machine and in the repository's Actions secrets:
 
 ```text
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\whisper-base ^
-     --meta %TEMP%\nexus-packs\whisper-base.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\whisper-base ^
+     --meta ~\.nexus-packs\whisper-base.meta.json --key <release-key.pem>
 ```
 
 The signed folder is then installable through the „Paketi sadržaja" card, or

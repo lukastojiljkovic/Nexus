@@ -82,12 +82,12 @@ are in [`scripts/packs/recipes/sources.json`](../../scripts/packs/recipes/source
 
 ```text
 node scripts/packs/recipes/build.mjs
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\recipes-world \
-  --meta %TEMP%\nexus-packs\recipes-world.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\recipes-world \
+  --meta ~\.nexus-packs\recipes-world.meta.json --key <release-key.pem>
 ```
 
 The build downloads the two books and the two wiki harvests into
-`%TEMP%\nexus-pack-cache\recipes-world\` and reuses them on a second run. The
+`~\.nexus-pack-cache\recipes-world\` and reuses them on a second run. The
 MediaWiki API takes fifty titles per request, so the 3,796 pages are 76 calls
 with a 200 ms gap rather than 3,796 calls with a back-off; the whole corpus
 costs under a minute. The 2026-10-10 run took 98,345 ms with an empty cache and

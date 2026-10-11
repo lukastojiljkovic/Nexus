@@ -38,16 +38,16 @@ node scripts/packs/tales/build.mjs --offline        # from the cache, no socket
 node scripts/packs/tales/build.mjs --write-sources  # rewrite sources.json
 ```
 
-Sources are cached under `%TEMP%\nexus-pack-cache\<pack id>\` and re-running
+Sources are cached under `~\.nexus-pack-cache\<pack id>\` and re-running
 reuses them, so the second run is seconds. The pack folder is written to
-`%TEMP%\nexus-packs\<pack id>\` — `content.json` and `articles/…` — with the
-metadata `pack-sign.mjs` takes beside it as `%TEMP%\nexus-packs\<pack id>.meta.json`.
+`~\.nexus-packs\<pack id>\` — `content.json` and `articles/…` — with the
+metadata `pack-sign.mjs` takes beside it as `~\.nexus-packs\<pack id>.meta.json`.
 
 **The maintainer signs the packs**, not this builder:
 
 ```
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\tales-sr \
-  --meta %TEMP%\nexus-packs\tales-sr.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\tales-sr \
+  --meta ~\.nexus-packs\tales-sr.meta.json --key <release-key.pem>
 ```
 
 The builder never sees the private key and never writes `pack.json`.

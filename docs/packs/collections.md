@@ -11,8 +11,8 @@ every fetched response in `scripts/packs/collections/sources.json`.
 The content is not written by hand: `scripts/packs/collections/build.mjs` runs
 the twenty-five SPARQL queries in `scripts/packs/collections/queries/` against
 `https://query.wikidata.org/sparql` (cached under
-`%TEMP%\nexus-pack-cache\collections-wikidata\`), converts the responses and
-writes the pack to `%TEMP%\nexus-packs\collections-wikidata\` together with the
+`~\.nexus-pack-cache\collections-wikidata\`), converts the responses and
+writes the pack to `~\.nexus-packs\collections-wikidata\` together with the
 metadata file `scripts/pack-sign.mjs` takes.
 
 ## What it holds
@@ -141,8 +141,8 @@ time; it writes the pack folder and the metadata file, then prints the
 
 ```text
 node scripts/pack-sign.mjs \
-  --dir "%TEMP%\nexus-packs\collections-wikidata" \
-  --meta "%TEMP%\nexus-packs\collections-wikidata.meta.json" \
+  --dir "~\.nexus-packs\collections-wikidata" \
+  --meta "~\.nexus-packs\collections-wikidata.meta.json" \
   --key <private-key.pem>
 ```
 

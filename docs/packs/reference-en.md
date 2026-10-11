@@ -60,22 +60,23 @@ states it.
 node scripts/packs/reference/build.mjs --id reference-en
 ```
 
-- Fetches every source into `%TEMP%\nexus-pack-cache\reference-en\` (one file
+- Fetches every source into `~\.nexus-pack-cache\reference-en\` (one file
   and one `.json` sidecar per URL, so a re-run reuses what it already has; add
   `--refresh` to re-fetch).
-- Writes the pack folder to `%TEMP%\nexus-packs\reference-en\` and the metadata
-  the signer takes to `%TEMP%\nexus-packs\reference-en.meta.json`.
+- Writes the pack folder to `~\.nexus-packs\reference-en\` and the metadata
+  the signer takes to `~\.nexus-packs\reference-en.meta.json`.
 - Rewrites `scripts/packs/reference/sources.reference-en.json`.
 - Add `--fixtures` to re-cut the test fixtures in
   `scripts/packs/reference/fixtures/` from the same bytes.
-- Fonts note: the build needs no network beyond the sources above, and the API
-  is `%TEMP%`, so nothing it writes lands in the repository.
+- Fonts note: the build needs no network beyond the sources above, and both
+  directories it writes are outside the worktree, so nothing it writes lands in
+  the repository.
 
 Signing (maintainer only, release key):
 
 ```bash
-node scripts/pack-sign.mjs --dir "%TEMP%\nexus-packs\reference-en" \
-  --meta "%TEMP%\nexus-packs\reference-en.meta.json" --key <private-key.pem>
+node scripts/pack-sign.mjs --dir "~\.nexus-packs\reference-en" \
+  --meta "~\.nexus-packs\reference-en.meta.json" --key <private-key.pem>
 ```
 
 ## How it is kept honest

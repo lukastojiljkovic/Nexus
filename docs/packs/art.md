@@ -7,7 +7,7 @@ licence recorded, plus Serbian and Yugoslav painters whose work is out of
 copyright.
 
 **Built by.** `node scripts/packs/art/build.mjs`, which writes the pack folder to
-`%TEMP%\nexus-packs\art-open-access\` and the metadata file that
+`~\.nexus-packs\art-open-access\` and the metadata file that
 `node scripts/pack-sign.mjs --dir … --meta … --key …` signs. The maintainer signs
 it with the release key; the builder never sees that key.
 
@@ -153,13 +153,13 @@ node scripts/packs/art/build.mjs --max 40 --pool 20   # a smoke run
 node scripts/packs/art/build.mjs --quality 85     # skip the measurement
 ```
 
-Downloads are cached under `%TEMP%\nexus-pack-cache\art-open-access\`, so a
+Downloads are cached under `~\.nexus-pack-cache\art-open-access\`, so a
 re-run re-fetches only what it does not already have; the pack folder is
 rewritten from scratch each time. Then:
 
 ```text
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\art-open-access \
-  --meta %TEMP%\nexus-packs\art-open-access.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\art-open-access \
+  --meta ~\.nexus-packs\art-open-access.meta.json --key <release-key.pem>
 ```
 
 `SMITHSONIAN_API_KEY` in the environment replaces the shared `DEMO_KEY`. Nothing

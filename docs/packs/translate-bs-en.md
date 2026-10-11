@@ -15,7 +15,7 @@ holds Mozilla's released `base-memory` Bosnian→English model.
 | `NOTICE.txt` | — | names every file with the name Mozilla publishes it under, its version and its hash |
 
 **Measured size: 37 534 530 bytes** of content. Rebuilt 2026-10-10 from
-`%TEMP%\nexus-pack-cache\translate-bs-en`.
+`~\.nexus-pack-cache\translate-bs-en`.
 
 The three files are Mozilla's objects at
 `models/hbs-en/hbs_d85wHYN_SUmGIqekvLSNjA/exported/`, downloaded gzipped
@@ -51,4 +51,4 @@ node scripts/packs/translate-bs-en/build.mjs
 ```
 
 Then sign the folder with `scripts/pack-sign.mjs` and
-`%TEMP%\nexus-packs\translate-bs-en.meta.json`.
+`~\.nexus-packs\translate-bs-en.meta.json`.

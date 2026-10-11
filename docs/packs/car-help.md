@@ -206,15 +206,15 @@ separable, and what remains says plainly what its own vehicle and doctrine are.
 
 ```text
 node scripts/packs/car-help/build.mjs
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\car-help \
-  --meta %TEMP%\nexus-packs\car-help.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\car-help \
+  --meta ~\.nexus-packs\car-help.meta.json --key <release-key.pem>
 ```
 
 The build downloads the six sources into
-`%TEMP%\nexus-pack-cache\car-help\` and reuses them on a second run, verifies
+`~\.nexus-pack-cache\car-help\` and reuses them on a second run, verifies
 each against the pinned digest and size, converts the sources, proves the
 fidelity of every article, and writes the pack folder plus the metadata file to
-`%TEMP%\nexus-packs\`. It prints what it fetched (and whether each came from the
+`~\.nexus-packs\`. It prints what it fetched (and whether each came from the
 network or the cache), every article's size, the omission list, the corrections
 it applied, the pack's size and the time. `--evidence` re-measures the sources
 and rewrites their digests, `--fixtures` re-cuts the test fixtures, and

@@ -15,7 +15,7 @@ holds Mozilla's `base-memory` English→Serbian model.
 | `NOTICE.txt` | — | names every file with the name Mozilla publishes it under, its version and its hash |
 
 **Measured size: 35 026 482 bytes** of content. Rebuilt 2026-10-10 from
-`%TEMP%\nexus-pack-cache\translate-en-sr`.
+`~\.nexus-pack-cache\translate-en-sr`.
 
 The three files are Mozilla's objects at
 `models/en-sr/hbs-topk10_KZK68xhrQWWeK6xcMRtd9A/exported/`, downloaded gzipped
@@ -41,10 +41,10 @@ node scripts/packs/translate-en-sr/build.mjs
 ```
 
 Same flow as its sibling: cache, verify each file against Mozilla's record,
-cross-check the two records, write the pack and the metadata to `%TEMP%`, and
-rewrite `sources.json`. Then:
+cross-check the two records, write the pack and the metadata to
+`~\.nexus-packs\`, and rewrite `sources.json`. Then:
 
 ```bash
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\translate-en-sr \
-  --meta %TEMP%\nexus-packs\translate-en-sr.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\translate-en-sr \
+  --meta ~\.nexus-packs\translate-en-sr.meta.json --key <release-key.pem>
 ```

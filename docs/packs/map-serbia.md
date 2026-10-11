@@ -44,7 +44,7 @@ that evidence is not used.
 | ODbL 1.0 text (`opendatacommons.org/licenses/odbl/1-0/`) | ODbL-1.0 | the page itself |
 
 The tile CLI is a **build tool**: it is downloaded into
-`%TEMP%/nexus-pack-cache/map-serbia/`, used, and left there. It is never shipped
+`~/.nexus-pack-cache/map-serbia/`, used, and left there. It is never shipped
 inside the app and never committed.
 
 ## How to rebuild it
@@ -54,14 +54,14 @@ node scripts/packs/map-serbia/build.mjs                      # newest Protomaps 
 node scripts/packs/map-serbia/build.mjs --build=20261009     # a named build
 node scripts/packs/map-serbia/build.mjs --maxzoom=14         # roughly half the tiles
 
-node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\map-serbia \
-     --meta %TEMP%\nexus-packs\map-serbia.meta.json --key <release-key.pem>
+node scripts/pack-sign.mjs --dir ~\.nexus-packs\map-serbia \
+     --meta ~\.nexus-packs\map-serbia.meta.json --key <release-key.pem>
 ```
 
-The build downloads into `%TEMP%/nexus-pack-cache/map-serbia/` and **reuses what
+The build downloads into `~/.nexus-pack-cache/map-serbia/` and **reuses what
 is there**: the 240 MB extract is fetched once, the 138 GB planet build is never
 fetched at all (only the region's byte ranges are), and a re-run prints what it
-reused. It writes the pack to `%TEMP%/nexus-packs/map-serbia/`, prints every
+reused. It writes the pack to `~/.nexus-packs/map-serbia/`, prints every
 step with the size it measured and the time it took, and **rewrites
 `sources.json` inside the pack** with the date, size and SHA-256 of everything it
 read.
