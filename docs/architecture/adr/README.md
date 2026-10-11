@@ -122,3 +122,4 @@ directory is the decision log behind it.
 | [109](109-astronomy.md) | The astronomy corner, assembled: four views, one clock, one place | Accepted | 2026-10-10 |
 | [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted | 2026-10-10 |
 | [110](110-remembered-unlock.md) | „Traži pristupni kod": how often the app asks for the passcode | Accepted | 2026-10-10 |
+| [111](111-cards-module.md) | The Cards module on the kit: one shelf, nine engines, one worker (uses ADR-090, ADR-093) | Accepted | 2026-10-11 |

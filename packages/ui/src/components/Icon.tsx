@@ -211,7 +211,14 @@ export type IconName =
   // because the thing inside it answers from what it read rather than from a
   // script: every other shape in the set says "a note", "a file" or "a search",
   // and none of them says "something that talks back".
-  | "assistant";
+  | "assistant"
+  // The CARDS module's mark (ADR-090): two playing cards, one behind the other,
+  // with the front one's pip. A single card is `notes` at 16px and a stack of
+  // rectangles is `dashboard`; two cards laid on each other is what a card table
+  // IS, and it names the shelf rather than any one of its nine games. Appended at
+  // the end for `calculator`'s reason: a kit module run grows this list at its
+  // end, where the merge is mechanical.
+  | "cards";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -1029,6 +1036,17 @@ const SHAPES: Record<IconName, ReactNode> = {
     <>
       <path d="M4 6.4A2.4 2.4 0 0 1 6.4 4h11.2A2.4 2.4 0 0 1 20 6.4v8.2a2.4 2.4 0 0 1-2.4 2.4h-6.9l-4.3 3.3a.6.6 0 0 1-.97-.47V17A2.4 2.4 0 0 1 4 14.6z" />
       <path d="M12 6.9l1.3 2.9 2.9 1.3-2.9 1.3-1.3 2.9-1.3-2.9-2.9-1.3 2.9-1.3z" />
+    </>
+  ),
+  // Two playing cards, one laid on the other, with the front card's own pip: a
+  // card table rather than any single game, which is why the shelf's nine entries
+  // all wear it. The back card's corner shows only because the front one is
+  // offset, which is what makes the pair read as a stack and not as one card.
+  cards: (
+    <>
+      <rect x="4.4" y="3.2" width="10.6" height="15" rx="1.6" />
+      <rect x="9" y="6.6" width="10.6" height="15" rx="1.6" />
+      <path d="M14.3 11.4l1.4 3.1 3.1 1.4-3.1 1.4-1.4 3.1-1.4-3.1-3.1-1.4 3.1-1.4z" />
     </>
   ),
 };

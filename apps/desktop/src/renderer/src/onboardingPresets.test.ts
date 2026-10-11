@@ -231,6 +231,8 @@ describe("resolveModuleSelection", () => {
       miniapps: true,
       // And the second discovered module, on for the same reason.
       boards: true,
+      // ...and the card table, on the same terms: no deal exists until one is made.
+      cards: true,
       // ...and the second, whose board writes nothing until a game is played.
       chess: true,
       // And the second, last because a kit module registers after every
@@ -335,6 +337,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "lab", enabled: true },
       { moduleId: "puzzles", enabled: true },
       { moduleId: "boards", enabled: true },
+      { moduleId: "cards", enabled: true },
       { moduleId: "chess", enabled: true },
       { moduleId: "astronomy", enabled: true },
     ]);

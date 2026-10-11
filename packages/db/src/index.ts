@@ -1104,6 +1104,7 @@ export type {
 // into stage 2's profile archive, and `importData` refuses an unknown version
 // before it writes anything.
 export {
+  readCardGameArchive,
   CardGameStore,
   CARD_GAME_ARCHIVE_VERSION,
   MAX_CARD_GAME_ELAPSED_SECONDS,

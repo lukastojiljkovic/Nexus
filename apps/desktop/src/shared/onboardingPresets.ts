@@ -84,6 +84,10 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // complete screen the moment it is on, and it writes nothing until somebody
   // plays one — so „Osnovno" decides it `true`, exactly as its manifest says.
   boards: true,
+  // The card table, decided the same way: a deal writes nothing until one is made,
+  // so there is nothing to opt into and „Osnovno" says yes exactly as the manifest
+  // does.
+  cards: true,
   // Šah, decided the same way and for the same reason: a board writes nothing
   // until somebody plays a game, so there is nothing here to opt into.
   chess: true,

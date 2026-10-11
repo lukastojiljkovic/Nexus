@@ -93,6 +93,7 @@ describe("launcherGroups", () => {
     expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual([
       "puzzles",
       "boards",
+      "cards",
       "chess",
     ]);
     // Make holds the tool drawers and the makers' modules; `pro` is absent
