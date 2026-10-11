@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-10-12
+
+The nine card engines that shipped in 2.0.0 reached no screen: they could not be
+dealt, played or saved from anywhere in the app. This release is the card table.
+
+### Added
+
+- **The Cards module, one shelf for all nine games.** Six solitaires dealt by the
+  player — Klondike, FreeCell, Spider, Pyramid, TriPeaks and Golf — and three
+  against the computer — Hearts, Spades and Tablić — each with the variants it
+  actually has (one or three at a time, one, two or four suits, one pass), a seed
+  you can type, a hint, `Back` to undo, and `Check the deal` for the solitaires
+  the solver can settle. The computer's three games think in a dedicated worker,
+  so the table never blocks on a search. Serbian and English throughout, and the
+  games-in-progress card on the dashboard opens the module where a game was left.
+- **A manual page for the module**, in both languages, and its mark in the icon
+  set: two cards laid on each other, because the shelf holds nine games and the
+  mark names the shelf rather than any one of them.
+
+### Notes
+
+- No schema moves. `CardGameStore` and migration 081 already held the record and
+  the games in progress, so this release adds no migration.
+- ADR-111 records the three decisions a later reader would otherwise re-derive:
+  where the computer thinks, what one press of `Back` means at a table, and how a
+  board draws a legal move without re-deriving a rule.
+
 ## [2.0.0] - 2026-10-11
 
 Nexus is offline first, and this release is the one that makes that mean
