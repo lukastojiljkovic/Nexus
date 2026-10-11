@@ -486,7 +486,15 @@ describe("the live tree", () => {
     // The clause with no witness here, asserted as the measurement it is: if
     // `Object.keys` over a subtree ever appears, this line fails and says so.
     expect(count("enumerated"), "no enumeration of a copy subtree in this tree").toBe(0);
-  });
+    // AND ONE WALK HAS ITS OWN BUDGET, MEASURED. This file takes 13.9 s whole on
+    // the machine it was written on (2026-10-11, tests 98% of it, so the walk IS
+    // the time); on the CI runner, two cores with the other 83 suites running
+    // beside it, the same walk crossed the 30 s the config sets and the job went
+    // red with "Test timed out" — which names neither the gate's subject nor the
+    // cause. That is the failure this file already answered once, by memoizing the
+    // walk instead of asking for more time, and there is nothing left to memoize:
+    // this budget is for one walk, not for a flake to hide in.
+  }, 120_000);
 
   /**
    * THE INSTRUMENT'S OWN REPORT, PINNED — and it has now shrunk to nothing.
