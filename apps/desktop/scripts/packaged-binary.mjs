@@ -31,8 +31,7 @@ import { join } from "node:path";
 export function assertSinglePrebuild({ unpackedDir, platform, arch }) {
   const expected = `${platform}-${arch}.node`;
   const prebuilds = join(
-    unpackedDir,
-    "resources",
+    resourcesDir(unpackedDir, platform),
     "app.asar.unpacked",
     "node_modules",
     "better-sqlite3-multiple-ciphers",
@@ -59,4 +58,41 @@ export function assertSinglePrebuild({ unpackedDir, platform, arch }) {
   }
 
   return expected;
+}
+
+/**
+ * The directory the packaged app keeps its resources in.
+ *
+ * Windows and Linux keep them in a flat `resources/` beside the executable
+ * (`release/win-unpacked`, `release/linux-unpacked`). A macOS build is a BUNDLE,
+ * so the same files sit at `release/mac-arm64/Nexus.app/Contents/Resources`, and
+ * the product's name is the one part of that path not stated here: the bundle is
+ * found by its extension rather than by name, because `productName` in
+ * electron-builder.yml is where that name is declared and a second copy of it in
+ * this file would be a second place for it to drift.
+ */
+function resourcesDir(unpackedDir, platform) {
+  if (platform !== "darwin") return join(unpackedDir, "resources");
+
+  let bundles;
+  try {
+    bundles = readdirSync(unpackedDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.endsWith(".app"))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    throw new Error(
+      `Packaging check failed: ${unpackedDir} does not exist, so the packaged app ` +
+        "carries no SQLite binary and cannot open a database.",
+    );
+  }
+
+  if (bundles.length !== 1) {
+    throw new Error(
+      `Packaging check failed: ${unpackedDir} holds [${bundles.join(", ")}] as its ` +
+        "application bundles, expected exactly one .app.",
+    );
+  }
+
+  return join(unpackedDir, bundles[0], "Contents", "Resources");
 }

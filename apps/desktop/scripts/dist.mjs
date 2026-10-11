@@ -1,6 +1,8 @@
 // Builds the packaged app for the HOST platform (--publish never):
 //   Windows → NSIS x64 installer
 //   Linux   → AppImage x64 + tar.gz (the payload build/gentoo/ installs)
+//   macOS   → dmg, Apple silicon (the `mac` block in electron-builder.yml says
+//             why the Intel half is a stated gap rather than a line here)
 //
 // It builds for the host and only the host, on purpose — but the reason is no
 // longer the one that used to be written here. It USED to be the native module:
@@ -29,18 +31,27 @@ import { DEFAULT_DATA_FILE, renderNotices } from "./render-notices.mjs";
 
 const require = createRequire(import.meta.url);
 
-// The one place the target architecture is written. electron-builder's `${arch}`
+// One line per platform: the electron-builder flag, the target architecture and
+// the output directory. The architecture is declared EXACTLY ONCE, here, because
+// two declarations are two things to keep in step — electron-builder's `${arch}`
 // macro in electron-builder.yml expands to the TARGET arch, not the host's, so
-// the flag below and the check at the end have to agree — and they can only be
-// made to agree by coming from the same constant.
-const TARGET_ARCH = "x64";
-
-// electron-builder's own directory names for an x64 build. They carry the arch
-// only when it is not x64 (`linux-arm64-unpacked`), which is why TARGET_ARCH
-// appears in the filename below and not here.
+// the `--arch` flag below and the check at the end have to agree, and they can
+// only be made to agree by reading the same value.
+//
+// macOS is arm64 and only arm64. `mac`'s own block says why an Intel dmg is a
+// stated gap rather than a second line: every native dependency in this tree was
+// installed for the architecture of the runner that ran `pnpm install`, so an
+// x64 dmg built here would carry arm64 bytes under x64 paths.
+//
+// The directory names are `platformPackager.js`'s: `<platform><arch suffix>`,
+// with the suffix dropped for the platform's default arch and `-unpacked`
+// appended everywhere except macOS, whose directory holds the `.app` BUNDLE
+// rather than a flat tree — which is why `packaged-binary.mjs` looks inside it
+// for the resources.
 const PLATFORM = {
-  win32: { flag: "--win", unpacked: "win-unpacked" },
-  linux: { flag: "--linux", unpacked: "linux-unpacked" },
+  win32: { flag: "--win", arch: "x64", unpacked: "win-unpacked" },
+  linux: { flag: "--linux", arch: "x64", unpacked: "linux-unpacked" },
+  darwin: { flag: "--mac", arch: "arm64", unpacked: "mac-arm64" },
 };
 
 function run(command, args) {
@@ -51,7 +62,7 @@ function run(command, args) {
 const target = PLATFORM[process.platform];
 if (target === undefined) {
   console.error(
-    `Nexus is not packaged for ${process.platform}. Run this on Windows or Linux ` +
+    `Nexus is not packaged for ${process.platform}. Run this on Windows, Linux or macOS ` +
       "(see the header for why the host platform is the only target).",
   );
   process.exit(1);
@@ -70,7 +81,7 @@ const electronBuilderCli = require.resolve("electron-builder/cli.js");
 run(process.execPath, [
   electronBuilderCli,
   target.flag,
-  `--${TARGET_ARCH}`,
+  `--${target.arch}`,
   "--publish",
   "never",
 ]);
@@ -88,7 +99,7 @@ function assertPackagedBinary() {
     const only = assertSinglePrebuild({
       unpackedDir: join("release", target.unpacked),
       platform: process.platform,
-      arch: TARGET_ARCH,
+      arch: target.arch,
     });
     console.log(`\nPackaging check: ${only} is the only prebuild in the package.`);
   } catch (error) {
