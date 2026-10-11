@@ -277,6 +277,23 @@ overrides:
   # offsets. Development only, through postcss and sass; 1.2.2 is the fix and
   # the same major.
   source-map-js: ^1.2.2
+  # GHSA-x6jw-m9v5-85vh, GHSA-g4wm-2vf7-vfgr and GHSA-858h-whjf-mvg5 on
+  # `simple-git`, plus GHSA-v5rq-49vh-5v5c on `@simple-git/argv-parser`. All
+  # four are about simple-git's own guards when IT runs git: an editor chosen
+  # by an environment variable, a trailer command, a configuration `include`,
+  # and a long-option abbreviation that slips past the unsafe-operation plugin.
+  #
+  # Path: apps/desktop > node-llama-cpp > simple-git. node-llama-cpp asks for
+  # `^3.15.0`, which admits nothing that fixes them, and the two critical ones
+  # are only patched in 4.0.1 — so ordinary caret resolution can never reach the
+  # fix and the shipped audit sees the vulnerable version, which is the case
+  # this list exists for. The app itself never runs git; what the override buys
+  # is that the version inside the shipped tree is the patched one.
+  #
+  # Retires when node-llama-cpp's own range reaches 4.0.1 and 2.0.1, at which
+  # point ordinary resolution gets there and this entry must come out.
+  simple-git: ^4.0.1
+  "@simple-git/argv-parser": ^2.0.1
 
 # One four-line patch, and it is a TYPES bug rather than a code one. 13.0.3
 # added an `exports` map whose `"."` is a bare `"./lib/index.js"` with no
