@@ -5,6 +5,11 @@ on:
 
 permissions:
   contents: read
+  # The action writes a summary comment on the pull request. Without this it
+  # still fails the job when the diff is bad, but it says so only in its log —
+  # the warning this permission silences is the one a reviewer needs on the PR
+  # itself, where the dependency that failed the gate is.
+  pull-requests: write
 
 # EVERY `uses:` IS PINNED TO A 40-CHARACTER COMMIT SHA with the tag as a
 # comment — see ci.yml for the reasoning.
@@ -27,6 +32,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

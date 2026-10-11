@@ -56,45 +56,6 @@ const ALLOWED = [
     package: "http-cache-semantics",
     retireWhen: "a release fixes max-stale handling, or @electron/get stops using got",
   },
-  // THE FOUR BELOW ARE ONE DEPENDENCY, and they arrived with the assistant.
-  // `simple-git` (and its `@simple-git/*` helpers) is a dependency of
-  // `node-llama-cpp`, which Nexus ships for the local model runner. Every one
-  // of the four is about simple-git's own guards when IT runs `git`: an editor
-  // chosen by an environment variable, a trailer command, a configuration
-  // `include`, and a long-option abbreviation that slips past the
-  // unsafe-operation plugin.
-  //
-  // Nexus never runs git. Nothing in this repository imports `simple-git`, and
-  // the app has no git surface at all: models are fetched over HTTPS, packs are
-  // files, and updates read the GitHub release API. What the advisories
-  // describe is a program taking hostile input into a git invocation, and the
-  // program here is a library Nexus only uses for inference and for its own
-  // HTTPS downloads. So the exposure is bounded by what node-llama-cpp does
-  // with it, which is why the retire condition names that package rather than
-  // a version of simple-git: an override to 4.x would be a MAJOR bump under a
-  // package whose git path is not exercised here, so it would change behaviour
-  // Nexus cannot test while silencing a warning about a code path it does not
-  // enter.
-  {
-    ghsa: "GHSA-x6jw-m9v5-85vh",
-    package: "simple-git",
-    retireWhen: "node-llama-cpp moves to simple-git 4.0.1 or later",
-  },
-  {
-    ghsa: "GHSA-g4wm-2vf7-vfgr",
-    package: "simple-git",
-    retireWhen: "node-llama-cpp moves to simple-git above 3.36.0",
-  },
-  {
-    ghsa: "GHSA-858h-whjf-mvg5",
-    package: "simple-git",
-    retireWhen: "node-llama-cpp moves to simple-git above 3.36.0",
-  },
-  {
-    ghsa: "GHSA-v5rq-49vh-5v5c",
-    package: "@simple-git/argv-parser",
-    retireWhen: "node-llama-cpp moves to @simple-git/argv-parser 2.0.1 or later",
-  },
 ];
 
 /** Runs the audit and returns its JSON report. A non-zero exit is expected whenever findings exist. */
