@@ -275,17 +275,26 @@ jobs:
   # the reason the linux job states one job over: the packaged app carries
   # platform-specific native modules (better-sqlite3, node-llama-cpp,
   # onnxruntime-node, sharp), so the only tree that can be assembled correctly
-  # is the one whose own `pnpm install` fetched them. `macos-14` is Apple
+  # is the one whose own `pnpm install` fetched them. `macos-15` is Apple
   # silicon, which is also the architecture the dmg target names — see the
   # `mac` block in `electron-builder.yml` for why an Intel dmg needs one more
   # step (the x64 half of every one of those packages) rather than one more
   # line here.
   #
+  # `macos-15` RATHER THAN `macos-14`, AND NOT AS A PREFERENCE. Measured on
+  # 2026-10-11 against `actions/runner-images`' own README: BOTH macOS 14 labels
+  # (`macos-14-large` and `macos-14`) carry a "deprecated" badge pointing at
+  # issue 13518, and 15 is the arm64 image named to replace them (`macos-15`, or
+  # `macos-15-xlarge`). That project's policy removes a deprecated label's tools
+  # six months after the announcement, so a job pinned to 14 is a job with a date
+  # on it. 15 is arm64 too, so the architecture the dmg target names is the same
+  # one — this changes the image, not the output.
+  #
   # No notarisation and no certificate: the app ships unsigned on purpose, and
   # the block that decides that is the `mac` one in `electron-builder.yml`.
   macos:
     name: macOS artefacts
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     permissions:
       contents: read
