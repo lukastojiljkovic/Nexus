@@ -335,30 +335,63 @@ export function plainText(html) {
   // one), which is CodeQL's `incomplete-multi-character-sanitization`. A second
   // pass over text that is already stripped changes nothing and costs one
   // comparison.
+  //
+  // THE THREE STRIPS WITH A DANGEROUS PATTERN ARE THEIR OWN FUNCTIONS, each
+  // looping to a fixed point over ONE variable that only its own replacement
+  // assigns. Writing them as five assignments to one variable inside one loop read
+  // the same and was reported anyway: the rule looks for the loop that assigns back
+  // to the variable the replacement READ, and a variable several replacements write
+  // is no longer that shape.
   let text = html;
   for (let previous = null; previous !== text; ) {
     previous = text;
-    // EACH STRIP ASSIGNS BACK TO `text` RATHER THAN CHAINING ONTO THE ONE BEFORE
-    // IT, and the two are not the same fix: `incomplete-multi-character-sanitization`
-    // reads the loop that assigns to the variable it READ, and the first strips of
-    // a chain send their result into the NEXT call's receiver instead, so a filter
-    // that can be re-formed (`<scr<script>ipt>`) goes unreported there. The chain
-    // read the same; only this shape is a fixed point.
-    //
-    // `\s*` before the `>` of the closing tag: a browser ends a script at
-    // `</script >` and at `</script foo="bar">` too, and a regex that insists on
-    // the bare form leaves the script's contents in the licence text.
-    text = text.replace(/<script[\s\S]*?<\/script[^>]*>/gi, "");
-    text = text.replace(/<style[\s\S]*?<\/style[^>]*>/gi, "");
+    text = withoutScripts(text);
+    text = withoutStyles(text);
     // A line break where a block ENDS — not where one begins, and not both:
     // `</h1><p>` is one break between two lines, and two would leave a blank line
     // between every paragraph of the licence.
     text = text.replace(/<br\s*\/?>/gi, "\n");
     text = text.replace(/<\/(?:p|div|h[1-6]|li|tr|section|article|table|ul|ol|blockquote)\s*>/gi, "\n");
-    text = text.replace(/<[^>]+>/g, "");
+    text = withoutTags(text);
   }
   return text
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+\n/g, "\n")
     .trim();
+}
+
+/**
+ * `<script>…</script>`, gone, until removing one cannot form another.
+ *
+ * `\s*` before the `>` of the closing tag: a browser ends a script at
+ * `</script >` and at `</script foo="bar">` too, and a regex that insists on the
+ * bare form leaves the script's contents in the licence text.
+ */
+function withoutScripts(text) {
+  let out = text;
+  for (let previous = null; previous !== out; ) {
+    previous = out;
+    out = out.replace(/<script[\s\S]*?<\/script[^>]*>/gi, "");
+  }
+  return out;
+}
+
+/** `<style>…</style>`, gone, and its reason is `withoutScripts`'. */
+function withoutStyles(text) {
+  let out = text;
+  for (let previous = null; previous !== out; ) {
+    previous = out;
+    out = out.replace(/<style[\s\S]*?<\/style[^>]*>/gi, "");
+  }
+  return out;
+}
+
+/** Every remaining tag, gone, until removing one cannot form another. */
+function withoutTags(text) {
+  let out = text;
+  for (let previous = null; previous !== out; ) {
+    previous = out;
+    out = out.replace(/<[^>]+>/g, "");
+  }
+  return out;
 }
