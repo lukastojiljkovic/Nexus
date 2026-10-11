@@ -48,9 +48,10 @@
 // honest form of that, not a hole in the manifest.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 // The cache write below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
@@ -215,7 +216,7 @@ export function cacheFile(cacheDir, source) {
  */
 export async function fetchSource(source, options) {
   const file = cacheFile(options.cacheDir, source);
-  let bytes = existsSync(file) ? readFileSync(file) : null;
+  let bytes = readIfPresent(file);
   if (bytes !== null && (sha256(bytes) !== source.sha256 || bytes.byteLength !== source.bytes)) {
     bytes = null;
   }

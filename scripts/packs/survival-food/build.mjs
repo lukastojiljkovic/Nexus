@@ -25,7 +25,7 @@
 // A failure at any of the three stops the run.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { connect as connectHttp2 } from "node:http2";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +52,7 @@ import { parseHtml, selectMain, textContent, toMarkdown } from "./lib/html.mjs";
 // The cache index below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 
 import * as roots from "../lib/roots.mjs";
 
@@ -160,9 +161,11 @@ const USER_AGENT =
 async function fetchCached(url, name, index) {
   const file = join(CACHE, name);
   const known = index[name];
-  if (existsSync(file) && known !== undefined) {
-    const bytes = readFileSync(file);
-    return { file, bytes, sha256: known.sha256, fetchedAt: known.fetchedAt, cached: true, finalUrl: known.finalUrl ?? url };
+  if (known !== undefined) {
+    const cached = readIfPresent(file);
+    if (cached !== null) {
+      return { file, bytes: cached, sha256: known.sha256, fetchedAt: known.fetchedAt, cached: true, finalUrl: known.finalUrl ?? url };
+    }
   }
   let target = url;
   let response = null;
@@ -476,9 +479,8 @@ function creditsArticle() {
 async function build() {
   const started = Date.now();
   mkdirSync(CACHE, { recursive: true });
-  const index = existsSync(CACHE_INDEX)
-    ? JSON.parse(readFileSync(CACHE_INDEX, "utf8"))
-    : {};
+  const indexText = readIfPresent(CACHE_INDEX, "utf8");
+  const index = indexText === null ? {} : JSON.parse(indexText);
   const fetched = [];
   const record = (id, cache, extra) => {
     fetched.push({ id, ...cache, ...extra });

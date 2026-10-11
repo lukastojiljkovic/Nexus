@@ -6,7 +6,7 @@
 // folder is the shape ADR-091's `content` layout 1 describes.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { uniqueId } from "./markdown.mjs";
@@ -14,6 +14,7 @@ import * as roots from "../lib/roots.mjs";
 // The cache write below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 
 /** The one User-Agent every request goes out with, Wikimedia's policy included. */
 export const USER_AGENT =
@@ -51,9 +52,9 @@ export function cacheDirFor(packId, cacheRoot = roots.cacheRoot()) {
  */
 export async function fetchSource({ packId, cacheRoot, file, url, offline = false, delayMs = 250 }) {
   const dest = join(cacheDirFor(packId, cacheRoot), file);
-  if (existsSync(dest)) {
-    const bytes = readFileSync(dest);
-    return { bytes, path: dest, cached: true, sha256: sha256(bytes) };
+  const cachedBytes = readIfPresent(dest);
+  if (cachedBytes !== null) {
+    return { bytes: cachedBytes, path: dest, cached: true, sha256: sha256(cachedBytes) };
   }
   if (offline) {
     throw new Error(`tales: "${file}" is not in the cache and --offline was given.`);
@@ -184,11 +185,11 @@ export function checkPackShape(dir) {
 function checkArticle(dir, entry, path, listed, problems) {
   listed.add(entry.file);
   const file = join(dir, entry.file);
-  if (!existsSync(file)) {
+  const text = readIfPresent(file, "utf8");
+  if (text === null) {
     problems.push(`${path}/${String(entry.id)}: ${String(entry.file)} is missing.`);
     return;
   }
-  const text = readFileSync(file, "utf8");
   if (entry.file !== `articles/${entry.id}.md`) {
     problems.push(`${path}/${String(entry.id)}: article file ${String(entry.file)} does not match its id.`);
   }

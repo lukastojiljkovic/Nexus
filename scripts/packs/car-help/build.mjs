@@ -22,9 +22,10 @@
 // article, and one Source line per article.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -194,7 +195,7 @@ function verify(bytes, url, expected) {
 export async function fetchSource(source, options) {
   const file = cacheFile(options.cacheDir, source);
   const expected = { bytes: source.bytes, sha256: source.sha256 };
-  let bytes = existsSync(file) ? readFileSync(file) : null;
+  let bytes = readIfPresent(file);
   if (options.trust !== true && bytes !== null && source.sha256 !== "" && sha256(pinnedBytes(source, bytes)) !== source.sha256) {
     bytes = null;
   }

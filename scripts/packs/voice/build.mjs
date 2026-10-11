@@ -35,10 +35,11 @@
 // is the next and last step.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { checkMeta } from "../../pack-sign.mjs";
@@ -231,7 +232,7 @@ export async function harvest({ sources, voice, cacheDir, fetchImpl = fetch, log
   for (const path of voice.paths) {
     const file = join(cacheDir, ...path.split("/"));
     const declared = voice.files?.[path] ?? null;
-    const cached = existsSync(file) ? readFileSync(file) : null;
+    const cached = readIfPresent(file);
     if (cached !== null && declared !== null && sha256(cached) === declared) {
       log(`cached   ${path} (${String(cached.byteLength)} bytes)`);
       measured.push({ path, bytes: cached.byteLength, sha256: declared });

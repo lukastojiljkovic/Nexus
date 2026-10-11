@@ -10,13 +10,14 @@
 // tool every time, and `docs/packs/survival.md` names the version and licence.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 // The cache write below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 
 /** The pinned upstream build: `oschwartz10612/poppler-windows`, Release 26.09.0-0. */
 export const POPPLER = {
@@ -81,7 +82,7 @@ export async function ensurePoppler(options) {
   const existing = findTools(options.cacheDir);
   if (existing !== null) return existing;
   const zipPath = join(options.cacheDir, `poppler-${POPPLER.version}.zip`);
-  let bytes = existsSync(zipPath) ? readFileSync(zipPath) : null;
+  let bytes = readIfPresent(zipPath);
   if (bytes !== null && (bytes.byteLength !== POPPLER.bytes || sha256(bytes) !== POPPLER.sha256)) bytes = null;
   if (bytes === null) {
     options.log(`  poppler ${POPPLER.version}: fetching ${POPPLER.url}`);
@@ -101,7 +102,9 @@ export async function ensurePoppler(options) {
   // A half-unpacked tree from an interrupted build is removed before the retry,
   // so the retry unpacks rather than finding a tool directory that is one exe
   // short.
-  if (existsSync(root)) rmSync(root, { recursive: true, force: true });
+  // Unconditional: `force` already ignores a directory that is not there, so the
+  // check bought nothing and left a window between it and the removal.
+  rmSync(root, { recursive: true, force: true });
   unzip(zipPath, root);
   const tools = findTools(options.cacheDir);
   if (tools === null) {

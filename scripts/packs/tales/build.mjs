@@ -24,7 +24,7 @@
 // beside it as `<out>/<pack id>.meta.json`. This script never signs anything:
 // `pack.json` and `pack.json.sig` are the maintainer's signing tool's output.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -46,6 +46,7 @@ import { convertPage, sourceSection, textOf } from "./wikisource.mjs";
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 
 /** The app version a content pack may ask for: this wave's manifest floor. */
 const MIN_APP_VERSION = "1.5.0";
@@ -264,7 +265,8 @@ export class WikisourceClient {
     const subject = params.pageid ?? params.page ?? params.titles ?? params.list ?? "api";
     const file = `wiki-${slug(params.action ?? "query")}-${name ?? slug(String(subject))}.json`;
     const dest = join(this.cacheDir, file);
-    if (existsSync(dest)) return JSON.parse(readFileSync(dest, "utf8"));
+    const cached = readIfPresent(dest, "utf8");
+    if (cached !== null) return JSON.parse(cached);
     if (this.offline) {
       throw new Error(`tales: the Wikisource response "${file}" is not in the cache and --offline was given.`);
     }

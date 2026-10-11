@@ -22,9 +22,11 @@
 // figure images, and one Source line per article.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
+import { statIfPresent } from "../lib/readIfPresent.mjs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -147,7 +149,7 @@ export function figuresDigest(figures) {
  * something is serving another page — are told apart by exactly that.
  */
 export async function fetchSource(url, expected, options) {
-  let bytes = existsSync(expected.file) ? readFileSync(expected.file) : null;
+  let bytes = readIfPresent(expected.file);
   if (bytes !== null && (sha256(bytes) !== expected.sha256 || bytes.byteLength !== expected.bytes)) bytes = null;
   let fetched = false;
   if (bytes === null) {
@@ -553,7 +555,7 @@ export function figuresBase(source) {
 export async function writeFigure(name, source, options) {
   const target = join(options.packDir, "images", name);
   const cached = join(options.cacheDir, "figures", name);
-  if (!existsSync(cached)) {
+  if (statIfPresent(cached) === null) {
     const url = figuresBase(source) + name.slice(source.id.length + 1);
     const response = await options.fetchImpl(url, { headers: { "user-agent": "nexus-pack-builder" } });
     if (response.ok !== true) throw new Error(`${PACK_ID}: ${url} answered ${String(response.status)}.`);

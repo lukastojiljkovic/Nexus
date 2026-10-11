@@ -34,7 +34,6 @@ import { createHash } from "node:crypto";
 import {
   createReadStream,
   createWriteStream,
-  existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -57,6 +56,7 @@ import {
   serbianEntry,
 } from "./convert.mjs";
 import * as roots from "../lib/roots.mjs";
+import { statIfPresent } from "../lib/readIfPresent.mjs";
 
 /** Where a source is cached, and where the pack is written. `../lib/roots.mjs` owns the decision. */
 const CACHE_ROOT = roots.cacheRoot();
@@ -147,12 +147,14 @@ export async function sha256File(path) {
  * exists is a cache entry that is whole.
  */
 export async function fetchToCache(url, path, expectedBytes) {
-  if (existsSync(path) && statSync(path).size === expectedBytes) {
+  const whole = statIfPresent(path);
+  if (whole !== null && whole.size === expectedBytes) {
     log(`cache hit  ${path} (${megabytes(expectedBytes)})`);
     return;
   }
   const partial = `${path}.part`;
-  let from = existsSync(partial) ? statSync(partial).size : 0;
+  const resumable = statIfPresent(partial);
+  let from = resumable === null ? 0 : resumable.size;
   if (from > expectedBytes) from = 0;
   const headers = from > 0 ? { Range: `bytes=${String(from)}-` } : {};
   log(`fetching   ${url}${from > 0 ? ` (resuming at ${megabytes(from)})` : ""}`);

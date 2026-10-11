@@ -26,7 +26,7 @@
 //   node scripts/pack-sign.mjs --dir %TEMP%\nexus-packs\recipes-world \
 //     --meta %TEMP%\nexus-packs\recipes-world.meta.json --key <release-key.pem>
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -34,6 +34,7 @@ import { createSource, packsDir, printFetchLog, sha256 } from "../lib/source.mjs
 // The cache write below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 import {
   GUTENBERG_BOOKS,
   PUBLIC_DOMAIN_LICENCE,
@@ -143,10 +144,10 @@ const apiUrl = (host, params) => `${api(host)}?${new URLSearchParams({ format: "
 async function cached(source, name, describe, produce) {
   const path = join(source.dir, name);
   const started = Date.now();
-  if (existsSync(path)) {
-    const bytes = readFileSync(path);
-    source.log.push({ url: describe, name, bytes: bytes.byteLength, sha256: sha256(bytes), fromCache: true, ms: Date.now() - started });
-    return JSON.parse(bytes.toString("utf8"));
+  const cachedBytes = readIfPresent(path);
+  if (cachedBytes !== null) {
+    source.log.push({ url: describe, name, bytes: cachedBytes.byteLength, sha256: sha256(cachedBytes), fromCache: true, ms: Date.now() - started });
+    return JSON.parse(cachedBytes.toString("utf8"));
   }
   const value = await produce();
   const bytes = Buffer.from(JSON.stringify(value), "utf8");

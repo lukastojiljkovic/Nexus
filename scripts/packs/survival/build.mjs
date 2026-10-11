@@ -20,9 +20,10 @@
 // markup, the images, and one Source line per article.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -173,7 +174,7 @@ function verify(bytes, url, expected) {
  * something is serving another page — are told apart by exactly that.
  */
 export async function fetchSource(url, expected, options) {
-  let bytes = existsSync(expected.file) ? readFileSync(expected.file) : null;
+  let bytes = readIfPresent(expected.file);
   if (bytes !== null && (sha256(bytes) !== expected.sha256 || bytes.byteLength !== expected.bytes)) bytes = null;
   let fetched = false;
   if (bytes === null) {
@@ -196,7 +197,7 @@ export async function fetchSource(url, expected, options) {
  */
 export async function fetchFragment(page, source, options) {
   const file = pageCacheFile(options.cacheDir, source, page);
-  let fragment = existsSync(file) ? readFileSync(file, "utf8") : null;
+  let fragment = readIfPresent(file, "utf8");
   if (fragment !== null && (sha256(fragment) !== page.sha256 || Buffer.byteLength(fragment, "utf8") !== page.bytes)) {
     fragment = null;
   }

@@ -22,10 +22,12 @@
 // that would be the reason a whole wave of builders gets rate-limited.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { cacheDirFor, packDirFor } from "./roots.mjs";
+import { writeCacheFile } from "./cacheWrite.mjs";
+import { readIfPresent } from "./readIfPresent.mjs";
 
 /**
  * What the builders call themselves. Wikimedia's API policy asks for a
@@ -107,9 +109,13 @@ export function createSource(packId, { delayMs = DEFAULT_DELAY_MS } = {}) {
     async bytes(url, name) {
       const path = join(dir, name);
       const started = Date.now();
-      const fromCache = existsSync(path);
-      const buffer = fromCache ? readFileSync(path) : await request(url);
-      if (!fromCache) writeFileSync(path, buffer);
+      // ONE READ THAT ANSWERS `null`, rather than a check and then a read: the two
+      // calls ask about one NAME twice and the answer to the first is not a promise
+      // about the second (`lib/readIfPresent.mjs` has the long version).
+      const cached = readIfPresent(path);
+      const fromCache = cached !== null;
+      const buffer = cached ?? (await request(url));
+      if (cached === null) writeCacheFile(path, buffer);
       const row = {
         url,
         name,

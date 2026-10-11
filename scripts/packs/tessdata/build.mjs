@@ -36,9 +36,10 @@
 // trusted - a cache that lies is worse than no cache.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -191,8 +192,8 @@ async function fetchBytes(url) {
 /** One source's bytes: from the cache when its digest still matches, from the network otherwise. */
 async function sourceBytes(source, cacheDir, log, download) {
   const path = join(cacheDir, source.name);
-  if (existsSync(path)) {
-    const cached = readFileSync(path);
+  const cached = readIfPresent(path);
+  if (cached !== null) {
     if (digest(cached) === source.sha256) {
       log(`cached    ${source.name} (${cached.byteLength} bytes)`);
       return cached;
