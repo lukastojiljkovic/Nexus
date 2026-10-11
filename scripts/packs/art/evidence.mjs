@@ -17,13 +17,22 @@
 /** Everything a reader sees: tags and the contents of `script`/`style` removed. */
 export function htmlToText(html) {
   return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    // `\s*` before the `>` on the closing tag, because a browser ends a script at
+    // `</script >` and at `</script foo="bar">` as readily as at `</script>`: a
+    // regex that demands the bare form leaves the tag's contents in the text,
+    // which is CodeQL's `bad-tag-filter` and, here, a licence quote "found" in a
+    // script the reader never sees.
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
     .replace(/<[^>]+>/g, " ")
+    // THE `&amp;` DECODE COMES LAST, and `&nbsp;` moved above it for the same
+    // reason: a replacement that produces an `&` must not be followed by one that
+    // reads it, or `&amp;nbsp;` — the literal text "&nbsp;" escaped for HTML —
+    // decodes twice into a space that was never on the page. (`double-escaping`.)
+    .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/&#x27;|&#39;|&#8217;|&rsquo;/gi, "'")
     .replace(/&quot;|&#8220;|&#8221;|&ldquo;|&rdquo;/gi, '"')
     .replace(/&amp;/gi, "&")
-    .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

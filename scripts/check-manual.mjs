@@ -50,7 +50,7 @@
 // constant in `App.tsx` and nowhere as data; the test beside this file pins that
 // list to the constant so it cannot quietly go stale either.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -130,8 +130,18 @@ export function knownVocabulary(root = REPO_ROOT) {
   for (const entry of readdirSync(kitRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const manifest = join(kitRoot, entry.name, "shared", "manifest.ts");
-    if (!statSync(manifest, { throwIfNoEntry: false })?.isFile()) continue;
-    const id = kitModuleId(readFileSync(manifest, "utf8"));
+    // The read IS the test for whether the file is there, rather than a `statSync`
+    // before it: a directory that is not a kit module has no `shared/manifest.ts`,
+    // and a check followed by a read is a check a second process can invalidate in
+    // between (CodeQL's `file-system-race`, and the same reason holds off CI: the
+    // gate must not read one file and decide about another).
+    let source;
+    try {
+      source = readFileSync(manifest, "utf8");
+    } catch {
+      continue;
+    }
+    const id = kitModuleId(source);
     if (id !== null) moduleIds.add(id);
   }
 

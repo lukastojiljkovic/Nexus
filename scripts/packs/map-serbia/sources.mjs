@@ -20,6 +20,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
+
 /** The pack's own id: the folder the app installs it into, and the authority in every URL it serves. */
 export const PACK_ID = "map-serbia";
 /** The style generator, pinned: two builds of one pack produce the same style. */
@@ -163,18 +165,34 @@ async function get(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+/**
+ * A cache file's bytes, or `null` when there is no such file.
+ *
+ * The read IS the test. `existsSync` followed by `readFileSync` is a check and a
+ * use with a window between them, which is CodeQL's `file-system-race`; a read
+ * that catches its own ENOENT asks the same question and cannot be answered
+ * wrongly by anything that happens in the meantime.
+ */
+function readIfPresent(path) {
+  try {
+    return readFileSync(path);
+  } catch {
+    return null;
+  }
+}
+
 /** A cached fetch: a second run of this builder does not ask for anything twice. */
 export async function cached(url, name, log = () => undefined) {
   const path = join(CACHE, name);
-  if (existsSync(path)) {
-    const bytes = readFileSync(path);
-    log(`cache hit  ${name} (${formatBytes(bytes.byteLength)})`);
-    return { path, bytes };
+  const hit = readIfPresent(path);
+  if (hit !== null) {
+    log(`cache hit  ${name} (${formatBytes(hit.byteLength)})`);
+    return { path, bytes: hit };
   }
   log(`fetching   ${url}`);
   const bytes = await get(url);
   mkdirSync(CACHE, { recursive: true });
-  writeFileSync(path, bytes);
+  writeCacheFile(path, bytes);
   log(`fetched    ${name} (${formatBytes(bytes.byteLength)})`);
   return { path, bytes };
 }
@@ -249,7 +267,14 @@ export function unpack(archive, name, kind) {
       { cause: error },
     );
   }
-  writeFileSync(marker, "");
+  // Created exclusively (`wx`): two builders unpacking at once must not both
+  // believe they wrote the marker, and a name that already exists is the answer,
+  // not an error to raise.
+  try {
+    writeFileSync(marker, "", { flag: "wx" });
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+  }
   return dir;
 }
 
@@ -293,15 +318,29 @@ export function regionFrom(index, id) {
  * would be a licence text nobody could read.
  */
 export function plainText(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    // A line break where a block ENDS — not where one begins, and not both:
-    // `</h1><p>` is one break between two lines, and two would leave a blank
-    // line between every paragraph of the licence.
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(?:p|div|h[1-6]|li|tr|section|article|table|ul|ol|blockquote)\s*>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+  // Stripped until it stops changing, and that loop is the point rather than a
+  // belt: one pass of a regex that matches several characters can leave the thing
+  // it removed standing (`<scr<script>ipt>` loses the inner tag and keeps an outer
+  // one), which is CodeQL's `incomplete-multi-character-sanitization`. A second
+  // pass over text that is already stripped changes nothing and costs one
+  // comparison.
+  let text = html;
+  for (let previous = null; previous !== text; ) {
+    previous = text;
+    text = text
+      // `\s*` before the `>` of the closing tag: a browser ends a script at
+      // `</script >` and at `</script foo="bar">` too, and a regex that insists
+      // on the bare form leaves the script's contents in the licence text.
+      .replace(/<script[\s\S]*?<\/script\s*>/gi, "")
+      .replace(/<style[\s\S]*?<\/style\s*>/gi, "")
+      // A line break where a block ENDS — not where one begins, and not both:
+      // `</h1><p>` is one break between two lines, and two would leave a blank
+      // line between every paragraph of the licence.
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:p|div|h[1-6]|li|tr|section|article|table|ul|ol|blockquote)\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+  }
+  return text
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+\n/g, "\n")
     .trim();

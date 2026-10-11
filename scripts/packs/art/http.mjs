@@ -18,8 +18,13 @@
 // back in 300 milliseconds gets the build banned instead of slowed.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
+// Both cache files this class writes go through the shared writer: its header
+// explains why a cache under `%TEMP%` cannot be filled with a plain
+// `writeFileSync` after an `existsSync`.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
 
 /**
  * The User-Agent every request carries. Wikimedia's policy requires a
@@ -192,7 +197,7 @@ export class CachedHttp {
 
   #toCache(url, bytes, contentType, status) {
     const key = cacheKey(url);
-    writeFileSync(join(this.#dir, `${key}.bin`), bytes);
+    writeCacheFile(join(this.#dir, `${key}.bin`), bytes);
     const meta = {
       url,
       status,
@@ -201,7 +206,7 @@ export class CachedHttp {
       bytes: bytes.byteLength,
       sha256: cacheKey(bytes),
     };
-    writeFileSync(join(this.#dir, `${key}.json`), `${JSON.stringify(meta, null, 2)}\n`);
+    writeCacheFile(join(this.#dir, `${key}.json`), `${JSON.stringify(meta, null, 2)}\n`);
     return meta;
   }
 
