@@ -107,9 +107,18 @@ export function parseSensorLine(line: string, columnCount: number): readonly num
  * is 0 and `Number("0x10")` is 16, so a parser built on `Number` alone accepts
  * an empty field as zero — which is the one substitution a logging tool must
  * never make.
+ *
+ * The fractional half is written `(?:\.\d*)?` rather than `\.?\d*`, and the two
+ * accept exactly the same fields ("41", "23.5" and "23." alike). What differs is
+ * the BACKTRACKING: with an optional point, `\d+` and the trailing `\d*` overlap,
+ * so a long run of digits can be split between them as many ways as it has
+ * characters — the quadratic shape js/polynomial-redos reports on a measurement
+ * log whose field is a wall of zeroes. A mandatory point inside the optional
+ * group leaves one way to parse the run, and `"23."` is pinned by the test
+ * beside this file so the two spellings cannot drift apart.
  */
 function isNumeric(text: string): boolean {
-  return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(text);
+  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text);
 }
 
 /** One value as it is written to a file: a plain decimal with a `.` point. */

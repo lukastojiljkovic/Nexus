@@ -52,6 +52,10 @@ describe("parseSensorLine", () => {
   it("reads one line as the three values its header describes", () => {
     expect(parseSensorLine("23.5,41,1009", 3)).toEqual([23.5, 41, 1009]);
     expect(parseSensorLine(" -12.5 , 41.2 , 1009.75 ", 3)).toEqual([-12.5, 41.2, 1009.75]);
+    // The two edge spellings of the same shape, pinned because `isNumeric` was
+    // rewritten for its backtracking (see its comment): a trailing point and a
+    // leading one are both numbers, and neither may quietly stop being one.
+    expect(parseSensorLine("23.,.5,1009", 3)).toEqual([23, 0.5, 1009]);
   });
 
   it("accepts the exponent form a sketch may print and refuses everything else", () => {

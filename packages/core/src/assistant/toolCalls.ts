@@ -61,7 +61,8 @@ export interface ParsedToolCalls {
   readonly calls: readonly ParsedToolCall[];
 }
 
-const HERMES_BLOCK = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+const HERMES_OPEN = /<tool_call>/gi;
+const HERMES_CLOSE = /<\/tool_call>/gi;
 const MISTRAL_MARKER = "[TOOL_CALLS]";
 const MISTRAL_ARGS = /^\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\[ARGS\]\s*\{/;
 const PYTHON_TAG = /<\|python_tag\|>/g;
@@ -78,22 +79,39 @@ export function parseToolCalls(text: string): ParsedToolCalls {
   return parseLlama(text);
 }
 
-/** `<tool_call>…</tool_call>`, one or many. */
+/**
+ * `<tool_call>…</tool_call>`, one or many.
+ *
+ * TWO SEARCHES PER BLOCK RATHER THAN ONE `<tool_call>([\s\S]*?)</tool_call>`
+ * REGEX, and the difference is not style. A lazy gap is linear PER STARTING
+ * POSITION, so a message carrying many opening tags and no closing one — the
+ * shape a truncated or looping generation produces — costs a scan of the whole
+ * message for each of them, and that quadratic curve is what `js/polynomial-redos`
+ * reports. An opening tag with no closing tag after it ends the parse either way,
+ * and the two searches say the same thing about where a block begins and ends.
+ * The `i` flag stays on both, because the regex this replaces carried it.
+ */
 function parseHermes(text: string): ParsedToolCalls {
   const calls: ParsedToolCall[] = [];
   const spans: { start: number; end: number }[] = [];
-  HERMES_BLOCK.lastIndex = 0;
+  HERMES_OPEN.lastIndex = 0;
   for (;;) {
-    const match = HERMES_BLOCK.exec(text);
-    if (match === null) break;
-    const inner = match[1] ?? "";
+    const opening = HERMES_OPEN.exec(text);
+    if (opening === null) break;
+    HERMES_CLOSE.lastIndex = opening.index + opening[0].length;
+    const closing = HERMES_CLOSE.exec(text);
+    if (closing === null) break;
+    // Advanced BEFORE the JSON is read, so a block whose JSON does not parse is
+    // skipped exactly as the regex's own `lastIndex` skipped it.
+    HERMES_OPEN.lastIndex = closing.index + closing[0].length;
+    const inner = text.slice(opening.index + opening[0].length, closing.index);
     const parsed = tryJson(inner.trim());
     const found = callsFromJson(parsed);
     if (found === null) continue;
     // Not a call after all (bad JSON, or a JSON object that is not a call): the
     // block stays in the text.
     calls.push(...found);
-    spans.push({ start: match.index, end: match.index + match[0].length });
+    spans.push({ start: opening.index, end: closing.index + closing[0].length });
   }
   return { text: removeSpans(text, spans), calls };
 }

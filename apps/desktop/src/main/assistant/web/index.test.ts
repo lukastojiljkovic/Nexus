@@ -80,7 +80,14 @@ function harness(options: {
     options.resolve ??
     ((hostname) =>
       Promise.resolve(
-        hostname.endsWith("wikipedia.org") || hostname === "example.org" || hostname === "moved.example"
+        // A dot-boundary test, not `.endsWith("wikipedia.org")`: the bare suffix
+        // also resolves `evilwikipedia.org`, which is what
+        // js/incomplete-url-substring-sanitization reports on a fixture exactly as
+        // it does on the code under test.
+        hostname === "wikipedia.org" ||
+          hostname.endsWith(".wikipedia.org") ||
+          hostname === "example.org" ||
+          hostname === "moved.example"
           ? PUBLIC
           : [],
       ));
