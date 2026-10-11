@@ -1,0 +1,50 @@
+{
+ "note": "Geofabrik's index-v1.json, cut to two features, so the region reader can be tested without a 500 kB download. The real index carries every region Geofabrik publishes, each as a GeoJSON Feature whose geometry is the region's boundary.",
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "serbia",
+    "parent": "europe",
+    "iso3166-1:alpha2": ["RS"],
+    "name": "Serbia",
+    "urls": { "pbf": "https://download.geofabrik.de/europe/serbia-latest.osm.pbf" }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [18.8, 42.2],
+        [23.0, 42.2],
+        [23.0, 46.2],
+        [18.8, 46.2],
+        [18.8, 42.2]
+      ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "slovenia",
+    "parent": "europe",
+    "iso3166-1:alpha2": ["SI"],
+    "name": "Slovenia",
+    "urls": { "pbf": "https://download.geofabrik.de/europe/slovenia-latest.osm.pbf" }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [13.3, 45.4],
+        [16.6, 45.4],
+        [16.6, 46.9],
+        [13.3, 46.9],
+        [13.3, 45.4]
+      ]
+    ]
+   }
+  }
+ ]
+}

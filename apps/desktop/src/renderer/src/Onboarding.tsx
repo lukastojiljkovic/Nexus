@@ -43,6 +43,7 @@ import {
 import { PLAN_STAGES, applyProfilePlan, type PlanStage } from "./profilePlanApply.js";
 import { heardTrades, joinList, packName, planReasonLines } from "./profilePlanCopy.js";
 import { persistSignals } from "./signalPrefs.js";
+import { moduleDescription, moduleName } from "./moduleName.js";
 import { fill, lookup, strings } from "./strings.js";
 
 /** Mirrors the main-process rule: 1–80 chars after trimming (UX-side only). */
@@ -1010,20 +1011,24 @@ export function Onboarding({
                 „Uvek uključeno“ chip in both. */}
             <h2 className="onb__module-group-title">{s.modulesTitle}</h2>
             <div className="onb__modules">
-              {[...registry.byCategory()].map(([category, members]) => (
-                <div key={category} className="onb__module-group">
+              {/* The same groups the rail and the launcher draw (ADR-093): the
+                  chips are grouped so the person recognises the shape their app
+                  is about to have, and a heading only this screen uses would be
+                  a taxonomy they never meet again. */}
+              {[...registry.byGroup()].map(([group, members]) => (
+                <div key={group} className="onb__module-group">
                   <h3 className="onb__module-group-title">
-                    {strings.settings.moduleCategories[category] ?? category}
+                    {lookup(strings.app.navGroups, group) ?? group}
                   </h3>
                   <div className="onb__module-list">
                     {members.map((manifest) => {
-                      const label = lookup(strings.modules, manifest.id) ?? manifest.id;
+                      const label = moduleName(manifest.id);
                       return (
                         <div className="onb__module-row" key={manifest.id}>
                           <div className="onb__module-info">
                             <span className="onb__module-name">{label}</span>
                             <span className="onb__module-desc">
-                              {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
+                              {moduleDescription(manifest.id)}
                             </span>
                           </div>
                           {LOCKED_MODULE_IDS.has(manifest.id) ? (

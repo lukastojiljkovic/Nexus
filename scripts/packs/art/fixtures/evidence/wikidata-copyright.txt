@@ -1,0 +1,4 @@
+A cut of https://www.wikidata.org/wiki/Wikidata:Licensing (fetched 2026-10-10),
+section "Determining the copyright of a dataset".
+
+All data in Wikidata has a CC0 license. Wikidata avoids hosting data that lacks a CC0 license.

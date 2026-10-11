@@ -1,0 +1,216 @@
+{
+  "layout": 1,
+  "fetched": "2026-10-10",
+  "note": [
+    "Every source this pack is built from, with the size and SHA-256 measured on 2026-10-10.",
+    "`evidence.quote` is the exact sentence the licence was read from, on `evidence.url`; a source",
+    "without one is not used, and the builder refuses bytes that do not match `bytes` and `sha256`.",
+    "Two licence bases carry this pack. (1) Works of the U.S. Government are not subject to copyright",
+    "in the United States (17 U.S.C. 105(a), quoted verbatim on the govinfo page named below); the",
+    "Farmers' Bulletins and the Bureau of Agricultural Chemistry and Engineering circular are",
+    "federal publications, and each scan prints its own Department of Agriculture imprint, which",
+    "`docs/packs/make.md` records. (2) Project Gutenberg's own rights statement for these ebooks is",
+    "`Public domain in the USA.` (read from each ebook's `.opds`), and Gutenberg's licence page",
+    "states the reuse position quoted below. Wikibooks pages are CC BY-SA 4.0 and keep their own",
+    "labelled chapter in the pack, so the share-alike boundary is a folder rather than a memory.",
+    "`kind` chooses the converter: `gutenberg-html` is a Gutenberg HTML edition (text, headings,",
+    "tables and the edition's own captioned figures), `ia-ocr` is the Internet Archive's OCR text",
+    "layer of a scanned bulletin, and `wikibooks` is a MediaWiki page's wikitext.",
+    "`furniture` is what the OCR layer adds to a document rather than being part of it: the scanning",
+    "library's banner and stamps. Each pattern is a `/pattern/flags` expression matched against the",
+    "collapsed line, and a pattern that matches nothing stops the build rather than quietly",
+    "admitting the banner into the article.",
+    "`figuresSha256` is the digest over the figures a book ships: one line per file, `name space",
+    "SHA-256`, sorted by name, hashed as UTF-8 with a trailing newline. It pins a hundred drawings",
+    "in one field so the licence evidence above stays readable."
+  ],
+  "sources": [
+    {
+      "id": "farmers-bulletin-1925",
+      "kind": "ia-ocr",
+      "title": "US Department of Agriculture, Farmers' Bulletin No. 1925, ABC's of Mending (1942)",
+      "url": "https://archive.org/download/CAT87203517/farmbul1925_djvu.txt",
+      "bytes": 28258,
+      "sha256": "bf0211610bacbc9c101b06956579749ab291887b15affff58506c633dce314de",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm).",
+      "credit": "US Department of Agriculture, Bureau of Home Economics, Farmers' Bulletin No. 1925, ABC's of Mending, by Clarice L. Scott, 1942. Work of the U.S. Government, not subject to copyright in the United States (17 U.S.C. 105).",
+      "furniture": [
+        "/^Historic, archived document$/",
+        "/^Do not assume content reflects current$/",
+        "/^scientific knowledge, policies, or$/",
+        "/^scientific knowledge, policies, or practices\\.$/",
+        "/^practices\\.$/"
+      ],
+      "evidence": {
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+      }
+    },
+    {
+      "id": "miscellaneous-publication-482",
+      "kind": "ia-ocr",
+      "title": "US Department of Agriculture, Miscellaneous Publication No. 482, Mending Men's Suits (1943)",
+      "url": "https://archive.org/download/mendingmenssuits482scot/mendingmenssuits482scot_djvu.txt",
+      "bytes": 54157,
+      "sha256": "4a7432ad90d2ce6b303db7a03aeafe015f88617b14f8b6487ec4c62637a8faad",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm).",
+      "credit": "US Department of Agriculture, Bureau of Home Economics, Miscellaneous Publication No. 482, Mending Men's Suits, by Clarice L. Scott and Anne F. Hagood, issued January 1943. Work of the U.S. Government, not subject to copyright in the United States (17 U.S.C. 105).",
+      "furniture": [
+        "/^Historic, archived document$/",
+        "/^Do not assume content reflects current$/",
+        "/^scientific knowledge, policies, or$/",
+        "/^scientific knowledge, policies, or practices\\.$/",
+        "/^practices\\.$/",
+        "/^ffJentUsuy$/",
+        "/^[^A-Za-z0-9]+$/"
+      ],
+      "evidence": {
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+      }
+    },
+    {
+      "id": "acs-27-candle-making",
+      "kind": "ia-ocr",
+      "title": "US Department of Agriculture, ACS-27, Candle Making (1940)",
+      "url": "https://archive.org/download/candlemaking27unit/candlemaking27unit_djvu.txt",
+      "bytes": 2144,
+      "sha256": "740b8fd22fbaf503a62ec975174008fc053f4804e955aace3dddd85df5dc5b7d",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm).",
+      "credit": "US Department of Agriculture, Bureau of Agricultural Chemistry and Engineering, Carbohydrate Research Division, ACS-27, Candle Making, 1940. Work of the U.S. Government, not subject to copyright in the United States (17 U.S.C. 105).",
+      "furniture": [
+        "/^Historic, archived document$/",
+        "/^Do not assume content reflects current$/",
+        "/^scientific knowledge, policies, or$/",
+        "/^scientific knowledge, policies, or practices\\.$/",
+        "/^practices\\.$/",
+        "/^L I B R A R Y$/",
+        "/^\\* MAR 4 1940 \\*$/"
+      ],
+      "evidence": {
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+      }
+    },
+    {
+      "id": "carpentry-for-boys",
+      "kind": "gutenberg-html",
+      "title": "Carpentry for Boys, by J. S. Zerbe (New York Book Company, 1914)",
+      "url": "https://www.gutenberg.org/cache/epub/20763/pg20763-images.html",
+      "bytes": 381457,
+      "sha256": "d447db63fc606e1afe40f245e2d396fcb65b7919aabd1038153896850e8cd2bc",
+      "figuresSha256": "894708b39aabc4e05807749b547459974bc382bcb249f6f4e097fb0762682a36",
+      "licence": "Public domain in the USA (Project Gutenberg's own rights statement for this ebook; the underlying work was published in 1914).",
+      "credit": "Project Gutenberg ebook 20763, Carpentry for Boys, in simple language, by J. S. Zerbe, New York Book Company, 1914. Rights statement: Public domain in the USA.",
+      "evidence": {
+        "url": "https://www.gutenberg.org/policy/permission.html",
+        "quote": "The vast majority of Project Gutenberg eBooks are in the public domain in the US."
+      }
+    },
+    {
+      "id": "textiles-and-clothing",
+      "kind": "gutenberg-html",
+      "title": "Textiles and Clothing, by Kate Heintz Watson (American School of Home Economics)",
+      "url": "https://www.gutenberg.org/cache/epub/21534/pg21534-images.html",
+      "bytes": 379618,
+      "sha256": "e69d1c1fd4bd22ad16271ec9fc3c336c86f2a2d816d43f2d9e585719fbca2d74",
+      "figuresSha256": "2efa0253fa91b668d225855aa5659d50daaad8affecb86d0185196180855a24d",
+      "licence": "Public domain in the USA (Project Gutenberg's own rights statement for this ebook).",
+      "credit": "Project Gutenberg ebook 21534, Textiles and Clothing, by Kate Heintz Watson, American School of Home Economics. Rights statement: Public domain in the USA.",
+      "evidence": {
+        "url": "https://www.gutenberg.org/policy/permission.html",
+        "quote": "The vast majority of Project Gutenberg eBooks are in the public domain in the US."
+      }
+    },
+    {
+      "id": "needlework-economies",
+      "kind": "gutenberg-html",
+      "title": "Needlework Economies: A Book of Mending and Making with Oddments and Scraps (1919)",
+      "url": "https://www.gutenberg.org/cache/epub/48050/pg48050-images.html",
+      "bytes": 342363,
+      "sha256": "f8eb7647d3eba279303c59237797e2866b606dd9b1d1c4687f0e9f60703bc51c",
+      "figuresSha256": "3ecba5f514c76fa640497b37f68793dc299c433950dd6febc9de311079c0e957",
+      "licence": "Public domain in the USA (Project Gutenberg's own rights statement for this ebook).",
+      "credit": "Project Gutenberg ebook 48050, Needlework Economies: A Book of Mending and Making with Oddments and Scraps, 1919. Rights statement: Public domain in the USA.",
+      "evidence": {
+        "url": "https://www.gutenberg.org/policy/permission.html",
+        "quote": "The vast majority of Project Gutenberg eBooks are in the public domain in the US."
+      }
+    },
+    {
+      "id": "soap-making-manual",
+      "kind": "gutenberg-html",
+      "title": "Soap-Making Manual, by E. G. Thomssen (D. Van Nostrand Company, 1922)",
+      "url": "https://www.gutenberg.org/cache/epub/34114/pg34114-images.html",
+      "bytes": 643192,
+      "sha256": "a9ae23f3327b754b14e4274f82130de52a3543f829ca6ddd6916d0393050962b",
+      "figuresSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "licence": "Public domain in the USA (Project Gutenberg's own rights statement for this ebook).",
+      "credit": "Project Gutenberg ebook 34114, Soap-Making Manual: A practical handbook on the raw materials, their manipulation, analysis and control in the modern soap plant, by E. G. Thomssen, D. Van Nostrand Company, 1922. Rights statement: Public domain in the USA.",
+      "evidence": {
+        "url": "https://www.gutenberg.org/policy/permission.html",
+        "quote": "The vast majority of Project Gutenberg eBooks are in the public domain in the US."
+      }
+    },
+    {
+      "id": "potters-craft",
+      "kind": "gutenberg-html",
+      "title": "The Potter's Craft: A Practical Guide for the Studio and Workshop, by Charles F. Binns (1922)",
+      "url": "https://www.gutenberg.org/cache/epub/40411/pg40411-images.html",
+      "bytes": 324388,
+      "sha256": "58dae8fcb82551f8f893f9a02e5497d026a36534ae3e415801063edd8113abfa",
+      "figuresSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "licence": "Public domain in the USA (Project Gutenberg's own rights statement for this ebook).",
+      "credit": "Project Gutenberg ebook 40411, The Potter's Craft: A Practical Guide for the Studio and Workshop, by Charles F. Binns, D. Van Nostrand Company, second edition 1922. Rights statement: Public domain in the USA.",
+      "evidence": {
+        "url": "https://www.gutenberg.org/policy/permission.html",
+        "quote": "The vast majority of Project Gutenberg eBooks are in the public domain in the US."
+      }
+    },
+    {
+      "id": "wikibooks-hand-sewing",
+      "kind": "wikibooks",
+      "title": "Wikibooks, Sewing/Hand sewing",
+      "url": "https://en.wikibooks.org/w/index.php?title=Sewing/Hand%20sewing&action=raw",
+      "page": "Sewing/Hand sewing",
+      "bytes": 1503,
+      "sha256": "f7e0409fa725acf6a8025646bddfc6aeaaff820ee972af4fedc0fc3c6f8ca01c",
+      "licence": "CC BY-SA 4.0 and the GNU Free Documentation License (Wikibooks).",
+      "credit": "Wikibooks, Sewing/Hand sewing, by the Wikibooks contributors, used verbatim under CC BY-SA 4.0.",
+      "evidence": {
+        "url": "https://en.wikibooks.org/wiki/Wikibooks:Copyrights",
+        "quote": "Wikibooks is a collection of free content books licensed under the terms of the GNU Free Documentation License and Creative Commons Attribution-ShareAlike 4.0 License"
+      }
+    },
+    {
+      "id": "wikibooks-sharpening",
+      "kind": "wikibooks",
+      "title": "Wikibooks, Woodworking/Sharpening",
+      "url": "https://en.wikibooks.org/w/index.php?title=Woodworking/Sharpening&action=raw",
+      "page": "Woodworking/Sharpening",
+      "bytes": 5766,
+      "sha256": "ad182fa5b262636fce52facce610106b834c6341033b642b32a3d79d14e16af5",
+      "licence": "CC BY-SA 4.0 and the GNU Free Documentation License (Wikibooks).",
+      "credit": "Wikibooks, Woodworking/Sharpening, by the Wikibooks contributors, used verbatim under CC BY-SA 4.0.",
+      "evidence": {
+        "url": "https://en.wikibooks.org/wiki/Wikibooks:Copyrights",
+        "quote": "Wikibooks is a collection of free content books licensed under the terms of the GNU Free Documentation License and Creative Commons Attribution-ShareAlike 4.0 License"
+      }
+    },
+    {
+      "id": "wikibooks-candlemaking",
+      "kind": "wikibooks",
+      "title": "Wikibooks, Adventist Youth Honors Answer Book/Arts and Crafts/Candlemaking",
+      "url": "https://en.wikibooks.org/w/index.php?title=Adventist%20Youth%20Honors%20Answer%20Book/Arts%20and%20Crafts/Candlemaking&action=raw",
+      "page": "Adventist Youth Honors Answer Book/Arts and Crafts/Candlemaking",
+      "bytes": 11352,
+      "sha256": "7a41eb562363120c3fce84dd3d96bdf6b457d7545645154e63384953cc6d0b28",
+      "licence": "CC BY-SA 4.0 and the GNU Free Documentation License (Wikibooks).",
+      "credit": "Wikibooks, Adventist Youth Honors Answer Book/Arts and Crafts/Candlemaking, by the Wikibooks contributors, used verbatim under CC BY-SA 4.0.",
+      "evidence": {
+        "url": "https://en.wikibooks.org/wiki/Wikibooks:Copyrights",
+        "quote": "Wikibooks is a collection of free content books licensed under the terms of the GNU Free Documentation License and Creative Commons Attribution-ShareAlike 4.0 License"
+      }
+    }
+  ]
+}

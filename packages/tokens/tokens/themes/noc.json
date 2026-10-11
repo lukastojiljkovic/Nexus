@@ -35,6 +35,7 @@
     "elecGrid":       "{color.bench.nocGrid}",
     "elecPartBody":   "{color.bench.nocBody}",
     "elecPartEdge":   "{color.bench.nocEdge}",
+    "elecFocus":      "{color.bench.nocFocus}",
     "elecWireRed":    "{color.wire.red}",
     "elecWireBlack":  "{color.wire.black}",
     "elecWireYellow": "{color.wire.yellow}",

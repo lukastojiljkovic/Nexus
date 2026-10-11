@@ -246,6 +246,51 @@ export const TRADE_STEMS: readonly TradeStem[] = [
   { stem: "konferencij", packs: ["event"] },
   { stem: "festival", packs: ["event"] },
   { stem: "dekoracij", packs: ["event"] },
+  // laboratorija, elektro, it, auto
+  { stem: "laboratorij", packs: ["laboratorija"] },
+  { stem: "hemicar", packs: ["laboratorija"] },
+  { stem: "elektricar", packs: ["elektro"] },
+  { stem: "informatic", packs: ["it"] },
+  { stem: "mrez", packs: ["it"] },
+  { stem: "automehanicar", packs: ["auto"] },
+  { stem: "autoelektricar", packs: ["auto", "elektro"] },
+  { stem: "autolimar", packs: ["auto"] },
+  { stem: "autoservis", packs: ["auto"] },
+  { stem: "vulkanizer", packs: ["auto"] },
+
+  // more i jedrenje
+  { stem: "jedrilic", packs: ["nautika"] },
+  { stem: "jedrenj", packs: ["nautika"] },
+  { stem: "nauticar", packs: ["nautika"] },
+  { stem: "skiper", packs: ["nautika"] },
+  { stem: "regat", packs: ["nautika"] },
+  { stem: "brodic", packs: ["nautika"] },
+
+  // vazduhoplovstvo
+  { stem: "avijacij", packs: ["vazduhoplovstvo"] },
+  { stem: "avion", packs: ["vazduhoplovstvo"] },
+  { stem: "pilot", packs: ["vazduhoplovstvo"] },
+  { stem: "stjuard", packs: ["vazduhoplovstvo"] },
+  { stem: "vazduhoplov", packs: ["vazduhoplovstvo"] },
+
+  // geodezija
+  { stem: "geodet", packs: ["geodezija"] },
+  { stem: "geodezij", packs: ["geodezija"] },
+  { stem: "kartograf", packs: ["geodezija"] },
+  { stem: "topograf", packs: ["geodezija"] },
+
+  // radio-amaterizam
+  { stem: "antena", packs: ["radio"] },
+  { stem: "kratkotalas", packs: ["radio"] },
+  { stem: "predajnik", packs: ["radio"] },
+  { stem: "prijemnik", packs: ["radio"] },
+  { stem: "radioamat", packs: ["radio"] },
+
+  // energija
+  { stem: "akumulator", packs: ["energija"] },
+  { stem: "fotonap", packs: ["energija"] },
+  { stem: "invertor", packs: ["energija"] },
+  { stem: "solar", packs: ["energija"] },
 ];
 
 /**
@@ -271,13 +316,18 @@ export interface TradeActivity {
 }
 
 export const TRADE_ACTIVITIES: readonly TradeActivity[] = [
-  { id: "mere-sece", packs: ["gradnja", "zanat"] },
+  // The five wave-2b toolkits ride here rather than on new rows, and the reason
+  // is that an activity id is a key into `strings`, so a new row would be new
+  // copy in both languages for a set of trades that measures and cuts exactly
+  // like the two trades this row already names: a plumber cuts pipe, a
+  // metalworker cuts stock, a joiner and a tailor cut their own material.
+  { id: "mere-sece", packs: ["gradnja", "zanat", "grejanje", "metal", "stolarija", "krojenje"] },
   { id: "ponude", packs: ["biznis", "racunovodstvo"] },
   { id: "teren", packs: ["gradnja", "nekretnine", "agro"] },
   { id: "predaje", packs: ["prosveta"] },
   { id: "ugovori", packs: ["pravo"] },
   { id: "vozi", packs: ["transport"] },
-  { id: "kuva", packs: ["kuhinja"] },
+  { id: "kuva", packs: ["kuhinja", "vino"] },
   { id: "snima", packs: ["foto", "dizajn"] },
   { id: "kod", packs: ["softver", "inzenjering"] },
   { id: "svira", packs: ["muzika"] },
@@ -285,6 +335,15 @@ export const TRADE_ACTIVITIES: readonly TradeActivity[] = [
   { id: "dogadjaji", packs: ["event"] },
   { id: "trenira", packs: ["trening"] },
   { id: "prevodi", packs: ["tekst"] },
+  { id: "laboratorija", packs: ["laboratorija"] },
+  { id: "instalacije", packs: ["elektro"] },
+  { id: "sistemi", packs: ["it"] },
+  { id: "servis", packs: ["auto"] },
+  { id: "jedrim", packs: ["nautika"] },
+  { id: "letim", packs: ["vazduhoplovstvo"] },
+  { id: "merim-teren", packs: ["geodezija"] },
+  { id: "radio", packs: ["radio"] },
+  { id: "solar", packs: ["energija"] },
 ];
 
 /**

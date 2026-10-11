@@ -1,0 +1,57 @@
+{
+  "pack": "reference-sr",
+  "language": "sr",
+  "built": "2026-10-10",
+  "documents": [
+    {
+      "id": "udhr-sr",
+      "work": "Општа декларација о правима човека",
+      "section": "Увод и чланови 1–30",
+      "url": "https://sr.wikisource.org/w/api.php?action=parse&page=%D0%9E%D0%BF%D1%88%D1%82%D0%B0%20%D0%B4%D0%B5%D0%BA%D0%BB%D0%B0%D1%80%D0%B0%D1%86%D0%B8%D1%98%D0%B0%20%D0%BE%20%D0%BF%D1%80%D0%B0%D0%B2%D0%B8%D0%BC%D0%B0%20%D1%87%D0%BE%D0%B2%D0%B5%D0%BA%D0%B0&prop=text&format=json&formatversion=2",
+      "canonical": "https://sr.wikisource.org/wiki/%D0%9E%D0%BF%D1%88%D1%82%D0%B0_%D0%B4%D0%B5%D0%BA%D0%BB%D0%B0%D1%80%D0%B0%D1%86%D0%B8%D1%98%D0%B0_%D0%BE_%D0%BF%D1%80%D0%B0%D0%B2%D0%B8%D0%BC%D0%B0_%D1%87%D0%BE%D0%B2%D0%B5%D0%BA%D0%B0",
+      "fetched": "2026-10-10",
+      "bytes": 38161,
+      "sha256": "5554a0023a861969aba2c4f0b14761ccd3daf010886b8885deefff0bdd3fd837",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      }
+    },
+    {
+      "id": "ustav-republike-srbije",
+      "work": "Устав Републике Србије",
+      "section": "Проглашен 2006. године; текст који објављује Уставни суд",
+      "url": "https://www.ustavni.sud.rs/ustav-rs-i-propisi/ustav-republike-srbije",
+      "canonical": "https://www.ustavni.sud.rs/ustav-rs-i-propisi/ustav-republike-srbije",
+      "fetched": "2026-10-10",
+      "bytes": 259143,
+      "sha256": "a7d5ad54be4abdf969d06235d738f420359ce2e3fbbe8db50e60a6391e62c7d8",
+      "format": "html",
+      "licence": {
+        "spdx": "LicenseRef-Serbian-Official-Text",
+        "name": "Official text — not a work of authorship (Art. 6, Zakon o autorskom i srodnim pravima)",
+        "url": "https://www.wipo.int/wipolex/en/legislation/details/19376",
+        "note": "Serbian law is not protected as a work of authorship, so the text itself may be reproduced; what a publisher can own is a consolidated collection of it (the database right in Art. 137–140a), which is why no consolidated or commercial text is a source here. WIPO Lex is cited as the page where the exclusion could be read, not as a supply of text.",
+        "evidence": [
+          {
+            "url": "https://www.wipo.int/wipolex/en/legislation/details/19376",
+            "quote": "Ne smatraju se autorskim delom: 1) zakoni, podzakonski akti i drugi propisi; 2) službeni materijali državnih organa i organa koji obavljaju javnu funkciju"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -915,7 +915,7 @@ describe("CardStore", () => {
       const noteId = insertNote(profileId);
       cards.syncFromNote(noteId, deckId, [spec("b1", "Q", "A")], T0);
       const created = cards.listByDeck(deckId)[0]!;
-      const reviewed = cards.review(created.id, 3, T0); // Good â€” moves state off New
+      const reviewed = cards.review(created.id, 3, T0); // Good — moves state off New
 
       const result = cards.syncFromNote(
         noteId,

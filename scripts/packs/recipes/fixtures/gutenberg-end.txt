@@ -1,0 +1,23 @@
+talics font in _underscores_.
+ 6. Enclosed bold font in =equals=.
+ 7. Superscripts are denoted by a caret before a single superscript
+      character or a series of superscripted characters enclosed in
+      curly braces, e.g. M^r. or M^{ister}.
+ 8. Subscripts are denoted by an underscore before a series of
+      subscripted characters enclosed in curly braces, e.g. H_{2}O.
+
+
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE BOSTON COOKING-SCHOOL COOK BOOK ***
+
+
+    
+
+Updated editions will replace the previous one—the old editions will
+be renamed.
+
+Creating the works from print editions not protected by U.S. copyright
+law means that no one owns a United States copyright in these works,
+so the Foundation (and you!) can copy and distribute it in the United
+States without permission and without paying copyright
+royalties. Special rules, 

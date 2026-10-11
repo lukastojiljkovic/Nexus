@@ -5,6 +5,7 @@ import { Button, Chip, TextField } from "@nexus/ui";
 import { canvasPickerRows } from "./canvasCards.js";
 import type { CanvasPickerRow } from "./canvasCards.js";
 import { SEARCH_DEBOUNCE_MS } from "./searchShared.js";
+import { searchKindLabel } from "./moduleKit/labels.js";
 import { strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
@@ -176,7 +177,7 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
                   onClick={() => onPick(row)}
                 >
                   <Chip className="canv-picker__kind">
-                    {strings.search.kindSingular[row.kind]}
+                    {searchKindLabel(row.kind, false)}
                   </Chip>
                   <span className="canv-picker__title">{row.title}</span>
                   {row.detail !== null && (

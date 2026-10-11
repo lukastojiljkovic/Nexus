@@ -3,6 +3,7 @@ import { formatChord } from "@nexus/core";
 import { Icon, type IconName } from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import type { WindowState, WindowViewCommand } from "../../shared/ipc.js";
+import { UNBOUNDED_PANEL_HEIGHT } from "./anchoredPlacement.js";
 import { NotePopover } from "./notePopover.js";
 import { strings } from "./strings.js";
 
@@ -224,6 +225,12 @@ export function TitleBar({ surface, theme, onToggleTheme, commands = [] }: Title
           align="start"
           panelClassName="app__menu-panel"
           triggerClassName="app__menu-trigger"
+          // The window is this menu's only ceiling: it is a list of commands,
+          // so it shows every row whenever there is room for them and scrolls
+          // only when there really is not. `PANEL_MAX_HEIGHT` — the popover's
+          // own default, a note menu's scroll window — was capping it at 320px
+          // and drawing a scrollbar over a window with room to spare.
+          preferredMaxHeight={UNBOUNDED_PANEL_HEIGHT}
           triggerContent={
             <>
               <span className="app__brand-mark" aria-hidden="true">
@@ -239,7 +246,14 @@ export function TitleBar({ surface, theme, onToggleTheme, commands = [] }: Title
               dismiss();
               action();
             };
-            return (
+            /**
+             * The rows, and only the rows: the build line at the foot is drawn
+             * outside this list so that a short window scrolls the commands
+             * while the line naming the build stays put. `.app__menu-list` is
+             * the scroller, so the menu's own height is the only thing that
+             * decides whether there is one at all.
+             */
+            const rows = (
               <>
                 {commands.length > 0 && (
                   <>
@@ -301,7 +315,12 @@ export function TitleBar({ surface, theme, onToggleTheme, commands = [] }: Title
                   run(toggleMaximize),
                 )}
                 {item("close", strings.app.window.close, run(close), CLOSE_CHORD)}
+              </>
+            );
 
+            return (
+              <>
+                <div className="app__menu-list">{rows}</div>
                 {version !== null && (
                   <p className="app__menu-foot">{`${strings.app.brand} ${version}`}</p>
                 )}

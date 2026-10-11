@@ -1,0 +1,206 @@
+/**
+ * „IT" — the English copy of this toolkit's surfaces.
+ *
+ * One entry per tool id, keyed exactly as the assignment spells the
+ * registration. The tool's NAME and its one-line blurb are not here: those live
+ * in a different table another process owns.
+ *
+ * **The unit tables are here and not in the surface**, and they are the same in
+ * both languages on purpose: `MB` and `MiB` are different units in every locale,
+ * and a label that said one thing while the arithmetic used the other is the
+ * defect this toolkit exists to make visible.
+ */
+export const PRO_IT_EN = {
+  units: {
+    data: {
+      bit: "bit",
+      kbit: "kbit",
+      Mbit: "Mbit",
+      Gbit: "Gbit",
+      Tbit: "Tbit",
+      B: "B",
+      kB: "kB",
+      MB: "MB",
+      GB: "GB",
+      TB: "TB",
+      KiB: "KiB",
+      MiB: "MiB",
+      GiB: "GiB",
+      TiB: "TiB",
+    },
+    rate: {
+      bitPerSecond: "bit/s",
+      kbitPerSecond: "kbit/s",
+      MbitPerSecond: "Mbit/s",
+      GbitPerSecond: "Gbit/s",
+      bytePerSecond: "B/s",
+      kBPerSecond: "kB/s",
+      MBPerSecond: "MB/s",
+      GBPerSecond: "GB/s",
+      KiBPerSecond: "KiB/s",
+      MiBPerSecond: "MiB/s",
+      GiBPerSecond: "GiB/s",
+    },
+    diskSize: {
+      GB: "GB",
+      TB: "TB",
+      TiB: "TiB",
+    },
+  },
+
+  "transfer-time": {
+    size: "Payload size",
+    sizeUnit: "Size unit",
+    rate: "Transfer rate",
+    rateUnit: "Rate unit",
+    overhead: "Protocol overhead",
+    overheadHint:
+      "In percent of the payload. An empty field means 0 % — the payload alone, with no headers.",
+    results: "Result",
+    totalTime: "Transfer time",
+    totalSeconds: "Time in seconds",
+    effectiveBytes: "Bytes moved in total",
+    overheadUsed: "Overhead counted",
+    formulaLine: "t = size × 8 / rate     (the factor of 8 only where bytes meet bits)",
+    inputs: "Entered",
+    unitDays: "d",
+    unitHours: "h",
+    unitMinutes: "min",
+    unitSeconds: "s",
+    unitB: "B",
+    errorSize: "The size must be a number, zero or greater.",
+    errorRate: "The rate must be greater than zero.",
+    errorOverhead: "The overhead is between 0 and 10 000 percent.",
+  },
+
+  "transfer-rate": {
+    value: "Value",
+    unit: "Unit",
+    binaryNote:
+      "Decimal prefixes are powers of ten and binary ones powers of two: 1 MiB/s is 8.388608 Mbit/s.",
+    results: "Result",
+    colUnit: "Unit",
+    colValue: "Value",
+    formulaLine: "1 B/s = 8 bit/s     decimal: 10³     binary: 2¹⁰",
+    inputs: "Entered",
+    errorValue: "The value must be a number, zero or greater.",
+  },
+
+  "raid-capacity": {
+    level: "RAID level",
+    level0: "RAID 0 — striping, no protection",
+    level1: "RAID 1 — mirror",
+    level5: "RAID 5 — single parity",
+    level6: "RAID 6 — double parity",
+    level10: "RAID 10 — mirrored stripes",
+    diskCount: "Number of disks",
+    diskCountHint:
+      "Data disks only, without spares. Levels need at least 2, 3 or 4 disks, depending on the level.",
+    diskSize: "Size of one disk",
+    diskSizeUnit: "Disk size unit",
+    hotSpares: "Hot spares",
+    hotSparesHint: "Held in reserve, outside the array's capacity and parity. An empty field means none.",
+    rebuildRate: "Rebuild rate",
+    rebuildRateHint: "A measured rate in MB/s. An empty field leaves the rebuild row out.",
+    results: "Result",
+    rawBytes: "Raw capacity",
+    usableBytes: "Usable capacity",
+    usableTiB: "Usable, as the operating system reports it",
+    efficiency: "Efficiency",
+    toleratedFailures: "Disks that may fail",
+    redundancyDisks: "Disks given to redundancy",
+    dataDisks: "Data disks",
+    hotSparesOut: "Hot spares",
+    rebuildTime: "Rebuild time",
+    capacityNote:
+      "This is the array's capacity and does not deduct the filesystem's own overhead, which " +
+      "depends on which filesystem it is and how it is configured.",
+    formulaLine:
+      "0: N·C     1: C     5: (N−1)·C     6: (N−2)·C     10: (N/2)·C     C = disk size",
+    inputs: "Entered",
+    unitB: "B",
+    unitTiB: "TiB",
+    unitHours: "h",
+    errorCount: "The disk count is a whole number from 2 to 240 and must be enough for the level.",
+    errorCountEven: "RAID 10 needs an even number of disks.",
+    errorCountTwo: "RAID 1 in this tool means exactly two disks.",
+    errorSize: "The disk size must be greater than zero.",
+    errorSpares: "The number of spares is a whole number from 0 to 100.",
+    errorRebuild: "The rebuild rate must be greater than zero.",
+  },
+
+  "uptime-downtime": {
+    mode: "Mode",
+    modeFromUptime: "From an availability percentage",
+    modeFromDowntime: "From a month's downtime",
+    uptime: "Availability",
+    monthlyDowntime: "Downtime in the reference month",
+    periodNote: "The reference year is 365 days and the month 30 days.",
+    results: "Result",
+    unavailable: "Unavailability",
+    nines: "Number of nines",
+    perDay: "Downtime a day",
+    perWeek: "Downtime a week",
+    perMonth: "Downtime a month",
+    perYear: "Downtime a year",
+    perMonthSeconds: "Downtime a month in seconds",
+    formulaLine: "downtime = (1 − availability)·period     nines = −log₁₀(1 − availability)",
+    inputs: "Entered",
+    unitMinutes: "min",
+    unitSeconds: "s",
+    errorUptime: "Availability is a number between 0 and 100.",
+    errorUptimeHundred:
+      "An availability of exactly 100 % has no downtime and no nines — enter a value below one hundred.",
+    errorDowntime: "The month's downtime must be above zero and below the number of minutes in the month.",
+  },
+
+  "vlsm-split": {
+    baseAddress: "Base network",
+    baseAddressHint: "e.g. 192.168.10.0. The address is masked to its network at the prefix given.",
+    prefix: "Base prefix",
+    hostCounts: "Hosts needed",
+    hostCountsHint:
+      "One whole number per subnet, separated by commas, semicolons or spaces, e.g. 100, 50, 20. " +
+      "The comma is a separator, not a decimal mark. The order does not matter — the tool " +
+      "allocates from the largest subnet down.",
+    results: "Result",
+    baseNetwork: "Network",
+    baseBroadcast: "Broadcast address",
+    colRequested: "Hosts asked",
+    colPrefix: "Prefix",
+    colNetwork: "Network",
+    colFirst: "First address",
+    colLast: "Last address",
+    colBroadcast: "Broadcast",
+    colUsable: "Usable addresses",
+    totalRequested: "Hosts asked for in total",
+    totalAllocated: "Addresses allocated in total",
+    freeAddresses: "Unclaimed addresses of the base network",
+    formulaLine: "prefix = 32 − ceil(log₂(hosts + 2))     block = 2^(32 − prefix)",
+    unitHosts: "hosts",
+    errorAddress: "The address must be a.b.c.d, each part from 0 to 255.",
+    errorPrefix: "The prefix is a whole number from 0 to 30 — /31 and /32 have no host addresses.",
+    errorCounts: "Enter at least one host count, each a whole number above zero.",
+    errorDoesNotFit: "Subnets of these sizes do not fit in the base network.",
+  },
+
+  "mac-normalise": {
+    address: "MAC address",
+    addressHint:
+      "Any ordinary spelling: aa:bb:cc:dd:ee:ff, aa-bb-…, aabb.ccdd.eeff or with no separators.",
+    results: "Result",
+    colon: "Colon notation",
+    dash: "Dash notation",
+    dotted: "Cisco notation",
+    bare: "No separators",
+    oui: "OUI (vendor)",
+    groupBit: "First bit of the first octet",
+    adminBit: "Second bit of the first octet",
+    multicast: "Group address (multicast)",
+    unicast: "Single-station address (unicast)",
+    locallyAdministered: "Assigned by an administrator, not the vendor",
+    globallyAdministered: "Assigned by the vendor",
+    formulaLine: "I/G = bit 0 of the first octet     U/L = bit 1 of the first octet",
+    errorAddress: "The address must be exactly six bytes of hexadecimal.",
+  },
+} as const;

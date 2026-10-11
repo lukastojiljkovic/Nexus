@@ -1,0 +1,99 @@
+/* ASTRONOMIJA (ADR-090 / ADR-109) — the page's own arrangement, and the one
+   thing CSS could not know: how tall the 3D view is. Tokens exclusively, like
+   every other stylesheet in the app — raw colour values are forbidden outside
+   @nexus/tokens, and this file is checked by the same gates the shell's own are
+   (`check:colours`, `check:tokens`, `check:css`, `check:layers`).
+ *
+ * Class prefix `astronomy__`, after the module.
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE AND BY ITS SETTINGS CARD BODY. The
+ * page is lazy and so is the card, and the settings page can be opened by
+ * somebody who never opened the module, so the card imports the stylesheet too
+ * (`signals.css` states the same arrangement). `.set__*` classes are the SHELL's
+ * settings arrangement and are used here as a module body uses them.
+ */
+
+.astronomy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+/* The four views, as a wrapping row so a narrow window stacks them rather than
+   scrolling sideways. */
+.astronomy__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* The shared clock. Its row mixes a stacked field with bare buttons, so it
+   aligns its CONTROLS at `end` — `check:rows` is the gate that knows why. */
+.astronomy__clock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.astronomy__clock-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+/* The instant on screen. Tabular figures, because it is a column of digits that
+   changes once a second and must not wobble while it does. */
+.astronomy__instant {
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The WRAPPER, which is where `TextField` puts a caller's class and where a
+   width belongs: the control itself is `width: 100%` of this box. */
+.astronomy__moment {
+  width: 240px;
+}
+
+.astronomy__scales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* The selected body's own reading: a column of digits and a name, so tabular
+   figures again. */
+.astronomy__choice {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.astronomy__error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.astronomy__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+/* The 3D view is a flex child with no intrinsic height, so the page states one.
+   `min` keeps a maximised window from stretching an empty-looking canvas. */
+.astronomy .solar {
+  height: min(70vh, 720px);
+}
+
+/* The picker without its own frame, inside the settings card: the controls are
+   the page's, the card around them is the shell's. */
+.astronomy .ast-place__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}

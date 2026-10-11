@@ -1,5 +1,6 @@
 import type { CanvasRef } from "@nexus/core";
 import type { CanvasCardInteraction, CanvasCardView } from "./canvasCards.js";
+import { searchKindLabel } from "./moduleKit/labels.js";
 import { strings } from "./strings.js";
 
 /**
@@ -63,7 +64,7 @@ export function CanvasCard({ elementId, view, interaction, onOpen, onRemove }: C
   return (
     <div className={cardClass(view.state, interaction)}>
       {view.state !== "foreign" && (
-        <span className="canv-card__kind">{strings.search.kindSingular[view.ref.kind]}</span>
+        <span className="canv-card__kind">{searchKindLabel(view.ref.kind, false)}</span>
       )}
 
       {view.state === "ready" && (

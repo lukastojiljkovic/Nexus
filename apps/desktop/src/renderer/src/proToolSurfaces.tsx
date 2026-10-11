@@ -171,6 +171,77 @@ export const PRO_SURFACE_FILES: readonly SurfaceFile[] = [
     tools: PRO_TOOL_GROUPS.event,
     load: () => import("./pro/event.js").then((module) => module.EVENT_SURFACES),
   },
+  {
+    file: "pro/laboratorija.tsx",
+    tools: PRO_TOOL_GROUPS.laboratorija,
+    load: () => import("./pro/laboratorija.js").then((module) => module.LABORATORIJA_SURFACES),
+  },
+  {
+    file: "pro/elektro.tsx",
+    tools: PRO_TOOL_GROUPS.elektro,
+    load: () => import("./pro/elektro.js").then((module) => module.ELEKTRO_SURFACES),
+  },
+  {
+    file: "pro/it.tsx",
+    tools: PRO_TOOL_GROUPS.it,
+    load: () => import("./pro/it.js").then((module) => module.IT_SURFACES),
+  },
+  {
+    file: "pro/auto.tsx",
+    tools: PRO_TOOL_GROUPS.auto,
+    load: () => import("./pro/auto.js").then((module) => module.AUTO_SURFACES),
+  },
+  {
+    file: "pro/nautika.tsx",
+    tools: PRO_TOOL_GROUPS.nautika,
+    load: () => import("./pro/nautika.js").then((module) => module.NAUTIKA_SURFACES),
+  },
+  {
+    file: "pro/vazduhoplovstvo.tsx",
+    tools: PRO_TOOL_GROUPS.vazduhoplovstvo,
+    load: () =>
+      import("./pro/vazduhoplovstvo.js").then((module) => module.VAZDUHOPLOVSTVO_SURFACES),
+  },
+  {
+    file: "pro/geodezija.tsx",
+    tools: PRO_TOOL_GROUPS.geodezija,
+    load: () => import("./pro/geodezija.js").then((module) => module.GEODEZIJA_SURFACES),
+  },
+  {
+    file: "pro/radio.tsx",
+    tools: PRO_TOOL_GROUPS.radio,
+    load: () => import("./pro/radio.js").then((module) => module.RADIO_SURFACES),
+  },
+  {
+    file: "pro/energija.tsx",
+    tools: PRO_TOOL_GROUPS.energija,
+    load: () => import("./pro/energija.js").then((module) => module.ENERGIJA_SURFACES),
+  },
+  {
+    file: "pro/grejanje.tsx",
+    tools: PRO_TOOL_GROUPS.grejanje,
+    load: () => import("./pro/grejanje.js").then((module) => module.GREJANJE_SURFACES),
+  },
+  {
+    file: "pro/metal.tsx",
+    tools: PRO_TOOL_GROUPS.metal,
+    load: () => import("./pro/metal.js").then((module) => module.METAL_SURFACES),
+  },
+  {
+    file: "pro/stolarija.tsx",
+    tools: PRO_TOOL_GROUPS.stolarija,
+    load: () => import("./pro/stolarija.js").then((module) => module.STOLARIJA_SURFACES),
+  },
+  {
+    file: "pro/krojenje.tsx",
+    tools: PRO_TOOL_GROUPS.krojenje,
+    load: () => import("./pro/krojenje.js").then((module) => module.KROJENJE_SURFACES),
+  },
+  {
+    file: "pro/vino.tsx",
+    tools: PRO_TOOL_GROUPS.vino,
+    load: () => import("./pro/vino.js").then((module) => module.VINO_SURFACES),
+  },
 ];
 
 /**

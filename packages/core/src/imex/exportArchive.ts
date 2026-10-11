@@ -45,7 +45,13 @@ import type { HabitSchedule } from "../habits/habitSchedule.js";
 import type { RecurrenceRule } from "../recurrence/recurrence.js";
 import type { TaskViewConfig } from "../tasks/taskViewConfig.js";
 import { base64ToBytes } from "../bytes.js";
-import { claimUniqueName, sanitizePathSegment, UNTITLED_NOTE_NAME } from "./archivePaths.js";
+import {
+  ARCHIVE_SEGMENT_NAMES,
+  claimUniqueName,
+  sanitizePathSegment,
+  type ArchiveLanguage,
+  type ArchiveSegmentNames,
+} from "./archivePaths.js";
 import { toCsv } from "./csv.js";
 import { buildIcsCalendar } from "./icsExport.js";
 import { renderNoteMarkdown } from "./noteMarkdown.js";
@@ -616,7 +622,29 @@ import type { NoteMarkdownAttachment, NoteMarkdownContext } from "./noteMarkdown
  * pins them equal.
  *
  */
-const SCHEMA_VERSION = "1.41.0";
+/**
+ * `1.42.0` adds the MODULE KIT's section (ADR-090): a new
+ * `data/modules.ndjson` carrying one `module-data` record per discovered module
+ * that has something to say.
+ *
+ * A MINOR bump, by the same honesty every entry above made: an older reader
+ * refuses the record type outright, and it would refuse it for a reason that
+ * has nothing to do with a damaged file - a kit module's payload would be
+ * silently missing from a restore that reported success. The record type is
+ * additive in this build's own direction (nothing above changed), which is why
+ * the bump is minor and not major.
+ *
+ * **ADR-108 then lets that section's BLOBS ride, and there is no bump of its
+ * own - which is the difference between this and every entry above.** A module
+ * that names files declares them through the kit, and the hashes join the
+ * `blobs/` union and the manifest's blob list: the same shapes, the same
+ * checksum rule, no new record type and no changed field. An older reader
+ * handed such an archive parses every part it knows and writes only the bytes
+ * its own rows name, so the module's rows come back exactly as a 1.42.0 archive
+ * restored them - the module's own missing-file state. Nothing is refused and
+ * nothing is misread, so a bump would claim a break that does not exist.
+ */
+const SCHEMA_VERSION = "1.42.0";
 
 // --- Row shapes (the interchange contract; see file header) -----------------
 
@@ -2154,6 +2182,42 @@ export interface ExportSettings {
 }
 
 /**
+ * One kit module's section of an archive (ADR-090): which module, and the
+ * versioned payload that module handed over.
+ *
+ * `moduleId` is the module's own manifest id (`timers`), which is also the
+ * prefix of every channel it declares — one name for one module, so an archive
+ * that names an id this build does not know is answerable with a sentence
+ * rather than a guess. The row rides as `module-data` in
+ * `data/modules.ndjson`.
+ */
+export interface ExportModuleData {
+  moduleId: string;
+  /**
+   * The module's own export value, exactly as its `exportData()` returned it
+   * (or as the `parse` half of its `importData()` will validate it back).
+   * Deliberately `unknown`:
+   * see `ProfileData.modules` for why core carries this without reading it.
+   */
+  payload: unknown;
+}
+
+/**
+ * One blob a kit module's rows name, as the module declares it for an archive
+ * (ADR-108): the content hash, and the size the module's own row states.
+ *
+ * It rides as a PARALLEL input beside `ProfileData.modules` rather than inside
+ * `ExportModuleData`, for `payload: unknown`'s own reason: core carries a
+ * module's payload without reading it, so it cannot look inside one to find the
+ * hashes. The module reads them off its own rows and main hands the list over
+ * (`ModuleContext.blobs`, `ModuleHost.collectBlobs`).
+ */
+export interface ExportModuleBlob {
+  sha256: string;
+  sizeBytes: number;
+}
+
+/**
  * Every non-derived row of one profile: what an archive carries, what the
  * exporter gathers, and what a restore writes. One shape, deliberately shared
  * by all three, so a module that one of them forgets is a type error in the
@@ -2392,6 +2456,35 @@ export interface ProfileData {
   circuitChassis: readonly ExportCircuitChassis[];
   circuitParts: readonly ExportCircuitPart[];
   circuitWires: readonly ExportCircuitWire[];
+  /**
+   * The MODULE KIT's section (ADR-090): one entry per discovered module that
+   * has something to say, keyed by that module's own id.
+   *
+   * **Why this one member is not an array of rows with its own bucket.** Every
+   * field above is a collection this package knows the shape of, and that is
+   * what lets `countProfileModules` and `filterProfileData` share one
+   * module↔collection mapping. A kit module's payload is the opposite kind of
+   * thing by design: its shape belongs to the module, versioned by the module,
+   * read back only by the module that wrote it (`ModuleContext.exportData`).
+   * Core carries it and never looks inside — so it stays `unknown`, and the
+   * type says out loud what the alternative (`any`, or a shape invented here)
+   * would hide.
+   *
+   * **It belongs to no archive module** (IMEX-003), exactly as `settings` and
+   * the private section belong to none: a subset export filters the collections
+   * above, and this rides whole with every archive, because a module's data has
+   * no bucket a subset could be expressed against. The one thing an archive
+   * DOES say about it is which modules it names, and a build that does not know
+   * one of them refuses the archive rather than dropping the section
+   * (`main/restore.ts`), because a backup that silently loses rows is the
+   * failure this whole reader exists to prevent.
+   *
+   * Required like every field above, and for the same reason: a caller that
+   * forgets it must be a type error, not a quiet omission. EMPTY is the honest
+   * shape for "this archive carries no kit module data", which is also every
+   * archive written before `1.42.0` — indistinguishable on purpose.
+   */
+  modules: readonly ExportModuleData[];
 }
 
 // --- Private notes (PRIV v1, ADR-057 §6) ------------------------------------
@@ -2541,6 +2634,22 @@ export interface ExportArchiveInput {
    */
   modules?: ReadonlySet<ArchiveModuleId>;
   /**
+   * The blobs the archive's kit-module section names (ADR-108) — the hashes the
+   * exported profiles' registered modules declare, with the sizes their own rows
+   * state. A parallel input beside `data.modules` for exactly `privateNotes`'
+   * reason one field down: core carries a module's payload without reading it,
+   * so the module is the only thing that can answer which files its rows name.
+   *
+   * ABSENT whenever no module names one, which writes byte for byte the archive
+   * every earlier build wrote: the `blobs/` union and the manifest's blob list
+   * are unchanged in SHAPE, and this input only ever adds an entry to them. They
+   * ride with every subset, on the module section's own terms (ADR-090 §5) — a
+   * module's payload belongs to no archive module, so neither does the file
+   * beside it, and a tasks-only export still carries the tickets the module
+   * section it always carries names.
+   */
+  moduleBlobs?: readonly ExportModuleBlob[];
+  /**
    * The profile's private notes, DECRYPTED (ADR-057 §6) — a parallel input
    * beside `data`, deliberately NOT a `ProfileData` member: `ProfileData` is
    * the shape `gatherProfileData` reads, a restore's undo snapshot captures and
@@ -2557,6 +2666,17 @@ export interface ExportArchiveInput {
    * whole arrangement avoids.
    */
   privateNotes?: ExportPrivateNotes;
+  /**
+   * The language the Markdown mirror's two GENERATED names are written in — the
+   * untitled-note and nameless-folder fallbacks (`archivePaths.ts`).
+   *
+   * ABSENT means Serbian, which is what every caller that has no locale keeps
+   * getting: the language is read from ONE variable in `main` (`mainLocale()`)
+   * and passed down, the way `main/shellStrings.ts` reads its native-dialog
+   * names. A note's title and a folder's name are the user's own data and are
+   * never translated, so this changes nothing else in the archive.
+   */
+  language?: ArchiveLanguage;
   /** sha256 hex over a UTF-8 string, injected so this module never imports `node:crypto`. */
   hash: (content: string) => string;
 }
@@ -2617,6 +2737,11 @@ export const DATA_FILES = [
   // The ELEC module (migration 067, `1.40.0`): its own file, on the same terms
   // again — a pre-1.40 archive neither carries it nor declares its checksum.
   "data/electronics.ndjson",
+  // The MODULE KIT's section (ADR-090, `1.42.0`): one record per discovered
+  // module that has something to say, appended on the same terms again - a
+  // pre-1.42 archive neither carries it nor declares its checksum, and
+  // absent-and-undeclared is nothing at all.
+  "data/modules.ndjson",
 ] as const;
 
 /** The manifest's module ids, in manifest order — the grouping `countProfileModules` counts by and `buildExportArchive` builds `manifest.modules` from, so the two can never disagree. */
@@ -2777,6 +2902,12 @@ export function countProfileModules(data: ProfileData): Record<ArchiveModuleId, 
       data.circuitChassis.length +
       data.circuitParts.length +
       data.circuitWires.length,
+    // The kit's section (ADR-090) is counted NOWHERE, deliberately: it belongs
+    // to no archive module (see `ProfileData.modules`), and the buckets above
+    // are keyed by `ArchiveModuleId` - a closed union this package cannot grow
+    // per module. A restore preview therefore says nothing about it, which is
+    // the honest answer: what one module's opaque payload contains is the
+    // module's own business, and its own screen is where it is described.
   };
 }
 
@@ -2957,6 +3088,11 @@ export function filterProfileData(
     circuitChassis: only("electronics", data.circuitChassis),
     circuitParts: only("electronics", data.circuitParts),
     circuitWires: only("electronics", data.circuitWires),
+    // The MODULE KIT's section passes through WHOLE (ADR-090): it belongs to no
+    // archive module, so there is no subset to apply to it - a module's payload
+    // is not a collection of rows a module choice could drop. `settings` and
+    // the private section ride outside this filter for the same reason.
+    modules: data.modules,
   };
 }
 
@@ -3143,6 +3279,15 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
     ...privateNotes.versions.map((row) => ({ type: "private-note-version", ...row })),
   ]);
 
+  // The kit's section (ADR-090): one record per module, in the order the host
+  // collected them (which is registration order, so two exports of one profile
+  // are byte-identical). A module with nothing to say never reaches here - the
+  // host omits it - so an empty file means "no module had anything", exactly
+  // what a profile that never used one produces.
+  const modulesNdjson = toNdjson(
+    data.modules.map((row) => ({ type: "module-data", ...row })),
+  );
+
   files.set("data/tasks.ndjson", tasksNdjson);
   files.set("data/calendar.ndjson", calendarNdjson);
   files.set("data/study.ndjson", studyNdjson);
@@ -3155,10 +3300,11 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   files.set("data/fitness.ndjson", fitnessNdjson);
   files.set("data/canvas.ndjson", canvasNdjson);
   files.set("data/electronics.ndjson", electronicsNdjson);
+  files.set("data/modules.ndjson", modulesNdjson);
 
   // --- Notes: Markdown mirror + binary entries (ADR-022 section 3) -------
   const binaries: ExportBinaryEntry[] = [];
-  const notePaths = buildNotePaths(notes, noteFolders);
+  const notePaths = buildNotePaths(notes, noteFolders, ARCHIVE_SEGMENT_NAMES[input.language ?? "sr"]);
   const attachmentsByNote = groupAttachmentsByNote(noteAttachments);
 
   for (const note of notes) {
@@ -3214,6 +3360,15 @@ export function buildExportArchive(input: ExportArchiveInput): ExportArchive {
   // still carries the picture of the profile it is an export of.
   if (input.profile.picture !== null) {
     declareBlob(input.profile.picture.hash, input.profile.picture.sizeBytes);
+  }
+  // The module section's own blobs (ADR-108), joining the SAME union on the
+  // picture's terms one block up: no `ProfileData` row names them — the rows
+  // that do live inside a module payload core deliberately does not read — so
+  // the module declares them through the kit and main hands the list over. The
+  // deduplication is this map's, so a recipe photo identical to a culture
+  // ticket travels once, exactly as a note's image and a task's file already do.
+  for (const blob of input.moduleBlobs ?? []) {
+    declareBlob(blob.sha256, blob.sizeBytes);
   }
 
   // --- Private notes (ADR-057 §6): Markdown mirrors + decrypted blob entries.
@@ -3342,10 +3497,15 @@ const EMPTY_NOTE_ATTACHMENTS: ReadonlyMap<string, NoteMarkdownAttachment> = new 
  * is resolved (and memoized) recursively; a cycle — never produced by
  * `NoteOrgStore`, but defensive here — is broken by treating the re-entrant
  * folder as a root folder rather than recursing forever.
+ *
+ * `names` is the one part of this that is not the user's data: the two
+ * fallbacks a path segment can need when there is nothing to name it with,
+ * already resolved to the export's language by the caller.
  */
 function buildNotePaths(
   notes: readonly ExportNote[],
   folders: readonly ExportNoteFolder[],
+  names: ArchiveSegmentNames,
 ): Map<string, NotePathInfo> {
   const folderById = new Map(folders.map((folder) => [folder.id, folder]));
   const registries = new Map<string, Set<string>>();
@@ -3370,7 +3530,11 @@ function buildNotePaths(
 
     resolving.add(folderId);
     const parentDir = folder.parentId !== null ? resolveFolderDir(folder.parentId) : "notes";
-    const name = claimUniqueName(registryFor(parentDir), sanitizePathSegment(folder.name, "Fascikla"), "");
+    const name = claimUniqueName(
+      registryFor(parentDir),
+      sanitizePathSegment(folder.name, names.untitledFolder),
+      "",
+    );
     const dir = `${parentDir}/${name}`;
     resolving.delete(folderId);
 
@@ -3388,7 +3552,7 @@ function buildNotePaths(
         : "notes";
     const fileName = claimUniqueName(
       registryFor(dir),
-      sanitizePathSegment(note.title, UNTITLED_NOTE_NAME),
+      sanitizePathSegment(note.title, names.untitledNote),
       ".md",
     );
     const path = `${dir}/${fileName}`;

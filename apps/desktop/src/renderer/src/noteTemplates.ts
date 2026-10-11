@@ -2,21 +2,25 @@ import type { JSONContent } from "@tiptap/core";
 import type { BuiltinNoteTemplateId } from "@nexus/core";
 import type { NoteTemplate } from "../../shared/ipc.js";
 import { collator } from "./intl.js";
-import { strings } from "./strings.js";
+import { activeLocale, strings } from "./strings.js";
 
 /**
  * The five built-in note templates (ADR-016 / NOTE-009 slice 009-b) —
  * Sastanak, Dnevnik, Recept, Predmet, Projekat — plus `stripAttachmentNodes`,
  * used by "Sačuvaj kao šablon".
  *
- * Their Serbian body text sits inline with the structure below rather than in
+ * Their body text sits inline with the structure below rather than in
  * `strings.ts`, a deliberate, documented exception to the house rule that all
  * user-facing copy lives there: a template body is structure-bearing content,
- * not a label, and splitting the two would leave both unreadable. This file
- * is therefore part of the future mechanical i18n extraction (ADR-016), same
- * as any other renderer copy — it just is not extracted yet. Template
- * *names* are NOT an exception and stay in `strings.ts` like every other
- * label (`strings.notes.templateBuiltins.*`).
+ * not a label, and splitting the two would leave both unreadable. Each
+ * built-in therefore carries its body twice, `bodySr` beside `bodyEn`, and
+ * `content` reads the ACTIVE locale — a getter rather than a field, for the
+ * reason `name` is one. What gets inserted is a snapshot of that reading, so a
+ * template copied into a note never retranslates afterwards, exactly like the
+ * persisted defaults `main/shellStrings.ts` documents. Template *names* are
+ * NOT an exception and stay in `strings.ts` like every other label
+ * (`strings.notes.templateBuiltins.*`), which is what keeps the picker and the
+ * body it inserts in one language.
  *
  * Also home to `TemplateEntry` / `mergeTemplateEntries`: the shared shape that
  * turns a profile's stored rows plus the built-ins above into the one ordered
@@ -34,8 +38,15 @@ export interface BuiltinTemplate {
    */
   id: BuiltinNoteTemplateId;
   name: string;
-  /** Always a full `{ type: "doc", content: [...] }` node. */
-  content: JSONContent;
+  /** The body inserted while Serbian is served. Always a full `{ type: "doc", content: [...] }` node. */
+  readonly bodySr: JSONContent;
+  /**
+   * The body inserted while English is served — the same structure, heading
+   * for heading, so the two cannot drift into two different templates.
+   */
+  readonly bodyEn: JSONContent;
+  /** The body for the active locale. Always a full `{ type: "doc", content: [...] }` node. */
+  readonly content: JSONContent;
 }
 
 // Small local builders so each template body below stays ~8 readable lines.
@@ -81,7 +92,7 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     get name() {
       return strings.notes.templateBuiltins.sastanak;
     },
-    content: doc(
+    bodySr: doc(
       heading(1, "Sastanak"),
       paragraph("Datum:"),
       paragraph("Učesnici:"),
@@ -92,13 +103,27 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
       heading(2, "Zaključci i zadaci"),
       tasks(),
     ),
+    bodyEn: doc(
+      heading(1, "Meeting"),
+      paragraph("Date:"),
+      paragraph("Attendees:"),
+      heading(2, "Agenda"),
+      bullets(),
+      heading(2, "Notes"),
+      paragraph(),
+      heading(2, "Decisions and tasks"),
+      tasks(),
+    ),
+    get content() {
+      return activeLocale() === "en" ? this.bodyEn : this.bodySr;
+    },
   },
   {
     id: "builtin:dnevnik",
     get name() {
       return strings.notes.templateBuiltins.dnevnik;
     },
-    content: doc(
+    bodySr: doc(
       heading(1, "Dnevnik"),
       heading(2, "Šta se danas desilo"),
       paragraph(),
@@ -107,13 +132,25 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
       heading(2, "Plan za sutra"),
       tasks(),
     ),
+    bodyEn: doc(
+      heading(1, "Journal"),
+      heading(2, "What happened today"),
+      paragraph(),
+      heading(2, "What I learned"),
+      paragraph(),
+      heading(2, "Plan for tomorrow"),
+      tasks(),
+    ),
+    get content() {
+      return activeLocale() === "en" ? this.bodyEn : this.bodySr;
+    },
   },
   {
     id: "builtin:recept",
     get name() {
       return strings.notes.templateBuiltins.recept;
     },
-    content: doc(
+    bodySr: doc(
       heading(1, "Naziv jela"),
       paragraph("Porcije:"),
       paragraph("Vreme pripreme:"),
@@ -124,13 +161,27 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
       heading(2, "Napomene"),
       paragraph(),
     ),
+    bodyEn: doc(
+      heading(1, "Dish name"),
+      paragraph("Servings:"),
+      paragraph("Preparation time:"),
+      heading(2, "Ingredients"),
+      bullets(),
+      heading(2, "Method"),
+      ordered(),
+      heading(2, "Notes"),
+      paragraph(),
+    ),
+    get content() {
+      return activeLocale() === "en" ? this.bodyEn : this.bodySr;
+    },
   },
   {
     id: "builtin:predmet",
     get name() {
       return strings.notes.templateBuiltins.predmet;
     },
-    content: doc(
+    bodySr: doc(
       heading(1, "Predmet"),
       paragraph("Profesor:"),
       paragraph("Ispit:"),
@@ -143,13 +194,29 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
       heading(2, "Obaveze"),
       tasks(),
     ),
+    bodyEn: doc(
+      heading(1, "Course"),
+      paragraph("Teacher:"),
+      paragraph("Exam:"),
+      heading(2, "Objectives"),
+      bullets(),
+      heading(2, "Reading list"),
+      bullets(),
+      heading(2, "Lecture notes"),
+      paragraph(),
+      heading(2, "Obligations"),
+      tasks(),
+    ),
+    get content() {
+      return activeLocale() === "en" ? this.bodyEn : this.bodySr;
+    },
   },
   {
     id: "builtin:projekat",
     get name() {
       return strings.notes.templateBuiltins.projekat;
     },
-    content: doc(
+    bodySr: doc(
       heading(1, "Projekat"),
       paragraph("Cilj:"),
       paragraph("Rok:"),
@@ -160,6 +227,20 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
       heading(2, "Otvorena pitanja"),
       bullets(),
     ),
+    bodyEn: doc(
+      heading(1, "Project"),
+      paragraph("Goal:"),
+      paragraph("Deadline:"),
+      heading(2, "Steps"),
+      tasks(),
+      heading(2, "Notes"),
+      paragraph(),
+      heading(2, "Open questions"),
+      bullets(),
+    ),
+    get content() {
+      return activeLocale() === "en" ? this.bodyEn : this.bodySr;
+    },
   },
 ];
 

@@ -1,0 +1,521 @@
+{
+  "pack": "collections-wikidata",
+  "generated": "2026-10-10",
+  "licence": {
+    "spdx": "CC0-1.0",
+    "attribution": "Wikidata contributors — data from Wikidata, dedicated to the public domain under CC0 1.0.",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "evidence": [
+      {
+        "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+        "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+      },
+      {
+        "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+        "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+      }
+    ]
+  },
+  "sources": [
+    {
+      "id": "booker-prize",
+      "queryFile": "queries/booker-prize.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "da667e66f3f9ef05d6bdd6faa3961cf2ff2e53048fa201feb63f8d72891f4fc1",
+      "bytes": 23488,
+      "rows": 47,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "international-booker-prize",
+      "queryFile": "queries/international-booker-prize.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "5bc525b2e3d2cc03e47463d9d3957c82703b852ea0466d72289596532c0aab67",
+      "bytes": 4562,
+      "rows": 10,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "pulitzer-prize-fiction",
+      "queryFile": "queries/pulitzer-prize-fiction.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "1bec6c41dc67e967d361aa5cbab8f5451d06c38b68b3ad604bff2c03cc7701e2",
+      "bytes": 27862,
+      "rows": 57,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "hugo-award-best-novel",
+      "queryFile": "queries/hugo-award-best-novel.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "a1671ccf779f43816146c924da1de9f0f829d7b81d1d32010d5def193edc1c6e",
+      "bytes": 37389,
+      "rows": 76,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "nebula-award-best-novel",
+      "queryFile": "queries/nebula-award-best-novel.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "ef109e16f690ddcf51ee382584791cd54b11f561a8557e5e81d279b822cc2655",
+      "bytes": 30280,
+      "rows": 62,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "prix-goncourt",
+      "queryFile": "queries/prix-goncourt.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "337c0bd4c65695d8f28d3e5b304e7402497e444ab475b39ad78eff177b56b6be",
+      "bytes": 43791,
+      "rows": 105,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "womens-prize-fiction",
+      "queryFile": "queries/womens-prize-fiction.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "33a6e72212359155e2daf889743d1f2bf15d9eb1ff902bb800b499b39cf15f4e",
+      "bytes": 4297,
+      "rows": 8,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "german-book-prize",
+      "queryFile": "queries/german-book-prize.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "4346259a2cd801f4246fcb80c5e0c52c485ea2da635425d7d34cfe7a67e2153c",
+      "bytes": 9464,
+      "rows": 22,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "harvard-classics",
+      "queryFile": "queries/harvard-classics.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "06351537695e19cc64397ba09e0c78e88cf9a3127d99bda1799bbea88292da07",
+      "bytes": 13811,
+      "rows": 28,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "nin-prize-winners-books",
+      "queryFile": "queries/nin-prize-winners-books.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "5d6f2be5b3ceed3d2635f11084b8729813d82d6650c1329860c0ac51bea507bb",
+      "bytes": 110510,
+      "rows": 282,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "works-of-ivo-andric",
+      "queryFile": "queries/works-of-ivo-andric.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "60603bad3e5f282e576907cce0dee30cb60da4b0a82e32da1ee1fc599eed99f4",
+      "bytes": 24756,
+      "rows": 63,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "isidora-sekulic-books",
+      "queryFile": "queries/isidora-sekulic-books.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "49c4b74f87e72446cf963bbe409e19a3f14a750dd284765b3a8bd7c2d45ae189",
+      "bytes": 11244,
+      "rows": 30,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "kresnik-books",
+      "queryFile": "queries/kresnik-books.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "5cfb96ad3dfc124893fe0f8f634aa204029cf39a86867f1926ba4334f0643a6c",
+      "bytes": 16960,
+      "rows": 59,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "academy-award-best-picture",
+      "queryFile": "queries/academy-award-best-picture.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "e65675ce8f6cbfb7e6aae118b08f65a22a1a0c57793cbe06bb23705d6ea5def6",
+      "bytes": 58703,
+      "rows": 98,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "palme-dor",
+      "queryFile": "queries/palme-dor.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "3324762774f1535ff659fa3313d5b43c844af90e6b04552e747a989c12c53924",
+      "bytes": 46753,
+      "rows": 84,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "golden-lion",
+      "queryFile": "queries/golden-lion.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "09915003a2f1fdb7197270c2bbf4ec68b6f3a122ad061d98ade8e178c6935bd3",
+      "bytes": 35065,
+      "rows": 67,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "golden-bear",
+      "queryFile": "queries/golden-bear.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "e9429d9fdd104f335c12fde3fae5c998c3217043d155d10b0b0ddb033f01055c",
+      "bytes": 45753,
+      "rows": 90,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "studio-ghibli-films",
+      "queryFile": "queries/studio-ghibli-films.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "3a46a094906d502cd61e21da9054d6fdf6962c60f207391430de2376d9507913",
+      "bytes": 28796,
+      "rows": 57,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "films-by-emir-kusturica",
+      "queryFile": "queries/films-by-emir-kusturica.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "52f2f40324044fd8d8c009fa57ec97841c2b887909c2f83845cdc4e997150118",
+      "bytes": 10960,
+      "rows": 19,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "yugoslav-black-wave-films",
+      "queryFile": "queries/yugoslav-black-wave-films.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "b18eb9e410e606fdf4553c7b2aa37418e1ac3f2de264dd53f17ab235eead8ccb",
+      "bytes": 25576,
+      "rows": 43,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "serbian-films",
+      "queryFile": "queries/serbian-films.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "411812d4d28064e02a5a66e8db6e2ae3524c26253845cfb760000e1c6f50d6d6",
+      "bytes": 305195,
+      "rows": 569,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "big-golden-arena-best-film",
+      "queryFile": "queries/big-golden-arena-best-film.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "966312c7a0d0ec2ee6db5f9c5cbd544beb84244fbe80d984649a8836c8f0213f",
+      "bytes": 2840,
+      "rows": 5,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "emmy-outstanding-drama-series",
+      "queryFile": "queries/emmy-outstanding-drama-series.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "0f7dcd0fd15f4c863731e13f8699cdba88a08a7596f8464986706e1534f5cb36",
+      "bytes": 6401,
+      "rows": 11,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "emmy-outstanding-comedy-series",
+      "queryFile": "queries/emmy-outstanding-comedy-series.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "00e61343689f79c823211d516bbb6c84b31a0e02942b9c3a2178c129e1695c68",
+      "bytes": 5265,
+      "rows": 9,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    },
+    {
+      "id": "golden-globe-drama-series",
+      "queryFile": "queries/golden-globe-drama-series.rq",
+      "url": "https://query.wikidata.org/sparql?format=json",
+      "fetched": "2026-10-10",
+      "sha256": "1a2e9a0f2b9f5bae58bbb5ca3875c8436af8c6409b08f26d5a54cde8ad8ee225",
+      "bytes": 9254,
+      "rows": 16,
+      "licence": "CC0-1.0",
+      "licenceEvidence": [
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:Copyright",
+          "quote": "All structured data from the main, Property, Lexeme, and EntitySchema namespaces is available under the Creative Commons CC0 License; text in the other namespaces is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply."
+        },
+        {
+          "url": "https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Copyright",
+          "quote": "Wikidata Query Service provides information from Wikidata, which is available under CC0."
+        }
+      ]
+    }
+  ]
+}

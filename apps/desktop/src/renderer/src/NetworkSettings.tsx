@@ -48,6 +48,7 @@ export function NetworkSettings({ hits }: { hits: ReadonlySet<string> }) {
   }[] = [
     { id: "offline", hitId: "network-offline", title: s.offlineTitle, body: s.offlineBody },
     { id: "updates", hitId: "network-updates", title: s.updatesTitle, body: s.updatesBody },
+    { id: "downloads", hitId: "network-downloads", title: s.downloadsTitle, body: s.downloadsBody },
   ];
 
   async function save(): Promise<void> {

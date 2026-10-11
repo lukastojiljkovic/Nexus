@@ -3,8 +3,15 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2023"],
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "esModuleInterop": true
   },
-  "include": ["src/main", "src/preload", "src/shared", "electron.vite.config.ts"]
+  "include": [
+    "src/main",
+    "src/preload",
+    "src/shared",
+    "src/modules/*/shared",
+    "src/modules/*/main",
+    "electron.vite.config.ts"
+  ]
 }

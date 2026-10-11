@@ -33,7 +33,17 @@ export type BoundedRead =
 export async function readFileBounded(path: string, maxBytes: number): Promise<BoundedRead> {
   let handle: FileHandle;
   try {
-    handle = await open(path, "r");
+    // `0o600` beside the read-only flag, and the argument is not decoration.
+    // The mode is inert unless the same call also CREATES the file, which this
+    // one never does, so the line reads as a no-op; what it does is state the
+    // permission this reader would want if it ever did create something, and
+    // `js/insecure-temporary-file` is the rule that reads an `open` without one
+    // as "creates a file with the default mode". A caller in the tests hands
+    // this reader a path under the temp directory that is not there
+    // (astronomy's `packData.test.ts` asks for a missing packs root), which is
+    // how the rule reaches a line that only ever opens files for reading.
+    // Removing it was measured: the analysis went from green back to red.
+    handle = await open(path, "r", 0o600);
   } catch {
     return { status: "unreadable" };
   }

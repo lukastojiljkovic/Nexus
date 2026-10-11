@@ -690,6 +690,12 @@ suggestion, cheapest and highest-leverage first.
    placeholder-text generator, and the tool that shows the time). A
    `shots`-side comparison with that tolerance, against the previous run's
    frames, would turn „is this change visible anywhere" into one command.
+   **Done (2026-10-09):** `pnpm --filter @nexus/desktop shots:compare <old run>
+   <new run>` pairs two sweeps by path and sorts every frame as identical,
+   noise, changed or size-changed, with the tolerance above as its default
+   (`DEFAULT_NOISE` in `main/shots/compare.mts`: 100 pixels, 32 levels). It
+   writes `compare.md` and a diff image per changed frame into the new run, and
+   `--fail-on-change` turns a changed frame into a failing exit code.
 4. **The sizing contract.** DC-06 closed one pane at one breakpoint; what is
    missing is the rule that would have prevented all of them — what a pane's
    floor is, and what happens below it. This is also the desktop half of the
@@ -699,15 +705,16 @@ suggestion, cheapest and highest-leverage first.
    2026-09-22 and fixed by hand, four more the same day. Nothing in the tree can
    check a sentence, and a figure has no type, no import and no call site. The
    owed gate is a rule over the specific shapes that have now shipped twice.
-6. **A gate for Class C: a contract field no screen can reach.** The worked
-   example is `NewDocumentFields.reminderOffsets` and
-   `DocumentFieldChanges.reminderOffsets` — declared in `shared/ipc.ts`,
-   accepted by main, validated by the store, asserted by
-   `documentStore.test.ts` — while the panel's form never sets them, so a
-   document's warning ladder is unreachable by any user. `check:pro-flags`
-   already asks this question inside the professional drawer; the owed gate is
-   the generalisation: every exported IPC interface field must have a renderer
-   call site that sets it.
+6. **Done (2026-10-09): `check:reachable`, the gate for Class C.** Every
+   field of a `NexusApi` parameter type needs a renderer call site that sets
+   it; the walk follows each argument back through locals, field assignments,
+   conditionals and helper returns. The worked example had already been fixed
+   by `0df4eae` (the panel sets `reminderOffsets` on create and edit); the
+   form's payload now lives in `documentsForm.ts` with tests. The gate's
+   allowlist carries 14 fields: six with a reason, and eight marked
+   `TODO(reachable)`, among them three real gaps of the same shape: TASK
+   cannot edit a task's description, and CAL cannot edit an event's
+   description or category.
 7. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
    was built in `@nexus/core` from `ProfileData`, one interchange version for
    the whole profile, not from per-module handlers — so the slot ADR-008 lists
@@ -728,6 +735,10 @@ suggestion, cheapest and highest-leverage first.
    `SettingsPage.tsx` in the renderer and appear in no list the main process
    can read, so the same derivation cannot reach them. Recorded rather than
    papered over with a second hand-kept list.
+   **Cards done (2026-10-09):** the category table moved to
+   `shared/settingsSections.ts`, and `SETTINGS_SHELL_CARDS` derives one scene
+   per shell card from it; a test reads the page's own `sectionDomId("…")` call
+   sites back and holds the two together. The banners below remain open.
    The shell's two banners share the gap for a different reason: the
    restore-undo banner and the unsaved-exit banner (DC-148) appear only after a
    restore or after a write fails behind a closed page, and the harness has no

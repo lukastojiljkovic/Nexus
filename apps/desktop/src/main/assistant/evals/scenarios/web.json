@@ -1,0 +1,206 @@
+{
+  "scenarios": [
+    {
+      "id": "web-off-local-answer-sr",
+      "title": "Zahtev za pretragu interneta dok je mreža isključena",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Pretraži internet i nađi mi cenu benzina u Beogradu." }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 1,
+      "expect": {
+        "toolsNotCalled": ["knowledge.search", "tasks.create"],
+        "answerContains": ["isključena"],
+        "language": "sr",
+        "maxSteps": 1
+      },
+      "script": [
+        {
+          "text": "Web pretraga je isključena i ne dodirujem internet bez tvoje dozvole. Ako je uključiš u Podešavanjima, mogu da potražim cenu; za sada ti mogu pomoći samo sa onim što je na tvom uređaju."
+        }
+      ]
+    },
+    {
+      "id": "web-on-accepted-sr",
+      "title": "Pretraga interneta posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Pretraži internet: kakvo je vreme sutra u Beogradu?" }
+      ],
+      "tools": [
+        {
+          "name": "web.search",
+          "effect": "network",
+          "summary": { "sr": "Poslaću jedan upit na internet: „vreme sutra Beograd“.", "en": "I will send one query to the internet: “weather tomorrow Belgrade”." },
+          "content": "Weather tomorrow in Belgrade: clear, 22 degrees, light wind from the north.",
+          "citations": [
+            { "kind": "wiki", "id": "wiki-weather-belgrade", "title": "Weather tomorrow, Belgrade" }
+          ]
+        },
+        { "name": "knowledge.search", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "web.search", "args": { "query": { "contains": "Beograd" } } }
+        ],
+        "cites": ["wiki-weather-belgrade"],
+        "answerContains": ["22"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "web.search", "arguments": { "query": "vreme sutra Beograd" } }] },
+        {
+          "text": "Našao sam jedan izvor za sutra u Beogradu: vedro, 22 stepena i slab vetar. Ovo je sa interneta, pa proveri i sam ako ti je važno za put."
+        }
+      ]
+    },
+    {
+      "id": "web-on-declined-sr",
+      "title": "Pretraga interneta odbijena",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Pretraži internet i reci mi koji je kurs evra danas." }
+      ],
+      "tools": [
+        {
+          "name": "web.search",
+          "effect": "network",
+          "summary": { "sr": "Poslaću jedan upit na internet: „kurs evra“.", "en": "I will send one query to the internet: “euro rate”." },
+          "content": "Euro rate today: 117.20 dinars.",
+          "citations": [{ "kind": "wiki", "id": "wiki-euro-rate", "title": "Euro rate today" }]
+        },
+        { "name": "knowledge.search", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "web.search" }],
+        "answerContains": ["Nisam pretražio"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "web.search", "arguments": { "query": "kurs evra" } }] },
+        {
+          "text": "Nisam pretražio internet, jer si predlog odbio. Ništa nije poslato sa ovog uređaja; reci ako želiš da ipak potražim."
+        }
+      ]
+    },
+    {
+      "id": "web-off-local-answer-en",
+      "title": "A request to search the web while the network is off",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Search the web and find me the price of petrol in Belgrade." }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 1,
+      "expect": {
+        "toolsNotCalled": ["knowledge.search", "tasks.create"],
+        "answerContains": ["off"],
+        "language": "en",
+        "maxSteps": 1
+      },
+      "script": [
+        {
+          "text": "Web search is off, and I do not touch the network without your say-so. Turn it on in Settings and I can look, but for now I can only help with what is already on your machine."
+        }
+      ]
+    },
+    {
+      "id": "web-on-accepted-en",
+      "title": "A web search after confirmation",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Search the web: what is the weather in Belgrade tomorrow?" }
+      ],
+      "tools": [
+        {
+          "name": "web.search",
+          "effect": "network",
+          "summary": { "sr": "Poslaću jedan upit na internet: „weather tomorrow Belgrade“.", "en": "I will send one query to the internet: “weather tomorrow Belgrade”." },
+          "content": "Weather tomorrow in Belgrade: clear, 22 degrees, light wind from the north.",
+          "citations": [
+            { "kind": "wiki", "id": "wiki-weather-belgrade", "title": "Weather tomorrow, Belgrade" }
+          ]
+        },
+        { "name": "knowledge.search", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "web.search", "args": { "query": { "contains": "Belgrade" } } }
+        ],
+        "cites": ["wiki-weather-belgrade"],
+        "answerContains": ["22"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "web.search", "arguments": { "query": "weather tomorrow Belgrade" } }] },
+        {
+          "text": "I found one source for Belgrade tomorrow: clear, 22 degrees and a light wind. This came from the web, so check it yourself if it matters for your trip."
+        }
+      ]
+    },
+    {
+      "id": "web-on-declined-en",
+      "title": "A web search declined",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Search the web and tell me today's euro rate." }
+      ],
+      "tools": [
+        {
+          "name": "web.search",
+          "effect": "network",
+          "summary": { "sr": "Poslaću jedan upit na internet: „euro rate“.", "en": "I will send one query to the internet: “euro rate”." },
+          "content": "Euro rate today: 117.20 dinars.",
+          "citations": [{ "kind": "wiki", "id": "wiki-euro-rate", "title": "Euro rate today" }]
+        },
+        { "name": "knowledge.search", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "web.search" }],
+        "answerContains": ["I did not search"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "web.search", "arguments": { "query": "euro rate" } }] },
+        {
+          "text": "I did not search the web, because you turned the proposal down. Nothing left this machine. Say so if you want me to look after all."
+        }
+      ]
+    }
+  ]
+}

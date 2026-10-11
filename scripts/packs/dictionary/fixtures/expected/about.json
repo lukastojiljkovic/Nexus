@@ -1,0 +1,30 @@
+{
+ "format": 1,
+ "id": "dictionary-sr-en",
+ "builtAt": "2026-10-10T00:00:00.000Z",
+ "licence": "CC-BY-SA-4.0",
+ "counts": {
+  "enKeys": 3,
+  "enEntries": 4,
+  "enDropped": 0,
+  "srKeys": 4,
+  "srEntries": 5,
+  "srDropped": 0,
+  "phrases": 59,
+  "topics": 4
+ },
+ "bytes": 9545,
+ "sources": [
+  {
+   "url": "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz",
+   "sha256": "fixture000000000000000000000000000000000000000000000000000000000",
+   "bytes": 2981058381
+  },
+  {
+   "url": "https://en.wikivoyage.org/w/index.php?title=Serbian_phrasebook&action=raw",
+   "sha256": "fixture000000000000000000000000000000000000000000000000000000000",
+   "bytes": 47086
+  }
+ ],
+ "attribution": "Dictionary data derived from Wiktionary (en.wiktionary.org), created by Wiktionary\ncontributors, licensed under CC BY-SA 4.0. Source per entry: the url field in\neach record (or https://en.wiktionary.org/wiki/<word>); full licence list at\nhttps://en.wiktionary.org/wiki/Wiktionary:Copyrights.\nPhrasebook text derived from Wikivoyage (en.wikivoyage.org), licensed CC BY-SA 4.0.\nExtracted with Wiktextract (MIT). This pack is licensed CC BY-SA 4.0; it is not part of,\nand does not change the licence of, the Nexus application."
+}

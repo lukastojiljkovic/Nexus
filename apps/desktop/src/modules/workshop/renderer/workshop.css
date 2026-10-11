@@ -1,0 +1,177 @@
+/* RADIONICA (ADR-090). Tokens exclusively — raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`: the shell's
+ * stylesheet is in the startup chunk, and a rule for a page nobody has opened
+ * would be paid for on every launch. Class prefix `workshop__`, for the reason
+ * the shell's split states — a rule belongs to the module whose prefix it
+ * carries.
+ *
+ * The bench is dark in BOTH themes, on `electronics.css`'s reasoning stated
+ * where the colours are chosen (`palette.ts`): the surface is an instrument, and
+ * what it carries is geometry told apart by colour.
+ */
+
+.workshop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+  min-width: 0;
+}
+
+.workshop__switcher,
+.workshop__toolbar,
+.workshop__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.workshop__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-width: 0;
+}
+
+/* The label and its checkbox on one line, the whole line being the pointer
+   target — the control's own hit area stays the design system's. */
+.workshop__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text-muted);
+}
+
+/* The two 3D viewers. A fixed height rather than an aspect ratio: the page has
+   to work at 900 x 600, and a canvas that sized itself from its width would
+   push the numbers below the fold on a short window. */
+.workshop__viewport {
+  position: relative;
+  block-size: 340px;
+  min-block-size: 240px;
+  /* The bench is the theme's own sunken surface, and the WebGL canvas above it
+     is transparent, so this is the ONE place that colour is written. */
+  background: var(--nx-surface-sunken);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  overflow: hidden;
+}
+.workshop__viewport canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  touch-action: none;
+}
+
+/* The layer slider. `accent-color` is the one property that paints a native
+   range control, and it takes a token like any other colour. */
+.workshop__slider {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: center;
+}
+.workshop__range {
+  flex: 1 1 12rem;
+  min-inline-size: 8rem;
+  accent-color: var(--nx-accent);
+}
+.workshop__range:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.workshop__slider-label {
+  font-size: var(--nx-font-size-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--nx-text-muted);
+}
+
+/* The board. The stage is the bench; the board inside it is laid out at one
+   pixel per millimetre and scaled to fit, so a 20 mm board and a 200 mm one are
+   drawn by the same rule. */
+.workshop__stage {
+  position: relative;
+  block-size: 340px;
+  min-block-size: 240px;
+  background: var(--nx-surface-sunken);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  overflow: hidden;
+}
+.workshop__board {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  transform-origin: center;
+}
+.workshop__layer {
+  position: absolute;
+  display: block;
+}
+
+.workshop__layers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+.workshop__layer-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  color: var(--nx-text);
+  min-width: 0;
+}
+/* The swatch IS the colour the layer is drawn in, which is the one thing a list
+   of checkboxes cannot say by itself. */
+.workshop__layer-colour {
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: var(--nx-radius-xs);
+  border: 1px solid var(--nx-border-subtle);
+  flex: none;
+}
+.workshop__layer-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workshop__list {
+  display: flex;
+  flex-direction: column;
+}
+.workshop__recent-name {
+  margin-inline-end: var(--nx-space-2);
+}
+/* A directory is the row's secondary fact: it is what tells two files of one
+   name apart, and it must never push the name out of the row. */
+.workshop__recent-path {
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-body-sm);
+  overflow-wrap: anywhere;
+}
+
+.workshop__error {
+  color: var(--nx-danger);
+}
+.workshop__refused,
+.workshop__warnings ul {
+  margin: 0;
+  padding-inline-start: var(--nx-space-5);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* At the minimum window the two viewers give up height rather than pushing the
+   numbers off the page. */
+@media (max-height: 700px) {
+  .workshop__viewport,
+  .workshop__stage {
+    block-size: 260px;
+  }
+}

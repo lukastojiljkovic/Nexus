@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { NoteTemplate } from "../../shared/ipc.js";
 import { BUILTIN_TEMPLATES, mergeTemplateEntries, stripAttachmentNodes } from "./noteTemplates.js";
-import { strings } from "./strings.js";
+import { applyLocale, DEFAULT_LOCALE, strings } from "./strings.js";
 
 /**
  * `noteTemplates.ts` imports TipTap for its `JSONContent` TYPE only, so the
@@ -13,6 +13,8 @@ import { strings } from "./strings.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // The locale is process-wide state, so a test that switches it puts it back.
+  applyLocale(DEFAULT_LOCALE);
 });
 
 const T0 = "2026-01-01T00:00:00.000Z";
@@ -24,6 +26,11 @@ function userRow(name: string, content: string): NoteTemplate {
 /** A stored row whose content is a valid, minimal document. */
 function validRow(name: string): NoteTemplate {
   return userRow(name, JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }));
+}
+
+/** Every text node's text, in document order — what a person reads out of a template body. */
+function texts(node: JSONContent): string[] {
+  return [...(node.text === undefined ? [] : [node.text]), ...(node.content ?? []).flatMap(texts)];
 }
 
 describe("BUILTIN_TEMPLATES", () => {
@@ -52,6 +59,31 @@ describe("BUILTIN_TEMPLATES", () => {
       expect(content[0]?.type, template.id).toBe("heading");
       expect(content[0]?.attrs?.["level"], template.id).toBe(1);
     }
+  });
+
+  /**
+   * A template is inserted INTO a note, so the language is decided at the
+   * moment of insertion and never retranslated afterwards. Before this shape
+   * existed the bodies were Serbian only, so an English reader inserting
+   * „Sastanak" got Serbian headings under an English name — the picker and the
+   * body it inserted disagreed, and the sweep could not see it because the
+   * drawer photographs as the same list either way.
+   */
+  it("serves the English body while English is active, section for section", () => {
+    const sections = (node: JSONContent): string[] =>
+      (node.content ?? []).map((child) => `${child.type ?? ""}:${child.attrs?.["level"] ?? ""}`);
+    for (const template of BUILTIN_TEMPLATES) {
+      expect(sections(template.bodyEn), template.id).toEqual(sections(template.bodySr));
+    }
+
+    applyLocale("en");
+    expect(texts(BUILTIN_TEMPLATES[0]?.content ?? {})).toContain("Meeting");
+    for (const template of BUILTIN_TEMPLATES) {
+      expect(texts(template.content).join(" "), template.id).not.toMatch(/[čćšžđČĆŠŽĐ]/);
+    }
+
+    applyLocale("sr");
+    expect(texts(BUILTIN_TEMPLATES[0]?.content ?? {})).toContain("Sastanak");
   });
 });
 

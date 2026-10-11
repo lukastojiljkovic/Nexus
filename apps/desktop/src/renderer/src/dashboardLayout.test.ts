@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { lookupString, moveNeighbours } from "./dashboardLayout.js";
+import { resolveLabel } from "./moduleKit/labels.js";
 import { strings } from "./strings.js";
 import { createModuleRegistry } from "../../shared/modules.js";
 
@@ -98,7 +99,10 @@ describe("lookupString", () => {
     const registry = createModuleRegistry();
     for (const manifest of registry.all()) {
       for (const widget of registry.widgetsOf(manifest.id)) {
-        expect(lookupString(strings, widget.title), widget.title).toBeTypeOf("string");
+        // `resolveLabel` rather than `lookupString`: a discovered module declares
+        // a `{ sr, en }` pair instead of a `strings` path (ADR-090), and this is
+        // the function the card itself draws the title through.
+        expect(resolveLabel(widget.title), JSON.stringify(widget.title)).toBeTypeOf("string");
       }
     }
     expect(lookupString(strings, "dashboard.today.title")).toBe("Danas");

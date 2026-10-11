@@ -1,0 +1,3 @@
+Ovaj fajl uključuje prenosni režim Nexusa: svi nalozi, podešavanja, paketi i modeli ostaju u fascikli NexusData pored ovog programa, na ovom USB-u. Obriši ovaj fajl i Nexus ponovo čuva podatke u uobičajenoj fascikli korisnika.
+
+This file turns on Nexus portable mode: every account, setting, pack and model stays in the NexusData folder beside this program, on this stick. Delete this file and Nexus keeps its data in the usual per-user folder again.

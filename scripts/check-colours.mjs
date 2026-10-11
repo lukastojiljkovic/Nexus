@@ -187,6 +187,23 @@ export const COLOUR_ALLOWLIST = new Map([
     "packages/core/src/devtools/colour.test.ts",
     ["colour-fn", "hex"],
   ],
+  [
+    // The drawing viewer's layer swatch, and the one colour in this app that is
+    // not ours to choose: a layer's colour is DATA the user authored in another
+    // CAD program, so `layerColourCss` builds one CSS value at runtime from the
+    // number the FILE carried. The same argument the electronics workbench makes
+    // for its wiring colours, one module over - here it is one function rather
+    // than a stylesheet, so the exemption is a file.
+    "apps/desktop/src/modules/drawings/renderer/layers.ts",
+    ["colour-fn"],
+  ],
+  [
+    // Its test, where the literals are the EXPECTED values: "0x123456 is
+    // rgb(18 52 86)" cannot be asserted without writing the colour down, and a
+    // test that named a token instead would be testing the token package.
+    "apps/desktop/src/modules/drawings/renderer/layers.test.ts",
+    ["colour-fn"],
+  ],
 ]);
 
 /**

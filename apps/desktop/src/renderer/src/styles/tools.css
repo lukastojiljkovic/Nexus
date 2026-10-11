@@ -1123,6 +1123,155 @@
   outline-offset: 2px;
 }
 
+/* --- The finder: one search over every tool --------------------------------
+ *
+ * It stands at the head of BOTH drawers, above the instrument, and its panel
+ * OVERLAYS the page instead of growing it: the drawer below is a fixed-height
+ * instrument, and a list that pushed it down the moment somebody took focus
+ * would move the rail out from under the reader's hands. `--nx-layer-panel` is
+ * the ladder position for a floating surface INSIDE the page — above the page's
+ * own furniture, below the drawers and dialogs.
+ *
+ * Every value is a token, and the active row is gold text and weight over a soft
+ * surface: the app's one selection grammar, and deliberately neither a glow nor
+ * an inset bar.
+ *
+ * The group chips carry no class of their own because they are
+ * `.nx-segmented__option` outright — that IS the pressed state's accent and
+ * weight, and SEARCH's kind chips are the same control one page over.
+ */
+.tool-finder {
+  position: relative;
+  flex: none;
+}
+.tool-finder__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.tool-finder__search {
+  /* The field gives way before the chips do: it takes the row's slack, and the
+     groups keep their own width so a press never reflows the control under the
+     pointer. */
+  flex: 1 1 var(--nx-layout-field-min);
+  min-width: 0;
+}
+.tool-finder__groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+.tool-finder__panel {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + var(--nx-space-1));
+  z-index: var(--nx-layer-panel);
+  /* Opaque: the instrument scrolls UNDER this, and a translucent panel would
+     leave two lists overlapping and both unreadable. */
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* The one scroller, on `tools.css`'s own recipe: a list, not a page. */
+.tool-finder__scroll {
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--nx-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.tool-finder__section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tool-finder__heading {
+  margin: 0 var(--nx-space-2) var(--nx-space-1);
+}
+.tool-finder__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+/* A real `<button>`, on `.tool-dir__row`'s reasoning: a row here swaps what is
+   on screen and carries a second control of its own, so it is not a
+   `role="option"` in somebody else's listbox. */
+.tool-finder__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  cursor: pointer;
+}
+.tool-finder__open:hover,
+.tool-finder__row--active .tool-finder__open {
+  background: var(--nx-surface-alt);
+}
+/* Weight on the NAME alone: bumping the row would take the line beside it with
+   it, and the secondary line is deliberately not shouting. */
+.tool-finder__row--active .tool-finder__name {
+  color: var(--nx-accent-strong);
+  font-weight: var(--nx-font-weight-semibold);
+}
+.tool-finder__open:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+}
+.tool-finder__name,
+.tool-finder__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-finder__meta {
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+}
+/* The star's own two states, read off `aria-pressed` exactly as the segmented
+   control reads its own. `starFilled`/`star` swap the shape, this sets the ink. */
+.tool-finder__star {
+  flex: none;
+  margin-inline-end: var(--nx-space-1);
+}
+.tool-finder__star[aria-pressed="true"] {
+  color: var(--nx-accent-strong);
+}
+.tool-finder__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+}
+.tool-finder__hint {
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border-top: 1px solid var(--nx-border);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+}
+/* `.nx-hint` already carries this element's measure and leading; only the margin
+   a `<p>` brings from the UA has to go, or the panel's footer sits off its line. */
+.tool-finder__hint,
+.tool-finder__empty p {
+  margin: 0;
+}
+
 /* --- How many columns a form gets ------------------------------------------
  *
  * Last in the file because every one of these is a single class, exactly as

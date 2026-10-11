@@ -1,0 +1,169 @@
+/* LABORATORIJA (ADR-090). Tokens exclusively — raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (`check:colours`, `check:tokens`, `check:layers`, `check:css`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, and that is the
+ * whole point of the kit stated in CSS: the shell's stylesheet is part of the
+ * startup chunk, so a rule for a page nobody has opened would be paid for on
+ * every launch. Vite turns this import into a chunk of its own, loaded with the
+ * page — the same shape the module's JavaScript has.
+ *
+ * Class prefix `lab__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries.
+ */
+
+.lab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.lab__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* A wrapping controls row. `flex-end` rather than `center`, because the rows
+   here mix stacked fields with bare buttons and `check:rows` is the gate that
+   says why: aligning the boxes leaves the controls the user touches unaligned. */
+.lab__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: flex-end;
+}
+
+.lab__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+}
+
+.lab__figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-4);
+}
+
+.lab__figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+/* Mono and tabular figures for every readout: a value that changes while it is
+   being watched must not shuffle its own digits. */
+.lab__value,
+.lab__port {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.lab__port {
+  color: var(--nx-text-muted);
+}
+
+.lab__terminal {
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-sunken);
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.lab__log {
+  margin: 0;
+  padding: var(--nx-space-3);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+  white-space: pre-wrap;
+  /* Long lines wrap rather than scrolling sideways: the page must not scroll
+     horizontally at the minimum window size. */
+  overflow-wrap: anywhere;
+}
+
+.lab__log--hex {
+  white-space: pre;
+}
+
+.lab__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.lab__log-name {
+  margin-inline-end: var(--nx-space-3);
+}
+
+.lab__log-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.lab__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+/* The two range inputs are the app's own: no shared primitive draws a slider,
+   and `check:fields` excludes `type="range"` by type for exactly this reason. */
+.lab__field input[type="range"] {
+  width: 12rem;
+  accent-color: var(--nx-accent);
+}
+
+.lab__canvas {
+  width: 100%;
+  max-width: 40rem;
+  height: auto;
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+}
+
+.lab__error {
+  color: var(--nx-danger);
+}
+
+/* The lamp: the one surface that covers the window, and it covers the LAYER the
+   app keeps for overlays rather than a number of its own (check:layers). */
+.lab__lamp {
+  position: fixed;
+  inset: 0;
+  z-index: var(--nx-layer-overlay);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-5);
+}
+
+/* White is the app's own surface pushed to its brightest, and red is its danger
+   hue pushed to a deep, dark red. Both are composed from tokens with
+   `color-mix`, because a raw colour is what the design rules forbid in a
+   component — and both are theme-independent on purpose: a lamp that went dark
+   with the dark theme would be a lamp that does not light a room. */
+.lab__lamp--white {
+  background: color-mix(in oklab, white 92%, var(--nx-surface));
+}
+
+.lab__lamp--red {
+  background: color-mix(in oklab, var(--nx-danger) 55%, black);
+}
+
+.lab__lamp-hint {
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+  opacity: 0.75;
+}

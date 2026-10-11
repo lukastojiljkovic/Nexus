@@ -1,0 +1,308 @@
+{
+  "scenarios": [
+    {
+      "id": "tasks-create-accepted-sr",
+      "title": "Zadatak dodat posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Dodaj mi zadatak: pozovi hitnu službu sutra ujutru." }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Pozovi hitnu službu“ sa rokom sutra.", "en": "I will add the task “Call the emergency service” due tomorrow." },
+          "content": "Task created: Pozovi hitnu službu, due tomorrow morning, list Zadaci."
+        },
+        { "name": "tasks.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "tasks.create", "args": { "title": { "contains": "hitnu" } } }
+        ],
+        "toolsNotCalled": ["tasks.list"],
+        "answerContains": ["Dodao sam zadatak"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "tasks.create",
+              "arguments": { "title": "Pozovi hitnu službu", "due": "2026-10-11", "list": "Zadaci" }
+            }
+          ]
+        },
+        {
+          "text": "Dodao sam zadatak. Rok je sutra ujutru, a nalaziš ga u listi Zadaci."
+        }
+      ]
+    },
+    {
+      "id": "tasks-create-declined-sr",
+      "title": "Zadatak nije dodat kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Dodaj zadatak da kupim vodu." }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Kupi vodu“.", "en": "I will add the task “Buy water”." },
+          "content": "Task created: Kupi vodu."
+        },
+        { "name": "tasks.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.create" }],
+        "toolsNotCalled": ["tasks.list"],
+        "answerContains": ["nisam dodao"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "tasks.create", "arguments": { "title": "Kupi vodu" } }
+          ]
+        },
+        {
+          "text": "U redu, nisam dodao zadatak. Ništa nije promenjeno; ako želiš, mogu da ga dodam kasnije."
+        }
+      ]
+    },
+    {
+      "id": "tasks-list-sr",
+      "title": "Pitanje o današnjim zadacima",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta imam za danas?" }
+      ],
+      "tools": [
+        { "name": "tasks.list", "effect": "read" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "tasks.list", "args": { "filter": { "oneOf": ["today", "danas"] } } }
+        ],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["hitnu službu"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "danas" } }] },
+        {
+          "text": "Danas imaš jedan zadatak: pozovi hitnu službu, rok je danas. Ništa drugo nema rok do kraja dana."
+        }
+      ]
+    },
+    {
+      "id": "tasks-two-confirmations-sr",
+      "title": "Dva predloga u jednom potezu, drugi odbijen",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Dodaj zadatak da kupim vodu i zabeleži to u beleške." }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Kupi vodu“.", "en": "I will add the task “Buy water”." },
+          "content": "Task created: Kupi vodu."
+        },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napraviću belešku o vodi.", "en": "I will create a note about water." },
+          "content": "Note created."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true, false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.create" }, { "name": "notes.create" }],
+        "answerContains": ["nisam napravio"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "tasks.create", "arguments": { "title": "Kupi vodu" } },
+            { "name": "notes.create", "arguments": { "title": "Voda", "body": "Kupi vodu." } }
+          ]
+        },
+        {
+          "text": "Zadatak je dodat, ali belešku nisam napravio jer si odbio predlog. Reci ako želiš da je napravim."
+        }
+      ]
+    },
+    {
+      "id": "tasks-create-accepted-en",
+      "title": "Task added after confirmation",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Add a task for me: call the emergency service tomorrow morning." }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Pozovi hitnu službu“ sa rokom sutra.", "en": "I will add the task “Call the emergency service” due tomorrow." },
+          "content": "Task created: Call the emergency service, due tomorrow morning, list Tasks."
+        },
+        { "name": "tasks.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "tasks.create", "args": { "title": { "contains": "emergency" } } }
+        ],
+        "toolsNotCalled": ["tasks.list"],
+        "answerContains": ["I added the task"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "tasks.create",
+              "arguments": { "title": "Call the emergency service", "due": "2026-10-11", "list": "Tasks" }
+            }
+          ]
+        },
+        {
+          "text": "I added the task. It is due tomorrow morning and you will find it in the Tasks list."
+        }
+      ]
+    },
+    {
+      "id": "tasks-create-declined-en",
+      "title": "Task not added when the user declined",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Add a task to buy water." }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Kupi vodu“.", "en": "I will add the task “Buy water”." },
+          "content": "Task created: Buy water."
+        },
+        { "name": "tasks.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.create" }],
+        "toolsNotCalled": ["tasks.list"],
+        "answerContains": ["I did not add the task"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.create", "arguments": { "title": "Buy water" } }] },
+        {
+          "text": "Understood. I did not add the task, and nothing changed. Say the word if you want it later."
+        }
+      ]
+    },
+    {
+      "id": "tasks-list-en",
+      "title": "A question about today's tasks",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "What do I have for today?" }],
+      "tools": [
+        { "name": "tasks.list", "effect": "read" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "tasks.list", "args": { "filter": { "oneOf": ["today", "danas"] } } }
+        ],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["emergency service"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "today" } }] },
+        {
+          "text": "You have one task for today: call the emergency service, due today. There is nothing else with a deadline before the end of the day."
+        }
+      ]
+    },
+    {
+      "id": "tasks-two-confirmations-en",
+      "title": "Two proposals in one turn, the second declined",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Add a task to buy water and write it down in my notes." }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Kupi vodu“.", "en": "I will add the task “Buy water”." },
+          "content": "Task created: Buy water."
+        },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napraviću belešku o vodi.", "en": "I will create a note about water." },
+          "content": "Note created."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true, false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.create" }, { "name": "notes.create" }],
+        "answerContains": ["I did not create the note"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "tasks.create", "arguments": { "title": "Buy water" } },
+            { "name": "notes.create", "arguments": { "title": "Water", "body": "Buy water." } }
+          ]
+        },
+        {
+          "text": "The task is added, but I did not create the note, because you turned that proposal down. Tell me if you want it after all."
+        }
+      ]
+    }
+  ]
+}

@@ -2,13 +2,17 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   IpcChannel,
   type NexusApi,
+  type InstalledPackView,
   type NetworkMode,
+  type PackDownloadProgress,
+  type PackProgress,
   type RunnerOutputEvent,
   type RunnerState,
   type SyncActivityView,
   type UpdateStateView,
   type WindowState,
 } from "../shared/ipc.js";
+import { buildModuleBridge } from "./moduleBridge.js";
 
 /**
  * The renderer's only bridge to the main process (SEC-EL-02). Each method wraps
@@ -17,6 +21,11 @@ import {
  * cannot reshape the surface after exposure.
  */
 const api: NexusApi = {
+  // The kit's modules, built from their own declared contracts (ADR-090). This
+  // line is the whole of the preload's per-module cost: the namespaces, their
+  // methods and the channels behind them all come from the modules' own
+  // `shared/ipc.ts` files, discovered by `moduleBridge.ts`.
+  modules: buildModuleBridge(ipcRenderer),
   getAuthStatus: () => ipcRenderer.invoke(IpcChannel.authStatus),
   createAccount: (label, passcode) => ipcRenderer.invoke(IpcChannel.authCreate, { label, passcode }),
   createAdditionalAccount: (label, passcode) =>
@@ -31,6 +40,9 @@ const api: NexusApi = {
   changePasscode: (currentPasscode, nextPasscode) =>
     ipcRenderer.invoke(IpcChannel.authChangePasscode, { currentPasscode, nextPasscode }),
   regenerateRecoveryCode: () => ipcRenderer.invoke(IpcChannel.authRegenerateRecovery),
+  getUnlockPolicy: () => ipcRenderer.invoke(IpcChannel.authUnlockPolicy),
+  setUnlockPolicy: (setting, passcode) =>
+    ipcRenderer.invoke(IpcChannel.authSetUnlockPolicy, { setting, passcode }),
   lock: () => ipcRenderer.invoke(IpcChannel.authLock),
   listProfiles: () => ipcRenderer.invoke(IpcChannel.profilesList),
   createProfile: (kind, name) =>
@@ -932,6 +944,60 @@ const api: NexusApi = {
     };
     ipcRenderer.on(IpcChannel.updateChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.updateChanged, handler);
+  },
+  // Content packs (ADR-091). Note what `packsInspect` and `packsInstall` do NOT
+  // carry: a path. `inspect` opens main's folder dialog, and `install` installs
+  // whatever that dialog left waiting — so this bridge can expose both without
+  // ever becoming a way to name a directory.
+  packsList: () => ipcRenderer.invoke(IpcChannel.packsList),
+  packsInspect: () => ipcRenderer.invoke(IpcChannel.packsInspect),
+  packsInstall: () => ipcRenderer.invoke(IpcChannel.packsInstall),
+  packsRemove: (id) => ipcRenderer.invoke(IpcChannel.packsRemove, { id }),
+  packsVerify: (id) => ipcRenderer.invoke(IpcChannel.packsVerify, { id }),
+  // The catalogue and its downloads (ADR-103). Same rule as above, one step
+  // further: what crosses here is a pack id, and the addresses a download
+  // reaches are main's, out of a document the release key signed.
+  packsCatalogue: (reload) =>
+    ipcRenderer.invoke(IpcChannel.packsCatalogue, { reload: reload === true }),
+  packsDownload: (id) => ipcRenderer.invoke(IpcChannel.packsDownload, { id }),
+  packsDownloadPause: (id) => ipcRenderer.invoke(IpcChannel.packsDownloadPause, { id }),
+  packsDownloadResume: (id) => ipcRenderer.invoke(IpcChannel.packsDownloadResume, { id }),
+  packsDownloadCancel: (id) => ipcRenderer.invoke(IpcChannel.packsDownloadCancel, { id }),
+  openExternal: (url) => ipcRenderer.invoke(IpcChannel.externalOpen, { url }),
+  onPacksChanged: (listener) => {
+    // Carries a payload, so it is typed at the boundary like `onUpdateChanged`:
+    // a hint to draw the new list, not a fact the renderer acts on unchecked.
+    const handler = (_event: unknown, packs: InstalledPackView[]): void => {
+      listener(packs);
+    };
+    ipcRenderer.on(IpcChannel.packsChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.packsChanged, handler);
+  },
+  onPacksProgress: (listener) => {
+    // The copy of a twenty-gigabyte pack is the one operation in this app that
+    // runs long enough for a person to wonder whether it is still going, so the
+    // rows are pushed for as long as it runs.
+    const handler = (_event: unknown, progress: PackProgress): void => {
+      listener(progress);
+    };
+    ipcRenderer.on(IpcChannel.packsProgress, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.packsProgress, handler);
+  },
+  // The device's module arrangement (ADR-101). `set` carries a whole
+  // arrangement rather than an operation, so a gesture that moves a group and
+  // one that switches a module off land the same way; main validates it against
+  // the live registry before it writes a byte.
+  getModuleVisibility: () => ipcRenderer.invoke(IpcChannel.visibilityGet),
+  setModuleVisibility: (visibility) =>
+    ipcRenderer.invoke(IpcChannel.visibilitySet, visibility),
+  onPacksDownloadProgress: (listener) => {
+    // A pack's download runs as long as its slowest file, so the rows are
+    // pushed for as long as it runs, exactly as the copy's are above.
+    const handler = (_event: unknown, progress: PackDownloadProgress): void => {
+      listener(progress);
+    };
+    ipcRenderer.on(IpcChannel.packsDownloadProgress, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.packsDownloadProgress, handler);
   },
 };
 

@@ -5,6 +5,7 @@ import {
   computePlacement,
   EDGE_MARGIN,
   PANEL_MAX_HEIGHT,
+  UNBOUNDED_PANEL_HEIGHT,
   type Placement,
   type PlacementInput,
   type Rect,
@@ -95,6 +96,62 @@ describe("computePlacement — vertical side", () => {
     });
     expect(placement.side).toBe("bottom");
     expect(placement.maxHeight).toBe(166);
+  });
+});
+
+/**
+ * The app menu behind the title bar's mark — the one panel that asks for
+ * `UNBOUNDED_PANEL_HEIGHT`, because a list of commands has no business being
+ * capped at a note popover's scroll window.
+ *
+ * The three numbers are the layout's own. The trigger is the 26px mark button
+ * centred in the 38px strip (`--app-titlebar-h` in `shell.css`), so its box is
+ * 6…32; the menu is 435px tall — eleven 28px rows (four shell commands, four
+ * „Prikaz“ rows, three „Prozor“ rows), two eyebrows of 8 + 4 padding over an
+ * 11px line at the app's 1.35 leading, two 1px separators with 8px of margin,
+ * the 1px gaps between them, the panel's own 4px padding and the build line at
+ * the foot — and the viewport is the shipped 1120×720 window's 681px inner.
+ */
+describe("computePlacement — the app menu's unbounded ceiling", () => {
+  const TRIGGER: Rect = { top: 6, left: 4, width: 200, height: 26 };
+  const MENU = { width: 268, height: 435 };
+
+  function placeMenu(viewportHeight: number): Placement {
+    return place({
+      anchor: TRIGGER,
+      panel: MENU,
+      viewport: { width: SHIPPED_VIEWPORT.width, height: viewportHeight },
+      preferredMaxHeight: UNBOUNDED_PANEL_HEIGHT,
+    });
+  }
+
+  it("takes every pixel the window has left, so the whole menu shows without a scrollbar", () => {
+    const placement = placeMenu(SHIPPED_VIEWPORT.height);
+    expect(placement.side).toBe("bottom");
+    // 681 − 32 (anchor bottom) − 2 (gap) − 8 (edge margin).
+    expect(placement.maxHeight).toBe(639);
+    expect(placement.top).toBe(34);
+    // Taller than the menu needs: the ceiling is the room, not the wish.
+    expect(placement.maxHeight).toBeGreaterThan(MENU.height);
+  });
+
+  it("still fits at the app's own minimum window — 600px outer is about 561px of viewport", () => {
+    // The frame is the same measurement in reverse: the shipped 720px window
+    // reports 681, so a 600px one reports about 561.
+    const placement = placeMenu(561);
+    expect(placement.side).toBe("bottom");
+    // Only then is the panel's height the constraint, and 435 + 8 fits in 527.
+    expect(placement.maxHeight).toBe(519);
+    expect(placement.maxHeight).toBeGreaterThanOrEqual(MENU.height);
+  });
+
+  it("scrolls the rows, below its anchor, once the window really is too short", () => {
+    const placement = placeMenu(400);
+    // Flipping above is not an option — the strip is at the top of the window —
+    // so it stays below and shrinks: 400 − 34 (anchor bottom + gap) − 8.
+    expect(placement.side).toBe("bottom");
+    expect(placement.maxHeight).toBe(358);
+    expect(placement.top).toBe(34);
   });
 });
 

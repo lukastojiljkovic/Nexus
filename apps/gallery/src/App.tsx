@@ -8,10 +8,15 @@ import {
   ChartLegend,
   Checkbox,
   Chip,
+  ConfirmDialog,
   ColumnPlot,
   EmptyState,
+  Field,
+  FieldError,
+  FormLayout,
   Icon,
   ICON_NAMES,
+  ListDetail,
   LoadingState,
   PageHeader,
   ProportionBar,
@@ -21,6 +26,8 @@ import {
   SpanLanes,
   StarField,
   StatBand,
+  Toast,
+  useListDetailSelection,
   CardsView,
   KanbanCard,
   KanbanColumn,
@@ -789,6 +796,195 @@ export function App() {
         <ThemePanel theme="noc" label="Noć — vesper" />
         <ThemePanel theme="dan" label="Dan — papir" />
       </div>
+      {/* The six shared page patterns, on the review surface rather than only
+          in the pages that adopt them: a header that folds its secondary
+          actions, a list beside a detail with a URL-backed selection, a form
+          field, a confirmation and an undo bar. Both themes, as above. */}
+      <div className="gallery__themes">
+        <PatternsPanel theme="noc" label="Noć — obrasci" />
+        <PatternsPanel theme="dan" label="Dan — obrasci" />
+      </div>
+    </div>
+  );
+}
+
+const PATTERN_ROWS = [
+  { id: "n-1", title: "Spisak za more", meta: "juče" },
+  { id: "n-2", title: "Sastanak — beleške", meta: "ponedeljak" },
+  { id: "n-3", title: "Recept: proja", meta: "12. septembar" },
+  { id: "n-4", title: "Servis — zapisnik", meta: "2. oktobar" },
+] as const;
+
+/**
+ * The page patterns together, because that is how they are used: the header
+ * opens the page, the filter row narrows it, the list selects what the detail
+ * shows, the form is inside the detail, and the confirmation and the undo bar
+ * are what the detail's actions do.
+ */
+function PatternsPanel({ theme, label }: { theme: ThemeName; label: string }) {
+  // The selection lives in the fragment, so a reload of the gallery lands on
+  // the same row — the convention `docs/design/patterns.md` states. Each panel
+  // takes its own key so the two themes do not share one selection.
+  const [picked, setPicked] = useListDetailSelection(`gallery-${theme}`);
+  const [confirming, setConfirming] = useState(false);
+  const [undone, setUndone] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [refusal, setRefusal] = useState<string | undefined>(undefined);
+  const row = PATTERN_ROWS.find((entry) => entry.id === picked) ?? null;
+
+  return (
+    <div className="gallery__panel nx-app" data-theme={theme}>
+      <div className="gallery__panel-title">{label}</div>
+
+      <Section title="PageHeader">
+        <PageHeader
+          title="Beleške"
+          sigil="notes"
+          subtitle="Sve beleške ovog profila, po fasciklama."
+          primaryAction={<Button variant="primary">Nova beleška</Button>}
+          actions={<Button size="sm">Uvezi…</Button>}
+          secondaryActions={[
+            <Button key="sort" size="sm" className="nx-segmented__option" aria-pressed={false}>
+              Po datumu
+            </Button>,
+            <Button key="grid" size="sm" className="nx-segmented__option" aria-pressed>
+              Mreža
+            </Button>,
+          ]}
+          overflowLabel="Još kontrola"
+          filters={
+            <>
+              <TextField
+                placeholder="Pretraga beleški"
+                aria-label="Pretraga beleški"
+              />
+              <Button size="sm" className="nx-segmented__option" aria-pressed>
+                Sve fascikle
+              </Button>
+              <Button size="sm" className="nx-segmented__option" aria-pressed={false}>
+                Bez fascikle
+              </Button>
+            </>
+          }
+        />
+      </Section>
+
+      <Section title="ListDetail (selection in the URL)">
+        <ListDetail
+          items={PATTERN_ROWS}
+          itemKey={(entry) => entry.id}
+          listLabel="Beleške"
+          detailLabel="Beleška"
+          backLabel="Nazad na listu"
+          selectedId={picked}
+          onSelect={setPicked}
+          renderRow={(entry) => (
+            <>
+              <span>{entry.title}</span>
+              <span className="nx-hint">{entry.meta}</span>
+            </>
+          )}
+          renderDetail={(entry) =>
+            entry === null ? (
+              <EmptyState
+                variant="inline"
+                sigil="notes"
+                title="Nijedna beleška nije otvorena."
+              />
+            ) : (
+              <>
+                <h2 className="gallery__section-title">{entry.title}</h2>
+                <p className="nx-hint">Izmenjeno {entry.meta}.</p>
+                <div className="gallery__row">
+                  <Button variant="primary" size="sm">
+                    Sačuvaj
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => setConfirming(true)}>
+                    Obriši
+                  </Button>
+                </div>
+              </>
+            )
+          }
+        />
+      </Section>
+
+      <Section title="Field (label, help, required mark, refusal)">
+        <FormLayout className="gallery__form" title="Nova beleška">
+          {/* The name belongs to the primitive and the field adds what it has
+              no place for: a help line, a refusal and the required mark. */}
+          <Field required help="Ime pod kojim se beleška nalazi u listi.">
+            <TextField
+              label="Naslov"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+          </Field>
+          <Field help="Fascikla je način da se beleške drže zajedno." error={refusal}>
+            <TextField
+              label="Fascikla"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+          </Field>
+          {refusal === undefined && <FieldError>Naslov je obavezan.</FieldError>}
+          <div className="gallery__row">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setRefusal(refusal === undefined ? "Fascikla već postoji." : undefined)}
+            >
+              Proveri
+            </Button>
+          </div>
+        </FormLayout>
+      </Section>
+
+      <Section title="Toast">
+        <div className="gallery__row">
+          <Button size="sm" onClick={() => setUndone(row === null ? "n-1" : row.id)}>
+            Obriši belešku
+          </Button>
+        </div>
+        {undone !== null && (
+          <Toast
+            message="Beleška je obrisana."
+            undo={{
+              label: "Vrati",
+              onUndo: () => {
+                setPicked(undone);
+                setUndone(null);
+              },
+            }}
+            dismissLabel="Odbaci"
+            onDismiss={() => setUndone(null)}
+          />
+        )}
+      </Section>
+
+      <Section title="ConfirmDialog">
+        <div className="gallery__row">
+          <Button size="sm" variant="danger" onClick={() => setConfirming(true)}>
+            Obriši belešku…
+          </Button>
+        </div>
+        {confirming && (
+          <ConfirmDialog
+            title="Brisanje beleške"
+            name={row?.title}
+            question="Beleška se briše iz fascikle i iz pretrage."
+            note="Oznake i veze ostaju u drugim beleškama."
+            confirmLabel="Obriši"
+            cancelLabel="Otkaži"
+            destructive
+            onConfirm={() => {
+              setConfirming(false);
+              setUndone(row?.id ?? "n-1");
+            }}
+            onCancel={() => setConfirming(false)}
+          />
+        )}
+      </Section>
     </div>
   );
 }

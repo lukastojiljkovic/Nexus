@@ -16,6 +16,7 @@ import {
   type ArchiveProfilePicture,
   type ExportArchive,
   type ExportArchiveInput,
+  type ExportModuleData,
   type ExportPrivateNotes,
   type ExportSettings,
   type ProfileData,
@@ -99,6 +100,7 @@ import * as apkgReaderModule from "./apkgReader.js";
 import * as archiveReaderModule from "./archiveReader.js";
 import * as csvReaderModule from "./csvReader.js";
 import * as icsReaderModule from "./icsReader.js";
+import { ModuleImportError, type ModuleImportBlob } from "./moduleIpc.js";
 import { deriveRestoredNotes, gatherProfileData, gatherProfileSettings } from "./profileData.js";
 import type { ProfileDataDeps } from "./profileData.js";
 import {
@@ -193,8 +195,60 @@ function createProfile(handle: NexusDatabase, name: string): string {
   return id;
 }
 
+/**
+ * The module kit's section as this suite sees it (ADR-090): what a full read
+ * hands over, which module ids this build adopted, and every import it was
+ * asked to apply.
+ *
+ * `main/index.ts` gets the same three things from `moduleHost`, which has its
+ * own tests (`moduleIpc.test.ts`) against the real host. Here they are a seam,
+ * because what THESE tests are responsible for is the ordering and the refusal
+ * the restore orchestration owes: a section that rides the archive, is refused
+ * at the preview when this build does not know an id or a payload its module
+ * will not take, and is applied after the replace has rewritten the profile.
+ */
+interface TestModuleSeam {
+  /** One profile's section, as the host's `collectExports` produces it. Written by `restoreModuleData`, so a re-read after a restore reports what the archive carried. */
+  exportsByProfile: Map<string, readonly ExportModuleData[]>;
+  /** The ids this build adopted; an archive naming anything else is refused. */
+  knownIds: ReadonlySet<string>;
+  /**
+   * How this build's own modules read a payload, by module id. A module absent
+   * here takes whatever it is given; a test that needs the other answer puts a
+   * throwing parser in - which is the second half of the refusal the preview owes.
+   */
+  parsers: Map<string, (value: unknown) => unknown>;
+  /**
+   * The files this build's own modules say a payload names, by module id
+   * (ADR-108). A module absent here names no blob - which is every module in
+   * this suite that is not about the section's bytes, and `moduleSeam` starts
+   * empty for that reason.
+   */
+  blobs: Map<string, (payload: unknown) => readonly { sha256: string; sizeBytes: number }[]>;
+  /**
+   * What the target's blob store held at the moment `restoreModuleData` ran:
+   * the one thing that proves a module's bytes were written BEFORE its own
+   * importer (ADR-108). Null until a test asks.
+   */
+  atApply: ((profileId: string, blobs: ReadonlyMap<string, Uint8Array>) => void) | null;
+  /** Every `restoreModuleData` call, in order. */
+  applied: { profileId: string; modules: readonly ExportModuleData[] }[];
+}
+
+/** A seam with nothing exported and `timers` adopted — what a suite that does not care about the section gets. */
+function moduleSeam(knownIds: readonly string[] = ["timers"]): TestModuleSeam {
+  return {
+    exportsByProfile: new Map(),
+    knownIds: new Set(knownIds),
+    parsers: new Map(),
+    blobs: new Map(),
+    atApply: null,
+    applied: [],
+  };
+}
+
 /** Every `ProfileDataDeps` getter, bound to one database — the same construction `main/index.ts` would do for a real profile, minus Electron. */
-function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
+function profileDataDeps(handle: NexusDatabase, modules = moduleSeam()): ProfileDataDeps {
   return {
     taskStore: (profileId) => new TaskStore(handle.raw, profileId),
     taskListStore: (profileId) => new TaskListStore(handle.raw, profileId),
@@ -241,6 +295,12 @@ function profileDataDeps(handle: NexusDatabase): ProfileDataDeps {
     fitBodyProfileStore: (profileId) => new FitBodyProfileStore(handle.raw, profileId),
     canvasStore: (profileId) => new CanvasStore(handle.raw, profileId),
     electronicsStore: (profileId) => new ElectronicsStore(handle.raw, profileId),
+    // The kit's section (ADR-090), over the seam above. The refusal's WORDING is
+    // duplicated from `main/moduleIpc.ts`'s `assertImportable`, exactly as
+    // `TestPrivSeam` duplicates `privResealForRestore`'s contract: this file is
+    // about the orchestration around it, and the real message is asserted where
+    // the real host is.
+    moduleExports: (profileId) => modules.exportsByProfile.get(profileId) ?? [],
   };
 }
 
@@ -253,6 +313,8 @@ interface TestDepsHandle {
   getReloadCount: () => number;
   /** The private-section seam's double (ADR-057 §6) — flip `unlocked` per test; `blobFiles` stands in for the sealed private-blob directory. */
   priv: TestPrivSeam;
+  /** The module kit's section (ADR-090) — flip `knownIds` per test; `applied` records every import. */
+  modules: TestModuleSeam;
 }
 
 /**
@@ -292,6 +354,8 @@ function makeTestDeps(
   icsPath: string | null = null,
   /** FIN slice e's own picker, injected separately for the reason every other one is: nothing on the task surface may open the ledger's dialog. */
   finCsvPath: string | null = null,
+  /** The kit's section (ADR-090), shared with whatever builds the archive under test so a section can be handed over, applied and read back. */
+  modules: TestModuleSeam = moduleSeam(),
 ): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
@@ -304,9 +368,63 @@ function makeTestDeps(
   };
 
   const deps: ImportDeps = {
-    ...profileDataDeps(handle),
+    ...profileDataDeps(handle, modules),
     restoreStore: (profileId) => new RestoreStore(handle.raw, profileId),
     foreignImportStore: (profileId) => new ForeignImportStore(handle.raw, profileId),
+    // The kit's section (ADR-090), over the seam above. The refusal's WORDING and
+    // its CODE are duplicated from `main/moduleIpc.ts`'s `assertImportable`,
+    // exactly as `TestPrivSeam` duplicates `privResealForRestore`'s contract:
+    // this file is about the orchestration around it, and the real message is
+    // asserted where the real host is. `ModuleImportError` is the real class
+    // though — the code is what `restore.ts` maps onto the wire, so the mapping
+    // is only under test if the error is.
+    assertImportable: (section) => {
+      for (const { moduleId } of section) {
+        if (!modules.knownIds.has(moduleId)) {
+          throw new ModuleImportError(
+            "unknown-module",
+            `This archive carries data for module "${moduleId}", which this build does not know.`,
+          );
+        }
+      }
+      for (const { moduleId, payload } of section) {
+        const parse = modules.parsers.get(moduleId);
+        if (parse === undefined) continue;
+        try {
+          parse(payload);
+        } catch (error) {
+          throw new ModuleImportError(
+            "invalid-module-data",
+            `This archive carries data for module "${moduleId}" that this build cannot read: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
+    },
+    restoreModuleData: (profileId, section) => {
+      // The one moment ADR-108's ordering is about: this hook sees the blob
+      // store as the module's own importer would, and a test asserts its bytes
+      // are already in it.
+      modules.atApply?.(profileId, blobs);
+      modules.applied.push({ profileId, modules: section });
+      modules.exportsByProfile.set(profileId, section);
+    },
+    // The host's `collectImportBlobs`, over the seam above. The real one parses
+    // each payload first (asserted in `moduleIpc.test.ts`); here the reader is
+    // what a test controls, and `blobs` being empty means "this build's modules
+    // name no file", which is every case that is not about the section's bytes.
+    moduleBlobs: (section) => {
+      const found: ModuleImportBlob[] = [];
+      for (const { moduleId, payload } of section) {
+        const read = modules.blobs.get(moduleId);
+        if (read === undefined) continue;
+        for (const ref of read(payload)) {
+          found.push({ moduleId, sha256: ref.sha256, sizeBytes: ref.sizeBytes });
+        }
+      }
+      return found;
+    },
     // The REAL read `main/index.ts` performs, through the same store — the
     // picture rides with the name because a restore replaces both, and an undo
     // that snapshotted only the name would leave the target wearing the
@@ -433,7 +551,7 @@ function makeTestDeps(
     },
   };
 
-  return { deps, blobs, cancelFocusCalls, getReloadCount: () => reloadCount, priv };
+  return { deps, blobs, cancelFocusCalls, getReloadCount: () => reloadCount, priv, modules };
 }
 
 /** A tick past `setTimeout(…, 0)` — what `applyRestore`/`undoRestore` schedule their renderer reload on. */
@@ -1016,6 +1134,17 @@ function seedProfile(handle: NexusDatabase, profileId: string, label: string): S
     circuitChassis: electronics.chassis,
     circuitParts: electronics.parts,
     circuitWires: electronics.wires,
+    // The module kit's section (ADR-090), carried by every archive this fixture
+    // builds so the whole suite exercises its travel. One discovered module with
+    // ONE opaque payload: core validates the row and never looks inside it, so
+    // what the row HOLDS is deliberately something only the module that wrote it
+    // could describe.
+    modules: [
+      {
+        moduleId: "timers",
+        payload: { presets: [{ name: "Kafa", durationSeconds: 240 }] },
+      },
+    ],
   };
 
   const derived = deriveRestoredNotes(data.notes);
@@ -1055,6 +1184,7 @@ function buildArchiveFor(
   profileName: string,
   profileKind: "personal" | "business" = "personal",
   privateNotes?: ExportPrivateNotes,
+  moduleBlobs?: readonly { sha256: string; sizeBytes: number }[],
 ): ExportArchive {
   const input: ExportArchiveInput = {
     profile: { id: profileId, name: profileName, kind: profileKind, picture: fixture.picture },
@@ -1067,6 +1197,10 @@ function buildArchiveFor(
   // The parallel input, exactly as `main` supplies it (ADR-057 §6) — absent
   // whenever a test's archive carries no private section.
   if (privateNotes !== undefined) input.privateNotes = privateNotes;
+  // And the kit section's own files (ADR-108), on the same terms: absent unless
+  // a test's module section names one, which is what makes every archive built
+  // without it byte for byte the archive this fixture has always produced.
+  if (moduleBlobs !== undefined) input.moduleBlobs = moduleBlobs;
   return buildExportArchive(input);
 }
 
@@ -1450,6 +1584,59 @@ describe("restore", () => {
     });
   });
 
+  describe("a kit module payload this build cannot read (ADR-090)", () => {
+    it("refuses it as a NAMED problem at the preview, before anything is confirmed", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      const archive = buildArchiveFor(
+        {
+          ...fixtureA,
+          // The fixture's own section, with a payload this build's Timers module
+          // will not take: the parser below is the module's own refusal, held in
+          // the seam because this file is about the orchestration around it.
+          data: {
+            ...fixtureA.data,
+            modules: [
+              {
+                moduleId: "timers",
+                payload: { version: 99, presets: [], settings: { soundOnEnd: true } },
+              },
+            ],
+          },
+        },
+        profileA,
+        "A",
+      );
+      const filePath = fixturePath("invalid-module.nexus.zip");
+      await writeFile(filePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+      const profileB = createProfile(dbB, "B");
+      const modules = moduleSeam();
+      modules.parsers.set("timers", () => {
+        throw new Error("Timers data was written by another version of this module.");
+      });
+      const { deps } = makeTestDeps(dbB, filePath, null, null, null, null, modules);
+      await pickRestoreFile(deps);
+
+      const preview = await previewRestore(deps, profileB, null);
+
+      expect(preview).toEqual({
+        status: "invalid",
+        problems: [
+          {
+            severity: "error",
+            code: "invalid-module-data",
+            path: "data/modules.ndjson",
+            detail: expect.stringContaining("another version"),
+          },
+        ],
+      });
+      // Refused at the preview means nothing was confirmed: no module was
+      // applied, and the profile the restore would have replaced is untouched.
+      expect(modules.applied).toEqual([]);
+    });
+  });
+
   describe("an NXA1 archive", () => {
     it("requires and validates its passphrase before previewing", async () => {
       const profileA = createProfile(dbA, "A");
@@ -1716,6 +1903,189 @@ describe("restore", () => {
       // rather than a refusal: the hash is still the honest record of what this
       // profile's picture IS, and the bytes may yet turn up in another archive.
       expect(new ProfileStore(dbB.raw).get(profileB)?.pictureHash).toBe(fixtureA.ids.pictureSha);
+    });
+  });
+
+  /**
+   * ADR-108: a kit module's own files ride the archive beside its rows.
+   *
+   * The fixture's section is the kit's `timers` payload, so these tests give it
+   * a file and answer for the hashes that payload names through the seam's own
+   * reader - which is exactly what a real module's `ctx.blobs.importBlobs` does
+   * (`ModuleHost.collectImportBlobs`). What is under test here is the
+   * orchestration: the bytes go in before the module's importer runs, undo takes
+   * back exactly what the restore wrote, and a section whose file the archive
+   * lacks is a warning rather than a refusal.
+   */
+  describe("a kit module's blobs (ADR-108)", () => {
+    /** The fixture's section with one file named inside its payload, as a module's own payload names one. */
+    function dataNamingFile(
+      fixture: SeededFixture,
+      file: { sha256: string; sizeBytes: number },
+    ): ProfileData {
+      return {
+        ...fixture.data,
+        modules: [
+          {
+            moduleId: "timers",
+            payload: { presets: [{ name: "Kafa", durationSeconds: 240 }], file },
+          },
+        ],
+      };
+    }
+
+    /** The seam's reader for that payload: the hash it names, off the payload - the live rows cannot answer for an archive. */
+    function readsTheFile(modules: TestModuleSeam): void {
+      modules.blobs.set("timers", (payload) => {
+        const value = payload as { file?: { sha256: string; sizeBytes: number } };
+        return value.file === undefined ? [] : [value.file];
+      });
+    }
+
+    it("carries the file in the archive, writes it before the module's importer, and counts it as written", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      // Real bytes, so the archive's own `blobs/<name>` hash check passes exactly
+      // as it does for a note's attachment.
+      const fileBytes = new TextEncoder().encode("karta za koncert");
+      const fileSha = sha256OfBytes(fileBytes);
+      const file = { sha256: fileSha, sizeBytes: fileBytes.length };
+
+      const archive = buildArchiveFor(
+        { data: dataNamingFile(fixtureA, file), settings: fixtureA.settings, picture: fixtureA.picture },
+        profileA,
+        "A",
+        "personal",
+        undefined,
+        [file],
+      );
+      // The zip carries it under `blobs/<sha>`, exactly as an attachment's own
+      // bytes are declared - one namespace, one copy.
+      expect(archive.binaries).toContainEqual({
+        kind: "attachment",
+        path: `blobs/${fileSha}`,
+        sha256: fileSha,
+        sizeBytes: fileBytes.length,
+      });
+      const filePath = fixturePath("module-blob.nexus.zip");
+      await writeFile(
+        filePath,
+        await buildArchiveZip(archive, new Map(fixtureA.blobBytes).set(fileSha, fileBytes)),
+      );
+
+      const profileB = createProfile(dbB, "B");
+      const modules = moduleSeam();
+      readsTheFile(modules);
+      // What the module's importer saw the store holding - the one moment the
+      // order matters, and the reason this attribute exists.
+      let storeAtApply: readonly string[] | null = null;
+      modules.atApply = (_profileId, store) => {
+        storeAtApply = [...store.keys()];
+      };
+
+      const { deps, blobs } = makeTestDeps(dbB, filePath, null, null, null, null, modules);
+      // A file already in the store before the restore: undo must leave it, so
+      // "the restore removed what it wrote" is an assertion and not a guess.
+      const bystanderBytes = new TextEncoder().encode("bystander file");
+      const bystanderSha = sha256OfBytes(bystanderBytes);
+      blobs.set(bystanderSha, bystanderBytes);
+
+      await pickRestoreFile(deps);
+      const preview = await previewRestore(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+      // The archive carries every file it declares, so there is nothing to warn
+      // about.
+      expect(preview.preview.warnings).toEqual([]);
+
+      const result = await applyRestore(deps, profileB, preview.preview.token);
+      // The five blobs the built-in rows name, plus the module's one. The file
+      // that was already there was not written by this restore.
+      expect(result.blobsAdded).toBe(6);
+      expect(result.missingBlobs).toBe(0);
+      expect(blobs.has(fileSha)).toBe(true);
+      // The order ADR-108 requires: when the module's own importer ran, its
+      // bytes were already in the store.
+      expect(storeAtApply).toContain(fileSha);
+      // The section travelled whole, its file named inside its own payload.
+      expect(modules.applied.at(-1)?.modules).toEqual([
+        { moduleId: "timers", payload: { presets: [{ name: "Kafa", durationSeconds: 240 }], file } },
+      ]);
+
+      const undo = await undoRestore(deps, profileB);
+      expect(blobs.has(fileSha)).toBe(false);
+      expect(blobs.has(bystanderSha)).toBe(true);
+      expect(undo.blobsRemoved).toBe(6);
+    });
+
+    it("warns by name about a module row whose file the archive lacks, and imports the rows anyway", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      // A hash nothing in this zip carries: the shape every archive written
+      // before ADR-108 has, and the shape a hand-edited one may have.
+      const file = { sha256: "c".repeat(64), sizeBytes: 2_048 };
+
+      const archive = buildArchiveFor(
+        { data: dataNamingFile(fixtureA, file), settings: fixtureA.settings, picture: fixtureA.picture },
+        profileA,
+        "A",
+      );
+      const filePath = fixturePath("module-blob-missing.nexus.zip");
+      await writeFile(filePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+      const profileB = createProfile(dbB, "B");
+      const modules = moduleSeam();
+      readsTheFile(modules);
+      const { deps, blobs } = makeTestDeps(dbB, filePath, null, null, null, null, modules);
+
+      await pickRestoreFile(deps);
+      const preview = await previewRestore(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+      // The built-in rule exactly (`parseImportArchive`'s rule 8): a warning
+      // naming the file, with the module that names it as the detail - the role
+      // a row's own id plays for an attachment.
+      expect(preview.preview.warnings).toContainEqual({
+        severity: "warning",
+        code: "missing-blob",
+        path: `blobs/${file.sha256}`,
+        detail: "timers",
+      });
+
+      const result = await applyRestore(deps, profileB, preview.preview.token);
+      // One lost file, and only one: the other five blobs were in the zip.
+      expect(result.missingBlobs).toBe(1);
+      expect(result.blobsAdded).toBe(5);
+      expect(blobs.has(file.sha256)).toBe(false);
+      // The row still restores with its hash, which is what makes the module's
+      // own page draw the file it cannot find.
+      expect(modules.applied.at(-1)?.modules[0]?.payload).toEqual({
+        presets: [{ name: "Kafa", durationSeconds: 240 }],
+        file,
+      });
+    });
+
+    it("imports an archive whose section names no file, adding nothing and reporting nothing", async () => {
+      const profileA = createProfile(dbA, "A");
+      const fixtureA = seedProfile(dbA, profileA, "A");
+      // No `moduleBlobs` input at all: byte for byte the archive every earlier
+      // build wrote, and still a complete one for a section with no files.
+      const archive = buildArchiveFor(fixtureA, profileA, "A");
+      const filePath = fixturePath("module-blob-none.nexus.zip");
+      await writeFile(filePath, await buildArchiveZip(archive, fixtureA.blobBytes));
+
+      const profileB = createProfile(dbB, "B");
+      const modules = moduleSeam();
+      modules.blobs.set("timers", () => []);
+      const { deps, blobs } = makeTestDeps(dbB, filePath, null, null, null, null, modules);
+
+      await pickRestoreFile(deps);
+      const preview = await previewRestore(deps, profileB, null);
+      if (preview.status !== "ready") unreachable();
+      expect(preview.preview.warnings).toEqual([]);
+
+      const result = await applyRestore(deps, profileB, preview.preview.token);
+      expect(result.blobsAdded).toBe(5);
+      expect(result.missingBlobs).toBe(0);
+      expect(blobs.size).toBe(5);
     });
   });
 

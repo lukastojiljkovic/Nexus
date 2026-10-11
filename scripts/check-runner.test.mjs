@@ -236,6 +236,21 @@ describe("the allowlist is an allowlist", () => {
     expect(scanSource(file, 'if (active.container === null) return "exited";')).toEqual([]);
   });
 
+  it("holds the installer launch to the same rules as the runner", () => {
+    // The second spawn site, and the decision this gate exists to make visible:
+    // `apps/desktop/src/main/update/launch.ts` may reach `node:child_process`
+    // because the program it starts is a path the update service downloaded and
+    // verified, and it is held to the rules that keep a command line from being
+    // assembled — which is why a literal program name or a shell would still be
+    // a finding there.
+    const file = "apps/desktop/src/main/update/launch.ts";
+    expect(ALLOWLIST.get(file)).toEqual(["child-process"]);
+    expect(scanSource(file, 'import { spawn } from "node:child_process";')).toEqual([]);
+    expect(ids(scanSource(file, 'spawn("Nexus-Setup-1.5.0.exe")'))).toEqual(["spawn-literal"]);
+    expect(ids(scanSource(file, "spawn(program, [], { shell: true });"))).toEqual(["shell"]);
+    expect(ids(scanSource(file, 'const tool = "docker";'))).toEqual(["toolchain-name"]);
+  });
+
   it("lets the runner's test spell what its fixtures assert, and nothing else", () => {
     const file = "apps/desktop/src/main/elecRunner.test.ts";
     expect(ALLOWLIST.get(file)).toContain("child-process");
@@ -255,8 +270,9 @@ describe("the allowlist is an allowlist", () => {
       expect(() => assertNoSecurityExemptions(bad)).toThrow(new RegExp(`"${id}"`));
     }
     expect(() => assertNoSecurityExemptions()).not.toThrow();
-    // `child-process` is not one of the three: one file may import the module,
-    // and that entry is the whole of the exemption.
+    // `child-process` is not one of the three: the files that may import the
+    // module are named one at a time, and those entries are the whole of the
+    // exemption.
     const spawnSite = new Map([["apps/desktop/src/main/elecRunner.ts", ["child-process"]]]);
     expect(() => assertNoSecurityExemptions(spawnSite)).not.toThrow();
   });

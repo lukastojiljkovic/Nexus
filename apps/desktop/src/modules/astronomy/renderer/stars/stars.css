@@ -1,0 +1,67 @@
+/* ZVEZDANA KARTA (the astronomy corner, part 4). Tokens exclusively - raw
+   colour values are forbidden outside @nexus/tokens, and this stylesheet is
+   checked by the same gates the shell's own is (`check:colours`,
+   `check:tokens`).
+ *
+ * THIS FILE IS IMPORTED BY THE MAP'S COMPONENT, not by `app.css`: the shell's
+ * stylesheet is part of the startup chunk, and the star map's rules belong to
+ * the chunk that loads the map. The canvas's own colours are read from these
+ * tokens at paint time (`StarMap.tsx`'s `readInk`), because a canvas is not
+ * restyled by a stylesheet.
+ *
+ * Class prefix `starmap__`, for the reason the kit's split states: a rule
+ * belongs to the component whose prefix it carries.
+ */
+
+.starmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* The search field takes the room and the button sits beside it. `end` and not
+   `center`: the field is a stacked box and the button is not, so centring would
+   leave the one control the user touches below the other (`check:rows`). */
+.starmap__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--nx-space-3);
+}
+
+.starmap__search {
+  flex: 1 1 var(--nx-layout-field-min);
+}
+
+/* The matches: a column of quiet buttons, each one a name the map can centre
+   on, left-aligned because they are read as a list rather than as actions. */
+.starmap__results {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: var(--nx-space-1);
+}
+
+.starmap__result {
+  text-align: start;
+}
+
+/* The chart itself. `touch-action: none` because the canvas pans itself: a
+   drag on a star map must not scroll the page behind it. */
+.starmap__canvas {
+  display: block;
+  width: 100%;
+  height: min(70vh, 620px);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Night mode: the deepest surface the theme has, behind the one red the canvas
+   paints. The class is here rather than only in the component so that the
+   colour of the field survives a repaint that has not happened yet. */
+.starmap__canvas--night {
+  background: var(--nx-bg);
+}

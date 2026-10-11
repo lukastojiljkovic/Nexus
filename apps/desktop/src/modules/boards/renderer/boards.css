@@ -1,0 +1,432 @@
+/* IGRE NA TABLI (ADR-090). Tokens exclusively — raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (`check:colours`, `check:tokens`, `check:layers`,
+   `check:tiers`, `check:rows`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, and that is the
+ * whole point of the kit stated in CSS: the shell's stylesheet is part of the
+ * startup chunk, so a rule for a page nobody has opened would be paid for on
+ * every launch.
+ *
+ * Class prefix `boards__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries.
+ *
+ * **A cell is never taller than it is wide** (`aspect-ratio: 1`), and the boards
+ * cap at `min(100%, 32rem)`: the minimum window is 900 by 600, and a board that
+ * grew past its column would be a horizontal scrollbar rather than a game.
+ *
+ * **No animation anywhere.** Dice are drawn with the values the engine rolled and
+ * no throw is animated, so nothing here needs a `prefers-reduced-motion` escape
+ * hatch: there is no motion to reduce.
+ */
+
+.boards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.boards__error {
+  color: var(--nx-danger);
+}
+
+.boards__card,
+.boards__setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.boards__list,
+.boards__moves,
+.boards__widget {
+  display: flex;
+  flex-direction: column;
+}
+
+.boards__row-name {
+  margin-inline-end: var(--nx-space-2);
+}
+
+.boards__row-about {
+  color: var(--nx-text-muted);
+}
+
+.boards__row-actions,
+.boards__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* A form row of mixed shapes lines its CONTROLS up, which `end` is what does: a
+   stacked field beside a bare control otherwise centres a tall box against a
+   short one (`check:rows`). */
+.boards__fields,
+.boards__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: flex-end;
+}
+
+.boards__row-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.boards__label {
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.boards__game {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+.boards__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: center;
+}
+
+.boards__status-turn {
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.boards__thinking {
+  color: var(--nx-text-muted);
+}
+
+/* The throw, and ONLY the throw: a settle of the dice the engines have already
+   rolled. It is inside `no-preference` on purpose — a reader who has asked the
+   platform for less motion gets the values and no movement at all, which is why
+   the animation is not load-bearing for anything. */
+@media (prefers-reduced-motion: no-preference) {
+  .boards__dice--rolling {
+    animation: boards-dice-settle var(--nx-motion-base) var(--nx-motion-ease);
+  }
+
+  @keyframes boards-dice-settle {
+    from {
+      opacity: 0.6;
+      transform: translateY(calc(-1 * var(--nx-space-1)));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* --- The boards ------------------------------------------------------------ */
+
+.boards__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.boards__prompt {
+  text-align: center;
+}
+
+.boards__board {
+  position: relative;
+  display: grid;
+  width: min(100%, 32rem);
+  aspect-ratio: 1;
+  gap: 1px;
+  padding: 1px;
+  background: var(--nx-border-subtle);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  overflow: hidden;
+}
+
+.boards__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: var(--nx-surface);
+  color: var(--nx-text);
+}
+
+.boards__cell:disabled {
+  cursor: default;
+}
+
+/* A legal move is an OUTLINE, never a glow: the accent edge the design rules name
+   for a target. `outline-offset: -2px` keeps it inside the cell so two adjacent
+   marks cannot overlap. */
+.boards__cell--legal {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: -2px;
+  cursor: pointer;
+}
+
+.boards__cell--selected {
+  outline: 2px solid var(--nx-text);
+  outline-offset: -2px;
+}
+
+.boards__cell--target {
+  outline: 2px solid var(--nx-data);
+  outline-offset: -2px;
+  cursor: pointer;
+}
+
+.boards__cell--last {
+  background: var(--nx-accent-soft);
+}
+
+.boards__cell--blocked {
+  background: var(--nx-surface-sunken);
+}
+
+.boards__piece {
+  width: 76%;
+  height: 76%;
+  border: 1px solid var(--nx-border-strong);
+  border-radius: var(--nx-radius-round);
+}
+
+.boards__piece--s0 {
+  background: var(--nx-accent);
+}
+
+.boards__piece--s1 {
+  background: var(--nx-text);
+}
+
+.boards__piece--s2 {
+  background: var(--nx-data);
+}
+
+.boards__piece--s3 {
+  background: var(--nx-swatch-bordo);
+}
+
+/* A crowned man carries a second ring: the shape says which piece it is, so the
+   difference between a man and a king is not a colour. */
+.boards__piece--crowned {
+  outline: 2px solid var(--nx-bg);
+  outline-offset: -3px;
+}
+
+/* The morris lines, behind its points. */
+.boards__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.boards__lines path {
+  fill: none;
+  stroke: var(--nx-border-strong);
+  stroke-width: 0.03;
+}
+
+.boards__cell--point {
+  background: transparent;
+  border-radius: var(--nx-radius-round);
+}
+
+/* --- Four in a row --------------------------------------------------------- */
+
+.boards__board--four {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  width: min(100%, 32rem);
+}
+
+.boards__columns {
+  display: flex;
+  gap: 1px;
+}
+
+.boards__column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.boards__column-cells {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--nx-border-subtle);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+}
+
+.boards__column-cells .boards__cell {
+  aspect-ratio: 1;
+}
+
+.boards__cell--drop {
+  aspect-ratio: 3;
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+}
+
+.boards__cell--drop:disabled {
+  color: var(--nx-text-faint);
+}
+
+.boards__drop-mark {
+  color: var(--nx-text-muted);
+}
+
+/* --- Backgammon ------------------------------------------------------------ */
+
+.boards__backgammon {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.boards__board--backgammon {
+  width: min(100%, 48rem);
+  aspect-ratio: 13 / 2;
+}
+
+.boards__cell--bar {
+  background: var(--nx-surface-sunken);
+}
+
+.boards__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.boards__stack .boards__piece {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.boards__stack-count {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.boards__trays {
+  display: flex;
+  gap: var(--nx-space-3);
+}
+
+.boards__cell--tray {
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-width: 4rem;
+  padding: var(--nx-space-2);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+}
+
+/* --- Ludo ------------------------------------------------------------------ */
+
+.boards__board--ludo {
+  width: min(100%, 36rem);
+}
+
+.boards__cell--track {
+  background: var(--nx-surface-alt);
+}
+
+.boards__cell--entry {
+  background: var(--nx-accent-soft);
+}
+
+.boards__cell--home {
+  background: var(--nx-surface-sunken);
+}
+
+.boards__cell--yard {
+  background: var(--nx-surface-sunken);
+  border-radius: var(--nx-radius-xs);
+}
+
+.boards__cell--token {
+  background: transparent;
+}
+
+.boards__cell--token .boards__piece {
+  width: 68%;
+  height: 68%;
+}
+
+.boards__ludo-centre {
+  display: flex;
+  grid-column: 7 / span 2;
+  grid-row: 7 / span 2;
+  align-items: center;
+  justify-content: center;
+  color: var(--nx-text-faint);
+}
+
+/* --- The record ------------------------------------------------------------ */
+
+.boards__stats {
+  display: flex;
+  flex-direction: column;
+}
+
+.boards__stats-head,
+.boards__stats-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, 2.5rem);
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.boards__stats-name {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.boards__stats-variant {
+  flex: none;
+}
+
+.boards__stats-number {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.boards__move-number {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.boards__move-text {
+  font-family: var(--nx-font-family-mono);
+}
+
+.boards__result-text {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+  font-size: var(--nx-font-size-title);
+}

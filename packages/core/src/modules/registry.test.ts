@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { ModuleRegistry } from "./registry.js";
-import type { ModuleCategory, ModuleManifest } from "./manifest.js";
+import type { ModuleGroup, ModuleManifest } from "./manifest.js";
 import type { WidgetContract } from "../contracts/widgets.js";
 import type { SearchKind } from "../search/searchQuery.js";
 
 function mod(
   id: string,
   prefix: string,
-  category: ModuleCategory,
+  group: ModuleGroup,
 ): ModuleManifest {
-  return { id, prefix, category, defaultEnabled: true };
+  return { id, prefix, group, defaultEnabled: true };
 }
 
 function widget(id: string, deepLink: string): WidgetContract {
@@ -21,14 +21,14 @@ function modWithWidgets(
   prefix: string,
   widgets: WidgetContract[],
 ): ModuleManifest {
-  return { ...mod(id, prefix, "Core experience"), widgets };
+  return { ...mod(id, prefix, "plan"), widgets };
 }
 
 describe("ModuleRegistry", () => {
   it("rejects a duplicate module id", () => {
     const reg = new ModuleRegistry();
-    reg.register(mod("tasks", "TASK", "Core experience"));
-    expect(() => reg.register(mod("tasks", "OTHER", "Life hubs"))).toThrow(
+    reg.register(mod("tasks", "TASK", "plan"));
+    expect(() => reg.register(mod("tasks", "OTHER", "life"))).toThrow(
       /tasks/,
     );
   });
@@ -49,8 +49,8 @@ describe("ModuleRegistry", () => {
    */
   it("allows two modules to share a PRD prefix, while both stay reachable by id", () => {
     const reg = new ModuleRegistry();
-    reg.register(mod("focus", "UTIL", "Professional & utilities"));
-    expect(() => reg.register(mod("tools", "UTIL", "Professional & utilities"))).not.toThrow();
+    reg.register(mod("focus", "UTIL", "make"));
+    expect(() => reg.register(mod("tools", "UTIL", "make"))).not.toThrow();
     expect(reg.all().map((m) => m.id)).toEqual(["focus", "tools"]);
     expect(reg.get("focus")?.prefix).toBe("UTIL");
     expect(reg.get("tools")?.prefix).toBe("UTIL");
@@ -58,40 +58,33 @@ describe("ModuleRegistry", () => {
 
   it("returns manifests in registration order from all()", () => {
     const reg = new ModuleRegistry();
-    reg.register(mod("notes", "NOTE", "Content & knowledge"));
-    reg.register(mod("tasks", "TASK", "Core experience"));
-    reg.register(mod("finance", "FIN", "Life hubs"));
+    reg.register(mod("notes", "NOTE", "knowledge"));
+    reg.register(mod("tasks", "TASK", "plan"));
+    reg.register(mod("finance", "FIN", "life"));
     expect(reg.all().map((m) => m.id)).toEqual(["notes", "tasks", "finance"]);
   });
 
   it("looks up by id, and returns undefined for an unknown id", () => {
     const reg = new ModuleRegistry();
-    const tasks = mod("tasks", "TASK", "Core experience");
+    const tasks = mod("tasks", "TASK", "plan");
     reg.register(tasks);
     expect(reg.get("tasks")).toBe(tasks);
     expect(reg.get("missing")).toBeUndefined();
   });
 
-  it("groups by category in canonical order, skipping empty categories", () => {
+  it("groups by navigation group in canonical order, skipping empty groups", () => {
     const reg = new ModuleRegistry();
-    // Registered out of category order to prove grouping re-orders by category.
-    reg.register(mod("automation", "AUTO", "Growth & platform"));
-    reg.register(mod("notes", "NOTE", "Content & knowledge"));
-    reg.register(mod("tasks", "TASK", "Core experience"));
-    reg.register(mod("canvas", "CANV", "Content & knowledge"));
+    // Registered out of group order to prove grouping re-orders by group.
+    reg.register(mod("pro", "PRO", "make"));
+    reg.register(mod("notes", "NOTE", "knowledge"));
+    reg.register(mod("tasks", "TASK", "plan"));
+    reg.register(mod("canvas", "CANV", "make"));
 
-    const grouped = reg.byCategory();
+    const grouped = reg.byGroup();
 
-    expect([...grouped.keys()]).toEqual([
-      "Core experience",
-      "Content & knowledge",
-      "Growth & platform",
-    ]);
-    // Members keep registration order within a category.
-    expect(grouped.get("Content & knowledge")?.map((m) => m.id)).toEqual([
-      "notes",
-      "canvas",
-    ]);
+    expect([...grouped.keys()]).toEqual(["plan", "knowledge", "make"]);
+    // Members keep registration order within a group.
+    expect(grouped.get("make")?.map((m) => m.id)).toEqual(["pro", "canvas"]);
   });
 });
 
@@ -103,7 +96,7 @@ describe("ModuleRegistry widgets (ADR-045)", () => {
     );
     reg.register(modWithWidgets("study", "STUDY", [widget("ispiti", "study")]));
     // A module that publishes none — the common case for now.
-    reg.register(mod("settings", "SET", "Core experience"));
+    reg.register(mod("settings", "SET", "shell"));
     return reg;
   }
 
@@ -142,7 +135,7 @@ describe("ModuleRegistry widgets (ADR-045)", () => {
 
 describe("ModuleRegistry search ownership (ADR-008, ADR-058 §5)", () => {
   function owning(id: string, ...kinds: SearchKind[]): ModuleManifest {
-    return { ...mod(id, id.toUpperCase(), "Core experience"), searchIndexers: kinds.map((kind) => ({ kind })) };
+    return { ...mod(id, id.toUpperCase(), "shell"), searchIndexers: kinds.map((kind) => ({ kind })) };
   }
 
   it("answers with the module a manifest says owns the kind", () => {
@@ -157,7 +150,7 @@ describe("ModuleRegistry search ownership (ADR-008, ADR-058 §5)", () => {
   it("answers undefined for a kind no registered module owns — a hit no flag can switch on", () => {
     const reg = new ModuleRegistry();
     reg.register(owning("notes", "note"));
-    reg.register(mod("canvas", "CANV", "Content & knowledge"));
+    reg.register(mod("canvas", "CANV", "knowledge"));
     expect(reg.searchKindOwner("circuit")).toBeUndefined();
   });
 

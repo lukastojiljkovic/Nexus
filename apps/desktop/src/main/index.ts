@@ -17,8 +17,8 @@ import {
   Menu,
   Notification,
   protocol,
+  safeStorage,
   session,
-  shell,
 } from "electron";
 import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // `electron-updater` is deliberately NOT imported, and that is settled rather
@@ -28,9 +28,25 @@ import type { IpcMainInvokeEvent, OpenDialogOptions, Session } from "electron";
 // and only when the user has chosen „Offline + update checks". See the SEC-EL-07
 // section near the bottom of this file.
 import { readFileBounded } from "./boundedRead.js";
+// The scanner's camera rule, consulted by the two session permission handlers
+// near the bottom of this file. Why a rule about who may ask is its own file
+// rather than a line here: `scannerMedia.ts`'s own header.
+import { allows as allowsScannerMedia, appMediaOrigins } from "./scannerMedia.js";
+// The LAB module's two Electron-shaped facts: the serial port picker, and the
+// save dialog its two file ops write through. The module's own `register.ts` is
+// electron-free so it stays testable, which is why the wiring is one call here
+// rather than an import inside the module (`modules/lab/main/electron.ts`).
+import { installLabElectron } from "../modules/lab/main/electron.js";
 import {
+  allows as labAllowsSerial,
+  appOrigin as labAppOrigin,
+} from "../modules/lab/main/serialPermission.js";
+import {
+  activeNetworkMode,
   devServerOrigin,
+  DOWNLOAD_HOSTS,
   isRequestAllowed,
+  isSessionRequestAllowed,
   networkChoiceRecorded,
   networkModeRequiresRestart,
   readNetworkChoice,
@@ -39,8 +55,15 @@ import {
   updatesActive,
   writeNetworkMode,
 } from "./net/offline.js";
-import { isUpdateRequestAllowed } from "./update/allowlist.js";
+import { applyPortableMode, PORTABLE_MARKER_FILE } from "./portable.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
+import { openExternalUrl } from "./external.js";
+import { createPackCatalogueIpc, type PackCatalogueIpc } from "./packs/catalogueIpc.js";
+import { createDownloadHttp } from "./download/electron.js";
+import { createDownloadService, freeSpaceBytes } from "./download/service.js";
+import { createZimHost, setZimHost, type ZimHost } from "./zim/host.js";
+import { createZimHttp, installExternalLinkRule, installZimProtocol } from "./zim/zimElectron.js";
+import { launchInstaller } from "./update/launch.js";
 import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
 import { createUpdateService, type UpdateService } from "./update/service.js";
 import { buildCloudEnv } from "./sync/config.js";
@@ -84,7 +107,6 @@ import {
   MAX_CIRCUMFERENCE_CM,
   MAX_EXERCISE_REF_LENGTH,
   MAX_HEIGHT_CM,
-  MAX_ID_LENGTH,
   MAX_PART_COORDINATE,
   MAX_PART_LABEL_LENGTH,
   MAX_WEIGHT_KG,
@@ -101,7 +123,6 @@ import {
   phaseProgress,
   rankSearchResults,
   resolveDueRange,
-  resolveEnabled,
   searchExercises,
   searchFoods,
   serializeWidgetConfig,
@@ -456,6 +477,15 @@ import {
 } from "./auth.js";
 import { createEditorFlush } from "./editorFlush.js";
 import {
+  asUnlockSetting,
+  forgetRememberedKey,
+  readUnlockPolicy,
+  rememberingProblem,
+  storeUnlockPolicy,
+  takeRememberedKey,
+  type RememberedUnlockDeps,
+} from "./rememberedUnlock.js";
+import {
   privAddAttachment,
   privCaptureAndLock,
   privCapturePendingVersions,
@@ -512,6 +542,14 @@ import { handleExport, handleIcsExport, writeProfileArchive, type ImexArchiveDep
 import { handleMarkdownImport } from "./markdownImport.js";
 import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
 import { duplicateNote } from "./noteDuplicate.js";
+import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
+// ADR-100: the Reader's two seams into this file. The pack read protocol is the
+// same shape `registerBlobProtocol` is (a scheme handler in main/packs), and the
+// module's environment is installed once below - which is the whole of what a kit
+// module adds to this file.
+import { registerPackProtocol } from "./packs/protocol.js";
+import { installReaderEnvironment } from "../modules/reader/main/electron.js";
+import { volumeFreeBytes } from "./packs/install.js";
 import {
   cancelIdleCompactions,
   captureNoteVersion,
@@ -521,6 +559,68 @@ import {
   scheduleIdleCompaction,
 } from "./notes.js";
 import { resolveActiveProfileId } from "./activeProfile.js";
+import {
+  asBoolean,
+  asBoundedInteger,
+  asCappedChars,
+  asId,
+  asInteger,
+  asNonEmptyString,
+  asNullableString,
+  asPositiveInteger,
+  asRecord,
+  asString,
+} from "./ipcValidators.js";
+import { createModuleHost } from "./moduleHost.js";
+// CULTURE's main-process seam (ADR-090 §3): the services its handlers need (blob
+// store, blob-reference union, packs root). Its arts guide reads images through
+// the shell's `nx-pack:` protocol (ADR-100), like every other pack reader.
+import { configureCultureServices } from "../modules/culture/main/services.js";
+import { packsRoot } from "./packs/registry.js";
+// The kit's attach path, implemented where it can be read on its own
+// (`moduleAttachments.ts`) — this file supplies it with what only this file
+// holds, in the module host's platform literal below.
+import { attachFilesForModule, releaseBlobForModule } from "./moduleAttachments.js";
+// The COOKBOOK module's Electron half and its runtime slot (ADR-090). A kit
+// module is a folder; the two things it cannot own — the packs directory and a
+// photo write into the encrypted blob store — are resolved HERE, by the one file
+// that owns `app`, the window and the data key, and handed to the module.
+import { configureCookbook } from "../modules/cookbook/main/register.js";
+import { createCookbookHost } from "../modules/cookbook/main/host.js";
+// The ASSISTANT module's main-process seam (ADR-106): the model runtime, the one
+// Electron-shaped secret cipher its web service keeps a Brave key through, and
+// the `.gguf` picker. All three are things only THIS file holds, and they are
+// handed over in the one `configureAssistant` call below - the module never
+// imports `electron`, `app` or an account directory (ADR-090 section 3).
+import { configureAssistant } from "../modules/assistant/main/services.js";
+import {
+  importDialogFilterName,
+  importDialogTitle,
+} from "../modules/assistant/main/dialogCopy.js";
+import { createModelHost } from "./assistant/runtime/index.js";
+import { createVoiceHost } from "./assistant/voice/host.js";
+import { VOICE_WORKER_ENTRY } from "./assistant/voice/workerEntry.js";
+import { createSafeStorageCipher } from "./assistant/web/electron.js";
+import {
+  allowsCheck as recorderAllowsCheck,
+  allowsRequest as recorderAllowsRequest,
+} from "../modules/recorder/main/mediaAccess.js";
+// The ASSISTANT's microphone (ADR-105): `media`, audio only, main frame, this
+// app's own document, and only while the assistant's own page has asked to talk.
+import {
+  allowsCheck as assistantAllowsMic,
+  allowsRequest as assistantAllowsMicRequest,
+} from "../modules/assistant/main/micAccess.js";
+// The kit's one PDF capability (ADR-090's `ModulePlatform.savePdf`), which is
+// Electron-shaped and therefore lives beside the window rather than in a module.
+import { saveCardPdf } from "./cardPdf.js";
+// The kit's tool-pack capability (ADR-094): installed tool packs, and the one
+// place a module can open a session on one. The rules live in `./moduleTools.ts`;
+// this file supplies the two facts only it holds — where the packs are, and the
+// release key their manifests verify against — and `killAllToolSessions` below.
+import { createModuleTools } from "./moduleTools.js";
+import { killAllToolSessions } from "./tools/run.js";
+import { installDrawingsPlatform } from "../modules/drawings/main/desktop.js";
 import {
   deliverSecurityNotices,
   runCheckNow,
@@ -590,6 +690,7 @@ import {
   type BackupSettingsView,
   type CalendarOverlayEvent,
   type CalendarSettings,
+  type InstalledPackView,
   CARD_KINDS,
   CARD_TEXT_MAX_LENGTH,
   type CardKind,
@@ -610,6 +711,7 @@ import {
   type DashboardSetsState,
   type DashboardSettings,
   type DashboardWidgetInstance,
+  DEFAULT_UNLOCK_SETTING,
   type DashboardWidgetSize,
   DOC_MIME_FAMILIES,
   DOC_TEXT_PREVIEW_MAX_BYTES,
@@ -680,6 +782,8 @@ import {
   MAX_TASK_TEMPLATE_NAME_LENGTH,
   MIN_FIT_REST_SECONDS,
   MIN_TARGET_RETENTION,
+  NETWORK_MODES,
+  type NetworkMode,
   type NetworkModeView,
   NOTE_CARD_DISPOSITIONS,
   NOTE_CARD_KEY_MAX_LENGTH,
@@ -690,6 +794,12 @@ import {
   type NoteDocPayload,
   type NoteDuplicateResult,
   type NoteVersionMeta,
+  type PackInspectResult,
+  type PackInstallResult,
+  type PackRemoveResult,
+  type PackCatalogueResult,
+  type PackDownloadResult,
+  type PackVerifyResult,
   PRIV_ATTACHMENT_MAX_BYTES,
   PRIV_ATTACHMENTS_MAX_COUNT,
   PRIV_PLAINTEXT_MAX_BYTES,
@@ -742,17 +852,37 @@ import {
   type TaskAttachmentsAddResult,
   type TaskListsSnapshot,
   type TopicMoveDirection,
+  type UnlockPolicy,
+  type UnlockPolicyResult,
+  type UnlockSetting,
   type UpdateStateView,
+  settingNeedsPasscode,
   WINDOW_VIEW_COMMANDS,
   type WindowState,
   type WindowViewCommand,
 } from "../shared/ipc.js";
 import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
+import {
+  normalizeShellVisibility,
+  visibleModuleSet,
+  type ShellVisibility,
+} from "../shared/moduleVisibility.js";
+import {
+  asModuleVisibility,
+  applyShellModuleChanges,
+  createShellVisibilityMigration,
+  resolveShellVisibility,
+  setShellModuleVisible,
+  showEveryModule,
+  withModuleVisibility,
+  writeShellVisibility,
+} from "./visibility.js";
 import { DEMO_BUSINESS_PROFILE_NAME, seedDemoBusiness, seedDemoProfile } from "./demo/index.js";
 import { seedDemoCanvas } from "./demo/canvas.js";
 import { createDemoContext } from "./demo/context.js";
 import type { DemoAttachmentIo } from "./demo/attachments.js";
 import { duplicateStems, missingCoverage, runShots } from "./shots/index.js";
+import { allows as signalsAllowsMicrophone } from "../modules/signals/main/permission.js";
 
 /**
  * Reads a harness flag off the command line — and answers false for every one
@@ -848,12 +978,75 @@ protocol.registerSchemesAsPrivileged([
   // The private section's read protocol (PRIV v1 / ADR-057): same privileges,
   // entirely different gate — it serves ONLY while a section is unlocked.
   { scheme: "priv-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // ADR-100: a content pack's own files - an article's images today, a map's tiles
+  // later. The handler is `main/packs/protocol.ts`, and its gate is the installed
+  // PACK: an id no installed manifest answers for, and a path that manifest does
+  // not list, are both 404s. `standard` gives the URL normal parsing (the pack id
+  // is the host and the rest is the pack path), and `stream` is what lets a media
+  // client read it by ranges.
+  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // The arts guide's read protocol (CULTURE, ADR-091): serves an IMAGE out of an
+  // installed, signature-verified content pack, and nothing else. Same
+  // privileges for the same reason - a URL that parses, that a CSP may allow,
+  // and that a `<img>` may load - with the handler registering below.
+  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // The offline library's read protocol (ADR-098): ZIM entries, one library per
+  // host, served by `main/zim/zimElectron.ts` from a file on this machine.
+  // `standard` is what gives the URL a host and a path at all (the library id
+  // and the entry), and `stream` is what lets a large image be answered without
+  // being held whole.
+  { scheme: "nx-zim", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 // Stable product name so userData resolves to a clean, branded directory
 // (%APPDATA%\Nexus) rather than the scoped package name. Set before any
 // getPath("userData") call.
 app.setName("Nexus");
+
+// ADR-102: the portable build — a stick that keeps everything in `NexusData`
+// beside `Nexus.exe`, and nothing on the computer it is running on. The marker
+// file's presence is the whole switch (`main/portable.ts` decides, and that
+// decision is a pure function with its own tests).
+//
+// HERE, and at module scope: `userData` and `sessionData` do not follow a
+// redirect applied after `ready`, which is the lesson the sandbox below paid
+// for. It comes after `app.setName` and BEFORE that sandbox, so a harness run
+// over a portable tree nests its throwaway directory inside the stick rather
+// than the other way round.
+//
+// A read-only stick is a REFUSAL, not a fallback. A marker asks for the stick;
+// writing the user's accounts into the host's `%APPDATA%` instead would break
+// exactly the promise the marker makes, and there is nothing to be salvaged
+// from a folder that will not take a byte. `showErrorBox` is documented as safe
+// before `ready` — the one reason any message can be shown this early — and the
+// language comes from the OS, because the renderer that would report the stored
+// one does not exist yet.
+const portable = applyPortableMode({
+  exeDir: dirname(app.getPath("exe")),
+  setPath: (name, directory) => app.setPath(name, directory),
+});
+/** Whether this launch keeps everything beside the executable (ADR-102). Read by `updateService()`. */
+const isPortableLaunch = portable.portable;
+if (!portable.portable && portable.reason === "unwritable") {
+  setMainLocale(app.getSystemLocale().toLowerCase().startsWith("sr") ? "sr" : "en");
+  dialog.showErrorBox(
+    shellStrings().portableRefusedTitle,
+    `${shellStrings().portableRefusedBody}\n\n${portable.detail ?? ""}`,
+  );
+  // `process.exit`, not `app.exit`, for the sandbox refusal's reason below:
+  // nothing is running yet to be closed, and no window was ever opened.
+  process.exit(1);
+}
+if (!portable.portable && portable.reason === "unreadable") {
+  // Said out loud, and then the launch goes on: a marker this process may not
+  // read is not a decision it may take, and an install that refused to start
+  // over one unreadable file would be a worse answer than using the usual
+  // folder and naming the file.
+  process.stderr.write(
+    `Nexus: ${PORTABLE_MARKER_FILE} could not be read — ${portable.detail ?? "unknown error"}\n` +
+      "  This launch will keep its data in the usual per-user folder.\n",
+  );
+}
 
 // The harness sandbox: never the developer's real `%APPDATA%\Nexus`, but a
 // nested, disposable directory, one per harness. Wiped up front (Electron only
@@ -925,8 +1118,10 @@ if (HARNESS_SANDBOX !== null) {
 // `MAP * ~NOTFOUND` blocks NAMES, not literal IPs, which is exactly why it is
 // the third line of defence and not the only one — `webRequest` does not care
 // how the destination was spelled. `resolverRules` returns exactly that string
-// in offline mode; in „offline + update checks" it appends one `EXCLUDE` per
-// pinned GitHub host so the dedicated update session alone can resolve them.
+// in offline mode; in either mode that allows a connection it appends one
+// `EXCLUDE` per host that mode's allowlist holds (ADR-089's three GitHub hosts,
+// and ADR-092's download list on top of them), so the dedicated session alone
+// can resolve those names.
 const resolverRuleForLaunch = resolverRules(app.getPath("userData"));
 if (resolverRuleForLaunch !== null) {
   app.commandLine.appendSwitch("host-resolver-rules", resolverRuleForLaunch);
@@ -1330,6 +1525,213 @@ let activeProfileId: string | null = null;
  */
 const moduleRegistry = createModuleRegistry();
 
+/**
+ * ADR-101 §3: the one-time union of the per-profile module switches this build
+ * replaces. Created here, at module load, because the window it opens depends on
+ * whether `visibility.json` exists at LAUNCH — and because a profile's rows are
+ * only readable once its account is unlocked, which is why `migrateShellVisibility`
+ * below is called from the unlock path rather than from startup.
+ */
+const moduleVisibilityMigration = createShellVisibilityMigration(
+  app.getPath("userData"),
+  moduleRegistry,
+);
+
+/**
+ * The profile a module's blob count is taken for, as MAIN resolves it (ADR-058).
+ *
+ * A module never supplies this, and that is the point: `attachFiles` and
+ * `releaseBlob` DELETE files, and a count taken against a profile the renderer
+ * chose would let a caller drive it to zero while another profile still holds
+ * the bytes. The unlocked session always has one profile, so the null arm is a
+ * locked session reaching a module's handler, which the sender check and the
+ * open database have already refused.
+ */
+function activeProfileForAttachments(): string {
+  const id = resolveActiveProfileId(listProfiles(requireDb()), activeProfileId);
+  if (id === null) throw new Error("The attachment store has no profile to count against.");
+  return id;
+}
+
+/**
+ * The module kit's host: every module discovered from `src/modules/<id>/`, its
+ * channels registered and its session hooks held (ADR-090). Built once, at
+ * module load, because `ipcMain.handle` has to be called before the renderer
+ * can ask for anything, and because a module that fails to register should fail
+ * here, where the message names it.
+ *
+ * The platform handed in is the whole of what the kit may touch that belongs to
+ * this file: the sender check (SEC-EL-02), the open database, the one
+ * notification path, a timer and the clock. A module gets no `BrowserWindow`, no
+ * `app` and no `ipcMain` - it gets a handler per channel it declared, and
+ * nothing else is reachable from it.
+ */
+const moduleHost = createModuleHost({
+  assertTrustedSender,
+  database: () => requireDb().raw,
+  // The kit's attach path (ADR-090), wired to the ONE blob store every
+  // compiled-in attachment surface writes through. The logic is
+  // `./moduleAttachments.ts`'s, because the kit's rules live where they can be
+  // tested and this file supplies only what only this file holds: the window,
+  // the paths, the keys and the database-wide reference count.
+  attachFiles: (maxBytes, record) =>
+    attachFilesForModule(
+      {
+        window: mainWindow,
+        paths: blobStorePathsFor(),
+        keys: requireBlobKeys(),
+        refCount: (sha256) => blobRefCount(activeProfileForAttachments(), sha256),
+      },
+      maxBytes,
+      record,
+    ),
+  releaseBlob: (sha256) =>
+    releaseBlobForModule(
+      {
+        window: mainWindow,
+        paths: blobStorePathsFor(),
+        keys: requireBlobKeys(),
+        refCount: (counted) => blobRefCount(activeProfileForAttachments(), counted),
+      },
+      sha256,
+    ),
+  // The blob store's write half, on the same terms `main/restore.ts` gets it: a
+  // module that stores bytes (the recorder's media) hands them over and gets
+  // back the plaintext sha256 that names them — no path, no key, no container.
+  saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
+  notify: ({ title, body, silent }) => {
+    // `Notification.isSupported()` rather than a try/catch: on a platform with
+    // no notification service the honest answer is "no toast", and a module's
+    // own state must never depend on one having been shown.
+    if (!Notification.isSupported()) return;
+    const notification = new Notification({ title, body, silent });
+    notification.on("click", () => {
+      const win = mainWindow;
+      if (win === null || win.isDestroyed()) return;
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    });
+    notification.show();
+  },
+  // `armUntil` re-arms in bounded hops, so the delay handed here is never more
+  // than half a minute even for a countdown that ends tomorrow.
+  schedule: (atMs, run) => {
+    const handle = setTimeout(run, Math.max(0, atMs - Date.now()));
+    return () => clearTimeout(handle);
+  },
+  // The content packs a kit module may READ (ADR-091): the registry's own two
+  // inputs, so a module lists installed packs through `main/packs/registry.ts`
+  // rather than through a path of its own. A module can name neither a pack to
+  // install nor a file the pack's signed manifest does not list, and the
+  // renderer never sees either value.
+  packs: { userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM },
+  // The kit's tool packs (ADR-094), over the same two values `packs` takes: a
+  // module finds an installed pack by id, reads the licence and the source it has
+  // to show, and opens a session on one — and nothing a renderer sends ever
+  // reaches an argument list (`./moduleTools.ts` states the whole of that).
+  tools: createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM }),
+  now: () => Date.now(),
+  // The capability that gives a module a file: it prints a document MAIN built
+  // and asks the USER where to put it (`cardPdf.ts`). A module never sees the
+  // path, the dialog or the window.
+  savePdf: saveCardPdf,
+});
+
+// CULTURE's main-process services (ADR-090 §3): the blob store, main's own
+// blob-reference union, and the two facts a content pack needs - all closures,
+// because the account's directories and key material move with the selected
+// account (ADR-044) and every one of them is resolved at use time.
+configureCultureServices({
+  saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
+  readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
+  deleteBlobIfOrphaned: (sha256, refCount) =>
+    deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
+  blobRefCount,
+  packsRoot: () => packsRoot(userDataDir()),
+  releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+});
+
+/**
+ * What the COOKBOOK module is handed once, at startup: where the installed
+ * content packs are, the release key their manifests are verified against, and
+ * the two capabilities a kit module cannot own — a native photo dialog with a
+ * write into the encrypted blob store, and the display-awake blocker.
+ *
+ * Every one of these is a fact about THIS file: `userDataDir`, the blob store's
+ * paths and keys, `mainWindow`, `blobRefCount`'s union over every
+ * blob-naming table. The module's own folder therefore stays free of Electron,
+ * of `app.getPath` and of the data key — and the module still cannot reach any
+ * path of its own choosing, because none of these is a parameter it supplies.
+ */
+configureCookbook({
+  // Resolved at launch and after the harness sandbox has been applied, which is
+  // exactly what the pack index expects: `<userData>/packs` (ADR-091 §5).
+  userData: userDataDir(),
+  packsPublicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+  host: createCookbookHost({
+    window: () => mainWindow,
+    blobPaths: blobStorePathsFor,
+    blobKeys: requireBlobKeys,
+    refCount: (profileId, sha256) => blobRefCount(profileId, sha256),
+  }),
+});
+
+/**
+ * What the ASSISTANT module is handed once, at launch (ADR-106).
+ *
+ * Every member is a fact about THIS file, and each is a closure rather than a
+ * value where the thing behind it moves with the selected account (ADR-044) or
+ * with the launch's network mode. The module composes its own services per
+ * profile from these - the model runtime, the knowledge index, the tools, the
+ * web tools and the conversation store - and drops them whole when the session
+ * ends, so a model loaded for one profile does not follow a user to another.
+ *
+ * `pickGgufFile` is the one native dialog this module needs, and it is opened
+ * HERE for the reason every other dialog in this app is: a path may only ever be
+ * named by a person choosing it in a dialog main itself opened.
+ */
+configureAssistant({
+  userData: () => userDataDir(),
+  releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+  networkMode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
+  // The default parameter builds the app's own wiring (the utility process and
+  // the dedicated session) - which imports Electron, and is therefore handed in
+  // rather than imported by the module.
+  createModelHost: () => createModelHost(),
+  // The voice worker (ADR-105 section 4), on the same terms: `utilityProcess`
+  // is Electron's, so the factory is handed over and the module never imports
+  // it. Nothing is forked until the first request.
+  createVoiceHost: () => createVoiceHost(VOICE_WORKER_ENTRY),
+  secretCipher: createSafeStorageCipher(),
+  pickGgufFile: async () => {
+    const options: OpenDialogOptions = {
+      properties: ["openFile"],
+      title: importDialogTitle(),
+      filters: [{ name: importDialogFilterName(), extensions: ["gguf"] }],
+    };
+    const { canceled, filePaths } = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options);
+    return canceled ? null : (filePaths[0] ?? null);
+  },
+  profileDb: (profileId, open) => open(requireDb().raw, profileId),
+  now: () => Date.now(),
+  search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
+  packs: { list: () => packs().list() },
+  modules: moduleRegistry,
+});
+
+/**
+ * The one Electron-shaped capability the DRAWINGS module cannot hold itself:
+ * its native picker and the window's `printToPDF`.
+ *
+ * The module keeps its handlers electron-free (`modules/drawings/main/register.ts`)
+ * so the kit's register test can run them under Vitest, and takes its two
+ * effects through a slot this call fills - the getter rather than the window,
+ * because the window is replaced over the app's life and a captured one would
+ * go stale on the first reopen.
+ */
+installDrawingsPlatform(() => mainWindow);
 /** The `userData` directory itself — the registry's home, and the root every account directory hangs off. */
 function userDataDir(): string {
   return app.getPath("userData");
@@ -1615,10 +2017,19 @@ async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Pr
   const created = new ProfileStore(database.raw).create(kind, name, now);
   new TaskListStore(database.raw, created.id).ensureInbox(now);
   if (kind === "business") {
-    const flags = new SqliteFlagStore(database.raw, created.id);
-    for (const { moduleId, enabled } of businessProfileFlags(moduleRegistry)) {
-      await flags.set(moduleId, enabled);
-    }
+    // ADR-101: the preset's module half is a DEVICE write now. There is one
+    // arrangement for the whole app, so "a business profile does not show
+    // Učenje" cannot be a row of its own any more — the alternative was a
+    // preset that writes rows nothing reads, which is a decision this build
+    // would then be pretending to honour. The preset's other half (an Inbox, a
+    // board, a look) is untouched and stays per profile.
+    applyShellModuleChanges(
+      userDataDir(),
+      moduleRegistry,
+      Object.fromEntries(
+        businessProfileFlags(moduleRegistry).map(({ moduleId, enabled }) => [moduleId, enabled]),
+      ),
+    );
   }
   return created;
 }
@@ -1749,59 +2160,29 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Invalid IPC payload: expected an object.");
-  }
-  return value as Record<string, unknown>;
-}
 
-function asNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Invalid IPC payload: "${field}" must be a non-empty string.`);
-  }
-  return value;
-}
+
+
 
 /**
- * An IDENTIFIER off the wire — a row's own id, a foreign key, a registry key —
- * bounded on `MAX_ID_LENGTH`'s terms.
+ * The network mode off the wire — the whole of `network:set-mode`'s payload, so
+ * a value this build does not know reaches no writer at all.
  *
- * **Every id here used to be a bare `asNonEmptyString`, which caps nothing.** An
- * id is the field nobody thinks of as untrusted input, so it got the check that
- * asks whether the string exists and nothing about what it is. The renderer IS
- * untrusted (SEC-EL), no id column in any migration carries a CHECK past
- * `NOT NULL`, and several handlers write a renderer-supplied key rather than
- * minting one — so the wire is the only bound those values ever meet.
- *
- * Same three questions as the archive reader's `idStr`, because it is the same
- * rule at the other boundary: non-empty, no outer whitespace (nothing in this
- * codebase mints an id with a space on either end, and trimming would forge a
- * key rather than refuse one), and inside `MAX_ID_LENGTH`. `check:ids` is what
- * keeps the next handler from reaching for `asNonEmptyString` again.
+ * It walks `NETWORK_MODES` rather than spelling the modes out, because that
+ * constant is also what the `NetworkMode` type is derived from: a mode added to
+ * the wire contract is admitted here by the same edit, and one removed stops
+ * being admitted. The stored file has its own, deliberately separate parser
+ * (`readNetworkChoice`), which fails closed to `"offline"` for a file it cannot
+ * trust; this one refuses outright, because a renderer sending an unknown mode
+ * is a fault rather than a device to be repaired.
  */
-function asId(value: unknown, field: string): string {
-  const id = asNonEmptyString(value, field);
-  if (id !== id.trim() || id.length > MAX_ID_LENGTH) {
-    throw new Error(`Invalid IPC payload: "${field}" is not a well-formed id.`);
+function asNetworkMode(value: unknown): NetworkMode {
+  if (typeof value === "string" && (NETWORK_MODES as readonly string[]).includes(value)) {
+    return value as NetworkMode;
   }
-  return id;
+  throw new Error('Invalid IPC payload: "mode" must be "offline", "updates" or "downloads".');
 }
 
-function asBoolean(value: unknown, field: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`Invalid IPC payload: "${field}" must be a boolean.`);
-  }
-  return value;
-}
-
-/** A plain string field that may be empty (structural check only; semantics stay in the store). */
-function asString(value: unknown, field: string): string {
-  if (typeof value !== "string") {
-    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
-  }
-  return value;
-}
 
 /**
  * A passcode field: a non-empty string capped at `MAX_PASSCODE_LENGTH`
@@ -1862,32 +2243,6 @@ function asCappedString(value: unknown, field: string, maxBytes: number): string
   return value;
 }
 
-/**
- * The CHARACTER-counting sibling of `asCappedString`, for the caps a store
- * defines in characters rather than bytes.
- *
- * The distinction is not pedantry in this app: every Serbian letter carrying a
- * diacritic — š, č, ć, ž, đ — is two bytes in UTF-8, so a byte cap applied to a
- * character limit refuses legal input, and refuses it *only for text written in
- * the product's own language*. `CARD_TEXT_MAX_LENGTH` is documented as mirroring
- * `CardStore`'s cap, and that cap is 10 000 CHARACTERS (`trimmed.length`), so
- * byte-capping it made the wire stricter than the store it claims to mirror and
- * produced a „must not exceed 10000 bytes" refusal for a card the store would
- * have taken. Found while reviewing UTIL slice b, whose `asFocusLabel` had to
- * dodge the same trap.
- *
- * Rule: match the unit the STORE measures in. A cap named `_BYTES` keeps
- * `asCappedString`; a cap the store checks with `.length` comes here.
- */
-function asCappedChars(value: unknown, field: string, maxChars: number): string {
-  if (typeof value !== "string") {
-    throw new Error(`Invalid IPC payload: "${field}" must be a string.`);
-  }
-  if (value.length > maxChars) {
-    throw new Error(`Invalid IPC payload: "${field}" must not exceed ${maxChars} characters.`);
-  }
-  return value;
-}
 
 /**
  * An array of non-empty strings, each capped at `maxItemLength`, the array
@@ -2067,11 +2422,6 @@ function asProfileCreateName(value: unknown, field: string): string {
   return asProfileName(value, field);
 }
 
-/** A nullable optional string field: either a string or an explicit null. */
-function asNullableString(value: unknown, field: string): string | null {
-  if (value === null || typeof value === "string") return value;
-  throw new Error(`Invalid IPC payload: "${field}" must be a string or null.`);
-}
 
 /**
  * An optional id: `null`, or an {@link asId}. An empty string is a bug on the
@@ -2951,15 +3301,6 @@ function asDashboardSetName(value: unknown, field: string): string {
   return trimmed;
 }
 
-function asBoundedInteger(value: unknown, field: string, min: number, max: number): number {
-  const int = asInteger(value, field);
-  if (int < min || int > max) {
-    throw new Error(
-      `Invalid IPC payload: "${field}" must be a whole number between ${min} and ${max}.`,
-    );
-  }
-  return int;
-}
 
 /** An optional whole number: an explicit null, or an integer (any range check stays in the store). */
 function asNullableInteger(value: unknown, field: string): number | null {
@@ -3356,22 +3697,7 @@ function asCardFieldChanges(value: unknown): UpdateCardFields {
   return patch;
 }
 
-/** A plain integer field (structural check only; range validation stays in the store). */
-function asInteger(value: unknown, field: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw new Error(`Invalid IPC payload: "${field}" must be an integer.`);
-  }
-  return value;
-}
 
-/** A `coveredSeq` field: an integer, and additionally ≥ 1 — seq 0 never names a version (ADR-015). */
-function asPositiveInteger(value: unknown, field: string): number {
-  const int = asInteger(value, field);
-  if (int < 1) {
-    throw new Error(`Invalid IPC payload: "${field}" must be a positive integer.`);
-  }
-  return int;
-}
 
 /** The closed FSRS review-rating domain (Again/Hard/Good/Easy); Manual (0) and anything else is rejected. */
 function asCardRating(value: unknown, field: string): CardRating {
@@ -5264,7 +5590,11 @@ function requireDocAttachment(
 // content-addressed across the whole database, so a count that saw one
 // profile's rows would be the same bug one profile smaller.
 //
-// A module that gains blobs widens exactly these two functions.
+// The five built-in stores below are this file's own; every KIT module that
+// names blobs is asked through `moduleHost` (ADR-108), so a module that gains
+// blobs registers one hook in its own folder rather than widening these two
+// functions - which is what a module forgetting its hand-written line here used
+// to cost: its files, silently, to the collector below.
 
 /** How many rows — across every blob-naming table and every profile — hold this hash. */
 function blobRefCount(profileId: string, sha256: string): number {
@@ -5273,10 +5603,17 @@ function blobRefCount(profileId: string, sha256: string): number {
     taskAttachmentStore(profileId).refCount(sha256) +
     subjectAttachmentStore(profileId).refCount(sha256) +
     dashboardSettingsStore(profileId).refCount(sha256) +
-    // The `profiles` table itself (SET-001, migration 040) — the fifth member,
-    // and the only one whose store takes no profile id, because that table IS
-    // the profile list. Its count is profile-agnostic like every other here.
-    profileStore().refCount(sha256)
+    // The `profiles` table itself (SET-001, migration 040) — the fifth and last
+    // built-in member, and the only one whose store takes no profile id, because
+    // that table IS the profile list. Its count is profile-agnostic like every
+    // other here.
+    profileStore().refCount(sha256) +
+    // Every kit module that stores bytes — CULTURE's tickets and tracks, the
+    // cookbook's recipe photos, the CAR's receipts, RECORDER's media and the
+    // library's covers (ADR-108) — through the one registration each of them
+    // makes in its own folder. One call, so this union cannot fall behind a
+    // module again.
+    moduleHost.blobRefCount(profileId, sha256)
   );
 }
 
@@ -5291,7 +5628,12 @@ function blobMimeForHash(profileId: string, sha256: string): string | null {
     // note image is, and THIS line is the gate: `registerBlobProtocol` 404s any
     // hash whose mime resolves to null, so a picture becomes servable at the
     // moment `profiles` joins this union and not before.
-    profileStore().mimeForHash(sha256)
+    profileStore().mimeForHash(sha256) ??
+    // The kit modules last (ADR-108), and for the reason RECORDER's line used to
+    // be last: a recording's mime is what `MediaRecorder` reported, while every
+    // built-in member above it is a mime main sniffed from the bytes themselves —
+    // so if one hash is somehow both, the sniffed answer is the one served.
+    moduleHost.blobMimeForHash(profileId, sha256)
   );
 }
 
@@ -5462,10 +5804,11 @@ function syncService(): SyncService {
   return syncServiceInstance;
 }
 
-// --- The network mode and the update check (ADR-089) -------------------------
+// --- The network mode, the update check and the download service (ADR-089,
+// --- ADR-092) ---------------------------------------------------------------
 //
 // One service per launch, memoised on `syncService`'s terms: it owns the
-// dedicated update session's fetch, the pending offer and the once-a-day
+// dedicated session's fetch, the pending offer and the once-a-day
 // bookkeeping, and a second instance would be a second answer to „is a download
 // already in flight".
 //
@@ -5473,6 +5816,11 @@ function syncService(): SyncService {
 // effects arrive here. The session is created lazily because it can only be
 // made after `ready`, and `updateService()` is only ever called from handlers
 // registered inside `whenReady` and from the startup check beside the window.
+//
+// The DOWNLOAD service (`main/download/service.ts`) is built by its caller for
+// our own reasons rather than here: nothing in the app starts a download yet —
+// the mode's third value is the whole of this run's IPC — so this file carries
+// only the session rule the service will fetch through.
 let updateSessionFor: Session | null = null;
 let updateServiceInstance: UpdateService | null = null;
 
@@ -5481,11 +5829,18 @@ function updateService(): UpdateService {
     currentVersion: app.getVersion(),
     platform: process.platform,
     userData: userDataDir(),
-    mode: () =>
-      updatesActive(runningNetworkMode, readNetworkMode(userDataDir())) ? "updates" : "offline",
+    // ADR-102: a portable build checks and reports, and installs nothing —
+    // there is no installer on the stick, and writing one onto whatever
+    // computer is running it would break the marker's promise.
+    portable: isPortableLaunch,
+    // The mode this launch may ACT on, not the stored one: a stored change is a
+    // restart owed, and until then the updater behaves as if the mode were
+    // offline. „downloads" arrives here as itself, and the service admits the
+    // check in it because the modes are a superset chain.
+    mode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
     http: createUpdateHttp(requireUpdateSession()),
     publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
-    openPath: (path) => shell.openPath(path),
+    launchInstaller,
     quit: () => app.quit(),
     now: () => Date.now(),
     onChanged: (view) => {
@@ -5500,6 +5855,61 @@ function requireUpdateSession(): Session {
     throw new Error("Nexus update: the update session has not been created yet.");
   }
   return updateSessionFor;
+}
+
+// --- The ZIM service (ADR-098) ------------------------------------------------
+//
+// ONE service per launch, on `updateService`'s terms above: it owns every open
+// reader, the library index and the download bookkeeping, and it is the one
+// thing both the wiki module's handlers (`modules/wiki/main/register.ts`) and
+// the `nx-zim://` protocol handler consult — so „which file is
+// `wikipedia-sr-mini`" has one answer in this process.
+//
+// The DOWNLOAD service is built here because this feature is its first caller
+// (ADR-092 §4 says so in as many words). Its progress sink is deliberately
+// unused: `zim/host.ts` reads the staging file's size instead, which is the same
+// number read from the one place that cannot get ahead of the write. Its host
+// rule is the same `isSessionRequestAllowed` the session itself enforces, read
+// with the mode this LAUNCH came up under rather than the stored one.
+let zimHostInstance: ZimHost | null = null;
+
+function zimService(): ZimHost {
+  if (zimHostInstance !== null) return zimHostInstance;
+  const mode = (): ReturnType<typeof activeNetworkMode> =>
+    activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir()));
+  const allowed = (url: string): boolean => isSessionRequestAllowed(mode(), url);
+  zimHostInstance = createZimHost({
+    userData: userDataDir(),
+    mode,
+    isAllowedUrl: allowed,
+    http: createZimHttp(requireUpdateSession()),
+    downloads: createDownloadService({
+      userData: userDataDir(),
+      mode,
+      isAllowedUrl: allowed,
+      http: createDownloadHttp(requireUpdateSession()),
+      freeSpaceBytes,
+      onProgress: () => undefined,
+    }),
+    freeSpaceBytes,
+    // The dialog is main's, and that is the whole security shape of importing a
+    // file: the only way a path is ever named is that a person picked it in a
+    // native dialog this process opened (`packsIpc`'s arrangement).
+    pickZimFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        title: shellStrings().zimDialogTitle,
+        filters: [{ name: shellStrings().zimFilterName, extensions: ["zim"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    now: () => Date.now(),
+  });
+  setZimHost(zimHostInstance);
+  return zimHostInstance;
 }
 
 /**
@@ -5582,6 +5992,90 @@ function runnerIpc(): ElecRunnerIpc {
  */
 function elecSettingsStore(profileId: string): ElecSettingsStore {
   return new ElecSettingsStore(requireDb().raw, profileId);
+}
+
+// --- Content packs (ADR-091) -------------------------------------------------
+//
+// ONE service, built once per launch, on `runnerIpc`'s terms: it holds the one
+// piece of state a pack operation has between two calls — the folder the last
+// inspect verified and `packs:install` is waiting to install — and a second
+// instance would be a second place that state could live, with a renderer able
+// to install a candidate one instance did not inspect.
+//
+// The dialog is main's, and that is the whole security shape of this surface: a
+// pack is a FOLDER, and the only way one is ever named is that a person picked
+// it in a native dialog this process opened. `pickFolder` is the one effect
+// here that needs a window, which is why the service above it is electron-free.
+let packsIpc: PacksIpc | null = null;
+
+function packs(): PacksIpc {
+  packsIpc ??= createPacksIpc({
+    userData: userDataDir(),
+    appVersion: app.getVersion(),
+    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    pickFolder: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openDirectory"],
+        title: shellStrings().packDialogTitle,
+        buttonLabel: shellStrings().packDialogButton,
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
+    // A window that has gone away is simply not sent to: the pack belongs to
+    // main and outlives any one window, `runnerIpc`'s arrangement.
+    onProgress: (row) => {
+      mainWindow?.webContents.send(IpcChannel.packsProgress, row);
+    },
+    onChanged: (packs) => {
+      mainWindow?.webContents.send(IpcChannel.packsChanged, packs);
+    },
+    freeBytes: volumeFreeBytes,
+  });
+  return packsIpc;
+}
+
+// --- Content packs: the catalogue and its downloads (ADR-103) ----------------
+//
+// ONE service per launch, beside `packs()` and on its terms: it holds the state
+// that lives between two calls — which pack is downloading, what it has staged
+// and where a pause stopped it — and a second instance would let one window
+// cancel a download another window started.
+//
+// It fetches on the SAME dedicated session the update check and the download
+// service use (the `nexus-update` partition, ADR-089 and ADR-092): the launch's
+// resolver block and that session's own request rule are what keep the addresses
+// this feature reaches the compiled-in ones. The catalogue and every pack file
+// go through `createDownloadHttp`, whose `redirect: "manual"` is what keeps each
+// hop of a redirect chain in the service's hands rather than Chromium's.
+//
+// It is built lazily, like `packs()`: the session exists only after `ready`, and
+// the first call is a renderer's, long after that.
+let packCatalogueIpc: PackCatalogueIpc | null = null;
+
+function packCatalogue(): PackCatalogueIpc {
+  packCatalogueIpc ??= createPackCatalogueIpc({
+    userData: userDataDir(),
+    appVersion: app.getVersion(),
+    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    // The mode this launch may ACT on, never the stored file: a stored change
+    // is a restart owed, and until then downloads behave as if the mode were
+    // offline. `packsIpc`'s two folder paths reach no network and need no mode.
+    mode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
+    http: createDownloadHttp(requireUpdateSession()),
+    hosts: DOWNLOAD_HOSTS,
+    isAllowedUrl: (url) => isSessionRequestAllowed(runningNetworkMode, url),
+    freeBytes: volumeFreeBytes,
+    onChanged: (packs) => {
+      mainWindow?.webContents.send(IpcChannel.packsChanged, packs);
+    },
+    onProgress: (row) => {
+      mainWindow?.webContents.send(IpcChannel.packsDownloadProgress, row);
+    },
+  });
+  return packCatalogueIpc;
 }
 
 // --- Search (ADR-021): the query pipeline -----------------------------------
@@ -5667,14 +6161,23 @@ function recentHits(
 }
 
 /**
- * The profile's enabled-module set (SET-007), resolved exactly as the shell
- * resolves it — the same `resolveEnabled` over the same shared manifests, fed
- * by the profile's own flag rows. This is what drives the search-result module
- * gate (ADR-058 §5, `filterSearchHitsByModules`): results gain the gate the
- * palette's COMMANDS have always had renderer-side, from the same two inputs.
+ * The modules this DEVICE shows (ADR-101), resolved through the one predicate
+ * every surface uses (`visibleModuleSet`). This is what drives the
+ * search-result module gate (ADR-058 §5, `filterSearchHitsByModules`) and, one
+ * level down, which modules may raise a notification at all.
+ *
+ * It used to be the profile's own flag rows through `resolveEnabled`; the
+ * app-wide setting replaces them, so hiding a module in „Prikaz" takes it out
+ * of the rail, the palette, the dashboard and this gate in ONE write — and the
+ * parameter went with the per-profile switch, because the answer is a fact
+ * about the machine rather than about who is signed in.
+ *
+ * Read per call rather than captured: the file is a couple of hundred bytes,
+ * and a module hidden while the app runs must stop surfacing results on the
+ * next query, exactly as `notificationSchedulerDeps` reads it on every cycle.
  */
-async function enabledModuleIdsFor(profileId: string): Promise<ReadonlySet<string>> {
-  return new Set(resolveEnabled(moduleRegistry, await flagStore(profileId).get()));
+function enabledModuleIds(): ReadonlySet<string> {
+  return visibleModuleSet(moduleRegistry, resolveShellVisibility(userDataDir()));
 }
 
 /**
@@ -5700,7 +6203,7 @@ async function runRecentSearch(
   limit: number,
   kinds: readonly SearchKind[] = [],
 ): Promise<SearchResult[]> {
-  const enabled = await enabledModuleIdsFor(profileId);
+  const enabled = enabledModuleIds();
   return filterSearchHitsByModules(recentHits(profileId, MAX_SEARCH_LIMIT, kinds), enabled)
     .slice(0, limit)
     .map((hit) => toSearchResult(hit, [], false));
@@ -5809,7 +6312,7 @@ async function runSearchQuery(
 
   if (match === null) {
     if (filters === null) return runRecentSearch(profileId, limit, parsed.kinds);
-    const enabled = await enabledModuleIdsFor(profileId);
+    const enabled = enabledModuleIds();
     const hits = filterSearchHitsByModules(
       recentHits(profileId, MAX_SEARCH_LIMIT, parsed.kinds),
       enabled,
@@ -5837,7 +6340,7 @@ async function runSearchQuery(
   // The enabled-module gate (ADR-058 §5) is applied to the CANDIDATES, before
   // operators and ranking, so a page of `limit` results is filled from rows
   // that may actually be shown rather than thinned after the cut.
-  const gated = filterSearchHitsByModules(candidates, await enabledModuleIdsFor(profileId));
+  const gated = filterSearchHitsByModules(candidates, enabledModuleIds());
   const filtered = filters === null ? gated : applySearchOperators(gated, filters);
 
   const ranked = rankSearchResults(filtered, { now: new Date().toISOString(), query: parsed });
@@ -5915,7 +6418,7 @@ async function runSearchPage(profileId: string, rawQuery: string): Promise<Searc
   // before EVERY count below — so a disabled module surfaces neither rows nor
   // phantom facet chips (`kindCounts`/`tagFacets` are computed strictly
   // post-gate, and a kind with nothing left simply never appears in them).
-  const candidates = filterSearchHitsByModules(sourced, await enabledModuleIdsFor(profileId));
+  const candidates = filterSearchHitsByModules(sourced, enabledModuleIds());
 
   const sources = tagFacetSources(profileId);
   const filters: SearchOperatorFilters | null =
@@ -6053,20 +6556,46 @@ function notificationSchedulerDeps(): NotificationSchedulerDeps {
     // ticks that says which of them are already done.
     habitStore,
     notificationStore,
-    // SET-007: a module switched off stops reminding, the way it already stops
-    // appearing in the sidebar, on the dashboard and in search. Read on every
-    // check rather than captured once — a flag toggled in Podešavanja must take
-    // effect on the next cycle, not on the next unlock.
-    enabledModuleIds: (profileId) =>
-      new Set(resolveEnabled(moduleRegistry, flagStore(profileId).getSync())),
+    // SET-007, now device-wide (ADR-101): a hidden module stops reminding, the
+    // way it already stops appearing in the sidebar, on the dashboard, in the
+    // launcher and in search. Read on every check rather than captured once — a
+    // module hidden in „Prikaz" must fall silent on the next cycle, not on the
+    // next unlock. The rows it already stored are untouched: hiding a module is
+    // a statement about this device's app, not about the user's data.
+    enabledModuleIds: () => enabledModuleIds(),
     getMainWindow: () => mainWindow,
   };
 }
 
+/**
+ * ADR-101 §3, driven from the unlock path: every profile this account holds is
+ * read ONCE per launch, and the device setting becomes the union of what they
+ * all had on. It returns immediately on any launch that found a
+ * `visibility.json`, which is what keeps the union from re-showing a module the
+ * user has since hidden by hand.
+ */
+function migrateShellVisibility(): void {
+  if (!moduleVisibilityMigration.open) return;
+  const profiles = listProfiles(requireDb()).map((profile) => ({
+    id: profile.id,
+    flags: flagStore(profile.id).getSync(),
+  }));
+  moduleVisibilityMigration.merge(profiles);
+}
+
 /** Starts everything that only makes sense once the database is open. Never during an automated run — a scheduled check firing mid-sweep would make its deterministic exit flaky, the same reason `app.whenReady` used to skip it. */
 function startUnlockedServices(): void {
+  // Before the automated-run guard on purpose: the union is a DATA migration
+  // rather than a running service, and a harness that never ran it would
+  // photograph a different app from the one a user gets on the same machine.
+  migrateShellVisibility();
   if (isAutomatedRun) return;
   startNotificationScheduler(notificationSchedulerDeps());
+  // The kit's modules get the same session the scheduler does, and for the same
+  // reason it is skipped in an automated run: a module that re-arms a countdown
+  // or fires a toast the moment the database opens would make a deterministic
+  // sweep non-deterministic. `performLock` hands them the end of it.
+  moduleHost.sessionStart(listProfiles(requireDb()).map((profile) => profile.id));
   // Sync follows the profile that is open, on the same rule and through the same
   // resolver the notification scheduler uses — so the two can never be serving
   // different profiles. A machine with cloud off, or with no account, refuses
@@ -6271,6 +6800,12 @@ function performLock(): void {
   // nothing below may run against a still-open private section.
   privLock();
   stopNotificationScheduler();
+  // The kit's modules lose their timers with the session, for the schedulers'
+  // reason and one more: a countdown armed for a profile whose database is about
+  // to be closed would fire against a locked session, and an OS toast about a
+  // profile nobody is standing in is the one notification this app must never
+  // show.
+  moduleHost.sessionEnd();
   // A round needs the data key and the open database; both die here. Optional
   // chaining rather than `syncService()`, because constructing the service to
   // stop a loop that was never started would read `cloud.json` at lock time.
@@ -6302,6 +6837,11 @@ function performLock(): void {
   db = null;
   unlockedDataKeyHex = null;
   blobKeys = null;
+  // ADR-110 §3: a lock the user asked for is also the user saying „ask me
+  // again". This is the ONE function every lock passes through, so the rule
+  // cannot be forgotten at a new call site, and the setting itself survives it
+  // — the next passcode unlock writes a fresh wrap under the same policy.
+  if (activeAccountId !== null) forgetRememberedKey(activeAccountDir());
   // `openExternally` must hand the OS a real plaintext file to open with its
   // default app, so its temp copies are an unavoidable plaintext residue
   // living outside both blob stores. What IS controllable is that they never
@@ -6440,6 +6980,135 @@ function handleAuthRenameAccount(accountId: string, label: string): AuthStatus {
 }
 
 /**
+ * The remembered unlock's whole environment (ADR-110): the OS keystore, this
+ * platform, and the clock. One literal, built per call — `rememberedUnlock.ts`
+ * imports no `electron` precisely so that every branch of the feature runs under
+ * Vitest, and this is the only place the two meet.
+ */
+function rememberedUnlockDeps(): RememberedUnlockDeps {
+  return { keystore: safeStorage, platform: process.platform, now: () => new Date() };
+}
+
+/**
+ * What the „Traži pristupni kod" row reads: the stored choice, plus whether this
+ * OS session can honour it at all. `reason` is computed here rather than stored
+ * because it is a fact about the MACHINE — the same account on the same disk
+ * answers differently under a different Windows session, and a stored reason
+ * would be yesterday's.
+ */
+function currentUnlockPolicy(): UnlockPolicy {
+  const deps = rememberedUnlockDeps();
+  const reason = rememberingProblem(deps);
+  if (activeAccountId === null) {
+    return { setting: DEFAULT_UNLOCK_SETTING, available: reason === null, reason };
+  }
+  return readUnlockPolicy(deps, activeAccountDir());
+}
+
+/**
+ * Opens the session from a REMEMBERED key, if this account has one that is still
+ * fresh (ADR-110). Runs once, from startup, after the IPC handlers are
+ * registered and before the window exists — so the renderer's first
+ * `auth:status` reports the session a user would have got by typing the
+ * passcode, instead of a locked account it would have to re-open.
+ *
+ * Everything that can go wrong here ends at the passcode prompt rather than in a
+ * refused launch. `takeRememberedKey` has already deleted and answered `null`
+ * for a wrap that has expired, one this Windows account cannot decrypt, and one
+ * whose plaintext is not a 256-bit key. The case left over is a remembered key
+ * that does not open THIS database — a `nexus.db` restored from a backup taken
+ * under an older key — and that is deliberately non-fatal: the wrap is forgotten
+ * and the passcode path, which can say something to the user, runs.
+ */
+async function adoptRememberedUnlock(): Promise<void> {
+  if (activeAccountId === null) return;
+  const dir = activeAccountDir();
+  const dataKeyHex = takeRememberedKey(rememberedUnlockDeps(), dir);
+  if (dataKeyHex === null) return;
+  try {
+    openEncrypted(dataKeyHex);
+  } catch (error) {
+    forgetRememberedKey(dir);
+    console.error(
+      "The remembered unlock did not open this database and has been forgotten: " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    return;
+  }
+  await adoptUnlockedKey(dataKeyHex);
+  startUnlockedServices();
+}
+
+/**
+ * Stores the „Traži pristupni kod" choice (ADR-110).
+ *
+ * The ORDER is the design, and every step of it is load-bearing:
+ *
+ * 1. This machine has to be able to honour a remembered wrap at all. The row is
+ *    drawn disabled for the two cases `rememberingProblem` names, but the
+ *    renderer is untrusted, so the refusal is enforced here too.
+ * 2. Anything weaker than „every time" needs the passcode ONCE MORE, verified
+ *    against the live session through `verifyPasscode` — the same call the
+ *    profile-switch gate uses, on the unlock's own throttle counter, because a
+ *    guess is a guess wherever it is typed. Re-selecting the value already
+ *    stored is not a change and asks for nothing.
+ * 3. Only then is the setting written — and the same proof is what produces the
+ *    first wrap, so a user who chooses „after 1 day" does not then have to lock
+ *    and unlock before it means anything.
+ */
+async function handleAuthSetUnlockPolicy(
+  setting: UnlockSetting,
+  passcode: string | undefined,
+): Promise<UnlockPolicyResult> {
+  if (activeAccountId === null) return { ok: false, reason: "notInitialized" };
+  const dir = activeAccountDir();
+  const deps = rememberedUnlockDeps();
+  if (rememberingProblem(deps) !== null) return { ok: false, reason: "keystoreUnavailable" };
+
+  try {
+    const current = readUnlockPolicy(deps, dir).setting;
+    const changes = setting !== current;
+    let dataKeyHex: string | null = null;
+    if (changes && settingNeedsPasscode(setting)) {
+      // An absent passcode is treated as a wrong one rather than refused
+      // separately: the only caller that can omit it is a renderer that ignored
+      // the form, and a missing field must not become a route to a weaker
+      // setting. The failed attempt it folds into the guard is the same cost a
+      // guess pays everywhere else in this file.
+      const clearedThrottle = await verifyPasscode(
+        dir,
+        passcode ?? "",
+        requireUnlockedDataKeyHex(),
+      );
+      if (clearedThrottle !== null) {
+        // NTF-007, exactly as the two unlock paths record it: this success just
+        // wiped the only evidence that the throttle ever tripped.
+        recordSecurityNotice({
+          kind: "unlock-throttle",
+          at: new Date().toISOString(),
+          ...clearedThrottle,
+        });
+        flushSecurityNotices();
+      }
+      dataKeyHex = requireUnlockedDataKeyHex();
+    }
+
+    const stored = storeUnlockPolicy(deps, dir, setting, dataKeyHex);
+    if (!stored) return { ok: false, reason: "keystoreUnavailable" };
+    return { ok: true, policy: readUnlockPolicy(deps, dir) };
+  } catch (error) {
+    if (!(error instanceof AuthError)) throw error;
+    if (error.reason === "throttled") {
+      // Recomputed rather than guessed: the throttle check that raised this left
+      // the guard untouched, so re-reading it here is exact, not stale — the
+      // same note `authResultFromError` carries.
+      return { ok: false, reason: error.reason, lockedForMs: readStatus(dir).lockedForMs };
+    }
+    return { ok: false, reason: error.reason };
+  }
+}
+
+/**
  * Deletes an account outright (ADR-048). The picker only offers this while
  * locked, but the renderer is untrusted, so deleting the SELECTED account is
  * handled properly rather than assumed away: it is `performLock()` first — the
@@ -6495,6 +7164,15 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
         ...clearedThrottle,
       });
     }
+    // ADR-110: this is the moment the passcode was proved, so it is also the
+    // moment the remembered unlock may (re)start its clock. Rewritten rather
+    // than appended to, so exactly one key is ever remembered, for the interval
+    // the user chose.
+    if (activeAccountId !== null) {
+      const deps = rememberedUnlockDeps();
+      const dir = activeAccountDir();
+      storeUnlockPolicy(deps, dir, readUnlockPolicy(deps, dir).setting, dataKeyHex);
+    }
     flushSecurityNotices(); // whatever piled up while nothing was open
     return { ok: true };
   } catch (error) {
@@ -6525,6 +7203,11 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
         ...clearedThrottle,
       });
     }
+    // ADR-110 §3: the Recovery Kit proved possession of the DATA KEY, not of the
+    // passcode — so it is a reason to forget a remembered wrap rather than to
+    // write one. A user who came through recovery has to type the passcode once
+    // more before the app remembers anything again.
+    forgetRememberedKey(activeAccountDir());
     flushSecurityNotices();
     return { ok: true };
   } catch (error) {
@@ -6543,6 +7226,13 @@ async function handleAuthChangePasscode(currentPasscode: string, nextPasscode: s
       recordSecurityNotice({ kind: "unlock-throttle", at, ...clearedThrottle });
     }
     recordSecurityNotice({ kind: "passcode-changed", at });
+    // ADR-110 §3: the passcode the remembered wrap was written under is gone.
+    // The wrap still opens this database — it is the DATA KEY inside it — so
+    // keeping it would leave the old passcode's convenience standing next to a
+    // new passcode the user has not yet used, which is exactly the state this
+    // feature's own promise („anyone at this Windows account can open it") would
+    // then be doing silently.
+    forgetRememberedKey(activeAccountDir());
     return { ok: true };
   } catch (error) {
     return authResultFromError(error, activeAccountDir());
@@ -6729,6 +7419,19 @@ function restoreDeps(): ImportDeps {
     fitBodyProfileStore,
     canvasStore,
     electronicsStore,
+    // The kit's own section (ADR-090), and the one `ProfileData` member that is
+    // a HOOK rather than a store read: a discovered module's data lives in its
+    // own tables and in its own shape, so the host that adopted it is what
+    // produces it - and what refuses an archive naming a module this build does
+    // not know, at the preview, before anything is replaced.
+    moduleExports: (profileId) => moduleHost.collectExports([profileId]),
+    assertImportable: (modules) => moduleHost.assertImportable(modules),
+    restoreModuleData: (profileId, modules) => moduleHost.applyImports(modules, [profileId]),
+    // The module section's own blobs (ADR-108): which hashes its payloads name,
+    // read by the modules that wrote them - the only things that can read those
+    // payloads at all. `restore.ts` writes those bytes before any module's
+    // `apply` writes the rows, and reports the ones the archive lacks.
+    moduleBlobs: (modules) => moduleHost.collectImportBlobs(modules),
     saveBlob: (bytes) => saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes),
     // Injected rather than reached for, so `restore.ts` never has to know WHICH
     // tables reference a blob — that union lives in exactly one place
@@ -6807,6 +7510,15 @@ function imexArchiveDeps(): ImexArchiveDeps {
     fitBodyProfileStore,
     canvasStore,
     electronicsStore,
+    // The kit's section of a full profile read (ADR-090). A function rather
+    // than a store getter, because a kit module's payload is produced by the
+    // module itself - see `ProfileDataDeps.moduleExports`.
+    moduleExports: (profileId) => moduleHost.collectExports([profileId]),
+    // And the files that section names (ADR-108), read from the same live rows
+    // by the modules that own them. The manual export and the scheduled backup
+    // share this literal, so neither can drift into carrying rows without their
+    // bytes.
+    moduleBlobs: (profileId) => moduleHost.collectBlobs([profileId]),
     flagStore,
     readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
     // A private attachment's decrypted bytes, under whatever section is open
@@ -7275,6 +7987,28 @@ function registerIpc(): void {
     performLock();
   });
 
+  ipcMain.handle(IpcChannel.authUnlockPolicy, (event): UnlockPolicy => {
+    assertTrustedSender(event);
+    return currentUnlockPolicy();
+  });
+
+  ipcMain.handle(
+    IpcChannel.authSetUnlockPolicy,
+    (event, payload): Promise<UnlockPolicyResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const setting = asUnlockSetting(body.setting, "setting");
+      // The passcode is OPTIONAL on the wire and required by the handler for
+      // anything weaker than the default. A validator that demanded it here
+      // would refuse the „every time" direction, which needs no passcode at
+      // all — so the structural check is „a string, if it is there", and
+      // `handleAuthSetUnlockPolicy` is the authority on when it must be.
+      const passcode =
+        body.passcode === undefined ? undefined : asPasscode(body.passcode, "passcode");
+      return handleAuthSetUnlockPolicy(setting, passcode);
+    },
+  );
+
   ipcMain.handle(IpcChannel.profilesList, (event): Profile[] => {
     assertTrustedSender(event);
     return listProfiles(requireDb());
@@ -7385,10 +8119,14 @@ function registerIpc(): void {
     return profile;
   });
 
-  ipcMain.handle(IpcChannel.flagsGet, (event, payload): Promise<FlagState> => {
+  ipcMain.handle(IpcChannel.flagsGet, async (event, payload): Promise<FlagState> => {
     assertTrustedSender(event);
     const profileId = asId(asRecord(payload).profileId, "profileId");
-    return new SqliteFlagStore(requireDb().raw, profileId).get();
+    // ADR-101: a module's answer is the DEVICE's, so it is laid over the
+    // profile's own rows — which still hold its toolkit packs — rather than
+    // being read out of them.
+    const rows = await new SqliteFlagStore(requireDb().raw, profileId).get();
+    return withModuleVisibility(moduleRegistry, rows, resolveShellVisibility(userDataDir()));
   });
 
   ipcMain.handle(IpcChannel.flagsSet, async (event, payload): Promise<void> => {
@@ -7397,7 +8135,46 @@ function registerIpc(): void {
     const profileId = asId(body.profileId, "profileId");
     const flagKey = asFlagKey(body.moduleId);
     const enabled = asBoolean(body.enabled, "enabled");
+    // ADR-101: `asFlagKey` admits two kinds of key and they are written in two
+    // different places now. A module id records the DEVICE's arrangement — one
+    // setting for the whole app, which is what the questionnaire's module
+    // screen, its manual override and the profile plan all mean by "switch
+    // this on" — and a `pack:` key stays a row of this profile's own, because
+    // a toolbox is an answer about the person.
+    const manifest = moduleRegistry.get(flagKey);
+    if (manifest !== undefined) {
+      setShellModuleVisible(userDataDir(), moduleRegistry, manifest, enabled);
+      return;
+    }
     await new SqliteFlagStore(requireDb().raw, profileId).set(flagKey, enabled);
+  });
+
+  /**
+   * ADR-101: the DEVICE's module arrangement — which modules this machine shows
+   * and in what order — beside `cloud.json` and `network.json` rather than in a
+   * profile, because the rail is drawn from it and main's own gates read it
+   * before any question about a profile is asked. It is a preference, not a
+   * boundary, so a malformed file reads as the app exactly as it ships
+   * (`resolveShellVisibility`) and never as „nothing is shown".
+   */
+  ipcMain.handle(IpcChannel.visibilityGet, (event): ShellVisibility => {
+    assertTrustedSender(event);
+    return resolveShellVisibility(userDataDir());
+  });
+
+  /**
+   * One write per gesture: a switch, a move of a group or of a module, or the
+   * reset. The payload is a whole arrangement rather than an operation, and main
+   * validates it (`asModuleVisibility`) and normalizes it against the live
+   * registry before writing — so the two locked modules cannot be hidden by a
+   * payload, an id this build does not know is kept rather than dropped, and the
+   * file never records an entry that merely restates a manifest.
+   */
+  ipcMain.handle(IpcChannel.visibilitySet, (event, payload): ShellVisibility => {
+    assertTrustedSender(event);
+    const next = normalizeShellVisibility(asModuleVisibility(payload), moduleRegistry);
+    writeShellVisibility(userDataDir(), next);
+    return next;
   });
 
   ipcMain.handle(IpcChannel.tasksList, (event, payload): Task[] => {
@@ -12249,10 +13026,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.networkSetMode, (event, payload): NetworkModeView => {
     assertTrustedSender(event);
-    const mode = asRecord(payload).mode;
-    if (mode !== "offline" && mode !== "updates") {
-      throw new Error('Invalid IPC payload: "mode" must be "offline" or "updates".');
-    }
+    const mode = asNetworkMode(asRecord(payload).mode);
     // The ONE write. Selecting a radio and then closing the window records
     // nothing, because nothing calls this but the confirm button and the
     // settings card.
@@ -12262,9 +13036,10 @@ function registerIpc(): void {
 
   // The update check. Validation is trivial (no payloads), and every handler
   // goes through one rule: updates may reach the network only when this launch
-  // came up in „updates" AND the stored choice is still „updates". Switching to
-  // offline therefore stops checks at once, while switching to updates waits for
-  // a restart, because the resolver rule is fixed at launch. That is why each
+  // came up in a mode that allows them — „updates", or „downloads", which
+  // contains it — AND the stored choice still names that same mode. Switching to
+  // offline therefore stops checks at once, while switching up waits for a
+  // restart, because the resolver rule is fixed at launch. That is why each
   // handler below re-reads the stored mode rather than trusting a renderer that
   // might have called the channel in a state this launch may not act on.
   ipcMain.handle(IpcChannel.updateStatus, (event): UpdateStateView => {
@@ -12303,6 +13078,92 @@ function registerIpc(): void {
     assertTrustedSender(event);
     return appInfo();
   });
+
+  // Content packs (ADR-091). Five channels and two pushes, and the one thing
+  // they all have in common is that **no path crosses them**: `packs:inspect`
+  // opens the folder dialog in main and remembers what was picked,
+  // `packs:install` installs exactly that and takes no argument at all, and the
+  // two ids below are validated as ids here and as kebab-case pack ids beside
+  // the code that names a folder with them.
+  ipcMain.handle(IpcChannel.packsList, async (event): Promise<InstalledPackView[]> => {
+    assertTrustedSender(event);
+    return packs().list();
+  });
+
+  ipcMain.handle(IpcChannel.packsInspect, async (event): Promise<PackInspectResult> => {
+    assertTrustedSender(event);
+    return packs().inspect();
+  });
+
+  ipcMain.handle(IpcChannel.packsInstall, async (event): Promise<PackInstallResult> => {
+    assertTrustedSender(event);
+    return packs().install();
+  });
+
+  ipcMain.handle(IpcChannel.packsRemove, async (event, payload): Promise<PackRemoveResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packs().remove(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsVerify, async (event, payload): Promise<PackVerifyResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packs().verify(id);
+  });
+
+  // The catalogue and its downloads (ADR-103). Six channels and one push, and
+  // the same rule as the five above holds: **no URL, no host and no path crosses
+  // this bridge.** `packs:catalogue` takes no argument at all; the four calls
+  // below take a pack id, which is validated as an id here and as a kebab-case
+  // pack id beside the code that looks it up in the signed document. Every
+  // address a download reaches came out of that document.
+  ipcMain.handle(IpcChannel.packsCatalogue, async (event, payload): Promise<PackCatalogueResult> => {
+    assertTrustedSender(event);
+    return packCatalogue().catalogue(asBoolean(asRecord(payload).reload, "reload"));
+  });
+
+  ipcMain.handle(IpcChannel.packsDownload, async (event, payload): Promise<PackDownloadResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packCatalogue().download(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsDownloadPause, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    await packCatalogue().pause(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsDownloadResume, async (event, payload): Promise<PackDownloadResult> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    return packCatalogue().resume(id);
+  });
+
+  ipcMain.handle(IpcChannel.packsDownloadCancel, async (event, payload): Promise<void> => {
+    assertTrustedSender(event);
+    const id = asId(asRecord(payload).id, "id");
+    await packCatalogue().cancel(id);
+  });
+
+  // The credits screen's addresses (ADR-103). `openExternalUrl` holds the whole
+  // rule (`main/external.ts`): https only, no credentials, and the loader is the
+  // user's browser. A refused address answers `false` and opens nothing.
+  ipcMain.handle(IpcChannel.externalOpen, async (event, payload): Promise<boolean> => {
+    assertTrustedSender(event);
+    const url = asString(asRecord(payload).url, "url");
+    return await openExternalUrl(url);
+  });
+
+  // The module kit's channels (ADR-090): one `ipcMain.handle` per channel a
+  // discovered module declared, and nothing generic behind them. The host
+  // refuses an untrusted sender before the module's own handler runs
+  // (`moduleIpc.ts`), so no module can forget SEC-EL-02 and no channel can be
+  // answered by a channel name the renderer made up.
+  for (const channel of moduleHost.channels()) {
+    ipcMain.handle(channel, (event, payload) => moduleHost.dispatch(channel, event, payload));
+  }
 }
 
 /**
@@ -12500,14 +13361,22 @@ function createWindow(): BrowserWindow {
       });
   });
 
-  // SEC-EL-03: deny every attempt to open a new window. The shell has no external
-  // links yet; a vetted shell.openExternal wrapper lands with the first one.
+  // SEC-EL-03: deny every attempt to open a new window. Windows stay denied even
+  // now that the app has external links: an address goes out through the ONE
+  // channel (`external:open` -> `main/external.ts`, ADR-107), which is a rule
+  // this process applies, never a window the renderer opened for itself.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   // SEC-EL-03: lock navigation to the app's own document; block anything else.
   win.webContents.on("will-navigate", (event, url) => {
     if (url !== win.webContents.getURL()) event.preventDefault();
   });
+
+  // ADR-098: a link inside a ZIM page is not the shell's business — the frame
+  // it was clicked in is, and `zim/external.ts` owns the rule (inside the ZIM
+  // stays inside, `http(s)` goes to the user's browser, everything else is
+  // dropped).
+  installExternalLinkRule(win.webContents);
 
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (devServerUrl) {
@@ -13208,6 +14077,11 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
     for (const pack of TOOL_PACKS) await flags.set(packFlagKey(pack), true);
   }
 
+  // ADR-101: the module switch is DEVICE-wide now, so „switches every module
+  // on" is a write to the device setting rather than to each profile's flag
+  // rows — and the walk below walks the pages of every module it just showed.
+  showEveryModule(userDataDir(), moduleRegistry);
+
   // Drawings the walk must NOT destroy. The walk opens „Tabla" and leaves the
   // moment it is shown, which is the exact gesture that emptied a board in 1.3.0:
   // the page's unmount flush read the editor after Excalidraw had replaced its
@@ -13632,6 +14506,11 @@ async function runDemoSeed(): Promise<void> {
 
 function shutdown(code: number): void {
   stopNotificationScheduler();
+  moduleHost.sessionEnd();
+  // ADR-098: the ZIM readers hold file descriptors on library files — third
+  // party content rather than profile data, but a handle left open across a
+  // shutdown is still a handle nobody will close.
+  zimHostInstance?.closeAll();
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   try {
     db?.close();
@@ -13674,16 +14553,55 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   // The one rung of the Electron hardening set that had neither code nor a
-  // stated reason. Nexus asks the web platform for nothing — notifications are
-  // raised by `Notification` in MAIN, not by the renderer's Notification API,
-  // and there is no camera, microphone, geolocation, MIDI or clipboard-read
-  // path anywhere in the product. So both handlers deny unconditionally rather
-  // than switching on a permission name: an allowlist with no entries is a
-  // list somebody eventually adds to, and a flat refusal is a decision.
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => {
-    callback(false);
+  // stated reason. Nexus asks the web platform for almost nothing —
+  // notifications are raised by `Notification` in MAIN, not by the renderer's
+  // Notification API, and there is no geolocation, MIDI or clipboard-read path
+  // anywhere in the product — so both handlers deny by default rather than
+  // switching on a permission name: a list that started empty is a list
+  // somebody eventually adds to, and a flat refusal is a decision.
+  //
+  // `media` is the ONE exception, and it is not made here: the recorder's own
+  // rule decides it (`modules/recorder/main/mediaAccess.ts`) — this app's own
+  // document, its main frame, and only while the recorder's page has asked for
+  // a device. The SIGNALS module's tuner and sound meter add the microphone
+  // (`modules/signals/main/permission.ts`: `media`, audio only, main frame only,
+  // this app's own page only), and the SCANNER the camera
+  // (`main/scannerMedia.ts`: `media`, video only, this app's own origin only).
+  // The LAB opens a serial port (`modules/lab/main/serialPermission.ts`:
+  // `serial`, this app's own origin only). A request is allowed when ONE
+  // module's rule allows it; every other permission name still reaches
+  // `callback(false)`.
+  const devOrigin = devServerOrigin(process.env);
+  const mediaOrigins = appMediaOrigins(process.env);
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    callback(
+      recorderAllowsRequest(permission, details, devOrigin, Date.now()) ||
+        assistantAllowsMicRequest(permission, details, devOrigin, Date.now()) ||
+        signalsAllowsMicrophone(permission, details.requestingUrl, details, devOrigin) ||
+        allowsScannerMedia(permission, contents.getURL(), details, mediaOrigins) ||
+        labAllowsSerial(permission, labAppOrigin(contents.getURL(), process.env), details),
+    );
   });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler(
+    (contents, permission, requestingOrigin, details) =>
+      recorderAllowsCheck(permission, requestingOrigin, details, devOrigin, Date.now()) ||
+      assistantAllowsMic(permission, requestingOrigin, details, devOrigin, Date.now()) ||
+      signalsAllowsMicrophone(permission, requestingOrigin, details, devOrigin) ||
+      allowsScannerMedia(
+        permission,
+        // Chromium names the frame's origin for a check ("file://" for the
+        // packaged page), and `webContents` can be null when nothing owns the
+        // check - a check with no origin at all is refused by the rule.
+        requestingOrigin === "" ? (contents?.getURL() ?? null) : requestingOrigin,
+        details,
+        mediaOrigins,
+      ) ||
+      labAllowsSerial(permission, labAppOrigin(requestingOrigin, process.env), details),
+  );
+  // The LAB's session wiring: the serial port picker (a dialog listing the
+  // ports, because a device on somebody's desk is never opened without a click)
+  // and the save dialog its file ops use. It touches no permission handler.
+  installLabElectron(session.defaultSession);
 
   // SEC-NET: the three runtime layers of the cloud-off boundary. The fourth
   // (`host-resolver-rules`) went on at module scope; `net/offline.ts` carries
@@ -13699,7 +14617,6 @@ app.whenReady().then(async () => {
   // decides whether the ports exist at all: „a port was built" and „its origin is
   // admitted" have to be the same decision, or one of them is a second opinion.
   const allowedRemoteOrigins: readonly string[] = syncService().allowedOrigins();
-  const devOrigin = devServerOrigin(process.env);
 
   // Layer 1: every request Chromium initiates — fetch, XHR, a stylesheet
   // `url()`, an `<img>`, a redirect, a service worker, a preconnect.
@@ -13749,14 +14666,16 @@ app.whenReady().then(async () => {
   // product it protects.
   session.defaultSession.setSpellCheckerEnabled(false);
 
-  // SEC-NET / ADR-089: the dedicated update session. It exists in BOTH modes,
+  // SEC-NET / ADR-089, ADR-092: the dedicated session. It exists in every mode,
   // but in offline mode it must be as DEAD as the renderer's — „a session
   // nobody uses" is not the guarantee, because a live allowlist is a request
   // path a bug or a future caller could reach. So the launch mode is the first
-  // condition here: unless this launch came up in „Offline + update checks",
-  // every request is cancelled before the host allowlist is even consulted.
-  // When the launch mode IS updates, the allowlist admits exactly three https
-  // hosts and nothing else — the ONLY network exception this product has.
+  // condition: in „Offline only" every request is cancelled before the host
+  // allowlist is even consulted. In the two modes that allow a connection, the
+  // allowlist admits exactly the https hosts that mode names and nothing else —
+  // the ONLY network exception this product has. Which hosts those are is
+  // `isSessionRequestAllowed`'s one rule in `net/offline.ts`, read here with the
+  // mode this LAUNCH came up under, never the stored one.
   //
   // In-memory on purpose: the partition has no `persist:` prefix, so nothing
   // this session fetches (no cookie, no cache, no auth) survives the process.
@@ -13774,11 +14693,16 @@ app.whenReady().then(async () => {
   // first and independent gate.
   updateSessionFor = session.fromPartition("nexus-update");
   updateSessionFor.webRequest.onBeforeRequest((details, callback) => {
-    callback({
-      cancel: runningNetworkMode !== "updates" || !isUpdateRequestAllowed(details.url),
-    });
+    callback({ cancel: !isSessionRequestAllowed(runningNetworkMode, details.url) });
   });
   await updateSessionFor.setProxy({ mode: "direct" });
+
+  // ADR-098: the offline library's scheme handler, installed once, before any
+  // window exists — a page that loaded first could ask for an `nx-zim://` entry
+  // and be told nothing at all, which is what an unregistered scheme answers.
+  // Building the service here also means every `wiki:` handler already has one
+  // (they reach it through `zimHost()`).
+  installZimProtocol(zimService());
 
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the
@@ -13810,6 +14734,13 @@ app.whenReady().then(async () => {
     // genuinely has nothing to hand back until the passcode is verified.
     registerIpc();
 
+    // ADR-110, the one exception to the sentence above, and deliberately AFTER
+    // the handlers are registered: a remembered unlock opens the database with
+    // no passcode typed, and doing it here means every channel exists before the
+    // session does — the renderer's first `auth:status` reads the finished state
+    // instead of racing this line for it.
+    await adoptRememberedUnlock();
+
     // ADR-014 / ADR-041: `blobMimeForHash` is the union over every table that
     // names a hash — an attachment row on either module, or a dashboard
     // background — and every member of it is deliberately profile-agnostic, so
@@ -13833,6 +14764,16 @@ app.whenReady().then(async () => {
       blobStorePathsFor,
       () => blobKeys,
     );
+
+    // ADR-100: the Reader's environment and its pack read protocol. The
+    // environment is what a kit module cannot reach for itself (userData, the
+    // release key, the print view and the OS browser), and the protocol serves a
+    // pack's own files - see `main/packs/protocol.ts` for what it refuses.
+    installReaderEnvironment();
+    registerPackProtocol(protocol, {
+      userData: userDataDir(),
+      publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    });
 
     // The private section's read protocol (PRIV v1 / ADR-057): decrypts a
     // sealed attachment ONLY while a section is unlocked — a locked section
@@ -14014,6 +14955,14 @@ app.on("will-quit", () => {
   // lazily — a launch where nobody opened Elektronika has none to stop.
   elecRunnerIpc?.dispose();
   stopNotificationScheduler();
+  moduleHost.sessionEnd();
+  // ADR-094 §3, and the reason this line belongs next to `sessionEnd`: a tool
+  // process that outlives the window that started it has no owner and no cancel,
+  // and its own minute-long limit is far too long to be the only thing standing
+  // between a quit and a stray program. `sessionEnd` closes what a module holds;
+  // this kills whatever any session started.
+  killAllToolSessions();
+  zimHostInstance?.closeAll(); // ADR-098, `shutdown`'s reason
   cancelIdleCompactions(); // same reasoning as `performLock` — about to close `db`
   clearRestoreState(); // likewise: decrypted archive bytes and a plaintext undo snapshot must not outlive the session
   try {

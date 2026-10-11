@@ -255,6 +255,10 @@ function emptyProfileData(): ProfileData {
     circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
+    // The kit's section (ADR-090): empty here, because no module is adopted in a
+    // database-level test and a module's own payload is not a row this store
+    // writes. A restore applies it through `restoreModuleData`, one level up.
+    modules: [],
     events: [],
     eventTemplates: [],
     documents: [],
@@ -955,6 +959,11 @@ function seedFixture(handle: NexusDatabase, profileId: string, name: string): Fi
     circuitChassis: electronics.chassis,
     circuitParts: electronics.parts,
     circuitWires: electronics.wires,
+    // The kit's section (ADR-090): this store writes no module's payload, so the
+    // fixture carries none — `main/restore.ts` applies it through
+    // `restoreModuleData` after the replace, which is where the desktop tests
+    // cover it.
+    modules: [],
   };
 
   const derived = new Map<string, RestoredNoteDerived>([
@@ -1583,6 +1592,111 @@ describe("RestoreStore", () => {
     //    a thing that may grant it. It is also not CONTENT in the archive's
     //    sense: nothing here is something the user wrote, so there is no
     //    version of it an archive could hold and no journal trigger on it.
+    //  - library_items / library_item_covers / library_passes / library_thoughts
+//    / library_collections / library_collection_items (migration 072): a KIT
+//    module's tables, and deliberately NOT in `RESTORE_WIPE_TABLES` for the
+//    TIMERS reason below rather than for a sequencing one. Stage 2 wired
+//    `LibraryStore.exportData`/`importData` into the archive (it is the
+//    module's `main/imex.ts`), so a restore DOES replace these rows — but
+//    it replaces them through the module's own `apply`, which runs in the same
+//    transaction as every other module's and is handed `undefined` by an
+//    archive that says nothing about the Library. Adding them to the wipe list
+//    instead would owe a matching entry in `@nexus/sync`'s collection map,
+//    which `collectionGuard.test.ts` holds EQUAL to that list and which a
+//    module built on the kit may not edit; the kit's own rule is the opposite
+//    one, and the TIMERS entry below states it in full.
+    //  - the nine culture tables (migration 073) are exempt on the TIMERS
+    //    module's terms, and stage 2 turns what was a deferral into the
+    //    permanent answer. CULTURE is a KIT module: its archive section rides
+    //    `data/modules.ndjson` and its own `importData` replaces its own rows,
+    //    inside the same restore and immediately after this list's wipe has
+    //    run. So these tables must NOT be on that list - which is DERIVED into
+    //    `@nexus/sync`'s collection map (`collectionGuard.test.ts` holds the
+    //    two equal) and which a kit module may not edit - and they carry no
+    //    journal triggers for the same reason.
+    //
+    //    SUPERSEDED (the stage-1 record, kept: six tables, before the archive
+    //    learned to carry CULTURE): but their archive section does not exist
+    //    yet: stage 1 built the store and its own versioned
+    //    `exportData`/`importData`, and stage 2 wires that section into the
+    //    profile archive. Until then a restore neither wipes nor refills them.
+    //    They are absent from `RESTORE_WIPE_TABLES` for the reason above; the
+    //    profile DELETE was never in question, because all of these tables
+    //    cascade from `profiles` like every other content table, which the
+    //    cascade audit in `profileStore.test.ts` proves table by table, photos
+    //    and playlist items included.
+    //  - CAR's seven tables (migration 074) and its `car_settings` row: stage 2
+    //    landed the module on the KIT, which settles this the way it settled
+    //    TIMERS rather than the way the stage-1 note predicted. The module's
+    //    archive arm is its own (`modules/car/main/imex.ts`), and `RestoreStore`
+    //    never writes a car table: `main/restore.ts` calls `restoreModuleData`
+    //    immediately after the replace, every adopted module replaces its own
+    //    rows there in ONE transaction, and one the archive does not name is
+    //    handed `undefined` and resets what it owns — the car's seven tables and
+    //    its preference row with them. So no CAR table is in
+    //    `RESTORE_WIPE_TABLES`, and that is not a hole: it is the kit's own
+    //    rule, stated in `ModuleContext.importData`, and the wipe list stays tied
+    //    to `@nexus/sync`'s collection map, which sync's hold freezes.
+    //  - pantry_locations / pantry_items / pantry_log (migration 075): CONTENT,
+    //    and deliberately not wiped YET rather than never. Sync is on hold
+    //    permanently, and a table joins this list only by joining `@nexus/sync`'s
+    //    collection map — `collectionGuard.test.ts` holds the two lists equal —
+    //    which in turn owes migration 063's journal triggers for every
+    //    collection it names. Stage 2 is the pass that takes the pantry the whole
+    //    way into the archive, and it owes all three of those edits in the same
+    //    run that wires `PantryStore.exportData`/`importData` into
+    //    `ProfileData`: the map entries, the triggers, and these three names.
+    //    Wiping them NOW is the one direction migration 067's own commit message
+    //    warns about — this guard requires a table to be wiped OR documented, and
+    //    does NOT require a wiped table to be written back, so a restore would
+    //    silently destroy every pantry in the profile while the pantry is still
+    //    not something an archive can carry.
+    //  - cookbook_recipes / cookbook_ingredients / cookbook_steps (migration
+    //    076): NOT in the wipe list, and the reason is SEQUENCING rather than
+    //    device-locality, so it expires. These three ARE the user's own content
+    //    and they belong in the archive — what does not exist yet is the
+    //    archive's half of that: `ProfileData` carries no cookbook field, so
+    //    `RestoreStore` has nothing to write these tables back FROM, and an
+    //    entry in `RESTORE_WIPE_TABLES` today would turn every restore into a
+    //    silent deletion of the user's recipes. The module's own
+    //    `RecipeStore.exportData`/`importData` pair is the other end of the
+    //    same change, and the day stage 2 plugs it into the archive these three
+    //    lines move into `RESTORE_WIPE_TABLES` — together with `@nexus/sync`'s
+    //    collection map, which `src/sync/collectionGuard.test.ts` holds equal to
+    //    that list (and which is frozen with sync itself).
+    //  - recordings / recording_markers (migration 077): the same sequencing
+    //    as the cookbook. They are the user's own content and belong in the
+    //    archive, but `ProfileData` carries no recorder field yet, so wiping
+    //    them today would delete every recording on restore. Stage 2 wires
+    //    `RecorderStore.exportData`/`importData` into the archive and moves
+    //    these two names into `RESTORE_WIPE_TABLES`.
+    //  - arcade_scores (migration 080): WIRED UP by stage 2, and its name STAYS
+    //    here rather than moving into `RESTORE_WIPE_TABLES` - because the module
+    //    is built on the kit. `ArcadeScoreStore.exportData`/`importData` are the
+    //    archive's door, and the store replaces the profile's own rows inside
+    //    the same restore (ADR-090 section 6): that list is DERIVED into
+    //    `@nexus/sync`'s collection map, which a kit module may not edit. The
+    //    TIMERS entry below says the same thing for its three tables.
+    //  - chess_games / chess_resume / chess_level_stats (migration 082): the
+    //    same sequencing as the arcade. Stage 2 wires `ChessStore.exportData`/
+    //    `importData` into the archive and moves these three names into
+    //    `RESTORE_WIPE_TABLES`.
+    //  - emergency_cards / emergency_contacts / emergency_documents (migration
+    //    078): the card IS user content, and it is deliberately NOT here yet
+    //    rather than exempt on its merits. The module ships in two stages, and
+    //    the profile archive is stage 2's job: it plugs this store's own
+    //    `exportData`/`importData` into the archive, and the three tables move
+    //    into `RESTORE_WIPE_TABLES` (with their sync classification) in that
+    //    pass. Exempting them HERE keeps a restore from emptying a table nothing
+    //    in this build refills - which is the lossy direction, not the safe one.
+    //  - calc_history / calc_sessions / calc_settings (migration 079): CONTENT,
+    //    and on this list for the KIT's reason rather than as a deferral. Stage 2
+    //    landed the page, the IPC and the profile archive — the module's own
+    //    `main/imex.ts` replaces these rows inside the restore's one transaction
+    //    — and the three tables still stay out of `RESTORE_WIPE_TABLES`, because
+    //    that list is DERIVED into `@nexus/sync`'s collection map, and a module
+    //    built on the kit edits no shared file. The three `timers_*` tables above
+    //    are the same arrangement, and the module-kit note beside them says it once.
     const allowlist = new Set<string>([
       "meta",
       "profiles",
@@ -1604,6 +1718,217 @@ describe("RestoreStore", () => {
       "sync_outbox",
       "sync_quarantine",
       "elec_settings",
+      // The TIMERS module's three tables (migration 071, ADR-090). A KIT
+      // module's tables are deliberately NOT in `RESTORE_WIPE_TABLES`, and the
+      // reason is structural rather than a preference: that list is DERIVED into
+      // `@nexus/sync`'s collection map, which `collectionGuard.test.ts` holds it
+      // equal to, and a module built on the kit may not edit `@nexus/sync` (its
+      // whole point is that a new module edits no shared file). So the kit's rule
+      // is the opposite one, stated in `ModuleContext.importData`: a module
+      // REPLACES ITS OWN ROWS, inside the same restore, and `main/restore.ts`
+      // calls `restoreModuleData` immediately after the replace has rewritten
+      // every table above. Every adopted module runs there, in ONE transaction,
+      // and one the archive's section does not name is handed `undefined` and
+      // resets its own rows to empty — so these tables not being on the wipe list
+      // is not a hole: an archive that says nothing about Timers leaves a profile
+      // with no presets, exactly as a pre-1.42 archive does.
+      "timers_presets",
+      "timers_countdowns",
+      "timers_settings",
+      "library_items",
+      "library_item_covers",
+      "library_passes",
+      "library_thoughts",
+      "library_collections",
+      "library_collection_items",
+      "culture_visits",
+      "culture_visit_photos",
+      "culture_venues",
+      "culture_tracks",
+      "culture_music_entries",
+      "culture_playlists",
+      "culture_playlist_items",
+      "culture_plans",
+      "culture_settings",
+      "vehicles",
+      "odometer_readings",
+      "service_entries",
+      "service_intervals",
+      "fuel_entries",
+      "faults",
+      "service_attachments",
+      "pantry_locations",
+      "pantry_items",
+      "pantry_log",
+      // Stage 2's two additions to migration 075, exempt on the KIT's terms
+      // rather than the sequencing one above: the hand-written half of the
+      // shopping list, and the module's single preference (the window
+      // „ističe uskoro" reaches). A kit module's tables are deliberately NOT in
+      // `RESTORE_WIPE_TABLES` — that list is derived into `@nexus/sync`'s
+      // collection map, which `collectionGuard.test.ts` holds it equal to, and a
+      // module built on the kit may not edit `@nexus/sync`. So this module
+      // REPLACES ITS OWN ROWS instead, inside the same restore, through
+      // `ModuleContext.importData` (`main/restore.ts` calls `restoreModuleData`
+      // immediately after the replace), exactly as the three TIMERS tables do.
+      "pantry_shopping",
+      "pantry_settings",
+      "cookbook_recipes",
+      "cookbook_ingredients",
+      "cookbook_steps",
+      "recordings",
+      "recording_markers",
+      // The recorder's one preference (migration 077, REC stage 2). A kit
+      // module's settings row joins `recordings`/`recording_markers` on exactly
+      // their reasoning: the module REPLACES its own rows in its own
+      // `importData`, inside the same restore, so a table here would be a wipe
+      // nothing on this list refills.
+      "recorder_settings",
+      "arcade_scores",
+      "emergency_cards",
+      "emergency_contacts",
+      "emergency_documents",
+      "calc_history",
+      "calc_sessions",
+      "calc_settings",
+      //  - cardgame_stats / cardgame_saves (migration 081, GAMES cards stage 1):
+      //    a DEFERRAL, not an exemption by nature — and it is written down here
+      //    because the alternative was to leave the gate red. Both tables hold
+      //    per-profile content, so they belong in this list the moment the
+      //    archive carries them: the module's own door is `CardGameStore.
+      //    exportData`/`importData`, and wiring them into the profile archive is
+      //    stage 2's job (it owns the module kit and the archive plug-in). Listing
+      //    them HERE alone would not be enough either — `collectionGuard.test.ts`
+      //    asserts that `RESTORE_WIPE_TABLES` and `@nexus/sync`'s collection map
+      //    are the same set, and sync is on hold with no new collections, so the
+      //    two lists have to gain these two tables together, in the run that
+      //    teaches the archive about GAMES. Until then a restore leaves whatever
+      //    game data this device has exactly where it is.
+      "cardgame_stats",
+      "cardgame_saves",
+      "chess_games",
+      "chess_resume",
+      "chess_level_stats",
+      //  - the READER module's four tables (migration 084, ADR-100): a KIT
+      //    module's tables are deliberately not in `RESTORE_WIPE_TABLES`, and
+      //    the reason is the structural one the timers entry above gives - a
+      //    module built on the kit replaces its own rows inside the restore
+      //    (`ModuleContext.importData`), because that list is derived into
+      //    `@nexus/sync`'s collection map and a module may not edit sync. So a
+      //    restore that names no Reader section leaves a profile with no
+      //    positions, no bookmarks and no reading size, which is exactly what a
+      //    fresh profile answers.
+      "reader_positions",
+      "reader_bookmarks",
+      "reader_settings",
+      "reader_acknowledged",
+      // CAR's preference row (migration 074's `car_settings`, added with the
+      // module's stage 2). It is allowlisted for the SAME structural reason the
+      // kit module above is, and it is the one CAR table that would otherwise
+      // have nothing to restore it from in `RESTORE_WIPE_TABLES`: a kit module's
+      // rows are replaced by the module's own `importData`, and its settings row
+      // is written by the module's own archive arm (`modules/car/main/imex.ts`)
+      // in the same transaction.
+      "car_settings",
+      //  - cookbook_settings / cookbook_food_matches (migration 076): the
+      //    COOKBOOK's stage-2 additions, exempt for TIMERS' reason rather than
+      //    for their own. They are PROFILE rows that travel in the archive, and
+      //    the module replaces them itself inside the kit's one restore
+      //    transaction (`modules/cookbook/main/register.ts` calls
+      //    `RecipeStore.importData`, which writes the preference and the links
+      //    the archive carries and empties them when it carries none). Being
+      //    absent from `RESTORE_WIPE_TABLES` is therefore not a hole: a restore
+      //    that names no cookbook leaves a profile with no recipes, the shipped
+      //    units and no ingredient links — and neither table is in
+      //    `@nexus/sync`'s map, which `collectionGuard.test.ts` holds equal to
+      //    that list, because a kit module may not edit `@nexus/sync`.
+      "cookbook_settings",
+      "cookbook_food_matches",
+      // The MINI-APPS module's one table (migration 083). A kit module's tables
+      // are NOT in `RESTORE_WIPE_TABLES` for the TIMERS reason stated above:
+      // that list is derived into `@nexus/sync`'s collection map, and this
+      // module replaces its own row from its own `importData` inside the same
+      // restore. One row per profile, holding the whole kept document.
+      "miniapps_state",
+      //  - puzzles_saves / puzzles_stats / puzzles_settings (migration 088): the
+      //    PUZZLES module's three tables, on the TIMERS entry's exact terms one
+      //    screen up — a kit module's tables are deliberately NOT in
+      //    `RESTORE_WIPE_TABLES`, because that list is derived into
+      //    `@nexus/sync`'s collection map, and the kit's rule is the opposite
+      //    one: the module REPLACES ITS OWN ROWS through `importData` inside the
+      //    same restore transaction.
+      "puzzles_saves",
+      "puzzles_stats",
+      "puzzles_settings",
+      //  - wiki_history / wiki_bookmarks (migration 086, ADR-098): the WIKI
+      //    module's two tables, exempt on the TIMERS section's exact reasoning
+      //    above — a kit module replaces ITS OWN rows inside the same restore
+      //    (`WikiStore.replaceFromArchive`, called by the module's own
+      //    `importData`), and neither table may join `RESTORE_WIPE_TABLES`
+      //    because that list is DERIVED into `@nexus/sync`'s collection map. The
+      //    archive carries the marks and deliberately not the reading log, so a
+      //    restore EMPTIES the log: a profile restored here says nothing about
+      //    what this machine once read.
+      "wiki_history",
+      "wiki_bookmarks",
+      //  - the LAB module's three tables (migration 087, ADR-090's kit): the
+      //    same structural exemption Timers' three have, and for the same
+      //    reason. `RESTORE_WIPE_TABLES` is DERIVED into `@nexus/sync`'s
+      //    collection map, which `collectionGuard.test.ts` holds equal to it,
+      //    and a kit module may not edit `@nexus/sync` — so a module replaces
+      //    its OWN rows inside the same restore, through
+      //    `ModuleContext.importData` (`main/restore.ts` calls
+      //    `restoreModuleData` right after the wipes). An archive that names no
+      //    Lab section therefore leaves a profile with no logs and no budget,
+      //    exactly as an archive written before this module did.
+      "lab_logs",
+      "lab_samples",
+      "lab_offgrid",
+      //  - maps_pins (migration 085, ADR-099) and boards_saves / boards_stats /
+      //    boards_settings (migration 089): kit modules, exempt for the LAB's
+      //    reason above; each replaces its own rows through
+      //    `ModuleContext.importData` (`modules/maps/main/imex.ts`,
+      //    `modules/boards/main/imex.ts`).
+      "maps_pins",
+      "boards_saves",
+      "boards_stats",
+      "boards_settings",
+      //  - the assistant's knowledge tables (migration 090 / ADR-104) and the
+      //    shadow of its FTS5 index: NOT in `RESTORE_WIPE_TABLES`, and this is
+      //    classification rather than deferral. Nothing here is content - every
+      //    row is derived from the user's own records, the app manual, installed
+      //    packs and the wiki reader, and `KnowledgeService.reindex` rebuilds the
+      //    whole thing from those sources. A restore REPLACES the records, so a
+      //    restored profile's index is stale until the next pass prunes against
+      //    the new `search_entries` and re-reads what changed, which is exactly
+      //    the direction that must not need a migration: a stale index row is a
+      //    cache miss and can never be a resurrection, because a passage is only
+      //    ever returned with a citation the source still answers for. It is
+      //    also on no sync collection map: an index over content is rebuilt from
+      //    whatever arrives, and shipping one across a wire would be sending
+      //    derived data to a device that can derive it.
+      "knowledge_chunks",
+      "knowledge_fts",
+      "knowledge_fts_data",
+      "knowledge_fts_idx",
+      "knowledge_fts_docsize",
+      "knowledge_fts_config",
+      "knowledge_vectors",
+      "knowledge_cursors",
+      //  - the ASSISTANT's three tables (migration 091, ADR-106): a kit module's
+      //    tables are deliberately NOT in `RESTORE_WIPE_TABLES`, on the TIMERS
+      //    entry's exact reasoning above - that list is DERIVED into
+      //    `@nexus/sync`'s collection map, which `collectionGuard.test.ts` holds
+      //    equal to it, and a module built on the kit may not edit `@nexus/sync`.
+      //    So the module REPLACES ITS OWN ROWS instead, inside the same restore,
+      //    through `ModuleContext.importData` (`modules/assistant/main/register.ts`
+      //    calls `ConversationStore.importData`, which empties all three when the
+      //    archive names no assistant section). Conversations are the user's own
+      //    words, so unlike the knowledge index above they ARE content: an
+      //    archive that names no assistant section leaves a profile with no
+      //    threads and the shipped tier, exactly as a pre-1.43 archive does.
+      "assistant_conversations",
+      "assistant_messages",
+      "assistant_settings",
     ]);
 
     const wipeTables = new Set<string>(RESTORE_WIPE_TABLES);

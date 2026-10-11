@@ -90,6 +90,7 @@ import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
 import { formatMoney } from "./money.js";
 import { dayUnit, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { CalendarHourRing } from "./CalendarHourRing.js";
 
 // A function, not a module-scope const, so a language switch relabels the
@@ -1399,7 +1400,11 @@ export function CalendarPage({
 
   return (
     <div className="cal">
-      <PageHeader title={moduleName("calendar")} sigil="calendar" />
+      <PageHeader
+        title={moduleName("calendar")}
+        sigil="calendar"
+        actions={<ModuleSettingsGear moduleId="calendar" />}
+      />
       {pendingSeries !== null && (
         <RecurrenceScopeDialog
           action={pendingSeries.kind === "delete" ? "delete" : "edit"}

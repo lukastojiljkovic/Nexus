@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { NetworkMode } from "../net/offline.js";
+import { modeAllowsUpdates, type NetworkMode } from "../net/offline.js";
 import type { UpdateProblem, UpdatePhase, UpdateStateView } from "../../shared/ipc.js";
 import { checksumFor, parseSha256Sums } from "./checksums.js";
 import {
@@ -24,11 +24,11 @@ import { sha256Hex, verifyDetachedSignature } from "./verify.js";
  * The update check as a service with every effect injected.
  *
  * This module imports no Electron and touches no session: the dedicated
- * network session, `shell.openPath` and `app.quit()` arrive as functions from
- * `index.ts`. That is what makes the interesting half — a rate-limited
- * automatic check staying silent, a hash mismatch deleting its file, a
- * signature that does not verify refusing to install — testable without a
- * browser process.
+ * network session, the installer launch (`update/launch.ts`) and `app.quit()`
+ * arrive as functions from `index.ts`. That is what makes the interesting half
+ * testable without a browser process: a rate-limited automatic check staying
+ * silent, a hash mismatch deleting its file, a signature that does not verify
+ * refusing to install.
  *
  * ADR-089 is the contract, and the two load-bearing sentences are enforced
  * here rather than in copy: nothing is downloaded until `install()` is called
@@ -58,11 +58,30 @@ export interface UpdateServiceDeps {
   readonly currentVersion: string;
   readonly platform: NodeJS.Platform;
   readonly userData: string;
+  /**
+   * Whether this launch is a portable build (ADR-102). Such a build CHECKS and
+   * reports like any other — the network mode decides that, not this — and
+   * installs nothing: the stick carries no installer, and writing one onto
+   * whatever computer it happens to be plugged into is the one thing the marker
+   * file promises not to do. The offer still names the version and the release
+   * page, so the user can fetch it by hand.
+   */
+  readonly portable: boolean;
+  /**
+   * The mode this launch may act on. `"downloads"` (ADR-092) allows the check
+   * too, because the modes are a superset chain, so every guard below asks
+   * `modeAllowsUpdates` rather than comparing against `"updates"`.
+   */
   readonly mode: () => NetworkMode;
   readonly http: UpdateHttp;
   readonly publicKeyPem: string;
-  /** Returns `shell.openPath`'s answer: an empty string on success, a message on failure. */
-  readonly openPath: (path: string) => Promise<string>;
+  /**
+   * Starts the verified installer and answers the way `shell.openPath` did: an
+   * empty string once the process exists, a message when it does not. It is
+   * never called with anything but the file this service downloaded, hashed
+   * while streaming and hashed again a moment ago.
+   */
+  readonly launchInstaller: (path: string) => Promise<string>;
   readonly quit: () => void;
   readonly now: () => number;
   readonly onChanged: (view: UpdateStateView) => void;
@@ -129,13 +148,14 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     return {
       version: pending.version,
       notes: pending.notes,
-      canInstall: pending.installer !== null,
+      canInstall: pending.installer !== null && !deps.portable,
     };
   }
 
   function view(): UpdateStateView {
     return {
       mode: deps.mode(),
+      portable: deps.portable,
       phase,
       offer: offerForWire(),
       problem,
@@ -181,7 +201,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   }
 
   async function runCheck(source: CheckSource): Promise<UpdateStateView> {
-    if (deps.mode() !== "updates") {
+    if (!modeAllowsUpdates(deps.mode())) {
       // Unreachable through the UI — the button is hidden and the startup check
       // is gated — but answered the same way either way: no request.
       return conclude(source, "unexpected", "idle");
@@ -232,10 +252,15 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   }
 
   async function install(): Promise<UpdateStateView> {
+    // ADR-102: the last step does not exist in a portable build. Unreachable
+    // through the UI — `canInstall` above is what hides the button — and
+    // answered the same way either way: nothing is fetched, nothing is started.
+    if (deps.portable) return fail("portable");
+
     const release = pendingRelease;
     const offer = pending;
     if (
-      deps.mode() !== "updates" ||
+      !modeAllowsUpdates(deps.mode()) ||
       release === null ||
       offer === null ||
       offer.installer === null
@@ -312,7 +337,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
 
     let launchError: string;
     try {
-      launchError = await deps.openPath(destination);
+      launchError = await deps.launchInstaller(destination);
     } catch {
       launchError = "launch failed";
     }
@@ -329,7 +354,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     view,
     async autoCheckIfDue(): Promise<void> {
       try {
-        if (deps.mode() !== "updates") return;
+        if (!modeAllowsUpdates(deps.mode())) return;
         if (!isAutomaticCheckDue(lastCheckedAt, deps.now())) return;
         await runCheck("auto");
       } catch {

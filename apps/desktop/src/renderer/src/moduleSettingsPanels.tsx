@@ -59,6 +59,7 @@ import {
   persistDefaultVatRate,
   readStoredDefaultVatRate,
 } from "./toolPrefs.js";
+import { kitSettingsPanel } from "./moduleKit/settings.js";
 import {
   BLOCKED_IN_TODAY_OPTIONS,
   clearStoredTaskPreferences,
@@ -1378,3 +1379,17 @@ export const MODULE_SETTINGS_PANELS: Record<string, SettingsPanelRenderer> = {
   fitness: { Body: FitnessSettingsPanel },
   tools: { Body: ToolsSettingsPanel, resetDevice: clearStoredToolPreferences },
 };
+
+/**
+ * The renderer for one module's declared card: the hand-written body above for a
+ * compiled-in module, and the module's OWN discovered body for one built on the
+ * kit (ADR-090, `moduleKit/settings.ts`).
+ *
+ * The page asks here rather than indexing `MODULE_SETTINGS_PANELS` itself,
+ * because "which bodies exist" stopped being a compile-time fact the day a
+ * module could bring its own. `undefined` still means what it always meant: a
+ * declaration this build cannot draw, which the page skips rather than fails on.
+ */
+export function settingsPanelRenderer(moduleId: string): SettingsPanelRenderer | undefined {
+  return MODULE_SETTINGS_PANELS[moduleId] ?? kitSettingsPanel(moduleId);
+}

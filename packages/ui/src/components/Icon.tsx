@@ -31,8 +31,19 @@ export type IconName =
   | "fitness"
   | "canvas"
   | "electronics"
+  // The Lab's own mark, and the reason it is a THIRD instrument glyph rather
+  // than a reused one: `electronics` is a chip (the module that places parts)
+  // and `tools` is a ruler (the drawer that measures), while this module is what
+  // READS a signal — so the shape is a square wave on a baseline, which is what
+  // a generator produces and a scope draws.
+  | "lab"
   | "tools"
   | "pro"
+  // The drawing viewer's mark, and the only one drawn as an INSTRUMENT rather
+  // than as the thing it produces. A sheet with a line on it is `notes` at 16px
+  // and `image` at 24; a pair of dividers says what the module is for - reading
+  // and measuring a drawing - the way the tray in `pro` says what a toolkit is.
+  | "drawing"
   | "priv"
   | "settings"
   | "search"
@@ -79,6 +90,20 @@ export type IconName =
   | "stop"
   | "clock"
   | "repeat"
+  // The countdown: an hourglass, deliberately NOT another stopwatch. `focus`
+  // above is one and `clock` is a time of day, so the third timer in this set
+  // had to be a shape of its own — and an hourglass says what a countdown is
+  // (time running out of a fixed amount) rather than what time it is.
+  | "timer"
+  // The arcade module's mark, and a joystick on purpose: five games share one
+  // page, so a glyph for any ONE of them (a mine, a falling piece, a tile) would
+  // name a shelf of five by one game on it. A stick says "something to play"
+  // without choosing which.
+  | "arcade"
+  // The scanner's mark (module `scanner`): the frame a picture is put inside
+  // and the line it is read along. The set already had a photograph (`image`)
+  // and a look (`eye`), and neither says "something is reading this page".
+  | "scan"
   // Objects the modules actually name.
   | "star"
   | "starFilled"
@@ -104,6 +129,7 @@ export type IconName =
   | "chart"
   | "wallet"
   | "book"
+  | "cookbook"
   | "lock"
   | "unlock"
   | "eye"
@@ -119,13 +145,73 @@ export type IconName =
   | "external"
   | "sun"
   | "moon"
+  // The pantry: a lidded jar, because the thing the module is about is what is
+  // IN the house. Deliberately not the module row's own vocabulary (`archive`
+  // above is already a box, and a second one would mean the wrong thing).
+  | "pantry"
   // The drawn window frame. Deliberately the OS's own vocabulary rather than
   // an invention: a rule, a square and a square-behind-a-square are what every
   // desktop has meant by minimise / maximise / restore for thirty years, and a
   // title bar is the last place in a product to be original about meaning.
   | "windowMinimize"
   | "windowMaximize"
-  | "windowRestore";
+  | "windowRestore"
+  // The culture corner's own mark: a pediment over three columns, which is what
+  // a person means by „going to see something". `book` is STUDY's (a library
+  // shelf) and `palette` says nothing about leaving the house, so the module
+  // brought this one rather than borrowing either.
+  | "museum"
+  // The car (the CAR module's own mark). Appended at the end rather than filed
+  // into the navigation group above on purpose: a wave adds one module per
+  // folder, and two runs appending a line under different groups is a merge
+  // that has to be read, where two runs appending to the same end of one list
+  // is a merge that cannot be got wrong.
+  //
+  // A car in side view: the three parts anybody draws it with, and nothing
+  // else. It is deliberately not a wheel and not a wrench — both of those are
+  // already in the set and both mean a REPAIR, while this module is a whole
+  // vehicle's book.
+  | "car"
+  // The recorder's mark: a microphone, which is the one shape that says
+  // "capture sound" rather than "play it back" (`play`) or "a picture"
+  // (`image`). Added with the RECORDER module.
+  | "mic"
+  // The module marks that arrived AFTER the set's own list, appended here rather
+  // than slotted into a group above: several runs add one glyph each on the same
+  // day, and a line at the end is the edit that merges mechanically. `medkit` is
+  // the emergency card's - a first-aid case, which is what a card read by a
+  // stranger in a hurry is, and which none of the shapes above is.
+  | "medkit"
+  // The CALCULATOR module's mark (ADR-090). It is APPENDED rather than filed
+  // with the navigation marks above, and that is this wave's rule rather than a
+  // taste: every kit module run adds one glyph to this file, and a list that
+  // grows at its end merges mechanically where a list that is re-sorted does
+  // not. `Icon`'s own order is declaration order, so a later pass can move this
+  // line up beside the other module marks with nothing else to change.
+  | "calculator"
+  // The SIGNALS module's mark (ADR-090): an emission from a point — the key at
+  // the corner with three arcs leaving it, which is what a signal IS in every
+  // one of that module's four tools. Drawn here rather than in the module
+  // because the drawing lives with the other drawings; the module brings the
+  // name (`renderer/icon.ts`).
+  | "signal"
+  // The ASTRONOMY module's mark: a ringed planet, which is the one shape that
+  // says "the sky" rather than any single thing in it — `globe` is the Earth,
+  // `sun` and `moon` are two of the bodies, and astronomy is the corner that
+  // holds all of them. Appended at the end for the reason `calculator` and
+  // `signal` above are, and drawn from the set's own vocabulary (a circle and
+  // two rotation-carrying arcs).
+  | "planet"
+  // The ASSISTANT module's mark (ADR-106): a speech bubble with a spark inside
+  // it. Appended at the end, on the CALCULATOR glyph's own rule - every kit
+  // module run adds one glyph here, and a list that grows at its end merges
+  // mechanically where a re-sorted one does not.
+  //
+  // A bubble because this module's whole surface is a conversation, and a spark
+  // because the thing inside it answers from what it read rather than from a
+  // script: every other shape in the set says "a note", "a file" or "a search",
+  // and none of them says "something that talks back".
+  | "assistant";
 
 const SHAPES: Record<IconName, ReactNode> = {
   // Three panes, uneven on purpose: a board someone arranged, not a 2×2 grid.
@@ -230,6 +316,16 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M9.5 8.5h0" />
     </>
   ),
+  // A square wave on its own baseline: two full periods, drawn as straight
+  // segments and nothing else. It is the one shape in this set that says
+  // „a signal somebody is generating or reading" rather than „a thing somebody
+  // owns", which is what the Lab is.
+  lab: (
+    <>
+      <path d="M3.4 14h3V8h4.6v6h4.6V8h5" />
+      <path d="M3.4 19.4h17.2" />
+    </>
+  ),
   // A ruler: UTIL is converters and calculators, so it measures.
   tools: (
     <>
@@ -238,6 +334,17 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M11 8.4v4.4" />
       <path d="M15 8.4v3" />
       <path d="M19 8.4v4.4" />
+    </>
+  ),
+  // A drafting compass: the knob, the hinge and the two legs. It says DRAWING
+  // where `tools`' ruler says MEASURING, which is the pair of things this
+  // module does and the reason the two marks are not the same shape.
+  drawing: (
+    <>
+      <path d="M12 3.2v2" />
+      <circle cx="12" cy="7.1" r="1.7" />
+      <path d="m11.1 8.4-4.4 12" />
+      <path d="m12.9 8.4 4.4 12" />
     </>
   ),
   // A case with a handle. This mark used to be angle brackets around a slash —
@@ -508,6 +615,39 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="m7.6 20.8-3-2.8 3-2.8" />
     </>
   ),
+  // Two caps and two arcs: the sand is implied by the shape, the way every other
+  // glyph here implies its subject rather than drawing a filled region.
+  timer: (
+    <>
+      <path d="M6.8 3.4h10.4" />
+      <path d="M6.8 20.6h10.4" />
+      <path d="M7.6 3.4c0 4.2 8.8 4.2 8.8 8.6s-8.8 4.4-8.8 8.6" />
+      <path d="M16.4 3.4c0 4.2-8.8 4.2-8.8 8.6s8.8 4.4 8.8 8.6" />
+    </>
+  ),
+  // A stick, a ball and a base: the arcade's own vocabulary at 16px, and the
+  // three shapes the set is built from. The ball sits on the stick rather than
+  // beside it, so the glyph reads upright at the rail's size.
+  arcade: (
+    <>
+      <circle cx="12" cy="6.6" r="2.8" />
+      <path d="M12 9.4v5.2" />
+      <rect x="3.6" y="14.6" width="16.8" height="5.4" rx="2" />
+    </>
+  ),
+  // Four corner brackets around the reading line, rather than a closed
+  // rectangle: a closed one with a line through it is the `image` frame with
+  // something laid across it, while brackets say "a region is being taken" on
+  // their own - which is what a scanner does to the picture.
+  scan: (
+    <>
+      <path d="M3.6 8.6v-3a2 2 0 0 1 2-2h3" />
+      <path d="M15.4 3.6h3a2 2 0 0 1 2 2v3" />
+      <path d="M20.4 15.4v3a2 2 0 0 1-2 2h-3" />
+      <path d="M8.6 20.4h-3a2 2 0 0 1-2-2v-3" />
+      <path d="M6.4 12h11.2" />
+    </>
+  ),
 
   // --- Objects the modules name -----------------------------------------
   star: <path d="M12 4l2.4 5.2 5.6.7-4.1 3.9 1 5.7-4.9-2.7-4.9 2.7 1-5.7L3.9 9.9l5.6-.7z" />,
@@ -671,6 +811,17 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M5.6 17.4a2 2 0 0 1 2-2h11.8" />
     </>
   ),
+  // A pot with its lid. The COOKBOOK module's mark, and the reason it is not a
+  // book: a library owns that glyph, and two modules in one rail wearing one
+  // mark breaks the only thing a mark is for — recognising which module you are
+  // looking at. A pot is what a cookbook is FOR.
+  cookbook: (
+    <>
+      <path d="M5.6 10.8h12.8v5.4a3.2 3.2 0 0 1-3.2 3.2H8.8a3.2 3.2 0 0 1-3.2-3.2z" />
+      <path d="M3.8 10.8h16.4" />
+      <circle cx="12" cy="7.4" r="1.8" />
+    </>
+  ),
   lock: (
     <>
       <rect x="4.6" y="10.2" width="14.8" height="10.4" rx="2" />
@@ -779,6 +930,107 @@ const SHAPES: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20 14.4A8.6 8.6 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z" />,
+  museum: (
+    <>
+      <path d="M4 10 12 4l8 6" />
+      <path d="M8 10.5v8" />
+      <path d="M12 10.5v8" />
+      <path d="M16 10.5v8" />
+      <path d="M5.5 19h13" />
+    </>
+  ),
+  // A car, in the same vocabulary: a body, a cabin and two wheels, all of them
+  // strokes inside 3…21. The wheels are `circle`s rather than dots because a car
+  // has to read as a car at 72px as well as at 18px, and a dot has no wheel in
+  // it at either size.
+  car: (
+    <>
+      <rect x="3.4" y="9.4" width="17.2" height="6.6" rx="2" />
+      <path d="M7.4 9.4 9.2 5.2h5.6l1.8 4.2" />
+      <circle cx="7.6" cy="16.8" r="1.8" />
+      <circle cx="16.4" cy="16.8" r="1.8" />
+    </>
+  ),
+  pantry: (
+    <>
+      <path d="M8.6 4.6h6.8" />
+      <path d="M9.8 4.6v2.6" />
+      <path d="M14.2 4.6v2.6" />
+      <path d="M7.4 9.8a2.6 2.6 0 0 1 2.6-2.6h4a2.6 2.6 0 0 1 2.6 2.6v7.8a2.4 2.4 0 0 1-2.4 2.4H9.8a2.4 2.4 0 0 1-2.4-2.4z" />
+      <path d="M9.8 14.6h4.4" />
+    </>
+  ),
+  // A capsule, the cradle it sits in, and a stem: the three strokes every
+  // microphone has been drawn with since the shape was a radio part. The
+  // capsule is 6 wide and 11 tall starting at y=3, so it touches neither edge
+  // and the cradle's arc (radius 6.4 from y=11.4) bottoms out at 17.8.
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0" />
+      <path d="M12 17.8V21" />
+    </>
+  ),
+  // A first-aid case: a handle, a lid and the cross. Drawn to the set's own
+  // rules (24×24 box, content inside 3…21, stroke only, one weight, round caps).
+  medkit: (
+    <>
+      <rect x="3" y="7.4" width="18" height="12.6" rx="2" />
+      <path d="M8.8 7.4V5.8a1.6 1.6 0 0 1 1.6-1.6h3.2a1.6 1.6 0 0 1 1.6 1.6v1.6" />
+      <path d="M12 10.6v6.2" />
+      <path d="M8.9 13.7h6.2" />
+    </>
+  ),
+  /**
+   * A calculator: a body, a display line, six keys and a wide one. Drawn from
+   * the same vocabulary as the keyboard beside it (a rect, dots made of
+   * zero-length subpaths, and a single line for a wide key), because the two
+   * describe the same object one step apart.
+   */
+  calculator: (
+    <>
+      <rect x="5.6" y="3.4" width="12.8" height="17.2" rx="2.2" />
+      <path d="M8.4 7.4h7.2" />
+      <path d="M9.4 11.8h0" />
+      <path d="M12 11.8h0" />
+      <path d="M14.6 11.8h0" />
+      <path d="M9.4 15.4h0" />
+      <path d="M12 15.4h0" />
+      <path d="M14.6 15.4h0" />
+      <path d="M9.4 18.2h5.2" />
+    </>
+  ),
+  // SIGNALS (ADR-090). A key at the lower-left corner with three arcs leaving
+  // it: the one shape shared by a Morse key, a microphone reading a pitch, a
+  // level meter and a character's code. The arcs are quarter circles from the
+  // same centre, so they read as one emission rather than as three curves, and
+  // the dot is the set's own zero-length subpath rather than a second fill.
+  signal: (
+    <>
+      <path d="M6 13.5A4.5 4.5 0 0 1 10.5 18" />
+      <path d="M6 9.5A8.5 8.5 0 0 1 14.5 18" />
+      <path d="M6 5.5A12.5 12.5 0 0 1 18.5 18" />
+      <path d="M6 18h0" />
+    </>
+  ),
+  // ASTRONOMY. A disc with a ring across it: the ring is one ellipse written as
+  // two arcs (arc flags, not a transform, so every icon in the set is drawn by
+  // the same grammar), tilted the way Saturn's ring is.
+  planet: (
+    <>
+      <circle cx="12" cy="12" r="5.2" />
+      <path d="M3.3 15.1A9 3.4 -20 1 0 20.7 8.9A9 3.4 -20 1 0 3.3 15.1" />
+    </>
+  ),
+  // A speech bubble with a four-pointed spark in it. The bubble is drawn with a
+  // tail on the lower left, so the shape reads as speech at 16px without a
+  // second glyph beside it.
+  assistant: (
+    <>
+      <path d="M4 6.4A2.4 2.4 0 0 1 6.4 4h11.2A2.4 2.4 0 0 1 20 6.4v8.2a2.4 2.4 0 0 1-2.4 2.4h-6.9l-4.3 3.3a.6.6 0 0 1-.97-.47V17A2.4 2.4 0 0 1 4 14.6z" />
+      <path d="M12 6.9l1.3 2.9 2.9 1.3-2.9 1.3-1.3 2.9-1.3-2.9-2.9-1.3 2.9-1.3z" />
+    </>
+  ),
 };
 
 /**

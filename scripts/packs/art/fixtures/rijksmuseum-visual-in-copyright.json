@@ -1,0 +1,15 @@
+{
+  "id": "https://id.rijksmuseum.nl/20220920",
+  "type": "VisualItem",
+  "subject_to": [
+    {
+      "type": "Right",
+      "identified_by": [
+        { "type": "Name", "content": "Copyright", "language": [{ "id": "http://vocab.getty.edu/aat/300388277", "type": "Language" }] },
+        { "type": "Name", "content": "Auteursrecht", "language": [{ "id": "http://vocab.getty.edu/aat/300388256", "type": "Language" }] }
+      ],
+      "classified_as": [{ "id": "https://rightsstatements.org/vocab/InC/1.0/", "type": "Type" }]
+    }
+  ],
+  "digitally_shown_by": [{ "id": "https://id.rijksmuseum.nl/5008910398567010810099", "type": "DigitalObject" }]
+}

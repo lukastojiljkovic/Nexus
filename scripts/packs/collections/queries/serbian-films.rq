@@ -1,0 +1,13 @@
+# collection: serbian-films   kind: film   (Serbia)
+# Objective criterion: P495 "country of origin" -> Serbia (Q403), restricted to films.
+# Broadest of the regional collections; includes co-productions.
+SELECT ?item ?en ?sr (MIN(?y) AS ?year) (GROUP_CONCAT(DISTINCT ?cr; separator="; ") AS ?creators) WHERE {
+  ?item wdt:P495 wd:Q403 ;
+        wdt:P31/wdt:P279* wd:Q11424 .
+  OPTIONAL { ?item rdfs:label ?en . FILTER(lang(?en) = "en") }
+  OPTIONAL { ?item rdfs:label ?sr . FILTER(lang(?sr) = "sr") }
+  OPTIONAL { ?item wdt:P577 ?d . BIND(YEAR(?d) AS ?y) }
+  OPTIONAL { ?item wdt:P57 ?a . ?a rdfs:label ?cr . FILTER(lang(?cr) = "en") }
+}
+GROUP BY ?item ?en ?sr
+ORDER BY ?year ?item

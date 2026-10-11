@@ -126,6 +126,7 @@ function emptyExportInput(): ExportArchiveInput {
       circuitChassis: [],
       circuitParts: [],
       circuitWires: [],
+      modules: [],
     },
     hash: sha256,
   };
@@ -937,6 +938,7 @@ function richProfileData(): ProfileData {
         createdAt: "2026-07-03T00:00:00.000Z", updatedAt: "2026-07-03T00:00:00.000Z",
       },
     ],
+    modules: [],
   };
 }
 
@@ -1321,12 +1323,12 @@ describe("parseImportArchive — one test per problem code", () => {
     expect(result.data).toBeNull();
   });
 
-  // `1.42.0`: the nearest minor strictly ahead of this build's `1.41.0`.
+  // `1.43.0`: the nearest minor strictly ahead of this build's `1.42.0`.
   it("unsupported-schema-version: a newer minor is refused", () => {
-    const files = baseFiles({ schemaVersion: "1.42.0" });
+    const files = baseFiles({ schemaVersion: "1.43.0" });
     const result = parseImportArchive(emptyInputWith(files));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.42.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.43.0" },
     ]);
     expect(result.data).toBeNull();
   });
@@ -5009,8 +5011,8 @@ describe("parseImportArchive — note categories (NOTE-002 / 1.27.0)", () => {
 });
 
 describe("parseImportArchive — schema version", () => {
-  it("is 1.41.0 for this build", () => {
-    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.41.0");
+  it("is 1.42.0 for this build", () => {
+    expect(INTERCHANGE_SCHEMA_VERSION).toBe("1.42.0");
   });
 
   it("is exactly what buildExportArchive stamps into its own manifest", () => {
@@ -5200,11 +5202,11 @@ describe("parseImportArchive — schema version", () => {
     expect(result.manifest?.profile.kind).toBe("personal");
   });
 
-  // `1.42.0`: the nearest minor strictly ahead of this build's `1.41.0`.
+  // `1.43.0`: the nearest minor strictly ahead of this build's `1.42.0`.
   it("refuses a newer minor", () => {
-    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.42.0" })));
+    const result = parseImportArchive(emptyInputWith(baseFiles({ schemaVersion: "1.43.0" })));
     expect(result.problems).toEqual([
-      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.42.0" },
+      { severity: "error", code: "unsupported-schema-version", path: "manifest.json", detail: "1.43.0" },
     ]);
     expect(result.data).toBeNull();
   });

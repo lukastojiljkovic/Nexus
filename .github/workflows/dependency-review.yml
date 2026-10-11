@@ -5,6 +5,11 @@ on:
 
 permissions:
   contents: read
+  # The action writes a summary comment on the pull request. Without this it
+  # still fails the job when the diff is bad, but it says so only in its log —
+  # the warning this permission silences is the one a reviewer needs on the PR
+  # itself, where the dependency that failed the gate is.
+  pull-requests: write
 
 # EVERY `uses:` IS PINNED TO A 40-CHARACTER COMMIT SHA with the tag as a
 # comment — see ci.yml for the reasoning.
@@ -27,6 +32,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -52,8 +58,24 @@ jobs:
             AGPL-3.0, AGPL-3.0-only, AGPL-3.0-or-later,
             GPL-2.0, GPL-2.0-only, GPL-2.0-or-later,
             GPL-3.0, GPL-3.0-only, GPL-3.0-or-later,
-            LGPL-3.0, LGPL-3.0-only, LGPL-3.0-or-later,
             SSPL-1.0, BUSL-1.1, CC-BY-NC-4.0
+          # LGPL-3.0 USED TO BE ON THIS LIST AND WAS TAKEN OFF ON 2026-10-11,
+          # and the difference from the entries above is the whole reason. Every
+          # licence still listed forbids the combination or the use; the LGPL
+          # forbids neither, it asks for two things instead — the notice, and the
+          # ability to replace the library with a modified one. Sharp's libvips
+          # ships as unmodified, separately loadable shared libraries
+          # (`@img/sharp-libvips-*`) that the app dlopen's, and this repository
+          # already ships every third-party notice under Settings → Licences and
+          # in THIRD-PARTY-NOTICES.md on the release. Both obligations are met by
+          # what is already built, so the entry was blocking a dependency Nexus
+          # may ship.
+          #
+          # What this is NOT: permission to ship a GPL or AGPL library. Those
+          # stay denied, including for the pack tools — Stockfish and LibreDWG
+          # travel as separate, unmodified programs in their own packs, which is
+          # mere aggregation and not a link, and that is why they are not npm
+          # packages at all.
           # A summary in the PR body, so a review does not have to open the job.
           comment-summary-in-pr: on-failure
 

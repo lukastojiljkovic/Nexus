@@ -1,9 +1,10 @@
 import {
-  MODULE_CATEGORIES,
+  MODULE_GROUPS,
   TOOL_CATEGORIES,
   TOOL_DRAWERS,
   TOOL_PACKS,
   TOOL_RISK_CLASSES,
+  TOOL_TASK_GROUPS,
   UNIT_KINDS,
   foldSearchText,
   parseWidgetConfig,
@@ -12,6 +13,7 @@ import {
   toolForbidsVerdict,
   unitsOfKind,
 } from "@nexus/core";
+import type { LabelText } from "@nexus/core";
 // The one place a renderer file names `@nexus/db`, and it is a TEST: the
 // default dashboard layout is a db constant (`DashboardWidgetStore`) whose
 // entries name widgets these manifests publish, and nothing else in the build
@@ -20,9 +22,9 @@ import {
 import { DEFAULT_DASHBOARD_LAYOUT } from "@nexus/db";
 import { describe, expect, it } from "vitest";
 
-import { DASHBOARD_WIDGETS } from "./dashboardWidgets.js";
+import { dashboardWidgetIds } from "./dashboardWidgets.js";
 import { FILE_VIEWS } from "./filePrefs.js";
-import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { MODULE_SETTINGS_PANELS, settingsPanelRenderer } from "./moduleSettingsPanels.js";
 import { NOTE_WIDTHS } from "./notePrefs.js";
 import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
 import { PRO_TOOL_SURFACES } from "./proToolSurfaces.js";
@@ -46,6 +48,32 @@ import { lookup as stringFor, strings } from "./strings.js";
  * import-time in the app) and a category outside the canonical list.
  */
 
+/**
+ * Whether a declared label really carries words, whichever of the two forms the
+ * declaration used (`LabelText`, ADR-090): a dotted `strings` path that
+ * RESOLVES to a string, or a `{ sr, en }` pair with both sentences written.
+ *
+ * One helper rather than two assertions per call site, because the question the
+ * two forms answer is the same one — "would this draw as something a person can
+ * read" — and a test that asked it one way for compiled-in modules and another
+ * way for discovered ones would let the two drift.
+ */
+function labelCarriesWords(label: LabelText): boolean {
+  if (typeof label === "string") {
+    const resolved = label
+      .split(".")
+      .reduce<unknown>(
+        (node, key) =>
+          typeof node === "object" && node !== null
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        strings,
+      );
+    return typeof resolved === "string";
+  }
+  return label.sr.trim().length > 0 && label.en.trim().length > 0;
+}
+
 describe("createModuleRegistry", () => {
   it("registers the v0 module set in PRD numbering order", () => {
     expect(createModuleRegistry().all().map((manifest) => manifest.id)).toEqual([
@@ -65,6 +93,68 @@ describe("createModuleRegistry", () => {
       "canvas",
       "electronics",
       "pro",
+      // The first DISCOVERED module (ADR-090): a kit module registers after
+      // every compiled-in one, ordered by its manifest's `order`. It is written
+      // here rather than derived because this test IS the declaration — what the
+      // registry holds is what the app shows. `timers` declares 100.
+      "timers",
+      // `order: 110`, after `timers` on the same rule.
+      "library",
+      // `order: 120`, after `library`; a tie would be broken by id.
+      "culture",
+      // The first discovered module in the life group: a service book for a car
+      // somebody owns, at `order: 140`.
+      "car",
+      // `order: 150`, after the car service book.
+      "pantry",
+      // `order: 160`, after it on the same terms (ADR-090).
+      "cookbook",
+      // The voice and camera diary, `order: 170`.
+      "recorder",
+      // `order: 180`, after `timers`' own 100.
+      "emergency",
+      // CALC (migration 079), `order: 190`.
+      "calculator",
+      // The Reader (ADR-100), `order: 200` — tied with Signals, and the
+      // tie-break by id puts it first.
+      "reader",
+      // `order: 200` as well; the id breaks the tie, since `reader` < `signals`.
+      "signals",
+      // The map (ADR-099), `order: 210` — tied with `miniapps`, ordered before
+      // it by id.
+      "maps",
+      // `order: 210`, after the map on the same number.
+      "miniapps",
+      // The reference library, `order: 220`.
+      "wiki",
+      // `order: 230`, after the reference library.
+      "translator",
+      // The ASSISTANT (ADR-106), `order: 240`: the last of Knowledge's
+      // reference-and-helper kits by `order`, ahead of the astronomy corner at
+      // 400.
+      "assistant",
+      // `order: 300`.
+      "scanner",
+      // The maker's file viewers, `order: 310`.
+      "workshop",
+      // `order: 320` — tied with Drawings, ordered before it by id — and the
+      // first module in the `play` group, which `MODULE_GROUPS` had held empty
+      // since ADR-093.
+      "arcade",
+      // `order: 320`, after the arcade on the same number.
+      "drawings",
+      // `order: 330` — tied with Puzzles, ordered before it by id.
+      "lab",
+      // `order: 330`, after the Lab on the same number.
+      "puzzles",
+      // `order: 340`: a board game, the `play` group's last member after Puzzles.
+      "boards",
+      // `order: 350`, the last discovered module this build registers.
+      "chess",
+      // `order: 400`, the astronomy corner: the module that assembles the four
+      // parts wave 1 built (`astronomy/solar`, `earth`, `stars`, `sunmoon`) into
+      // one page, one clock and one place.
+      "astronomy",
     ]);
   });
 
@@ -119,19 +209,104 @@ describe("createModuleRegistry", () => {
       // alatke" does NOT join it: PRD 30 („Profession Toolkits") is its own
       // entry, not a second reading of PRD 29 („Utility Belt"), so it takes
       // its own prefix below rather than borrowing this one.
-      UTIL: ["focus", "tools"],
+      UTIL: ["focus", "tools", "timers", "miniapps", "scanner"],
+      // PRD 26 (Read Later & Bookmarks) is the section the Reader implements: its
+      // bookmark half, against the content packs installed on this machine rather
+      // than against a web page. Written down here rather than shared with UTIL,
+      // for the reason the comment above gives.
+      READ: ["reader"],
+      // „Ostava" takes its own, on „Tabla"'s terms exactly: PANT is its own PRD
+      // entry, and the UTIL sharing above is one section implemented five times
+      // rather than a bin for anything shelf-shaped.
+      PANT: ["pantry"],
+      // „Kuvarica" takes its own for „Elektronika"'s reason: the cookbook is a
+      // section of the product rather than a second reading of PRD 29.
+      COOK: ["cookbook"],
+      // PRD 21 („Health") is its own entry too, and „Hitna karta" is the first
+      // module to implement it: the card's medications, allergies and conditions
+      // ARE that PRD's purpose line. It borrows no other module's prefix.
+      HLTH: ["emergency"],
       CANV: ["canvas"],
+      // The workshop viewers, whose prefix is their own PRD entry rather than a
+      // second reading of somebody else's section.
+      WS: ["workshop"],
       // „Elektronika" takes its own for „Tabla"'s reason exactly: ELEC is its
       // own PRD entry, and the UTIL sharing above is one section implemented
-      // twice rather than a bin for anything tool-shaped.
+      // five times rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
+      // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and chess
+      // joins it: one PRD section implemented as separate surfaces with separate
+      // toggles, exactly as UTIL is. Each one adds its id to this line, and the
+      // other game modules of this wave take prefixes of their own instead
+      // (BOARD for boards, PUZ for puzzles), each its own subject.
+      FUN: ["arcade", "chess"],
       PRO: ["pro"],
+      // PRD 27, and the module that finally puts a member in the `culture`
+      // group: `LIB` is its own PRD entry, so it is shared with nobody.
+      LIB: ["library"],
+      // CULTURE's own PRD entry, so it takes its own prefix rather than joining
+      // one of the groups above.
+      CULT: ["culture"],
+      // „Automobil" (ADR-093) takes its own prefix: PRD 22 is its own entry,
+      // not a second reading of another module's subject.
+      CAR: ["car"],
+      // The recorder takes its own prefix rather than borrowing another
+      // section's: a prefix is traceability to ONE PRD entry, and the brief
+      // names none for a voice and camera diary (see the module's manifest).
+      REC: ["recorder"],
+      // CALC is its own PRD entry, like ELEC and PRO: the calculator is a
+      // calculator rather than a second reading of „Utility Belt", so it does not
+      // join the UTIL sharing above.
+      CALC: ["calculator"],
+      // „Signali" takes a prefix of its own rather than borrowing UTIL: the
+      // sharing above is one PRD section implemented five times, and Morse,
+      // the ASCII table, the tuner and the sound meter are one instrument panel
+      // that is not any of those five.
+      SIG: ["signals"],
+      // The board games module: a board game is its own subject rather than a
+      // second reading of anything above, so it takes a prefix of its own.
+      BOARD: ["boards"],
+      // And puzzles take theirs on the same terms: a sudoku is its own subject,
+      // not a second reading of `board` or of PRD 31.
+      PUZ: ["puzzles"],
+      // MAPS' own, on the same terms: the PRD registry has no row for a map, so
+      // a map declares its own prefix rather than borrowing a tool drawer's.
+      MAP: ["maps"],
+      // The reference library takes its own prefix too: it is its own PRD entry
+      // rather than a second reading of PRD 27 (`LIB`, the shelf beside it).
+      WIKI: ["wiki"],
+      // Opening an AutoCAD drawing is its own subject rather than a second
+      // reading of another prefix, so DRAW is this module's own entry.
+      DRAW: ["drawings"],
+      // The LAB takes its own prefix for the reason above: an instrument drawer
+      // is not a second reading of the utility belt.
+      LAB: ["lab"],
+      LANG: ["translator"],
+      // The astronomy corner takes ASTR on the same terms: the PRD registry has
+      // no row for a sky, so the module declares its own prefix rather than
+      // borrowing a tool drawer's or a reference library's.
+      ASTR: ["astronomy"],
+      // The ASSISTANT (ADR-106) takes its own prefix: it is not a second reading
+      // of any section above - it is a helper that knows the app and the user's
+      // own material, which no PRD entry names.
+      ASST: ["assistant"],
     });
   });
 
-  it("only uses canonical categories, and every registered module except PRIV and PRO is on by default", () => {
+  /**
+   * The modules that ship OFF, by name. PRIV and PRO are the two the compiled-in
+   * set brought (ADR-057, and the professional drawer that is empty until a pack
+   * is granted); `arcade` is the first from this wave, and the rest of the game
+   * modules will join it - PRD 31 ships the entertainment section hidden and
+   * never suggests it during onboarding. A set rather than a chain of `!==` is
+   * what lets each of them add one LINE here instead of rewriting one
+   * expression, which is the same reason the prefix map below is a map.
+   */
+  const OFF_BY_DEFAULT: ReadonlySet<string> = new Set(["priv", "pro", "arcade"]);
+
+  it("gives every registered module a canonical group, and leaves only the opt-in modules off by default", () => {
     for (const manifest of createModuleRegistry().all()) {
-      expect(MODULE_CATEGORIES, manifest.id).toContain(manifest.category);
+      expect(MODULE_GROUPS, manifest.id).toContain(manifest.group);
       // Founder decision 2026-07-12: only BUILT modules are registered, so an
       // entry that shipped disabled would be an entry that leads nowhere.
       // Two deliberate exceptions, both built AND registered and both OFF
@@ -141,57 +316,135 @@ describe("createModuleRegistry", () => {
       // answered no questions on the way in would open it onto an empty page
       // — the opening questionnaire's pack picker is what turns it on.
       expect(manifest.defaultEnabled, manifest.id).toBe(
-        manifest.id !== "priv" && manifest.id !== "pro",
+        !OFF_BY_DEFAULT.has(manifest.id),
       );
     }
   });
 
-  it("groups the sidebar by category in canonical order, empty categories omitted", () => {
-    const grouped = createModuleRegistry().byCategory();
+  /**
+   * Where every module sits (ADR-093), asserted ID BY ID rather than by group
+   * size. The interesting half of this rule is which group each module CHOSE:
+   * Učenje is Knowledge and not Life, Privatno is Life and not Knowledge, and
+   * Fokus is Plan rather than the tool drawer the old category put it in — three
+   * modules moved, and a size check would have allowed any of them.
+   */
+  it("groups the modules by navigation group in canonical order, empty groups omitted", () => {
+    const grouped = createModuleRegistry().byGroup();
     expect([...grouped.keys()]).toEqual([
-      "Core experience",
-      "Content & knowledge",
-      "Life hubs",
-      "Professional & utilities",
+      "plan",
+      "knowledge",
+      "life",
+      "culture",
+      "make",
+      "play",
+      "shell",
     ]);
-    expect(grouped.get("Core experience")?.map((manifest) => manifest.id)).toEqual([
-      "dashboard",
+    expect(grouped.get("plan")?.map((manifest) => manifest.id)).toEqual([
       "tasks",
       "calendar",
-      "settings",
-    ]);
-    expect(grouped.get("Content & knowledge")?.map((manifest) => manifest.id)).toEqual([
-      "notes",
-      "priv",
-      "files",
-    ]);
-    // „Ishrana" joins the three subjects somebody HAS rather than the tools
-    // they use on them: what you eat is an area of a life in the plainest sense
-    // the group has.
-    expect(grouped.get("Life hubs")?.map((manifest) => manifest.id)).toEqual([
-      "study",
-      "finance",
       "habits",
-      "fitness",
-    ]);
-    // „Fokus" is the first module in „Profesionalno i alati", and the category
-    // is the honest one: „Životni centri" holds three subjects somebody HAS,
-    // while a Pomodoro timer is a TOOL you use on whichever of them you are at.
-    // Four modules now: „Fokus" a timer you run, „Alatke" a drawer you open,
-    // „Tabla" a surface you draw on, „Stručne alatke" a second, pack-gated
-    // drawer — separate entries because they are separate errands. „Fokus" and
-    // „Alatke" share the UTIL prefix (one PRD section implemented twice);
-    // „Tabla" and „Stručne alatke" each take their own, because each is its
-    // own PRD entry (CANV, PRO).
-    expect(grouped.get("Professional & utilities")?.map((manifest) => manifest.id)).toEqual([
       "focus",
+      // The first discovered module, in the group it declares (ADR-090).
+      "timers",
+    ]);
+    expect(grouped.get("knowledge")?.map((manifest) => manifest.id)).toEqual([
+      "notes",
+      "files",
+      "study",
+      // The recorder is Knowledge, on ADR-093's own reading of the group: it is
+      // the handling of what somebody wrote down, not an area of a life. Its
+      // `order: 170` puts it ahead of the reference kits that follow.
+      "recorder",
+      // The Reader (ADR-100), `order: 200`.
+      "reader",
+      // The map joins Knowledge (ADR-093 sent the reference libraries there and
+      // named maps as one), after the compiled-in three by its `order`.
+      "maps",
+      // The reference library is Knowledge on the same reading (ADR-098): it is
+      // material somebody consults, and its `order: 220` places it here.
+      "wiki",
+      // The translator, `order: 230` (ADR-090).
+      "translator",
+      // The ASSISTANT (ADR-106), `order: 240`: the last of the
+      // reference-and-helper kits that sit in Knowledge, one step past handling
+      // what somebody wrote down.
+      "assistant",
+      // And the astronomy corner (ADR-109), `order: 400`, after every discovered
+      // module this build registers: what is overhead is material somebody
+      // consults, which is ADR-093's own reading of this group - the same
+      // reading that put the reference library and the map in it.
+      "astronomy",
+    ]);
+    expect(grouped.get("life")?.map((manifest) => manifest.id)).toEqual([
+      "priv",
+      "finance",
+      "fitness",
+      // The discovered life module (ADR-090 / ADR-093): a car is a subject
+      // somebody HAS, which is what the group means.
+      "car",
+      // The second discovered module, in the group it declares: a pantry is an
+      // AREA of a life, which is what „Život" holds (ADR-093).
+      "pantry",
+      // A discovered module in the group it declares (ADR-090): the cookbook
+      // belongs to Life beside the pantry and the fitness log.
+      "cookbook",
+      // ADR-093's own table lists „Emergency card" under „Život", and the card
+      // joins it after the compiled-in three.
+      "emergency",
+    ]);
+    // Culture is the group ADR-093 named before anything was in it, and it now
+    // holds both the shelf and the visits beside it.
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual([
+      "library",
+      "culture",
+    ]);
+    expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
       "canvas",
       "electronics",
       "pro",
+      // And the discovered module that declares this group (CALC).
+      "calculator",
+      // The second discovered module: an instrument panel is something built,
+      // which is what „make" is for (ADR-093).
+      "signals",
+      // The second discovered module (ADR-090), in the group it declares.
+      "miniapps",
+      // The scanner sits in „make" rather than in a group of its own: it MAKES
+      // something (a note, from a picture), which is the whole of what this
+      // group is for.
+      "scanner",
+      // The second discovered module, in the group it declares.
+      "workshop",
+      // The second discovered module, in the group it declares (ADR-090).
+      "drawings",
+      // The LAB declares `make`, after the professional drawer (ADR-093).
+      "lab",
     ]);
+    // Kultura is the culture group ADR-093 named, and it now holds two members:
+    expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual([
+      "library",
+      "culture",
+    ]);
+    // The play group is where the games arrive (ADR-093), and the arcade is
+    // its first member: a game is what somebody does for fun, which is what the
+    // group is for rather than a second drawer of tools.
+    expect(grouped.get("play")?.map((manifest) => manifest.id)).toEqual([
+      "arcade",
+      // Puzzles and the board games follow the arcade by their own `order`.
+      "puzzles",
+      "boards",
+      // `order: 350`, the last of the four.
+      "chess",
+    ]);
+    // The shell group is the two rows nothing may switch off, and the sidebar is
+    // the one caller that splits it: its first member heads the rail, the rest
+    // close it (`navPrefs.sidebarGroups`).
+    expect(grouped.get("shell")?.map((manifest) => manifest.id)).toEqual([...LOCKED_MODULE_IDS]);
+    // Every canonical group now has a member, so none is omitted; Play was the
+    // last empty one, and the games filled it.
+    expect(grouped.has("play")).toBe(true);
   });
-
   it("is constructed per call, never a shared singleton (ADR-008)", () => {
     const first = createModuleRegistry();
     const second = createModuleRegistry();
@@ -221,6 +474,77 @@ describe("createModuleRegistry", () => {
       "tools",
       "canvas",
       "electronics",
+      // ON by default, like every module but PRIV and PRO: a timer writes
+      // nothing until somebody starts one, so there is nothing to opt into.
+      "timers",
+      // Nothing about a library asks to be opted into, and the module writes
+      // nothing until a first title is added.
+      "library",
+      // And the same is true of the culture corner: it writes nothing until a
+      // visit, a plan or a file is added.
+      "culture",
+      // The discovered life module, on for the same reason one group over: it
+      // writes nothing until somebody adds a vehicle.
+      "car",
+      // The same for the pantry: nothing is written until a first item is
+      // recorded.
+      "pantry",
+      // And the cookbook, on the same terms: nothing is written until a recipe
+      // is saved.
+      "cookbook",
+      // Likewise: a recorder writes nothing until somebody records, so there is
+      // nothing to opt into either.
+      "recorder",
+      // ON by default as well, and for a stronger version of the same reason: a
+      // module whose whole purpose is to be readable in an emergency cannot be
+      // something the user has to switch on first.
+      "emergency",
+      // The same for the calculator: a bench that writes nothing until an
+      // expression is committed.
+      "calculator",
+      // The Reader (ADR-100): a shelf with no packs on it writes nothing, and it
+      // is where the person learns where packs come from.
+      "reader",
+      // And the signals module, whose four tools open the microphone only when
+      // one of them is started.
+      "signals",
+      // A map writes nothing either - its pack is installed data and its pins
+      // are the user's own - so it is on like every module but the two above.
+      "maps",
+      // The second discovered module (ADR-090), ON by default for the same
+      // reason: nine small tools, and not one of them writes anything until it
+      // is used.
+      "miniapps",
+      // The reference library (ADR-098) stores installed packs and "where was I",
+      // so there is nothing here to opt into either.
+      "wiki",
+      "translator",
+      // The assistant (ADR-106) writes nothing until somebody asks it something,
+      // and its page is where a person learns where models come from - so it is
+      // on by default like every module but the two above.
+      "assistant",
+      // ON by default too. The scanner needs a language pack before it can
+      // read, and the page says so where the reading happens instead of hiding
+      // the module from everybody who has not installed one.
+      "scanner",
+      // And the viewers ON the same terms: they store nothing at all.
+      "workshop",
+      // The drawings viewer stores nothing at all - it reads a file and prints
+      // one - so there is nothing about it to opt into either.
+      "drawings",
+      // ON by default too: the LAB writes nothing until a log is created, and
+      // the microphone and the serial port are each opened by a click.
+      "lab",
+      // And the puzzles, on the same terms: a board writes nothing until a game
+      // is started.
+      "puzzles",
+      // A board game writes nothing until somebody plays one.
+      "boards",
+      // ...and the same for a board: no game exists until somebody starts one.
+      "chess",
+      // The astronomy corner is ON by the same test every module but PRIV and
+      // PRO passes: it stores nothing at all, so there is nothing to opt into.
+      "astronomy",
     ]);
     expect(resolveEnabled(registry, { study: false })).not.toContain("study");
     expect(resolveEnabled(registry, { priv: true })).toContain("priv");
@@ -404,6 +728,41 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
       "fitness",
       "focus",
       "tools",
+      // The first DISCOVERED card (ADR-090): declared in the module's own
+      // manifest and drawn by its own body, with no line in this file's map.
+      "timers",
+      "culture",
+      // The discovered card: the two thresholds, declared in the module's own
+      // manifest and drawn by its own body.
+      "car",
+      // The second, on the same terms.
+      "pantry",
+      "cookbook",
+      // And the second discovered card, on the same terms: declared in the
+      // recorder's own manifest, drawn by its own body.
+      "recorder",
+      // The second, on the same terms: `calc_settings` holds the two rows and the
+      // module's own `renderer/Settings.tsx` draws them.
+      "calculator",
+      "signals",
+      // The translator's two controls, declared as `{ sr, en }` pairs in its own
+      // manifest and drawn by its own body.
+      "translator",
+      // The assistant's three: the default tier, the web-search consent and the
+      // knowledge index's own statement of fact. Declared in its own manifest
+      // (`shared/manifest.ts`) and drawn by its own body.
+      "assistant",
+      // The second: one `fact` row, because the module stores nothing to set.
+      "workshop",
+      // And the puzzles, whose one preference is whether sudoku conflicts are
+      // marked while the board is played.
+      "puzzles",
+      // The second, whose one preference is the level a new game opens at.
+      "boards",
+      // The astronomy corner's one control is the place the sky is drawn for,
+      // declared as a `{ sr, en }` pair in its own manifest and drawn by its own
+      // body; it is a DEVICE value, so the card is a device card.
+      "astronomy",
     ]);
   });
 
@@ -412,24 +771,42 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // declaration with no renderer is an empty card, a renderer with no
     // declaration is a card the page never asks for. Neither fails loudly in
     // the app, which is why it is pinned here.
-    expect(declared.map(([moduleId]) => moduleId).sort()).toEqual(
-      Object.keys(MODULE_SETTINGS_PANELS).sort(),
-    );
+    // THE KIT CHANGES THE HALF THIS ASKS ABOUT (ADR-090). A compiled-in module's
+    // body is listed in `MODULE_SETTINGS_PANELS`; a DISCOVERED module's is
+    // discovered beside it (`moduleKit/settings.ts`), because listing it is the
+    // edit the kit exists to remove. So the pairing is asked through
+    // `settingsPanelRenderer` — the function `SettingsPage` itself calls, so
+    // this pins the real question rather than one half of it — and the reverse
+    // direction is still asked against the compiled-in map, which must not hold
+    // a body no declaration names.
+    const declaredIds = declared.map(([moduleId]) => moduleId);
+    for (const moduleId of declaredIds) {
+      expect(settingsPanelRenderer(moduleId), moduleId).toBeDefined();
+    }
+    for (const moduleId of Object.keys(MODULE_SETTINGS_PANELS)) {
+      expect(declaredIds, moduleId).toContain(moduleId);
+    }
   });
 
   it("names a string that really exists for every card title and every control label", () => {
     for (const [moduleId, panel] of declared) {
-      expect(typeof lookup(panel.titleKey), panel.titleKey).toBe("string");
-      // A module's card IS its own section, so its title is the very heading
-      // `strings.settings.sectionTitle` already carries for it.
-      expect(lookup(panel.titleKey), moduleId).toBe(
-        strings.settings.sectionTitle[moduleId as keyof typeof strings.settings.sectionTitle],
-      );
+      expect(labelCarriesWords(panel.titleKey), JSON.stringify(panel.titleKey)).toBe(true);
+      // A compiled-in module's card IS its own section, so its title is the very
+      // heading `strings.settings.sectionTitle` already carries for it. A
+      // DISCOVERED module (ADR-090) carries its own `{ sr, en }` pair instead —
+      // its page copy is not in the startup chunk, so the shell has no heading of
+      // its own to compare against — and the equality is asked only where a
+      // dotted path was declared.
+      if (typeof panel.titleKey === "string") {
+        expect(lookup(panel.titleKey), moduleId).toBe(
+          strings.settings.sectionTitle[moduleId as keyof typeof strings.settings.sectionTitle],
+        );
+      }
       for (const control of panel.controls) {
-        expect(typeof lookup(control.labelKey), control.labelKey).toBe("string");
+        expect(labelCarriesWords(control.labelKey), JSON.stringify(control.labelKey)).toBe(true);
         if (control.kind === "choice") {
           for (const option of control.options) {
-            expect(typeof lookup(option.labelKey), option.labelKey).toBe("string");
+            expect(labelCarriesWords(option.labelKey), JSON.stringify(option.labelKey)).toBe(true);
           }
         }
       }
@@ -512,6 +889,10 @@ describe("the settings each v0 module publishes (SettingsPanel)", () => {
     // podrazumevano": there is no default to go back to, and a reset would be a
     // write about somebody's own data.
     expect(storages("fitness")).toEqual(new Set(["profile"]));
+    // OSTAVA's one control is the window „ističe uskoro" reaches, and MAIN reads
+    // it while firing the module's own reminder with no page open at all — so it
+    // is a row about the profile's shelves and travels in the profile's archive.
+    expect(storages("pantry")).toEqual(new Set(["profile"]));
   });
 });
 
@@ -548,7 +929,12 @@ describe("the widgets the v0 modules publish (ADR-045)", () => {
       .flatMap((manifest) =>
         registry.widgetsOf(manifest.id).map((widget) => `${manifest.id}:${widget.id}`),
       );
-    expect([...qualified].sort()).toEqual(Object.keys(DASHBOARD_WIDGETS).sort());
+    // Both halves come from the same discovery now (ADR-090): a compiled-in
+    // widget is in `DASHBOARD_WIDGETS`, a discovered one in its module's own
+    // `renderer/Widgets.tsx`, and `dashboardWidgetIds` is the union — which is
+    // what the page itself draws from. A registered widget with no renderer is
+    // still a card the gallery would offer and the page could not draw.
+    expect([...qualified].sort()).toEqual([...dashboardWidgetIds()].sort());
   });
 
   it("resolves every widget of the DEFAULT layout — a new profile must not open onto blanks", () => {
@@ -571,28 +957,24 @@ describe("the widgets the v0 modules publish (ADR-045)", () => {
         expect(widget.id, widget.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
         expect(moduleIds, widget.id).toContain(widget.deepLink);
         expect(widget.sizes.length, widget.id).toBeGreaterThan(0);
-        // `title` is a strings KEY path, not Serbian copy (WidgetContract).
-        expect(widget.title, widget.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z]+)+$/);
+        // `title` is a strings KEY path, not Serbian copy (WidgetContract) — or,
+        // for a discovered module, its own `{ sr, en }` pair (ADR-090), which is
+        // the one form whose words live in the module's own folder.
+        if (typeof widget.title === "string") {
+          expect(widget.title, widget.id).toMatch(/^[a-zA-Z]+(?:\.[a-zA-Z]+)+$/);
+        }
       }
     }
   });
 
   it("names a string that really exists for every widget title", () => {
-    // The convention is only worth anything if the key resolves: a title that
-    // named nothing would render as the raw path the day slice b draws it.
+    // The convention is only worth anything if the label carries words — a
+    // dotted path that resolves, or a discovered module's own pair (ADR-090). A
+    // title that carried neither would render as the raw path on the card.
     const registry = createModuleRegistry();
     for (const manifest of registry.all()) {
       for (const widget of registry.widgetsOf(manifest.id)) {
-        const resolved = widget.title
-          .split(".")
-          .reduce<unknown>(
-            (node, key) =>
-              typeof node === "object" && node !== null
-                ? (node as Record<string, unknown>)[key]
-                : undefined,
-            strings,
-          );
-        expect(typeof resolved, widget.title).toBe("string");
+        expect(labelCarriesWords(widget.title), JSON.stringify(widget.title)).toBe(true);
       }
     }
   });
@@ -695,7 +1077,9 @@ describe("the per-widget configuration declarations (DASH-004 / ADR-059)", () =>
           expect(typeof lookup(`dashboard.config.fields.${field.key}`), field.key).toBe("string");
           if (field.kind === "choice") {
             for (const option of field.options) {
-              expect(typeof lookup(option.labelKey), option.labelKey).toBe("string");
+              expect(labelCarriesWords(option.labelKey), JSON.stringify(option.labelKey)).toBe(
+                true,
+              );
             }
           }
         }
@@ -899,6 +1283,27 @@ describe("the tools the registry publishes (PRD 29 UTIL, PRD 30 PRO)", () => {
       expect(TOOL_CATEGORIES, tool.id).toContain(tool.category);
       // A category with no Serbian label would render its raw id in the rail.
       expect(typeof strings.tools.category[tool.category], tool.id).toBe("string");
+    }
+  });
+
+  /**
+   * Every tool is filed where somebody can find it by NEED (C10a), which is a
+   * third axis beside the pack and the category: `taskGroups` answers „what did
+   * you come here to do", and a tool under none of them can only be reached by
+   * somebody who already knew its toolkit.
+   *
+   * The requirement makes an empty list unrepresentable, and the compiler cannot
+   * state the other half: that the ids are real, that two is the cap, and that a
+   * tool filed under five of eight headings has told the reader nothing about
+   * where to look.
+   */
+  it("files every tool under one or two of the eight task groups", () => {
+    for (const tool of declared) {
+      expect(tool.taskGroups.length, tool.id).toBeGreaterThan(0);
+      expect(tool.taskGroups.length, tool.id).toBeLessThanOrEqual(2);
+      for (const group of tool.taskGroups) {
+        expect(TOOL_TASK_GROUPS, `${tool.id}:${group}`).toContain(group);
+      }
     }
   });
 

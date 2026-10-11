@@ -1,0 +1,162 @@
+{
+  "layout": 1,
+  "fetched": "2026-10-10",
+  "note": [
+    "Every source this pack is built from, with the digest and size measured on 2026-10-10.",
+    "`evidence.quote` is the exact sentence the licence was read from, on `evidence.url`; a source",
+    "without one is not used, and the builder refuses bytes that do not match `sha256` and `bytes`.",
+    "The three Army PDFs and FEMA's guide are works of the U.S. Government, not subject to copyright",
+    "in the United States (17 U.S.C. 105(a)); each Army PDF also prints its own distribution",
+    "statement, which is the evidence quoted for it. FM 21-76 is served over http only, so its",
+    "integrity rests on the pinned digest rather than on the transport.",
+    "`vocabulary` is a source's own running-head tokens: the second opinion the margin band uses",
+    "when a page's furniture sits closer to the text block than the band. The ATP's `6HSWHPEHU` is",
+    "its cover date as that PDF's broken font extracts it, and it is furniture whichever letters",
+    "it carries. `runningTitle` is the one source whose text layer sits at an uneven height: FEMA's",
+    "guide prints `Are You Ready? <section>` on every page, and the line is furniture when nothing",
+    "but a few words follow the title.",
+    "`figures: \"none\"` means the source ships as text: FEMA's 2004 guide is a 204-page scan whose",
+    "text layer carries no caption for any of its images, so the pack takes its words and leaves",
+    "the pictures, which docs/packs/survival.md states.",
+    "For an HTML source, `bytes` and `sha256` are those of the page's own `<article>` element, which",
+    "is the part of the page the pack is made of. Measured on 2026-10-10: a federal page's whole",
+    "response can move between two fetches (FoodSafety.gov's did, its article element did not), so",
+    "pin the element rather than the envelope. The builder extracts the element, hashes it, and",
+    "refuses a mismatch exactly as it does for a PDF."
+  ],
+  "sources": [
+    {
+      "id": "atp-3-50-21",
+      "kind": "pdf",
+      "title": "US Army ATP 3-50.21, Survival (2018)",
+      "url": "https://archive.org/download/survival-atp-3-50-21/Survival%20(ATP%203-50-21).pdf",
+      "bytes": 23749774,
+      "sha256": "817746b13262e9e26e8ac7d25bf879790df369c2aa0a2600f69158ec4090461c",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm). Distribution statement: Approved for public release; distribution is unlimited.",
+      "credit": "US Army ATP 3-50.21, Survival, 2018. Distribution restriction: Approved for public release; distribution is unlimited. Work of the U.S. Government \u2014 not subject to copyright in the United States (17 U.S.C. 105).",
+      "vocabulary": ["ATP 3-50.21", "SEPTEMBER 2018", "6HSWHPEHU", "2018"],
+      "figures": "auto",
+      "evidence": {
+        "url": "https://archive.org/download/survival-atp-3-50-21/Survival%20(ATP%203-50-21)_djvu.txt",
+        "quote": "DISTRIBUTION RESTRICTION: Approved for public release; distribution is unlimited."
+      }
+    },
+    {
+      "id": "fm-21-76",
+      "kind": "pdf",
+      "title": "US Army FM 21-76, Survival (5 June 1992)",
+      "url": "http://www.deltagearinc.com/FYI/Downloads/FM21-76.pdf",
+      "bytes": 26597972,
+      "sha256": "a150b1d24d225ecfc3288c2bdfe0925f51105249d278a621e47d095fbfbc57bc",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm). Authentication page: Approved for public release; distribution is unlimited.",
+      "credit": "US Army FM 21-76, Survival, 5 June 1992. Approved for public release; distribution is unlimited. Work of the U.S. Government \u2014 not subject to copyright in the United States (17 U.S.C. 105).",
+      "vocabulary": ["FM 21-76", "FM 21-76-1"],
+      "figures": "auto",
+      "evidence": {
+        "url": "http://www.deltagearinc.com/FYI/Downloads/FM21-76.pdf",
+        "quote": "Approved for public release; distribution is unlimited."
+      }
+    },
+    {
+      "id": "atp-4-02-11",
+      "kind": "pdf",
+      "title": "US Army ATP 4-02.11, Casualty Response, Tactical Combat Casualty Care and First Aid (March 2026)",
+      "url": "https://archive.org/download/army-techniques-publication-for-casualty-response-tactical-combat-casualty-care-/Army%20Techniques%20Publication%20for%20Casualty%20Response%2C%20Tactical%20Combat%20Casualty%20Care%20and%20First%20Aid%20-%20ATP%204-02.11%20%28March%202026%29.pdf",
+      "bytes": 12665561,
+      "sha256": "a4a0650f5bb14c1c7163b9b1e9f08bcc012fb3fe49ea4432f0ccaffb9af86542",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm). Distribution statement: Approved for public release, distribution is unlimited.",
+      "credit": "US Army ATP 4-02.11, Casualty Response, Tactical Combat Casualty Care and First Aid, March 2026. Approved for public release, distribution is unlimited. Work of the U.S. Government \u2014 not subject to copyright in the United States (17 U.S.C. 105).",
+      "vocabulary": [
+        "ATP 4-02.11",
+        "23 March 2026",
+        "Secondary Injury Assessment Using Pain, Antibiotics, Wounds, Splinting and Mechanism of Injury,",
+        "First Aid in a Chemical, Biological, Radiological, and Nuclear Environment",
+        "First Aid Case and Kits, Authorized Medical Allowance List"
+      ],
+      "figures": "auto",
+      "evidence": {
+        "url": "https://archive.org/download/army-techniques-publication-for-casualty-response-tactical-combat-casualty-care-/Army%20Techniques%20Publication%20for%20Casualty%20Response%2C%20Tactical%20Combat%20Casualty%20Care%20and%20First%20Aid%20-%20ATP%204-02.11%20%28March%202026%29_djvu.txt",
+        "quote": "Distribution Restriction: Approved for public release, distribution is unlimited."
+      }
+    },
+    {
+      "id": "fema-is-22",
+      "kind": "pdf",
+      "title": "FEMA, Are You Ready? An In-depth Guide to Citizen Preparedness (IS-22, August 2004)",
+      "url": "https://archive.org/download/FemaEmergencyHandbook-areYouReady/FemaEmergencyHandbook-areYouReady.pdf",
+      "bytes": 22098772,
+      "sha256": "0d06472d035309aba015a830376da19f01e1ed6a5a3b87cc0ad346ea7cb67e4d",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm).",
+      "credit": "FEMA, Are You Ready? An In-depth Guide to Citizen Preparedness (IS-22), August 2004. Work of the U.S. Government \u2014 not subject to copyright in the United States (17 U.S.C. 105). Reference to FEMA/DHS material does not imply endorsement by the U.S. Government.",
+      "vocabulary": ["Are You Ready?", "IS-22 August 2004", "Basic Preparedness", "Natural Hazards", "Technological Hazards", "Recovering from Disaster"],
+      "runningTitle": "Are You Ready?",
+      "band": { "top": 30, "bottom": 22 },
+      "figures": "none",
+      "evidence": {
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+      }
+    },
+    {
+      "id": "ready-gov",
+      "kind": "html",
+      "title": "Ready.gov hazard guidance (FEMA)",
+      "url": "https://www.ready.gov/",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm).",
+      "credit": "Source: Ready.gov (FEMA). Work of the U.S. Government \u2014 not subject to copyright in the United States (17 U.S.C. 105). Reference to FEMA/DHS material does not imply endorsement by the U.S. Government.",
+      "evidence": {
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+      },
+      "documents": [
+        { "path": "/floods", "url": "https://www.ready.gov/floods", "bytes": 14064, "sha256": "8b5f6743933be2343896edfc8a443ada1fb8ea5cd655ae26233af27f3899a40c" },
+        { "path": "/tornadoes", "url": "https://www.ready.gov/tornadoes", "bytes": 10492, "sha256": "3e34d8f730b3b561dceb0293373bbded8c61431e3394c9e14528e01ee2dc9e7a" },
+        { "path": "/thunderstorms-lightning", "url": "https://www.ready.gov/thunderstorms-lightning", "bytes": 5212, "sha256": "ffe0a6893681ab70ed56616f9e97a20855121ba89bc9a504c64272f573e56455" },
+        { "path": "/winter-weather", "url": "https://www.ready.gov/winter-weather", "bytes": 10263, "sha256": "49f51aa24993ccf172438bdf7db779b3093c6cc94ed9c6db5231259995e25144" },
+        { "path": "/heat", "url": "https://www.ready.gov/heat", "bytes": 14659, "sha256": "84eefb524d467de363c1bf89f49e58e53343a7f5281b95228a24567da89eb7ef" },
+        { "path": "/earthquakes", "url": "https://www.ready.gov/earthquakes", "bytes": 15490, "sha256": "60f597d2777ead4c26acd487a35dc5099dcb1727d69660db6eb0b38bcc823f94" },
+        { "path": "/landslides-debris-flow", "url": "https://www.ready.gov/landslides-debris-flow", "bytes": 12097, "sha256": "faae5612ce06418aa141ce399cfae4d8f7c8e7073c7afbf0d642029936526c20" },
+        { "path": "/wildfires", "url": "https://www.ready.gov/wildfires", "bytes": 14723, "sha256": "06f7c3884e50be0b4f9d58e8b10224d47c84f45ad348cb217808261651c5fbd0" },
+        { "path": "/power-outages", "url": "https://www.ready.gov/power-outages", "bytes": 9050, "sha256": "bc61404cbc35238fcdd927935cb28dce9ddfdbb931844b1af9229ec91d7d6126" },
+        { "path": "/hazardous-materials-incidents", "url": "https://www.ready.gov/hazardous-materials-incidents", "bytes": 8525, "sha256": "59533900a351615547f032b34c70d6526ef4b763b0df5127df507e8cbf64fa46" },
+        { "path": "/household-chemical-emergencies", "url": "https://www.ready.gov/household-chemical-emergencies", "bytes": 6226, "sha256": "2a52759927146620865788b4c67f7ef1d55d223a31620729d3c368a2f487a05b" },
+        { "path": "/pandemics", "url": "https://www.ready.gov/pandemics", "bytes": 8477, "sha256": "0c1d8bdb1bc3623e986d6df6fff4e3319cc4fa2b90840c8301042553993174f6" },
+        { "path": "/radiation-emergencies", "url": "https://www.ready.gov/radiation-emergencies", "bytes": 12366, "sha256": "4a65bca05466a2e7ef205ca40794a21f2ff26cc113b8529355e157dc7886d6a7" },
+        { "path": "/space-weather", "url": "https://www.ready.gov/space-weather", "bytes": 7079, "sha256": "fee228f1416e2760214ba2c1c74556e4a5678aa713552d6948058b019b242aaf" },
+        { "path": "/volcanoes", "url": "https://www.ready.gov/volcanoes", "bytes": 10508, "sha256": "f4be1a25f428c31cb210ee52bcd49984754a4af5632c599d2aad2cde5dc0f39c" },
+        { "path": "/tsunamis", "url": "https://www.ready.gov/tsunamis", "bytes": 10951, "sha256": "f8eebd746a03d7169df8284721cf4d0ab88ba28605b4f2b279c1c9a2a5f5d586" }
+      ]
+    },
+    {
+      "id": "foodsafety-gov",
+      "kind": "html",
+      "title": "FoodSafety.gov, Safe Minimum Internal Temperatures (USDA FSIS)",
+      "url": "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures",
+      "licence": "Public domain (work of the U.S. Government; 17 U.S.C. 105(a) https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm).",
+      "credit": "Source: USDA FSIS / FoodSafety.gov, Safe Minimum Internal Temperatures (page reviewed 21 November 2024). Work of the U.S. Government \u2014 not subject to copyright in the United States (17 U.S.C. 105).",
+      "evidence": {
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "quote": "Copyright protection under this title is not available for any work of the United States Government, but the United States Government is not precluded from receiving and holding copyrights transferred to it by assignment, bequest, or otherwise."
+      },
+      "documents": [
+        { "path": "/food-safety-charts/safe-minimum-internal-temperatures", "url": "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures", "bytes": 4654, "sha256": "49fd71a27b290354ecedcb9b860f170500d83129d9bece8ab4e24ffa9c5b5e7f" }
+      ]
+    },
+    {
+      "id": "nws-jetstream",
+      "kind": "html",
+      "title": "NOAA/NWS JetStream, clouds",
+      "url": "https://www.noaa.gov/jetstream/clouds",
+      "licence": "Public domain (NOAA/NWS; the NWS disclaimer states NWS web material is in the public domain unless specifically noted otherwise).",
+      "credit": "Source: NOAA/NWS JetStream, clouds (fetched 10 October 2026). NWS material is public domain, is reproduced unmodified, and this pack is not endorsed by NOAA or NWS.",
+      "evidence": {
+        "url": "https://www.weather.gov/disclaimer",
+        "quote": "The information on National Weather Service (NWS) Web pages are in the public domain, unless specifically noted otherwise, and may be used without charge for any lawful purpose so long as you do not: 1) claim it is your own (e.g., by claiming copyright for NWS information -- see below), 2) use it in a manner that implies an endorsement or affiliation with NOAA/NWS, or 3) modify its content and then present it as official government material."
+      },
+      "documents": [
+        { "path": "/jetstream/clouds", "url": "https://www.noaa.gov/jetstream/clouds", "bytes": 13307, "sha256": "54b7b9b8499844b8ca3300284e27fd5b94006dd1b163498dca27f86bfcc48f6f" },
+        { "path": "/jetstream/clouds/how-clouds-form", "url": "https://www.noaa.gov/jetstream/clouds/how-clouds-form", "bytes": 18667, "sha256": "87ba4f747767f3c776add0614693c18a3e6e7f4d5dd042c84a954e71edf7a2d3" }
+      ]
+    }
+  ]
+}

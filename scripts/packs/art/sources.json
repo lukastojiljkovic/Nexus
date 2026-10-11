@@ -1,0 +1,3124 @@
+{
+  "pack": "art-open-access",
+  "kind": "dataset",
+  "generated": "2026-10-10T05:45:30.829Z",
+  "target": 300,
+  "quality": 90,
+  "qualityMeasurement": [
+    {
+      "quality": 70,
+      "meanBytes": 310158,
+      "meanPsnrDb": 35.25
+    },
+    {
+      "quality": 75,
+      "meanBytes": 336143,
+      "meanPsnrDb": 35.59
+    },
+    {
+      "quality": 80,
+      "meanBytes": 429318,
+      "meanPsnrDb": 36.76
+    },
+    {
+      "quality": 85,
+      "meanBytes": 548033,
+      "meanPsnrDb": 38.05
+    },
+    {
+      "quality": 90,
+      "meanBytes": 743496,
+      "meanPsnrDb": 39.88
+    }
+  ],
+  "sources": [
+    {
+      "id": "met",
+      "name": "The Metropolitan Museum of Art — Open Access",
+      "works": 140,
+      "excluded": 53,
+      "licenceCounts": {
+        "CC0-1.0": 140
+      },
+      "requests": [
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1.1/search?departmentId=11&isPublicDomain=true&hasImages=true&medium=Paintings&limit=100&offset=0",
+          "fetched": "2026-10-10T04:38:58.155Z",
+          "sha256": "e80b69fc9829216f7661056af54f309c3fa7cc25a06d6222545b88a4621df4a8",
+          "bytes": 729
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/189656",
+          "fetched": "2026-10-10T03:46:52.451Z",
+          "sha256": "aeb01c4dbcda37a2ea3369dea019230d7a0e180a17dcacdfba91fc2aebad90f1",
+          "bytes": 2137
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435570",
+          "fetched": "2026-10-10T03:46:52.912Z",
+          "sha256": "0fbd21f32f20570c8a72ac6befd5466adcc6a976a6e4b91b9c16715a0431f5b5",
+          "bytes": 2456
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435572",
+          "fetched": "2026-10-10T03:46:53.308Z",
+          "sha256": "9699021fb0fd3625f7e9febfda19f819f17eaf83324ef02d98d628473dc853bb",
+          "bytes": 2683
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435573",
+          "fetched": "2026-10-10T03:46:53.834Z",
+          "sha256": "6a651e821deab6f61a9508e919a6b82fac242258862b27c65c81c0c14803a036",
+          "bytes": 2433
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435574",
+          "fetched": "2026-10-10T03:46:54.180Z",
+          "sha256": "c7698cf3de3d01f6598cc7be5edb1bd284976240f5e4b7a9b4cc20999c21d09b",
+          "bytes": 2938
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435575",
+          "fetched": "2026-10-10T03:46:54.361Z",
+          "sha256": "e4018fb40e034694e945ed144e2893461ce3830e631260703b5ac38aabde90df",
+          "bytes": 2230
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435576",
+          "fetched": "2026-10-10T03:46:55.278Z",
+          "sha256": "b345cdbf7fa54d92f7de374918db8d89a3a5f135c240726822692f7832856029",
+          "bytes": 2523
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435577",
+          "fetched": "2026-10-10T03:46:55.461Z",
+          "sha256": "585cd99cc95241a79d09054809ce47398bf7c60cbd54b8bc1c7411f98e11ca11",
+          "bytes": 2711
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435578",
+          "fetched": "2026-10-10T03:46:55.851Z",
+          "sha256": "43796721f51690192a6ff716dce471d8b6c8988b772437fe3218c8fb9f5f60a5",
+          "bytes": 2820
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435579",
+          "fetched": "2026-10-10T03:46:56.024Z",
+          "sha256": "13e53f8d0f0bdbf57afb62e59aaa00867d730cba5dc53c46a2371d7bab03a088",
+          "bytes": 2838
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435580",
+          "fetched": "2026-10-10T03:46:56.308Z",
+          "sha256": "f6e03acb92872df5eb0c8511d15afe874619e2f82d71de3e8b185ba883771730",
+          "bytes": 2321
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435581",
+          "fetched": "2026-10-10T03:46:56.521Z",
+          "sha256": "ac360c6d83e6d67c14353d780691e044fe37788aa5c79fc9c932587dcc976266",
+          "bytes": 2280
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435583",
+          "fetched": "2026-10-10T04:09:33.054Z",
+          "sha256": "e01d6136c68b950002a5d0ddb41f6be897fdd00c15c724bdaa4ce2807fde3aac",
+          "bytes": 2347
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435584",
+          "fetched": "2026-10-10T04:09:33.248Z",
+          "sha256": "ae71235bc82c7996e77ef6f4ddb0df5aed6525216391118ebbf115dac0af2e5d",
+          "bytes": 3124
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435585",
+          "fetched": "2026-10-10T04:09:33.451Z",
+          "sha256": "70ad411444405a672c909e43777a03af4ca28e443b96dfd14d447591ba972564",
+          "bytes": 2598
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435586",
+          "fetched": "2026-10-10T04:09:33.631Z",
+          "sha256": "0ffd48f5566eaf6549506d08eced9227aa14c47457f90b0f72824759501f3c12",
+          "bytes": 2045
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435587",
+          "fetched": "2026-10-10T04:09:33.788Z",
+          "sha256": "843cc1de32eb0b591039131d56d498af808265adf63c2a2eb1a96392616722c7",
+          "bytes": 2240
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435588",
+          "fetched": "2026-10-10T04:09:33.951Z",
+          "sha256": "2a8e728746d8bfbd89267396cb067680d134b72760bb01dc2af5747c3848af98",
+          "bytes": 2378
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435589",
+          "fetched": "2026-10-10T04:09:34.151Z",
+          "sha256": "0699eb48ffc26dfd4793777f127374dac312b3ea32ca3e5e1432c1ad46a2ca50",
+          "bytes": 2208
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435590",
+          "fetched": "2026-10-10T04:09:34.878Z",
+          "sha256": "00b0d00e99d6cfa345bdb1c7f1c96e8a252cfd9eb012ec898cee49017e63f459",
+          "bytes": 3092
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435592",
+          "fetched": "2026-10-10T04:09:35.037Z",
+          "sha256": "a5b87b1b63d5251c436363d24198e021f52af805a1c32b16f422c2894d43baee",
+          "bytes": 2438
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435593",
+          "fetched": "2026-10-10T04:09:36.161Z",
+          "sha256": "eb049004976230af78b7898a9ae26707b179c447db0781231c0bbe8e9ec7823b",
+          "bytes": 2610
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435594",
+          "fetched": "2026-10-10T04:09:36.553Z",
+          "sha256": "2d0e6ad52a4e7d3112da254a54615c77442546666769e0c375c64e9fff315991",
+          "bytes": 2669
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435595",
+          "fetched": "2026-10-10T04:09:36.743Z",
+          "sha256": "623c09f3ef536a30099bab97e7aef94ce18d924d603cff9e789dba24b1e91cdb",
+          "bytes": 2140
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435596",
+          "fetched": "2026-10-10T04:09:37.085Z",
+          "sha256": "f446400e164b4fb0210e2180469ceb82f8bc49ee471b25f7c9b21bb13e3a05db",
+          "bytes": 2168
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435597",
+          "fetched": "2026-10-10T04:09:37.323Z",
+          "sha256": "9f1471a86fd4389370bab9fcdea531ff6819239e15584b85e582da837015835d",
+          "bytes": 2175
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435598",
+          "fetched": "2026-10-10T04:09:37.842Z",
+          "sha256": "ae8b3e0dc824a9ef3b0e0ac1ad59379a813348d3d2724ff8a4ac3e7375a2cb89",
+          "bytes": 2191
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435599",
+          "fetched": "2026-10-10T04:09:38.083Z",
+          "sha256": "45478cf2d3d3f342823795b7ca44f55fa1d38f30cbc1f2c161ae41d9b9669a08",
+          "bytes": 2435
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435600",
+          "fetched": "2026-10-10T04:09:38.305Z",
+          "sha256": "183844879bd0207a13000c03f3924cbb34b5c667050ebea02b47e5a22911d1c9",
+          "bytes": 3324
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435601",
+          "fetched": "2026-10-10T04:09:38.492Z",
+          "sha256": "5750c36d78e8637fcb986d7b330cfe9c3a837075e94fa974cb9aec32c4e2d842",
+          "bytes": 2078
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435602",
+          "fetched": "2026-10-10T04:09:38.731Z",
+          "sha256": "f95469f81f3d3bb67a321576e8841ab722f63f4d11a6eaebc1d307b8e5fa6bc3",
+          "bytes": 2889
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435603",
+          "fetched": "2026-10-10T04:09:38.895Z",
+          "sha256": "33b125f6c9065fb8e7d646e53eae4460046bfa41d1422f00686611389098560b",
+          "bytes": 2401
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435604",
+          "fetched": "2026-10-10T04:09:39.267Z",
+          "sha256": "f4955f82d26015c73cceec7c5b785c836161c405fb959ce6bdca2d1cd9da458d",
+          "bytes": 2452
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435607",
+          "fetched": "2026-10-10T04:09:39.527Z",
+          "sha256": "bcc5141112ab8ee896318b228dd9ce18cc3c09fe9d58856d9eab4fa1ec2e7de9",
+          "bytes": 2917
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435608",
+          "fetched": "2026-10-10T04:09:39.732Z",
+          "sha256": "86f0e16ad28a00e02e276323da4bea6e5e454ce662b93dacb32eeac5c96707e0",
+          "bytes": 1933
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435609",
+          "fetched": "2026-10-10T04:09:39.886Z",
+          "sha256": "aae5d09e8ece94492137b89d6454bfd6d3eb5521538b50fc402a78127ca15f40",
+          "bytes": 2148
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435610",
+          "fetched": "2026-10-10T04:09:40.076Z",
+          "sha256": "93a62e509b92004e5bf8d2dd0e5d561bac7f32e842dda57bf1801b001f09572a",
+          "bytes": 2151
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435611",
+          "fetched": "2026-10-10T04:09:40.326Z",
+          "sha256": "5c7710e981f40b59c0e113a1896858a690759dd6a071811bdb50855268ea858c",
+          "bytes": 2167
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435614",
+          "fetched": "2026-10-10T04:09:40.799Z",
+          "sha256": "94b56a12cdd2e2bdf8729ceacdd6253f113a77053ed67e97b57389874dabd7ad",
+          "bytes": 2441
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435615",
+          "fetched": "2026-10-10T04:09:41.003Z",
+          "sha256": "4c603b30be6d02b67ea8f1467cca138993d25edb4276bbcafb2ea62d11d70dc4",
+          "bytes": 2336
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435616",
+          "fetched": "2026-10-10T04:09:41.218Z",
+          "sha256": "b34cda34e7e80b9e571531b9ea470cac202da33e4b48b42401cd7391819c5486",
+          "bytes": 2475
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435617",
+          "fetched": "2026-10-10T04:09:41.464Z",
+          "sha256": "88c1e105808d33a30f80e20122a445e56d029644901d58f519bd649fa3980ca3",
+          "bytes": 2439
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435618",
+          "fetched": "2026-10-10T04:09:41.631Z",
+          "sha256": "00ccfc86a03157730994a6667ef5a10ca8542aa5c049c1c4c68fbfd588fd04f3",
+          "bytes": 2663
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435619",
+          "fetched": "2026-10-10T04:09:41.808Z",
+          "sha256": "7f8f196bb43a5ccf3e0fa667ba7e8f11091ca36d0b2d22f4e4a75726cef157e3",
+          "bytes": 2269
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435620",
+          "fetched": "2026-10-10T04:09:41.993Z",
+          "sha256": "5d9147e3d8e6c18d7dcf33d6a9b9a37e9e341fe611210e28f5b8070e9022ad7e",
+          "bytes": 2430
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435621",
+          "fetched": "2026-10-10T04:09:42.374Z",
+          "sha256": "5dfc591df61a10040a417853c7660d031ff1af47d85957001745d84b0ece254a",
+          "bytes": 2359
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435622",
+          "fetched": "2026-10-10T04:09:42.569Z",
+          "sha256": "0dc70f7d116c2e06a921e593c7d6f063345074609087686cf00352bb0feb2634",
+          "bytes": 2786
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435623",
+          "fetched": "2026-10-10T04:09:43.748Z",
+          "sha256": "722806ffd46fdbfd72c4970924148a51577d028b12a5c36063e29d3f79f5f4dc",
+          "bytes": 2600
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435624",
+          "fetched": "2026-10-10T04:09:43.993Z",
+          "sha256": "67cb9cc4f0fd5ede4a5943d92bf9f640b74d021b71ca5ee3fbc6559bdd6f81c5",
+          "bytes": 2207
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435625",
+          "fetched": "2026-10-10T04:09:44.182Z",
+          "sha256": "0dc3ec9465b4a1c99186c721a1d285e8e0601044693725f70d481774455d8b6f",
+          "bytes": 2206
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435626",
+          "fetched": "2026-10-10T04:09:44.404Z",
+          "sha256": "ff3df9bd51c796b1b9e045478b6bb06911239479329e434200f4e67feadcbef0",
+          "bytes": 2401
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435627",
+          "fetched": "2026-10-10T04:09:44.601Z",
+          "sha256": "abad8360144bb1048d590ea824549bef57980b3559eb05f3bd46bddc14d1f782",
+          "bytes": 2573
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435630",
+          "fetched": "2026-10-10T04:09:44.765Z",
+          "sha256": "67ffeefc2d8bbb33dbf534da77a4fa0ee447bde89c7c494a19607cbf67824216",
+          "bytes": 2314
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435631",
+          "fetched": "2026-10-10T04:09:44.954Z",
+          "sha256": "ea07cf299fa2cafa4e4c2712ef2c3d03ec8db73cf2ed39e70870568154f6fbea",
+          "bytes": 2490
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435632",
+          "fetched": "2026-10-10T04:09:45.111Z",
+          "sha256": "ea8c731b09385e87066032649063d88eecbb3261f3b2058ac884607847f36baf",
+          "bytes": 2174
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435633",
+          "fetched": "2026-10-10T04:09:45.291Z",
+          "sha256": "b709b6aaa7194be8c100c0f266b7bb0e11ea913f83c9f2ec4ffc3f3bbcdea331",
+          "bytes": 2694
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435634",
+          "fetched": "2026-10-10T04:09:45.462Z",
+          "sha256": "63778f2482beb0e3629ee1b5632c8a5df0400ee4ceb550661ce4f005a6be0e96",
+          "bytes": 2199
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435635",
+          "fetched": "2026-10-10T04:09:45.678Z",
+          "sha256": "de310f3a1572fb1d7cdf124a1dba5100caba3f1b16d5d5df30b64f1f8de6d972",
+          "bytes": 2383
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435636",
+          "fetched": "2026-10-10T04:38:59.132Z",
+          "sha256": "243716aa6360bfacd676a181e0d87bdf4e90f88ebe1c6f90bc570ef21d77b9b6",
+          "bytes": 2113
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435637",
+          "fetched": "2026-10-10T04:38:59.372Z",
+          "sha256": "0f3daa76bf3322616facd373eb99a074710822eed8bb5d0f41d6bdf338e8a2d7",
+          "bytes": 2261
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435638",
+          "fetched": "2026-10-10T04:38:59.950Z",
+          "sha256": "15f74338cd8d7a4b4f86ce753b8693799cab60a8479475e4b9f0650057a4a260",
+          "bytes": 3238
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435639",
+          "fetched": "2026-10-10T04:39:00.507Z",
+          "sha256": "eaa5a5ef5dc104d3e11fd5d1931472821ca2b896373c216cd2bf7eef6e38516c",
+          "bytes": 2209
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435640",
+          "fetched": "2026-10-10T04:39:01.236Z",
+          "sha256": "6ca99ac4528318452e7da63ab2748a3bdb99ead00485567384bb06842b71b3c5",
+          "bytes": 2457
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435641",
+          "fetched": "2026-10-10T04:39:01.770Z",
+          "sha256": "379d93606b823b9de8df3db13772a6ebab40813e043aa2529fb98abe3852f287",
+          "bytes": 2646
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435642",
+          "fetched": "2026-10-10T04:39:02.464Z",
+          "sha256": "1f36ec70a2bed5796dd3a9d656744aa0cce57a81520f24b20b86160a7df40fc0",
+          "bytes": 2693
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435643",
+          "fetched": "2026-10-10T04:39:03.079Z",
+          "sha256": "fee3954d46f74569c6937d9f9fc30ed272ef0f4aa489d23924208685ca056f22",
+          "bytes": 2816
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435644",
+          "fetched": "2026-10-10T04:39:03.660Z",
+          "sha256": "ecbf1df5b8e232c3aa9bbb82cf1de71d89b809c3cd763925794bb04456ca083a",
+          "bytes": 2369
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435645",
+          "fetched": "2026-10-10T04:39:04.148Z",
+          "sha256": "c6ea4f0dad57387710cde650fcc1c14469dcfd50b4cff58d89290c52f1bf800b",
+          "bytes": 2133
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435646",
+          "fetched": "2026-10-10T04:39:04.790Z",
+          "sha256": "29e32c77c2d8bd5efd0c46ad089f7a03568f14c5f0e7b563f98db81877adac30",
+          "bytes": 2376
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435647",
+          "fetched": "2026-10-10T04:39:05.384Z",
+          "sha256": "7e4962d8b1186b961a6b4905bd83c87bc2a21a282fbf588b3c944e2db89dfb2f",
+          "bytes": 2394
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435648",
+          "fetched": "2026-10-10T04:39:05.956Z",
+          "sha256": "e874560136cd7a7a0ef6d793e1269e0147105ae2d620807a970fc05213f1e115",
+          "bytes": 2333
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435649",
+          "fetched": "2026-10-10T04:39:06.586Z",
+          "sha256": "0704161e727f68d143144e80135f30458e8aa1face4dabf3ca26b8290cb89af7",
+          "bytes": 2364
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435650",
+          "fetched": "2026-10-10T04:39:07.348Z",
+          "sha256": "ea038d7c5af0a68d5dfdbb24167e2bbcb08cd04c38e5be212a1d1dd8b7d4e5bc",
+          "bytes": 2746
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435651",
+          "fetched": "2026-10-10T04:39:07.792Z",
+          "sha256": "f7aa8bb59b60f2e5ddeaf1327287a5343d23698dc97c4ba6bb76cbbdae8428ab",
+          "bytes": 3189
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435653",
+          "fetched": "2026-10-10T04:39:08.424Z",
+          "sha256": "2b9036dc838aebc077dab8110f1d97880e24d69549c2ff750d83dd4e55ba8685",
+          "bytes": 2940
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435654",
+          "fetched": "2026-10-10T04:39:08.985Z",
+          "sha256": "622444048e6e8d93fa513339bb791e6001e3a7f77d34c2bc7fd3fcad07a97932",
+          "bytes": 2276
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435655",
+          "fetched": "2026-10-10T04:39:09.598Z",
+          "sha256": "2cac03f39a6cc29508b11b3df2a9530cd177586a965b7a398f22cccbbbe4dbf2",
+          "bytes": 2483
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435656",
+          "fetched": "2026-10-10T04:39:10.199Z",
+          "sha256": "7e9becbffa6871cd7d83ec8549d0a11ca95da16b802a74764d357b3928faf252",
+          "bytes": 2493
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435657",
+          "fetched": "2026-10-10T04:39:10.805Z",
+          "sha256": "1d5657ac9bf781917199e3714de4287d38d6896eff5b75660daa18dac336a063",
+          "bytes": 3698
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435658",
+          "fetched": "2026-10-10T04:39:11.435Z",
+          "sha256": "b02065aa2baec3bf525dfbd363d2502b208aa04e00eafb54eb6d4cfa03a8fd13",
+          "bytes": 2327
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435659",
+          "fetched": "2026-10-10T04:39:12.477Z",
+          "sha256": "8b66b799e4235c63c7deaf230ab436cdfc0852cb8f6d52cd11e4ca0217b7cf6f",
+          "bytes": 2441
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435661",
+          "fetched": "2026-10-10T04:39:12.623Z",
+          "sha256": "ae6068e64221b40410315f0fb05767b01068939603b835a77e52260f0d90e5b8",
+          "bytes": 2160
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435662",
+          "fetched": "2026-10-10T04:39:13.230Z",
+          "sha256": "4a73ad4cc4c9c3f93fb5750ba306b4c2cbd8961b837147177253366af2f2284c",
+          "bytes": 2160
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435663",
+          "fetched": "2026-10-10T04:39:13.843Z",
+          "sha256": "1494eb0848f90945ea15bcd232357a643db0697b75bfe8e58423d459180f154d",
+          "bytes": 2762
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435664",
+          "fetched": "2026-10-10T04:39:14.600Z",
+          "sha256": "ed78ecce5c6362a71e231f9b01b22fae50c10df9e96d250fbe7819eaecbf725d",
+          "bytes": 2489
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435665",
+          "fetched": "2026-10-10T04:39:16.102Z",
+          "sha256": "dcdcd968c463c1a830ec182b3ca0a58221148a18ca851f2ea5ec60845bd81ac3",
+          "bytes": 3138
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435666",
+          "fetched": "2026-10-10T04:39:16.393Z",
+          "sha256": "cd68d3341506ae9d8c4bcd852ddd1d76a8cbe27f7deb10c807da4568147685c6",
+          "bytes": 2680
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435668",
+          "fetched": "2026-10-10T04:39:17.433Z",
+          "sha256": "3fb4a757858cfbf31394852169765ad1feff9ae0da13a219d53de816d2a5a29d",
+          "bytes": 2441
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435669",
+          "fetched": "2026-10-10T04:39:17.762Z",
+          "sha256": "fea4b0f61369c5bf63bf946bdb2d1f89dde7ccbfabcd6ffaee4adc5a3ed15429",
+          "bytes": 2576
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435670",
+          "fetched": "2026-10-10T04:39:18.331Z",
+          "sha256": "7e2367ba6c8f385e9972b6163882e3c53ad45775fc5af18568398546376f2b1b",
+          "bytes": 2445
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435671",
+          "fetched": "2026-10-10T04:39:18.806Z",
+          "sha256": "dddfc47678dde12c9e54868958784095a93a60e72d1e9df63ceea4e7a04942f2",
+          "bytes": 2196
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435672",
+          "fetched": "2026-10-10T04:39:19.422Z",
+          "sha256": "e56679ba45ea9b77a3348d77e0dccbf567137cc22e8b73dee84f722c6229ad7c",
+          "bytes": 2429
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435673",
+          "fetched": "2026-10-10T04:39:20.020Z",
+          "sha256": "6d851bb577af8342f506eec9eeb0b92728406099e6cefa5b9ecdfb91573db2a9",
+          "bytes": 2446
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435678",
+          "fetched": "2026-10-10T04:39:20.668Z",
+          "sha256": "42758c9c873e8b43d9f2b63fd5729d79528d9915e993a63a5c17fa706524dd9c",
+          "bytes": 2573
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435680",
+          "fetched": "2026-10-10T04:39:21.239Z",
+          "sha256": "cea02130c2f26d77efb611ed5aa1ac6b9976c1008c28fd227ffcecf550db193f",
+          "bytes": 2821
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435682",
+          "fetched": "2026-10-10T04:39:22.135Z",
+          "sha256": "c172316b57f0665de3eeddb7d3fc44a250f276e3bd7dafdda1b53ba82b92a8b2",
+          "bytes": 2272
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435683",
+          "fetched": "2026-10-10T04:39:22.570Z",
+          "sha256": "79eb70dcc7bb48f4f8943526ce68f425fa1dc595633ca15f9c25874118727ee2",
+          "bytes": 2501
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435684",
+          "fetched": "2026-10-10T04:39:23.149Z",
+          "sha256": "a02834edb172f7693f1e94a5c40e9d58ff16be9d0976a174531c25426f1ba3fe",
+          "bytes": 2097
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435685",
+          "fetched": "2026-10-10T04:39:23.634Z",
+          "sha256": "223df9a4215e5d233137192bc2b9e278e87c85bbe7d405012c28ea0f633d98bf",
+          "bytes": 2176
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/435686",
+          "fetched": "2026-10-10T04:39:24.244Z",
+          "sha256": "68a56cbaa50cb5674a85f34ace74e74d1db8781978c93ddb71fc0d9683ca57a8",
+          "bytes": 2180
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1.1/search?departmentId=2&isPublicDomain=true&hasImages=true&medium=Paintings&limit=100&offset=0",
+          "fetched": "2026-10-10T04:39:24.907Z",
+          "sha256": "df0f72937982ef97e76136384fad216151524971ee80ae8ad85311a23c77ea24",
+          "bytes": 630
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10028",
+          "fetched": "2026-10-10T04:39:25.443Z",
+          "sha256": "765262508e7107249c03619948d7f819d9fb0ef6cc903a34151b1c745b4359ca",
+          "bytes": 2218
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10035",
+          "fetched": "2026-10-10T04:39:26.051Z",
+          "sha256": "4851d19f0b678a05ac42bc1d36a13b4224d3cc8fa6d128dacff495284b4e5d0a",
+          "bytes": 2659
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10049",
+          "fetched": "2026-10-10T04:39:26.654Z",
+          "sha256": "4c946bac59a1e35105b93a111ec7fd1f61d415c0b03ed97e964ceedb7f491b0d",
+          "bytes": 2840
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10061",
+          "fetched": "2026-10-10T04:39:27.257Z",
+          "sha256": "5eea18a8a5e57f3692b13c0fa6a631270d2a5cd45b861858cfd3d22b90cd76cf",
+          "bytes": 2695
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10062",
+          "fetched": "2026-10-10T04:39:27.936Z",
+          "sha256": "129e529f0071d95dea0718c737903a491fec953cce0c9cb237f86d1e6faf628c",
+          "bytes": 2627
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10065",
+          "fetched": "2026-10-10T04:39:29.270Z",
+          "sha256": "709ae24b9b3a325821e749a7281c0e4a53af6e6b39deafa37e4d220e8dd8c6fd",
+          "bytes": 2142
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10066",
+          "fetched": "2026-10-10T04:39:29.420Z",
+          "sha256": "640c6978accc2da20e8c05f83ead58dec09d1382a03ef9902dfa109407f840a2",
+          "bytes": 2266
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10067",
+          "fetched": "2026-10-10T04:39:30.041Z",
+          "sha256": "f15bc76213e79900f712e150788c4ad45ec8458320844471fc2496b36beff9c9",
+          "bytes": 2567
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10068",
+          "fetched": "2026-10-10T04:39:30.890Z",
+          "sha256": "43ddf791435528f9cabda0cf8423a4bc4a19677ddc11e6f74ec1adf4f09155df",
+          "bytes": 2281
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10070",
+          "fetched": "2026-10-10T04:39:31.267Z",
+          "sha256": "da8e9d0177fbe1d068bf4901f50bc8ad7531ef26314967861e14ec29d6239536",
+          "bytes": 2186
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10072",
+          "fetched": "2026-10-10T04:39:32.034Z",
+          "sha256": "fe0a306b3492a73147d7dbbe640b0d60814e4a1f95095b7caecc40e2e9741494",
+          "bytes": 2255
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10074",
+          "fetched": "2026-10-10T04:39:32.478Z",
+          "sha256": "153deea5c1b6ce404ba69a196bd39fc2b661bcfe13fc6febc71b908538febee5",
+          "bytes": 2256
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10075",
+          "fetched": "2026-10-10T04:39:33.089Z",
+          "sha256": "441f2388d31d6779714eda546907301996b75ca7cbef4598c149e10f13a0956d",
+          "bytes": 2154
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10076",
+          "fetched": "2026-10-10T04:39:34.151Z",
+          "sha256": "eea6ed42640de110df487a0ae6da43b0fe110ef67fd94e3deb8745b12c365bc8",
+          "bytes": 2249
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10077",
+          "fetched": "2026-10-10T04:39:34.322Z",
+          "sha256": "095b396970bce5fe192eab65c8db0be9e23a56515445615733b0d53ffd238389",
+          "bytes": 2810
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10080",
+          "fetched": "2026-10-10T04:39:34.911Z",
+          "sha256": "b00a1079f4aeaf8c294f633d59b8f26d90acbfba6b0c61be2a4957e2dc93a08e",
+          "bytes": 2640
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10081",
+          "fetched": "2026-10-10T04:39:35.519Z",
+          "sha256": "e7e1ea05c7270576573746396d791805573720bc71121e6f9d837dbafbe96650",
+          "bytes": 2384
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10082",
+          "fetched": "2026-10-10T04:39:36.191Z",
+          "sha256": "baac1a2aa970adc4c371fdf03d286f06867b8d580faad3def53f5de2f3fb0606",
+          "bytes": 2734
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10083",
+          "fetched": "2026-10-10T04:39:36.962Z",
+          "sha256": "96ba1cd4f7a730408000e113efc11d46a9af9b123dd79d7007ca6b49ad8761e2",
+          "bytes": 2292
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10084",
+          "fetched": "2026-10-10T04:39:37.368Z",
+          "sha256": "d49fafb08e946a7150d3d9ff351d5448e6d0f2c69fc90c39316451c69852508e",
+          "bytes": 2863
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10085",
+          "fetched": "2026-10-10T04:39:37.946Z",
+          "sha256": "30015c9c2efa0b91eb89c7ed8e2965ee27fa8ff990e19b3caf2a98f7d164559a",
+          "bytes": 2414
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10087",
+          "fetched": "2026-10-10T04:39:38.550Z",
+          "sha256": "d6cae17d58a35a627794cb744d43503889809d36c038d9109692bba3be11195e",
+          "bytes": 2197
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10088",
+          "fetched": "2026-10-10T04:39:39.151Z",
+          "sha256": "a667e763eb8254a13832d185d4b82c481e54bc4043cd74982a647e0a6b615442",
+          "bytes": 2075
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10092",
+          "fetched": "2026-10-10T04:39:39.767Z",
+          "sha256": "63d3438e7a28d34ed1b91d7924a6eee224b26d1351fe0f8b6d2b808980a97873",
+          "bytes": 2139
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10093",
+          "fetched": "2026-10-10T04:39:40.439Z",
+          "sha256": "8bc3fec4dd51d4b9e420e5a28140dd941ae033eed8e620a6a87af0ba68614a39",
+          "bytes": 2268
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10095",
+          "fetched": "2026-10-10T04:39:41.094Z",
+          "sha256": "e102971131ce9d58792de2fa3d53886782bb1d7ea5f1524b6e6e47c6458e0744",
+          "bytes": 2048
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10096",
+          "fetched": "2026-10-10T04:39:41.573Z",
+          "sha256": "fd4df0a96d382125e31d07cb5a806f84cfe23e41adaa3bcf63213739664a38a7",
+          "bytes": 2167
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10116",
+          "fetched": "2026-10-10T04:39:42.176Z",
+          "sha256": "d83a913c3f04faf349434bc8d0f3ed291d59c5003281405d8eb143f08fe89809",
+          "bytes": 2168
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10126",
+          "fetched": "2026-10-10T04:39:42.818Z",
+          "sha256": "30e2429b6ae4bf97b2a01245d6c9228a713ef3c6b9c6f0a063c825d154b8ec3f",
+          "bytes": 2179
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10127",
+          "fetched": "2026-10-10T04:39:43.408Z",
+          "sha256": "a7f19b5022d73246a5c519b93214d53a5875425d8c85b720e9fc130c01251916",
+          "bytes": 2310
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10128",
+          "fetched": "2026-10-10T04:39:44.135Z",
+          "sha256": "e4a721e237c6d134d0f565af45037dd3f4e9ace59553a9470c17e844b8f5a90d",
+          "bytes": 2349
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10129",
+          "fetched": "2026-10-10T04:39:44.622Z",
+          "sha256": "ee5c834fc48c896b213483d8711c343811930e236f14fdda3b5b456e1ee0d6ff",
+          "bytes": 2006
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10130",
+          "fetched": "2026-10-10T04:39:45.598Z",
+          "sha256": "67ffaa86e1864398916367f852f9427e1abf162cbd669ac8c58154690313e33b",
+          "bytes": 2023
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10131",
+          "fetched": "2026-10-10T04:39:46.611Z",
+          "sha256": "966f44735235fa771349c219823ba4d846495a121f6704e2f2e2c6a609229854",
+          "bytes": 2547
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10134",
+          "fetched": "2026-10-10T04:39:47.267Z",
+          "sha256": "56c7711089ea55b63423f9da90e75ac3a7782df62526d4e3988d8fd88b880473",
+          "bytes": 2054
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10135",
+          "fetched": "2026-10-10T04:39:48.039Z",
+          "sha256": "822e0dfddc304e1c96dedb7e63378f291fb4ed9a4a91101911b148f77ddeee92",
+          "bytes": 2473
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10136",
+          "fetched": "2026-10-10T04:39:51.059Z",
+          "sha256": "472f18461ad66aa353afe9708fd34141a564ddb7057d7772e2275c3ad4b64d0b",
+          "bytes": 2290
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10137",
+          "fetched": "2026-10-10T04:39:52.026Z",
+          "sha256": "fb8751f202a3cc2eb44627144bd9ab847c60d319afd6f3f9336312f4aa9cdc5e",
+          "bytes": 2225
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10138",
+          "fetched": "2026-10-10T04:39:53.328Z",
+          "sha256": "55dce6505dca9af5a2431767e0539b4824da483ed61e12264b93634b812db1d0",
+          "bytes": 2352
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10139",
+          "fetched": "2026-10-10T04:39:53.889Z",
+          "sha256": "a4528bd0291acb5b980b6ef93bc7806a90a80782734e4e5bec164622bf06ecf9",
+          "bytes": 2274
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10140",
+          "fetched": "2026-10-10T04:40:00.924Z",
+          "sha256": "084d08247e2ff9955fcae9da716c3dcf56a49ea512d38929aa8ab5bd75a1b279",
+          "bytes": 2844
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10142",
+          "fetched": "2026-10-10T04:40:03.259Z",
+          "sha256": "20c53b88e69a4dc99bdbfdd2c1c13e7d010f85a594915cec029cc6bc0f7a952c",
+          "bytes": 2061
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10145",
+          "fetched": "2026-10-10T04:40:05.700Z",
+          "sha256": "42b38882280e51745c108174aa912639218531a0ccce62bfb36bd1dc17ae64d1",
+          "bytes": 2230
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10147",
+          "fetched": "2026-10-10T04:40:07.366Z",
+          "sha256": "381b633ad311857d75afa0b5179a9cc022107aef064d072fbb8795db6596c491",
+          "bytes": 2174
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10148",
+          "fetched": "2026-10-10T04:40:08.584Z",
+          "sha256": "688359be946da9265fddefb0274e5b10e2eb536127c6ad6517186148c2e0e69e",
+          "bytes": 2139
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10149",
+          "fetched": "2026-10-10T04:40:10.189Z",
+          "sha256": "3a65410cdb2eb01c05bf88bac2b28e7b0174da821a4ba3fdfa2d29f96011f41a",
+          "bytes": 2485
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10150",
+          "fetched": "2026-10-10T04:40:11.154Z",
+          "sha256": "2b2a0cc6e195adbea1627022b4163128d7dd302566d8873bd6516c8393e3fb0c",
+          "bytes": 2547
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10151",
+          "fetched": "2026-10-10T04:40:12.690Z",
+          "sha256": "47b6be79e38aa124b55cc68bcb880892b416200a21279e4dfa6e1bec0c90c2e4",
+          "bytes": 2270
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10152",
+          "fetched": "2026-10-10T04:40:13.012Z",
+          "sha256": "c4f3102dbc232ec44fe7a4147f27560981abd3a5ee273ec0984e76999cb278a3",
+          "bytes": 2723
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10154",
+          "fetched": "2026-10-10T04:40:13.768Z",
+          "sha256": "becad0be297a732e0956d9f0b982f77ba850511c9797eff9f7d8ab24bccf0541",
+          "bytes": 2552
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10155",
+          "fetched": "2026-10-10T04:40:14.751Z",
+          "sha256": "b12d03fd6dafb1d288d9db7a59e25983ae3e0111d0ff6b9f4045f6ff9fd09b77",
+          "bytes": 2257
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10156",
+          "fetched": "2026-10-10T04:40:15.254Z",
+          "sha256": "060817f820ac634ef0adf262b957a71d032acdf61fe16cd32c45133c06ba0142",
+          "bytes": 2164
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10158",
+          "fetched": "2026-10-10T04:40:15.877Z",
+          "sha256": "843bcc016c54657c99ff0357ed3b4014b172b6ad2ab5a0c0128623d98ca535c8",
+          "bytes": 2420
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10159",
+          "fetched": "2026-10-10T04:40:16.138Z",
+          "sha256": "c624e156bbca7e2c8ce888b68b17cd94e33551f71c4251851e37718254ae4161",
+          "bytes": 2690
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10164",
+          "fetched": "2026-10-10T04:40:16.737Z",
+          "sha256": "eb69e92142fd2adc12f28cf5f8e4426d4a9d1c069b6d044dccf5dbae1f571409",
+          "bytes": 2227
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10165",
+          "fetched": "2026-10-10T04:40:17.436Z",
+          "sha256": "d4aae24e251f15f94e05b72c6e75b4bbb5cc48a6aad72fba7b3bc9ab9975e404",
+          "bytes": 2302
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10166",
+          "fetched": "2026-10-10T04:40:17.988Z",
+          "sha256": "a0bfb6f06e1649415b7252de26cb3c2846624f785a6c2fa19ad0e45253287cfb",
+          "bytes": 2315
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10167",
+          "fetched": "2026-10-10T04:40:18.570Z",
+          "sha256": "3f7ad9050b552dd3d29482f0e1f0c7d12590063e05b2ff873fd21edf17c0a555",
+          "bytes": 2231
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10174",
+          "fetched": "2026-10-10T04:40:19.217Z",
+          "sha256": "5efafbdf97e443fe01025ef8656836129c0c820a000314c8955cf2373e39a08e",
+          "bytes": 2370
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10175",
+          "fetched": "2026-10-10T04:40:19.806Z",
+          "sha256": "a64edb93426030f868a761452a75efcb236eaa415835cf55c5c817266a7b85ed",
+          "bytes": 2329
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10176",
+          "fetched": "2026-10-10T04:40:20.394Z",
+          "sha256": "b4b7dbf22e0268a1af8c25ea19d596ec8d737c227b3ed3900e54e9b38481b690",
+          "bytes": 2266
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10177",
+          "fetched": "2026-10-10T04:40:21.010Z",
+          "sha256": "8c681cd55cc8dfc68531b7e493b22fbe73f412cbe6cb33b5dda20a1f39632447",
+          "bytes": 2272
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10178",
+          "fetched": "2026-10-10T04:40:21.581Z",
+          "sha256": "5d9c6fb144bed69955bd875060bf4e8926abb866c7c2bb51b433e5fefef8f061",
+          "bytes": 2277
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10180",
+          "fetched": "2026-10-10T04:40:22.254Z",
+          "sha256": "c43f408445e107a5b40d7c271568d0ae08b6a60397ae861a71f25e54dd4f2593",
+          "bytes": 2399
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10181",
+          "fetched": "2026-10-10T04:40:22.792Z",
+          "sha256": "6041476c044ab0c67ca898891138ed3bb0e5e2620b014a7698f03943b7aacbbc",
+          "bytes": 2264
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10182",
+          "fetched": "2026-10-10T04:40:23.506Z",
+          "sha256": "aa64864ed45fe8f91f82d59beba86c075a8e70d5f43c4e3dc9929616ea5e3729",
+          "bytes": 2283
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10183",
+          "fetched": "2026-10-10T04:40:24.002Z",
+          "sha256": "9b0aa2a0fd7c4150a2b753255969d0bf8ef8c38b85a7fafe9621e54af41e3f9b",
+          "bytes": 2652
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10184",
+          "fetched": "2026-10-10T04:40:24.607Z",
+          "sha256": "3b82aa98691ef84c9628f1a56d2727ef8b1cb3128676ea081097e9ec68c570be",
+          "bytes": 2326
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10185",
+          "fetched": "2026-10-10T04:40:25.333Z",
+          "sha256": "201b4de0598b1e934cdf167ef32b482f1cc8e25887fd6dbc07c66aab13deb404",
+          "bytes": 2430
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10186",
+          "fetched": "2026-10-10T04:40:25.881Z",
+          "sha256": "6786c51099c771e717b22d65226d99c0dcb36343f5501f7d89470a4b04ade4e1",
+          "bytes": 2552
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10189",
+          "fetched": "2026-10-10T04:40:26.428Z",
+          "sha256": "2abf138a3234372d7d1e01b9c210201952eadc47a0ed18c5f35d0c6702404248",
+          "bytes": 3126
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10190",
+          "fetched": "2026-10-10T04:40:27.068Z",
+          "sha256": "afc784d1b46317293f8745bc4c4e2f61407f9bcf1e5956c0b89d91696ff7d14e",
+          "bytes": 2346
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10191",
+          "fetched": "2026-10-10T04:40:27.636Z",
+          "sha256": "23ff95cc9e643650857eb46e82ccdcdf57f3f756a58c489d8fb9fcda3d3fa96d",
+          "bytes": 2506
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10192",
+          "fetched": "2026-10-10T04:40:28.292Z",
+          "sha256": "1ef33f4f5c92ca5a7b6eb63a43af09f8f6bbfcbc6086d826e5812ff33d902d83",
+          "bytes": 2101
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10193",
+          "fetched": "2026-10-10T04:40:28.889Z",
+          "sha256": "d592b841e499b2884df0b9f53f2d5b86dd9442a16e1062b531972f6316e5539c",
+          "bytes": 1945
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10194",
+          "fetched": "2026-10-10T04:40:30.222Z",
+          "sha256": "c1540e3a9e3c704ccc8890d754aa7598a84049a67defa7956d5a83d0d6391e8b",
+          "bytes": 2613
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10195",
+          "fetched": "2026-10-10T04:40:30.595Z",
+          "sha256": "cf6bc5ba45ddeffbd2246161a714c8593f10193dc22d98cb70f23e785ebafde1",
+          "bytes": 2048
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10196",
+          "fetched": "2026-10-10T04:40:31.052Z",
+          "sha256": "b9b0dd21913464d1ea66e2b32266bd73940efdce7559d2687e318b694ecdbd78",
+          "bytes": 2143
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10198",
+          "fetched": "2026-10-10T04:40:31.600Z",
+          "sha256": "f6535dee07e5f5f19a12ddec102b1ed8354ab59e8a8b3c101843465f0ddc0272",
+          "bytes": 2103
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10207",
+          "fetched": "2026-10-10T04:40:32.212Z",
+          "sha256": "32042f18f9ec1ee505a0fd4d3f6a197bc756c73bd2fc118ade244f76760c5ef2",
+          "bytes": 2376
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10209",
+          "fetched": "2026-10-10T04:40:32.831Z",
+          "sha256": "7eb79e4e605d008a99f42eae7a9b072f5b7a0170b0310e4786a23868ea007b33",
+          "bytes": 2605
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10210",
+          "fetched": "2026-10-10T04:40:33.497Z",
+          "sha256": "eb65d10a7162bd9da4c3ec44413bc8677803ed2ecb7f1f36937d0b560edac500",
+          "bytes": 2499
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10214",
+          "fetched": "2026-10-10T04:40:34.039Z",
+          "sha256": "6640c5b851f95d9d53a1754d56337b062cbda3fa9ded83b27b248c9c052fbc2e",
+          "bytes": 2489
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10215",
+          "fetched": "2026-10-10T04:40:34.699Z",
+          "sha256": "5408e281f82db35e243704363c7b15ee8e5749fbb44af3e5e6de47846a6bd8df",
+          "bytes": 2394
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10216",
+          "fetched": "2026-10-10T04:40:35.249Z",
+          "sha256": "2c65b3c0763af5678d9232815e38fbe75509f5efd83ee603e9bb6da2ac3ce2d6",
+          "bytes": 2408
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10217",
+          "fetched": "2026-10-10T04:40:35.874Z",
+          "sha256": "9604e0a4da7c94e967ee3f056458461c68baabf9e762c22df21483fde886fe5a",
+          "bytes": 2173
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10218",
+          "fetched": "2026-10-10T04:40:36.486Z",
+          "sha256": "32e1f6628971968263cd31ca9231038640e74151927bd2bf47cba614defff05e",
+          "bytes": 2298
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10219",
+          "fetched": "2026-10-10T04:40:37.085Z",
+          "sha256": "f6bc33e9dcd7c4bf2565190d2a6ee7688fdc5bce845ba2284e2e39c79b83593d",
+          "bytes": 2197
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10235",
+          "fetched": "2026-10-10T04:40:37.705Z",
+          "sha256": "f607709b7faa5ab5d9c79f61c931f1e8e1e2718c4dea40bcee54a7f01982d6ec",
+          "bytes": 2384
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10239",
+          "fetched": "2026-10-10T04:40:38.642Z",
+          "sha256": "82a00eb565108057d75813d7de0fe5fd833c34634b7ffe6e5fcefa2baf0177ad",
+          "bytes": 2490
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10240",
+          "fetched": "2026-10-10T04:40:38.917Z",
+          "sha256": "6255fa1a1ef466d8887064a68b5bad1f9f98711657103cbaf6073ca9fad92abf",
+          "bytes": 2791
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10241",
+          "fetched": "2026-10-10T04:40:39.524Z",
+          "sha256": "dd6716fe455e63ae56a0bc41f0552f63f66ba366d49de39cb9b24dc975efe91d",
+          "bytes": 2056
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10242",
+          "fetched": "2026-10-10T04:40:40.131Z",
+          "sha256": "eb488662e511cadd6b0bc7eb0c6ea93b23e40b9668918bf4775cb2053e4ee5cd",
+          "bytes": 2164
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10246",
+          "fetched": "2026-10-10T04:40:40.737Z",
+          "sha256": "d7268e9d26d97214d95000348366376b1e8401658dd958f3f4cdf7911196e580",
+          "bytes": 2421
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10247",
+          "fetched": "2026-10-10T04:40:41.334Z",
+          "sha256": "4cb5704ecfaf184c7cba1ec90d32e91f50801a4b4fc6244d92829c05cdc079d5",
+          "bytes": 2540
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10251",
+          "fetched": "2026-10-10T04:40:42.059Z",
+          "sha256": "dd3119029b671ab1a53f6c0219aec0c9d8439759ed909158b50b76a8cc2604db",
+          "bytes": 1965
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10252",
+          "fetched": "2026-10-10T04:40:42.735Z",
+          "sha256": "f0befe7d49dcb1cffe9c89de417bbd357c26877a4c50abfb3b148903615156a4",
+          "bytes": 2191
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10254",
+          "fetched": "2026-10-10T04:40:43.187Z",
+          "sha256": "bb2e1bdbb828e23ea4a63d92ad33f2cb39447c1f18e6f3c401c024c604d8262b",
+          "bytes": 2184
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10255",
+          "fetched": "2026-10-10T04:40:43.824Z",
+          "sha256": "357c818928d67e8afcafacdd65c11d329615f0d753d7e3ba4c0d7e77b2247917",
+          "bytes": 2456
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/10256",
+          "fetched": "2026-10-10T04:40:44.470Z",
+          "sha256": "10113c80422f3fc90d491e841ce2a21f293111ed9bf66c6aa307b4e4e584b60e",
+          "bytes": 2316
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1.1/search?departmentId=6&isPublicDomain=true&hasImages=true&medium=Paintings&limit=100&offset=0",
+          "fetched": "2026-10-10T04:40:45.025Z",
+          "sha256": "f64297e69bf5ba50d6b6338d8c20a4e92a28ed5ab73d35041602cb38b5cbe9f1",
+          "bytes": 629
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/35968",
+          "fetched": "2026-10-10T04:40:45.605Z",
+          "sha256": "921d7efec7d950f33fa8b39f75af93e4659ed7293c781bf1440ac5953429637b",
+          "bytes": 3296
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/35969",
+          "fetched": "2026-10-10T04:40:46.207Z",
+          "sha256": "cda723e43163009332ae9f0e43e92c193239017e5fa028cc3b67c5f6f9540418",
+          "bytes": 1934
+        },
+        {
+          "url": "https://collectionapi.metmuseum.org/public/collection/v1/objects/35970",
+          "fetched": "2026-10-10T04:40:46.813Z",
+          "sha256": "3c2f6ab6175a0d353acd5302e580408c582ea77baf480a25080471e0fc1b749b",
+          "bytes": 2605
+        }
+      ],
+      "licenceEvidence": {
+        "url": "https://metmuseum.github.io/",
+        "quote": "To the extent possible under law, The Metropolitan Museum of Art has waived all copyright and related or neighboring rights to this dataset using the Creative Commons Zero license.",
+        "fixture": "fixtures/evidence/met-open-access.txt",
+        "fetched": "2026-10-10T03:46:50.756Z",
+        "sha256": "6fbfe3a7620d9b79bbc49e68313d33ce10410aabbacf38e5e5f1f6349b942ff2",
+        "bytes": 84532
+      }
+    },
+    {
+      "id": "smithsonian",
+      "name": "Smithsonian Open Access",
+      "works": 0,
+      "excluded": 0,
+      "licenceCounts": {},
+      "requests": [],
+      "skipped": "HTTP 429, Retry-After 65778 s",
+      "licenceEvidence": {
+        "url": "https://registry.opendata.aws/smithsonian-open-access/",
+        "quote": "On February 25th, 2020, the Smithsonian released over 2.8 million CC0 interdisciplinary 2-D and 3-D images, related metadata, and additionally, research data from researches across the Smithsonian.",
+        "fixture": "fixtures/evidence/smithsonian-open-access.txt",
+        "fetched": "2026-10-10T03:46:51.142Z",
+        "sha256": "56d3dcddc73854163e8ebea614e09df0605d64139b3b383a92330f5d0ee5a9a0",
+        "bytes": 6663
+      }
+    },
+    {
+      "id": "rijksmuseum",
+      "name": "Rijksmuseum",
+      "works": 80,
+      "excluded": 1,
+      "licenceCounts": {
+        "PDM-1.0": 80
+      },
+      "requests": [
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=13%3F%3F",
+          "fetched": "2026-10-10T04:03:05.548Z",
+          "sha256": "518302eaf420f2d148e172f8f6bee45063798c4fcb0620c05f2498aede15c7c8",
+          "bytes": 739
+        },
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=14%3F%3F",
+          "fetched": "2026-10-10T04:03:05.768Z",
+          "sha256": "7f4ee7b9d935541b6d9dae15816eb91f93b8b47b11a67c84e3e7a16bc5450777",
+          "bytes": 670
+        },
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=15%3F%3F",
+          "fetched": "2026-10-10T04:03:05.860Z",
+          "sha256": "0f68383c0bb95ffd15b3752e3afc6a81e8113a95b23ce60c163e142f2baf71e5",
+          "bytes": 6646
+        },
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=16%3F%3F",
+          "fetched": "2026-10-10T04:03:05.948Z",
+          "sha256": "c287530a8c45e3186282c8b6c2b0d10df5e2b8af6e64ca2d74c982924957d4eb",
+          "bytes": 7969
+        },
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=17%3F%3F",
+          "fetched": "2026-10-10T04:03:06.055Z",
+          "sha256": "02321c8dfd2da33b3a18227115a749826cd5e90aba04aaebcb8f3ee74d3779cd",
+          "bytes": 7934
+        },
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=18%3F%3F",
+          "fetched": "2026-10-10T04:03:06.129Z",
+          "sha256": "d04cf36205131e3147b089f2371c76b7c4cd2331f4134ae8e6f3b6f0a0e034d4",
+          "bytes": 7958
+        },
+        {
+          "url": "https://data.rijksmuseum.nl/search/collection?type=painting&imageAvailable=true&creationDate=19%3F%3F",
+          "fetched": "2026-10-10T04:03:06.215Z",
+          "sha256": "30567f6b934394776be70e1b6d26618cc9f08953ddfe683dd74b7c5db3375a10",
+          "bytes": 5168
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107815",
+          "fetched": "2026-10-10T04:03:06.500Z",
+          "sha256": "303884dfff63f6bf1acdc94ba16e2832fd90b1b6a006648883cfd925a6de66c8",
+          "bytes": 46355
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107815",
+          "fetched": "2026-10-10T04:03:06.723Z",
+          "sha256": "6e809015323f7ae8ce924df9ff23ea6e7058162ca9c7bfcdbb77e9c09d810bd2",
+          "bytes": 1654
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5001006954695157116114",
+          "fetched": "2026-10-10T04:03:06.806Z",
+          "sha256": "b0052bc10b879618c035366a17de7d05b5a2877cdaf0d03be2ae15a932d5de85",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107879",
+          "fetched": "2026-10-10T04:03:06.938Z",
+          "sha256": "7f36e22940289cbfb2d889d0d4db65b35510255ecdabf349c82461978663e0ae",
+          "bytes": 26239
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107879",
+          "fetched": "2026-10-10T04:03:07.016Z",
+          "sha256": "546128f3095994f592d2e012276a0e4e769838200a29a84dc9978cb60952e56c",
+          "bytes": 1708
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5005277571101006910448",
+          "fetched": "2026-10-10T04:03:07.110Z",
+          "sha256": "d908237675dc498070863b5635649b1523fbadda5ff92fce0705bbbdb9dee7cb",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107986",
+          "fetched": "2026-10-10T04:03:07.267Z",
+          "sha256": "6629eb5278a7cf0e628fe6448f8bf4209fa07c3d3f19f989c47aac6750f8e1db",
+          "bytes": 31159
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107986",
+          "fetched": "2026-10-10T04:03:07.367Z",
+          "sha256": "09920a694ebe546bec4796b29d761b71ea860b42cebccae5470645a27898bc08",
+          "bytes": 1595
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500481217268721118474",
+          "fetched": "2026-10-10T04:03:07.475Z",
+          "sha256": "ea2156ca998e71842f548a4ba138ab76db7209b75df233a474f5389cc9176e41",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107987",
+          "fetched": "2026-10-10T04:03:07.596Z",
+          "sha256": "ae69d7f24f905234fead37dd94c1c322d5c8baa32f001132b4a56e2ea4051c20",
+          "bytes": 33147
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107987",
+          "fetched": "2026-10-10T04:03:07.689Z",
+          "sha256": "8e83ba87c96010e5cf4a5935d67c2c57a5e05201ee09d2a318fb074c9615bf09",
+          "bytes": 2185
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5001229710773117495165",
+          "fetched": "2026-10-10T04:03:07.780Z",
+          "sha256": "f51c062d37373fafc86bb1d73d7ddbc6b4753dd5e37468e53880bb3b10baaf1b",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108013",
+          "fetched": "2026-10-10T04:03:07.889Z",
+          "sha256": "0bad2adf87d8ee79bf1dea08af9c96c8f5626d50d551a3750e11973a94e1aec1",
+          "bytes": 25626
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108013",
+          "fetched": "2026-10-10T04:03:07.991Z",
+          "sha256": "3ec29ff8017e2d38cedf94de9643e7c42874bc55cb469bfda049bc2b509c650d",
+          "bytes": 2325
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500116651111038410012249",
+          "fetched": "2026-10-10T04:03:08.076Z",
+          "sha256": "8b778196f287a232d6e38081d733b019b9fbb1b4f6723e98942f812b82536a29",
+          "bytes": 632
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108123",
+          "fetched": "2026-10-10T04:03:08.174Z",
+          "sha256": "53f6e9a59d222eb8493ef45cfa4a544d5b9940af2f416d441a77d083b89066f7",
+          "bytes": 32504
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108123",
+          "fetched": "2026-10-10T04:03:08.283Z",
+          "sha256": "1d6b99ec54cadfeca626656fcab2a77f5f1b9e1130035e9b8f04d06d48d89273",
+          "bytes": 4106
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50051108719986111108104",
+          "fetched": "2026-10-10T04:03:08.384Z",
+          "sha256": "bcb6030a41daa6f072863bd8958da99137c57bb5e1e436d657d7a7d498f1e9dc",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108411",
+          "fetched": "2026-10-10T04:03:08.498Z",
+          "sha256": "a7213f2075b7d9a9ac2c1857b75788edf5a52304918ee0b54f2564d7430fd085",
+          "bytes": 22211
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108411",
+          "fetched": "2026-10-10T04:03:08.583Z",
+          "sha256": "b06731d20cf28588a2e3eac527090998a1de62156dad246a7b62b106efd69bdf",
+          "bytes": 1398
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5004811310211011611069117",
+          "fetched": "2026-10-10T04:03:08.687Z",
+          "sha256": "697dc26c62c34df5a8978ba016b1c2921b3cc636fe1f054ace96bbdedb6e73b1",
+          "bytes": 633
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108527",
+          "fetched": "2026-10-10T04:03:08.799Z",
+          "sha256": "b38693bde9e41dc6875a91558d1567647f0f4a69c1085d241786788475350663",
+          "bytes": 16329
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108527",
+          "fetched": "2026-10-10T04:03:08.887Z",
+          "sha256": "ef1ec1d93b8232c2f5384f1635577f40ed15d5ba6e5e8d467eec9a6216d0f01a",
+          "bytes": 2571
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5005070821221061178872",
+          "fetched": "2026-10-10T04:03:08.977Z",
+          "sha256": "8dce96153af7c4b3cebc053d714041572da9604e19bd75d5159916233dc968e7",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108528",
+          "fetched": "2026-10-10T04:09:52.754Z",
+          "sha256": "4237253eb07d2351f8f3ab9bc058067b10dc06e751b49217c22547b30f14c8de",
+          "bytes": 16312
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108528",
+          "fetched": "2026-10-10T04:09:52.986Z",
+          "sha256": "57798cba4c51c30a8bdcfd70980eab42e8bd53c57442427df12a6edf509c3fa8",
+          "bytes": 2653
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5007754116115117105119105",
+          "fetched": "2026-10-10T04:09:53.458Z",
+          "sha256": "b60424d37ee028df854347c70ae376ca4b4422e0f0f97bd79fd930594d5a9b79",
+          "bytes": 633
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108794",
+          "fetched": "2026-10-10T04:09:53.576Z",
+          "sha256": "3ecdfcd5194fbeb086b6fce13e7db303af05c2e5241b6081a743073872d3ff00",
+          "bytes": 14143
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108794",
+          "fetched": "2026-10-10T04:09:53.727Z",
+          "sha256": "f8ec4784803419081300d9e0573c701ca4242e0ab8f4d01fcf8cadf914ab4be7",
+          "bytes": 2399
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500897869100103110103112",
+          "fetched": "2026-10-10T04:09:53.873Z",
+          "sha256": "4e065ca51751d1ced3b9f2b92823b160f00cbf5bcdd8f2c8fe51153f528943dd",
+          "bytes": 632
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108899",
+          "fetched": "2026-10-10T04:09:54.035Z",
+          "sha256": "5852e2368ef3a3a17ec5f989004e371483b41cc8531cb462b94919c015d8b723",
+          "bytes": 15944
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108899",
+          "fetched": "2026-10-10T04:09:54.186Z",
+          "sha256": "3d78d448f86a7e32e7dc8a35be4b357aee3e94bb4e251990947fb7e360456b63",
+          "bytes": 1997
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5001125011776997310078",
+          "fetched": "2026-10-10T04:09:54.346Z",
+          "sha256": "f0dc9633b869ce6902555c62263ffff0d2b1bfbb02b41779f2edd92268f8acd6",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108900",
+          "fetched": "2026-10-10T04:09:54.513Z",
+          "sha256": "bb59d4055dc7166770a99fc49d2bce20f39885f786433ff01b643517a2eaa112",
+          "bytes": 15229
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108900",
+          "fetched": "2026-10-10T04:09:54.657Z",
+          "sha256": "4ebe741e9cada48e256d14b216ae93626a7fa75f8dfe0d7a5a14d0c1b1840ab9",
+          "bytes": 1911
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500709073701016611590",
+          "fetched": "2026-10-10T04:09:54.822Z",
+          "sha256": "f28b703d450b4dcc66a81346cb84869a379ae8699e44e917fc44a9f2909340ca",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108901",
+          "fetched": "2026-10-10T04:09:54.981Z",
+          "sha256": "d4696edf2569ea7d86e83e9a8e9b88a1062d3a19c9001a99ae8e037876d801eb",
+          "bytes": 12043
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108901",
+          "fetched": "2026-10-10T04:09:55.126Z",
+          "sha256": "4a8ee5de9c50b591e057fcb07b84e97f8c0203d79e08d98d9d53e29f2baa2e97",
+          "bytes": 1600
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500111497411711310384113",
+          "fetched": "2026-10-10T04:09:55.311Z",
+          "sha256": "69c7624f562f5ff64d589955d68da51bf0d953edfb83292c9055545a8d95f9d3",
+          "bytes": 632
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108902",
+          "fetched": "2026-10-10T04:09:55.467Z",
+          "sha256": "4470662ebbc3cacfbd7b3e738e19b786ea8c77d7570ed1e66a0e961f7078c38c",
+          "bytes": 13335
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108902",
+          "fetched": "2026-10-10T04:09:55.605Z",
+          "sha256": "ab9e3bd4ec88a78357d794cef4328f260af9857d4b3ace873eb1d10d4b36354a",
+          "bytes": 1912
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500691021091001031057151",
+          "fetched": "2026-10-10T04:09:55.774Z",
+          "sha256": "594a235825fbe2eefe99ed114b13281be35aa8806d85c27577f41ecf3df3af23",
+          "bytes": 632
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108903",
+          "fetched": "2026-10-10T04:09:55.927Z",
+          "sha256": "3f49fc64b3fd91773a8923322409204c60e71c66451dd1b4106634362e1335ff",
+          "bytes": 13173
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108903",
+          "fetched": "2026-10-10T04:09:56.083Z",
+          "sha256": "a474447f627726e4190dd20376cf07358ef36b29c9b656d4188563b4a8f06c37",
+          "bytes": 1910
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50050508784768790109",
+          "fetched": "2026-10-10T04:09:56.243Z",
+          "sha256": "a1c6270fccf2f404d58761b83f18251209024aa315bb1334896cd44f6e01dba5",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200108936",
+          "fetched": "2026-10-10T04:09:56.402Z",
+          "sha256": "210a8404c12f06d41764b468462495ee144bda6dc81ac74eeab3ea7d0fec1ce1",
+          "bytes": 12635
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202108936",
+          "fetched": "2026-10-10T04:09:56.568Z",
+          "sha256": "4f6ebc180fe74ff1312737f0b9fd6ff879b2394ea370b3f6301647492f75d3f8",
+          "bytes": 1766
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500827770121114889976",
+          "fetched": "2026-10-10T04:09:56.724Z",
+          "sha256": "a2d40a1fd82160ee477c0737f6df728785618e2a1ff31ebebec01d261606cbe7",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109037",
+          "fetched": "2026-10-10T04:09:56.883Z",
+          "sha256": "16324f54db24e0597e37fe50a733ba385489181138dd78a9b58e2e83d2bf1803",
+          "bytes": 12996
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109037",
+          "fetched": "2026-10-10T04:09:57.036Z",
+          "sha256": "db2a2d151e2f31d42c5547f529e2b9a60f18945562087b2971ab44c207291a79",
+          "bytes": 1369
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5007689505789117109120",
+          "fetched": "2026-10-10T04:09:57.181Z",
+          "sha256": "fa8196cd6e9bb60f4db87fa33b0dd3c57a4dbb6e6929446d8a0df8e96d75df2b",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109169",
+          "fetched": "2026-10-10T04:09:57.384Z",
+          "sha256": "543438025132b235c2226116b24b64d9e25f99c273d9e254ae0aa175c09ba605",
+          "bytes": 18754
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109169",
+          "fetched": "2026-10-10T04:09:57.504Z",
+          "sha256": "cc8e06b1cec3c5be16e616b388426680e927d109e5b2b1d7b83c101520e8cef8",
+          "bytes": 1644
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500846768831204867121",
+          "fetched": "2026-10-10T04:09:57.706Z",
+          "sha256": "2ea228c0a711de8a75333bd2a8003bb31904e54894497fd91d2d0fddfff1b798",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109172",
+          "fetched": "2026-10-10T04:09:57.959Z",
+          "sha256": "46017e8d1bcc29a1c0494454c7008f7269b179567253297cd12bf3f1c074249b",
+          "bytes": 27191
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109172",
+          "fetched": "2026-10-10T04:09:58.109Z",
+          "sha256": "b2eb63b97c38bbeb6888f26c1c5b359fcf5518431ada805ac8461505fe1458a7",
+          "bytes": 1842
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5001064951671071097389",
+          "fetched": "2026-10-10T04:09:58.199Z",
+          "sha256": "21948d425c012c73c7a48736d7e8d86cb782cbbfe983292f4161b9431241548f",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109194",
+          "fetched": "2026-10-10T04:09:58.389Z",
+          "sha256": "9ffd5203328d2aa95ee26aa6aab955d4d61c53fd8d229ffa0abe9735b64d6fb1",
+          "bytes": 27508
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109194",
+          "fetched": "2026-10-10T04:09:58.545Z",
+          "sha256": "8259527ac006bc302f6520891630cb08bd77391160ea874ca5cb552f5ed5af60",
+          "bytes": 1767
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500715278114668011571",
+          "fetched": "2026-10-10T04:09:58.710Z",
+          "sha256": "3348904a7911795549cda260dbb28043c58f504dcb55699e294116b98cae57c4",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109195",
+          "fetched": "2026-10-10T04:09:58.865Z",
+          "sha256": "c3883377a40bf1d3ca5f5844350c0e9c1fb087cfa1fdce1983c8223528e1ab3d",
+          "bytes": 32036
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109195",
+          "fetched": "2026-10-10T04:09:58.988Z",
+          "sha256": "85b351e3b7121e437e36548e76f8e4d6b1104c0f371beaa0022029daed6edbc0",
+          "bytes": 1503
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500811135776669711170",
+          "fetched": "2026-10-10T04:09:59.199Z",
+          "sha256": "df2db4e0d7edf8f0a3cfbc81b42c57722ab505c183203ba4546508bb0fd1a9c0",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109196",
+          "fetched": "2026-10-10T04:09:59.357Z",
+          "sha256": "ce7b709ae5ee96459fc709562254e6d0a3334751ef4fa41dd271057346a3ecca",
+          "bytes": 24487
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109196",
+          "fetched": "2026-10-10T04:09:59.484Z",
+          "sha256": "0460fc534606af26a9afab9778259dca894590a38a3179c3e0da52fe47bce6aa",
+          "bytes": 2357
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500665181841061156951",
+          "fetched": "2026-10-10T04:09:59.630Z",
+          "sha256": "c1d2d25fb211a1da6b5697740c1384a0bd15c3fdcabcdf1df0fab7e1c2a4b85e",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109197",
+          "fetched": "2026-10-10T04:09:59.806Z",
+          "sha256": "79479fb835b4cae2dcfa72b04dd149c8dfae1bb336427c44e0bc6cf6322b883a",
+          "bytes": 42494
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109197",
+          "fetched": "2026-10-10T04:09:59.967Z",
+          "sha256": "4362f34346b28b8da821c68d45a3c791010799c5f1f4531259e38f0973849dac",
+          "bytes": 1707
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50074507410288107104116",
+          "fetched": "2026-10-10T04:10:00.112Z",
+          "sha256": "3552624bcb0c80f823e4acb106a4f8cc8d96f1fdc750f2900f71673775ee9d75",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109200",
+          "fetched": "2026-10-10T04:10:00.277Z",
+          "sha256": "9e21ba211b393e5951de3b20ef6f299d229a9f8185a903467a6990fc11e2b189",
+          "bytes": 39757
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109200",
+          "fetched": "2026-10-10T04:10:00.458Z",
+          "sha256": "c1611f7a170ce4e3d70c6fef1ebdf369b2798f92a1d94bda1d233b09011cf44e",
+          "bytes": 1445
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5007411872981077510369",
+          "fetched": "2026-10-10T04:10:00.596Z",
+          "sha256": "bf03f86792e1b047a55cd345da9c4f00c10376518a118b7b8c50d72a0384ba69",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109203",
+          "fetched": "2026-10-10T04:10:00.773Z",
+          "sha256": "905b085abe1bc864d6aabe63e827e84c5727dac8b1b2ae61b6a78bd2c01aa425",
+          "bytes": 52482
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109203",
+          "fetched": "2026-10-10T04:10:00.889Z",
+          "sha256": "cbfdd7dde1ae9a78a865e724bd9335800d8a45e0db7f522fde8bb2c401eabec0",
+          "bytes": 1964
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500481054869758284102",
+          "fetched": "2026-10-10T04:10:01.052Z",
+          "sha256": "44bbb408e3fc725f2430c9796a807feda857dfc1599e4113d8b379757ccef221",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109362",
+          "fetched": "2026-10-10T04:10:01.222Z",
+          "sha256": "db7b0e5ff71153e8a6075066fd6174479a8da237c0eb6ab3e1eb7b9092ff5a87",
+          "bytes": 39099
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109362",
+          "fetched": "2026-10-10T04:10:01.370Z",
+          "sha256": "7fb33e9dfd26e842b25e42379f96a7fb35248995e991affd184cf8f820274c42",
+          "bytes": 2099
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50087691111091067667120",
+          "fetched": "2026-10-10T04:10:01.538Z",
+          "sha256": "efe6803a0b171541aca9c882c3764cd29360c82818a2360f0104b2f5a53e73b3",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109363",
+          "fetched": "2026-10-10T04:10:01.705Z",
+          "sha256": "05b1ce80fc4e2b80c94572a45ddf3d91a38390fc741905db7ad956fde867888f",
+          "bytes": 42711
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109363",
+          "fetched": "2026-10-10T04:10:01.843Z",
+          "sha256": "cbe2ddf1305e1737ec9b485e9eca052a66a01c6d3f79faaaf45dd37882163e5c",
+          "bytes": 2911
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50078100114121998511049",
+          "fetched": "2026-10-10T04:10:02.017Z",
+          "sha256": "02bff02dc4cd92a616f546f858d78a0f6817950567b3070fd3156aaf04b805b1",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109410",
+          "fetched": "2026-10-10T04:10:02.182Z",
+          "sha256": "e81166f56cd8760df59968a4e839d5cedc66ec88553fb10fc80ed79030812623",
+          "bytes": 40295
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109410",
+          "fetched": "2026-10-10T04:10:02.320Z",
+          "sha256": "6a045251ab84a854c7f346e3bbad40f348540e75ae39dd10b5184b08bbdfa387",
+          "bytes": 1455
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500121898199859711468",
+          "fetched": "2026-10-10T04:10:02.494Z",
+          "sha256": "9aef7c1ccd76b626280d1395fe2b4edb55ccae8de1087eca6082f82a39b4f0e5",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109419",
+          "fetched": "2026-10-10T04:10:02.667Z",
+          "sha256": "54b858a3e40de3590144037b68c3b875371c2e997b3418f297d30a398ae73ae5",
+          "bytes": 23843
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109419",
+          "fetched": "2026-10-10T04:10:02.796Z",
+          "sha256": "1d2939b96b265079a9e4cccfab1f240d5b230593d9eff0577ec680f91a49e3d1",
+          "bytes": 1842
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5005610070109811225672",
+          "fetched": "2026-10-10T04:10:02.950Z",
+          "sha256": "09b3851f77fd2c8348788c3a5a6d53756b053418b8744eff6722459f27bacdb0",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109421",
+          "fetched": "2026-10-10T04:10:03.139Z",
+          "sha256": "ffa4863ab14d5e8993a45361ebf4ab6c3b2912a1854aaac808572ed58bfc8d09",
+          "bytes": 44471
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109421",
+          "fetched": "2026-10-10T04:10:03.322Z",
+          "sha256": "cb39c2d625b90a68a56f7bc8ecf01a6795be7e4639e85d9d3c15f0b9485bee95",
+          "bytes": 1668
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011010648111845283110",
+          "fetched": "2026-10-10T04:10:03.536Z",
+          "sha256": "1b484e8f4a80a61375cb24e4d3ecdb0bb973da5c130ea10b2bcf9a609f28e7a6",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109466",
+          "fetched": "2026-10-10T04:10:03.650Z",
+          "sha256": "dae8bbe5226c574d00940b678f916e24f405e1fbd9a74b4493950223c83e8144",
+          "bytes": 51328
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109466",
+          "fetched": "2026-10-10T04:10:03.799Z",
+          "sha256": "3d0ad41d2383b03d0a32f89c2fda42a440acbd945b0a8954bea8eb7aab374667",
+          "bytes": 7122
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500876510611411811754102",
+          "fetched": "2026-10-10T04:10:03.956Z",
+          "sha256": "33350a2955d7b5710d1a67303b394eeda5f97dba312f40363cca80119b454305",
+          "bytes": 632
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109671",
+          "fetched": "2026-10-10T04:10:04.121Z",
+          "sha256": "a188d7fe78bf4129292f9b0d1cbcad6cc8f60747c4ffd35ac72d7f4182f5c21c",
+          "bytes": 36035
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109671",
+          "fetched": "2026-10-10T04:10:04.277Z",
+          "sha256": "cbaf386a7103f00806a54ab7e899cebb09844b6238df911b15ccd6febbe3362b",
+          "bytes": 2747
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500544811674908180117",
+          "fetched": "2026-10-10T04:10:04.451Z",
+          "sha256": "58b462f8ddccee1aafb114cd1675eeb1a6fec4749de203b6868ceb82e125f193",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200109821",
+          "fetched": "2026-10-10T04:10:04.635Z",
+          "sha256": "fd4eede28ee32eb3681d3ac184de96a24c785e44838f22085525d9cbf9248f55",
+          "bytes": 15967
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202109821",
+          "fetched": "2026-10-10T04:10:04.719Z",
+          "sha256": "9d63f05a904875145dbe542c9dc81e6f7a9821d4308c680ea3db976dc6fd930b",
+          "bytes": 1845
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50082721041221015472101",
+          "fetched": "2026-10-10T04:10:04.890Z",
+          "sha256": "74f6a8dda4c1801415d34ed9e8300c20dc95e29cec2f0af45c3d32046c3bfc37",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200110515",
+          "fetched": "2026-10-10T04:10:05.070Z",
+          "sha256": "5fff6d9f5c6ac8830d645736a0e3906651206ed7af1e762bf9ba64347695b795",
+          "bytes": 26568
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202110515",
+          "fetched": "2026-10-10T04:10:05.206Z",
+          "sha256": "5b832da590f1b796d28c64e0ccf45ff7e144a9eb3db23b01ad2f1a1976e00221",
+          "bytes": 1208
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50075105851061099812188",
+          "fetched": "2026-10-10T04:10:05.369Z",
+          "sha256": "749e5bf8c6b39b9e0c8eddf1586588617a70503021663d51865d19b91543cd1c",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200110537",
+          "fetched": "2026-10-10T04:10:05.541Z",
+          "sha256": "d2da05e5465b8462f1fe3bd3dcb64e2c8e7e56cee34dda32239886738aa6c219",
+          "bytes": 19179
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202110537",
+          "fetched": "2026-10-10T04:10:05.684Z",
+          "sha256": "48c281b0ed9b35d1fc10036afe4405c062ea9cb5908ac044349e7965a9c1782d",
+          "bytes": 2263
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5005050995048517880",
+          "fetched": "2026-10-10T04:10:05.838Z",
+          "sha256": "0220d921bf2eefbd3fe3aa7ff3843152b684fdba873cbe5f9e73fc218c42f44c",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20015844",
+          "fetched": "2026-10-10T04:10:06.004Z",
+          "sha256": "024d3047222c89ed32bf662a291fe743278962d496a9d3aeb363ec93669ff18d",
+          "bytes": 23506
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20215844",
+          "fetched": "2026-10-10T04:10:06.176Z",
+          "sha256": "4163d538508c514a68408826292b0c881ae04d473e5e2f6d4f49802e5a5faef4",
+          "bytes": 1496
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5008267841111019767103",
+          "fetched": "2026-10-10T04:10:06.295Z",
+          "sha256": "bc9ed669458829a560aee4f0d1cd0c50e21ef5bffb288c5d7651040c8de63932",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20015937",
+          "fetched": "2026-10-10T04:10:06.466Z",
+          "sha256": "5157cceac8e49903fcf1f56d7a302a7938c7ffef882681b30c7f8b544b10f19e",
+          "bytes": 34574
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20215937",
+          "fetched": "2026-10-10T04:10:06.615Z",
+          "sha256": "78752abf01322cfc85da0b5d7789552c87bf54bd052e5a0a6431935642ed2be5",
+          "bytes": 1806
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500103108515083788548",
+          "fetched": "2026-10-10T04:10:06.768Z",
+          "sha256": "ac476558ad18926a78b629435b1f7689914ffef9954867f773da6ad181d30593",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20024059",
+          "fetched": "2026-10-10T04:10:06.938Z",
+          "sha256": "ff7471f7845a6c8d477d818edbc4ec11706f31fc7d1e4aebbe781ff8aedd203e",
+          "bytes": 13460
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20224059",
+          "fetched": "2026-10-10T04:10:07.089Z",
+          "sha256": "fe66a28056273cf411925fff65bc2957cd1c9591dbb56866fe03d4470769eeb8",
+          "bytes": 1204
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011877696711710711865",
+          "fetched": "2026-10-10T04:10:07.242Z",
+          "sha256": "36082c1927735318cde947bcdcf5cc2fd82cfe540277e3532480d53e0076b48a",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20024328",
+          "fetched": "2026-10-10T04:10:07.412Z",
+          "sha256": "34d2d889719b6620083f28c3ef7ef7897d9185be41b42a0e45b38ec7ab21dc65",
+          "bytes": 15028
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20224328",
+          "fetched": "2026-10-10T04:10:07.624Z",
+          "sha256": "06d17e1184c93c1610a3e5a6eaba1eece48b36baf7a5609365e9f928e3372f80",
+          "bytes": 1201
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50056527282115658774",
+          "fetched": "2026-10-10T04:10:07.717Z",
+          "sha256": "3e1f95670f19cde7650b18f467b6c8d48c1598cc8cf135e0862a951b2b24db3a",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20025770",
+          "fetched": "2026-10-10T04:10:07.878Z",
+          "sha256": "32fa5bc387e65090ea63a818ba59b41945cc67e6df6483846f5e12f157c3c83c",
+          "bytes": 18357
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20225770",
+          "fetched": "2026-10-10T04:10:08.031Z",
+          "sha256": "9f136bacc884e3e544bb8ba3bc42d32e495f9024c23a08f99dd793ae8bb72c09",
+          "bytes": 1438
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5009970110104848397116",
+          "fetched": "2026-10-10T04:10:08.205Z",
+          "sha256": "34ff9f1f7780ea71cef4b4554f6dfb4f883361449286d07ee05f014461bf7b63",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20025775",
+          "fetched": "2026-10-10T04:10:08.352Z",
+          "sha256": "6037cc055210878d2e432a205a940b9530c4c924c7a027d0bf77f623338f1c0d",
+          "bytes": 18086
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20225775",
+          "fetched": "2026-10-10T04:10:08.541Z",
+          "sha256": "f4691fc55fd1e8f0bd551676b267b22169efa9db544d372af9eacf21013b23c2",
+          "bytes": 1523
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50010512210111385110119114",
+          "fetched": "2026-10-10T04:10:08.850Z",
+          "sha256": "7c3a97cceb9383fd9ce5a0b13e678c2f9471cade486d92c95a1a878b6d9f91a3",
+          "bytes": 633
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20025794",
+          "fetched": "2026-10-10T04:10:08.957Z",
+          "sha256": "f3162656dfbe7037ce820e02552debcff0110b4e3338a94e65d5d4ffb126531c",
+          "bytes": 18000
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20225794",
+          "fetched": "2026-10-10T04:10:09.142Z",
+          "sha256": "ab0b645088275b6ca00009a29fa5b4fdcb5e9251ba78baac207c2f8d93aa267b",
+          "bytes": 1443
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011110171908811011783",
+          "fetched": "2026-10-10T04:10:09.274Z",
+          "sha256": "d218d647fc89be6262d5f400866eab6e7be1e5b726339fa930321353dd5f4359",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20025851",
+          "fetched": "2026-10-10T04:10:09.452Z",
+          "sha256": "a4daff6e805e85fc72a9bf2e37ba23750d21dae0333e6c7967148a038dbd4b10",
+          "bytes": 16848
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20225851",
+          "fetched": "2026-10-10T04:10:09.619Z",
+          "sha256": "5b6d09d088616d38f7969ddbfb44af44bbabfab1e0abae95ca80abde3d9d0185",
+          "bytes": 2959
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011788726876885355",
+          "fetched": "2026-10-10T04:10:09.742Z",
+          "sha256": "889df446ae4011cb2859f3fc47ed863871c8d6aaee3381c3e0f89ae17db4fe31",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026039",
+          "fetched": "2026-10-10T04:10:10.114Z",
+          "sha256": "e927140db77b4ab2719ac575d89e52e23bfd80c6fd4247f4357925100466d059",
+          "bytes": 22794
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226039",
+          "fetched": "2026-10-10T04:10:10.198Z",
+          "sha256": "aaf69ffa281da97b1ef76508fb7461256008c8959f1f34bebb4c36ecdafa3b98",
+          "bytes": 2767
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50048689810278745376",
+          "fetched": "2026-10-10T04:10:10.421Z",
+          "sha256": "4eed133aba8d53b7a6c96407cb21b8cae894389d9ace6d76d4171282a28d6e70",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026061",
+          "fetched": "2026-10-10T04:10:10.540Z",
+          "sha256": "bd616196ccf37e06dbdd1778f753884c35f378d6f776d795fb38340fee33e5de",
+          "bytes": 17258
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226061",
+          "fetched": "2026-10-10T04:10:10.687Z",
+          "sha256": "92b0de6906f64ef81811e2bb407f086a1fbd4d44b917c7f54ff0f29191103408",
+          "bytes": 2195
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500531011207371109121112",
+          "fetched": "2026-10-10T04:10:10.895Z",
+          "sha256": "29f1f2caab6c1e8be4eb19f40067c82f2636abc75a887911220e915cf26b91da",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026317",
+          "fetched": "2026-10-10T04:10:11.010Z",
+          "sha256": "13abb6a28406294a3abde25f325be8564fc44e7835ac7674c09dac8f2d61b162",
+          "bytes": 26523
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226317",
+          "fetched": "2026-10-10T04:10:11.158Z",
+          "sha256": "8e66c0b8403a48fbff2f0c5c00bf12abc89d5d919c8b2e65111ed532480b21bf",
+          "bytes": 1517
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5007166113658910166119",
+          "fetched": "2026-10-10T04:10:11.311Z",
+          "sha256": "55f4b55449a0703ebfc0743d15b6f8dfc1f55bb012bfe85c018d753e12b73e2b",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026438",
+          "fetched": "2026-10-10T04:10:11.478Z",
+          "sha256": "b0fdbb6fdf2136165c6011fd280fdbdef320d712ebe6479513af913139e9dfe6",
+          "bytes": 14560
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226438",
+          "fetched": "2026-10-10T04:10:11.653Z",
+          "sha256": "7e0734bdca3f0a536928021aa36564cd85b7866fae6b55db6504a0a2fda809bf",
+          "bytes": 1574
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5001005053121116546768",
+          "fetched": "2026-10-10T04:10:11.821Z",
+          "sha256": "43cfc15224b09ae92e2308f9002701b391f05ac32a9e7d8518665ddebaad3adc",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026443",
+          "fetched": "2026-10-10T04:10:11.954Z",
+          "sha256": "5c53d23a98373bfcc18d316b905db2cee0e8a6de6aeddd548f0e1bff98763219",
+          "bytes": 17725
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226443",
+          "fetched": "2026-10-10T04:10:12.096Z",
+          "sha256": "f94e5f903456b5b09509a086df9af646b93eb89aafe6e784040d29e65aeaba60",
+          "bytes": 1913
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50068825053797611270",
+          "fetched": "2026-10-10T04:10:12.257Z",
+          "sha256": "160ffa6ab4dec20fc7a4bc7a4ea9bd33bd0ac29e3787c80e8c4438c2b6a3f1a6",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026555",
+          "fetched": "2026-10-10T04:10:12.439Z",
+          "sha256": "bcf66549080b44dc8e587613508eac85444619e1b337820c2aabebbdb7fe7692",
+          "bytes": 20211
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226555",
+          "fetched": "2026-10-10T04:10:12.563Z",
+          "sha256": "7a39c460dec709abb2c44e59752eaeabb0e691dada4fceb5b7d94ab2d44c0ae2",
+          "bytes": 2271
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500115536810510311054120",
+          "fetched": "2026-10-10T04:10:12.714Z",
+          "sha256": "a49dd9d2669c6ff471ddd59a7dac56275ccc1f05025d59ecee67891ac654bffc",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20026626",
+          "fetched": "2026-10-10T04:10:12.892Z",
+          "sha256": "f86282fc65c23f427fba05aca485bea70a7d52d53f6148d3f98c1b769f5ed73e",
+          "bytes": 18540
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20226626",
+          "fetched": "2026-10-10T04:10:13.058Z",
+          "sha256": "3a45195b09640d1420b189d3c1117324811bb1c671a9e88c10b2d7cc1271c127",
+          "bytes": 1444
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011771671171175211453",
+          "fetched": "2026-10-10T04:10:13.208Z",
+          "sha256": "3d97d87479089eba9e31fc734df3722e3474c0a4c8b7c1d3fd8280962fd6f06c",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027003",
+          "fetched": "2026-10-10T04:10:13.357Z",
+          "sha256": "3a82652e6ef2d9d34c30746583b25675cc0605550877f9736bc175d025f16ea9",
+          "bytes": 16842
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227003",
+          "fetched": "2026-10-10T04:10:13.526Z",
+          "sha256": "175949ac1f81327f97afde12d791b86d3f6d5658d4f17ddc0937ea6558734f08",
+          "bytes": 1436
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500749911183851228966",
+          "fetched": "2026-10-10T04:10:13.749Z",
+          "sha256": "02a8862644ebbca34ee0d51bfa63ecdb605690e775d7a69f7421e13f98b797c6",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027210",
+          "fetched": "2026-10-10T04:10:13.846Z",
+          "sha256": "29219a588a88fe5a3871985bf83c0ab019975556181448aae5c08ae907c3a048",
+          "bytes": 18092
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227210",
+          "fetched": "2026-10-10T04:10:14.005Z",
+          "sha256": "62b71e2812d47621884bd51819fb79f433d260a5c805283220983b55a08aa063",
+          "bytes": 1515
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50012250797778659870",
+          "fetched": "2026-10-10T04:10:14.176Z",
+          "sha256": "e85eba86a1bee6697c5a9a10ccaaa0f7f4b004d53584dfe9f9165f4a59968f8d",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027379",
+          "fetched": "2026-10-10T04:10:14.346Z",
+          "sha256": "f716ccbf4f442c283a2650de52c14f747d34d83cea3f532b8f022f4d329e245f",
+          "bytes": 35686
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227379",
+          "fetched": "2026-10-10T04:10:14.481Z",
+          "sha256": "4b76980a52ada9a6caac55f43b24d3c554a44ca29aef3321b33a0e8b6ffd4180",
+          "bytes": 2976
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50073507870105119114113",
+          "fetched": "2026-10-10T04:10:14.652Z",
+          "sha256": "f370b68173566e92350681b5cdf9b68f062908037f01efd4a9254cb261fca2ed",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027457",
+          "fetched": "2026-10-10T04:10:14.805Z",
+          "sha256": "a0557b0ca1fbfdeca6fc4086c2e08c0d1ac895b3202385c404043cdb9e3d3a3c",
+          "bytes": 17773
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227457",
+          "fetched": "2026-10-10T04:10:14.953Z",
+          "sha256": "42bd26280bf2b560f2212440a99a29f33a8521a1e793a6ceb81670b0086cde3b",
+          "bytes": 1837
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5006565118565010853109",
+          "fetched": "2026-10-10T04:10:15.105Z",
+          "sha256": "0bafd2d755e81d0edc3a08395d1689da72435103f328f6669b4f89bf09e77735",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027605",
+          "fetched": "2026-10-10T04:10:15.271Z",
+          "sha256": "429658e0244889f16ed7c5417a9232034edfe16fc59aded0f5eae59e55c90475",
+          "bytes": 17040
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227605",
+          "fetched": "2026-10-10T04:10:15.432Z",
+          "sha256": "93a6c5dafcd6cfc8a5945a4f8e5a86f905795ec0f7b3a984fcef150df8a5bd56",
+          "bytes": 2717
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5008111510653681047075",
+          "fetched": "2026-10-10T04:10:15.562Z",
+          "sha256": "34f3644b8c42f27adf304ce47b675781e28d2aa8cc5a80d0ed5df6f5e8daf93f",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027722",
+          "fetched": "2026-10-10T04:10:15.761Z",
+          "sha256": "1eddf652cc58e19335533eb2f3d5d99f7e8a5fbb38db7514e518c0536046d4e9",
+          "bytes": 17181
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227722",
+          "fetched": "2026-10-10T04:10:15.899Z",
+          "sha256": "f2fecfad562a7256426074bdc351967c65bc172864ebb4b7fd8dfe230637628c",
+          "bytes": 1939
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500728765501105211850",
+          "fetched": "2026-10-10T04:10:16.055Z",
+          "sha256": "cc22142dd26c67325be206793f773590d0d9a54d09e89985d908a51a320d4b52",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027765",
+          "fetched": "2026-10-10T04:10:16.598Z",
+          "sha256": "d005799a3d54c6d38908e3da1fc3871d3a906cd7b2571e169f26e46795df7ba1",
+          "bytes": 22598
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227765",
+          "fetched": "2026-10-10T04:10:16.686Z",
+          "sha256": "5b5ba3bf954c35e2e414b2fa8348930355d1de1b98d01a0af165ac49caf522ab",
+          "bytes": 3716
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50078678378768812086",
+          "fetched": "2026-10-10T04:10:16.849Z",
+          "sha256": "311297b2a0129e32cc9bcd85177f0adf64750b62369cd826ff9983b129b432d8",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027766",
+          "fetched": "2026-10-10T04:10:17.019Z",
+          "sha256": "d574cce73d2578767bf9d246f30c19c5db29dac90a2b64a6a3ab187bb6bdbe11",
+          "bytes": 18614
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227766",
+          "fetched": "2026-10-10T04:10:17.162Z",
+          "sha256": "9790c2dd590861dad35ff6db87a29ad0135e6abf06f7dbfe4cc3a84599ab1fa2",
+          "bytes": 2757
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5008370757487115111114",
+          "fetched": "2026-10-10T04:10:17.334Z",
+          "sha256": "eb09ce0c4f4b55b63b0e79c92aa746cc78ac35c36e72ee0ce7a3d3bf1aacbda6",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027875",
+          "fetched": "2026-10-10T04:10:17.491Z",
+          "sha256": "f0d179137efd311b44e97487931b12bf1ae61a9db3377202884675daf56d7cfc",
+          "bytes": 23062
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227875",
+          "fetched": "2026-10-10T04:10:17.642Z",
+          "sha256": "88317f0137e03e3ca173445a825ab797825ae02be31f89f20e9a42642e7697bd",
+          "bytes": 1918
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500108112100115497611298",
+          "fetched": "2026-10-10T04:10:17.814Z",
+          "sha256": "ce690fede59b00dfc9a6c595e1dd13ed86eeb07d12e46e6b36b6f5b986247d84",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027876",
+          "fetched": "2026-10-10T04:10:17.970Z",
+          "sha256": "81382b982ab62a30b93e97f28093a8209822705560acff0d6d2f31b7a7eea4d3",
+          "bytes": 28653
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227876",
+          "fetched": "2026-10-10T04:10:18.112Z",
+          "sha256": "8e85b897d93483bc26aebbd4a9736b7394d82c0fdf59a65d08d5fd0e310592b2",
+          "bytes": 1915
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011711210210387666565",
+          "fetched": "2026-10-10T04:10:18.277Z",
+          "sha256": "913ed8b455c3bb6a800f4fae02963eb4fec97ddb214f836f35a3863df10ec081",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027914",
+          "fetched": "2026-10-10T04:10:18.450Z",
+          "sha256": "c1d7a2157b67fe9db554d2773638ebdf289d16562aa126fe66318c079de20b13",
+          "bytes": 17554
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227914",
+          "fetched": "2026-10-10T04:10:18.621Z",
+          "sha256": "3de75cdb6485aa16e7775c3663747c9cbf6cac29292ab6e1433132895714d27d",
+          "bytes": 2048
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50010912181834911271101",
+          "fetched": "2026-10-10T04:10:18.753Z",
+          "sha256": "cd7236576a602462cdf8bf2bfcc0d79f1acb30bc0c16a2192760635d892c5b09",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027918",
+          "fetched": "2026-10-10T04:10:18.900Z",
+          "sha256": "af07be7df848c315f42a6a8f2160c5c7649e80c7c371e2c38b314633a67b3e5b",
+          "bytes": 17320
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227918",
+          "fetched": "2026-10-10T04:10:19.079Z",
+          "sha256": "8b8c086acec6b7ce5cdf1041eb5946e17d56b29e92546b0e939392a1b1ac5dfb",
+          "bytes": 1957
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50082697278538410487",
+          "fetched": "2026-10-10T04:10:19.204Z",
+          "sha256": "7a82fb3ef4c9554df51328184af21bbe8ba8afd6a5fe7334d3b665e573eb9b31",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027920",
+          "fetched": "2026-10-10T04:10:19.381Z",
+          "sha256": "996d37eb689aea2095b8896b6e42d9055f9496406fbb535b96cf5e15e0f8095d",
+          "bytes": 16403
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227920",
+          "fetched": "2026-10-10T04:10:19.534Z",
+          "sha256": "6cdaa884353875de7df1a7bcc6fa9fd69a1ac76771ab56d6f39f29d75cccc409",
+          "bytes": 1603
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50072789772651067365",
+          "fetched": "2026-10-10T04:10:19.680Z",
+          "sha256": "952653aa89fdcfd7736df2cd8a318fb11abb1cc6ca0b27d588c61b71420cd8d3",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20027921",
+          "fetched": "2026-10-10T04:10:19.861Z",
+          "sha256": "41e332030243f4bc9812485fc5f5ca6f4a1b96a19d1235721590c007b9ce7cdc",
+          "bytes": 19140
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20227921",
+          "fetched": "2026-10-10T04:10:20.018Z",
+          "sha256": "6e1f278313e7befefdf2ee4ba22da90e3006f97a9880d2e3d67c54a5ba6f5692",
+          "bytes": 1516
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500881089088481198289",
+          "fetched": "2026-10-10T04:10:20.173Z",
+          "sha256": "1379ec3d3fda6c9061152960acfef80f96eb158af9b81babee0fd88663883f82",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028067",
+          "fetched": "2026-10-10T04:10:20.331Z",
+          "sha256": "9bc17bdff3a01f9beaafeb782f84f2d68d6a42032dbb942756a7cc9d8e7a57df",
+          "bytes": 15611
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228067",
+          "fetched": "2026-10-10T04:10:20.490Z",
+          "sha256": "667403d0b350710c13ac3a30d3945cfee72983cc95a2f7b568b1c6f4b3b14053",
+          "bytes": 1579
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50089687682719910884",
+          "fetched": "2026-10-10T04:10:20.698Z",
+          "sha256": "982d9866a90599634cab8e0ec4d5528955c8383d1845d5605c9cb4c67ba42669",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028122",
+          "fetched": "2026-10-10T04:10:20.956Z",
+          "sha256": "549d2df69ea4a6d413a72a7e32ebb586d52ca0738be95628c4c4ee5ee7752228",
+          "bytes": 17268
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228122",
+          "fetched": "2026-10-10T04:10:21.069Z",
+          "sha256": "01b629a05fff84793c59eebb9c73a4adf2ddb0af7e7713c99d2eb62c26270ede",
+          "bytes": 1796
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500891217151898610671",
+          "fetched": "2026-10-10T04:10:21.213Z",
+          "sha256": "13bdc3401d4ec2ed8c44a1cd8cd33d628a4d8def78a92ac0885ae7b7d134ec0a",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028182",
+          "fetched": "2026-10-10T04:10:21.371Z",
+          "sha256": "37bdc332d37d77a19cb3c97bd59598423b34bd89dbb4825c24f3f918e783bad9",
+          "bytes": 19762
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228182",
+          "fetched": "2026-10-10T04:10:21.508Z",
+          "sha256": "eaeeeb26be39c1442347c22c7586a162019d4f4be3b5c5019b97556f3cb66155",
+          "bytes": 2057
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500119114102101106689785",
+          "fetched": "2026-10-10T04:10:21.682Z",
+          "sha256": "a3cdf209087d1c5bb6990eeb84d8ce84d9c061ddc27cf3af6e044e38bb5c2f2f",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028518",
+          "fetched": "2026-10-10T04:10:21.855Z",
+          "sha256": "49f6695f65b6ff6097d1a6bd874c2ec6728dbfda0a3b44ee438c31e601fbc962",
+          "bytes": 14245
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228518",
+          "fetched": "2026-10-10T04:10:21.999Z",
+          "sha256": "ccf312adc683a675bc0a4d39f931074f4fd40619514f4001ae37fecfe0ff8b79",
+          "bytes": 1445
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500114886511468119105107",
+          "fetched": "2026-10-10T04:10:22.165Z",
+          "sha256": "a1049a31fc4473140067f95ac37b2fdcb8b66353a7a997b85840d81e9ad48939",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028696",
+          "fetched": "2026-10-10T04:10:22.334Z",
+          "sha256": "72ee85517a80db9c8d502d3e7f2a82ef2f208763e31f90300fd3fe48000c3cc9",
+          "bytes": 21155
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228696",
+          "fetched": "2026-10-10T04:10:22.486Z",
+          "sha256": "8868940cb987a4a51cf13e353d443b6e25135c4bcd4f8b06981b55377c87408b",
+          "bytes": 2968
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5008767697511811581112",
+          "fetched": "2026-10-10T04:10:22.652Z",
+          "sha256": "caac8f9b9b56169b0cc832c1d26cb685e03d0efb3271a4d84d29d3b6f2a6d6f5",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028697",
+          "fetched": "2026-10-10T04:10:22.799Z",
+          "sha256": "61d106ea2d61889c79740bc56efa99f19632be65943da5ae61f3852ea2300563",
+          "bytes": 20770
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228697",
+          "fetched": "2026-10-10T04:10:22.979Z",
+          "sha256": "7bd81026eb2ef383286a3b0d4a59410cbe590539de648d6a004ac22fd3abb98f",
+          "bytes": 2231
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500101113102501191107070",
+          "fetched": "2026-10-10T04:10:23.111Z",
+          "sha256": "2cf34c6b7d299ea5668462c04f8330f4148c660cb52a1a64659b2255e7bc7fda",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028739",
+          "fetched": "2026-10-10T04:10:23.284Z",
+          "sha256": "8f96266616eb4e4bda0134693c6b12a5ab4b4bb522139823c7be8d61e69fcada",
+          "bytes": 21763
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228739",
+          "fetched": "2026-10-10T04:10:23.427Z",
+          "sha256": "daa4b066d548beda761835f75ffe627d05c8e9e92658d5b6dcaa2ffd06570638",
+          "bytes": 4344
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500908412066875298121",
+          "fetched": "2026-10-10T04:10:23.586Z",
+          "sha256": "f42dd6d184d7105e905c6141b5c6c1710785123d5440c5d0eda77bbd4a3f468f",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20028829",
+          "fetched": "2026-10-10T04:10:23.745Z",
+          "sha256": "bc6ce4169e3b0fdbe6d98d1f0691c1691afb6474e31b35bd087bff6fe9502961",
+          "bytes": 20367
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20228829",
+          "fetched": "2026-10-10T04:10:23.911Z",
+          "sha256": "c332819f9fd3eae110d35adea504bebde7e64c6629f5a6e225a10299e795d915",
+          "bytes": 1427
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500119675111974718472",
+          "fetched": "2026-10-10T04:10:24.112Z",
+          "sha256": "3778a096dcc67595087ddf6e0f4270dc0f9c73760a6ac3835f116cf4893d8f71",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20029074",
+          "fetched": "2026-10-10T04:10:24.242Z",
+          "sha256": "0115815c62ae7303d8b881d45bdfa674a4f75d84b416c66dd89953cc01e5da65",
+          "bytes": 15988
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20229074",
+          "fetched": "2026-10-10T04:10:24.418Z",
+          "sha256": "54a5ba87230a572b7d6160de72133a63585df2ec3d66b220bf1de402570ca938",
+          "bytes": 1784
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5008285681141047870115",
+          "fetched": "2026-10-10T04:10:24.540Z",
+          "sha256": "3040ec3f198dc66d957f3df109fd289da495206f63332bcb5bb4d19a95231c06",
+          "bytes": 629
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20029258",
+          "fetched": "2026-10-10T04:10:24.693Z",
+          "sha256": "de886abd399dd2337b34bbcc011fd2f98cead6bd6de2dbee4f5c83089c507d9a",
+          "bytes": 20203
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20229258",
+          "fetched": "2026-10-10T04:10:24.841Z",
+          "sha256": "4e6ad52189fc725c5c2c0f77f858bd55b67ed933c5c021d668a353dcc674a38d",
+          "bytes": 1516
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50056541079951998466",
+          "fetched": "2026-10-10T04:10:25.016Z",
+          "sha256": "249b035baec1e47d0f91fce668bfc8732a31d4c69720aef3808c08fbcd2df459",
+          "bytes": 627
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415342",
+          "fetched": "2026-10-10T04:10:25.179Z",
+          "sha256": "d7084b81649b7e51a36cf6ad2d1707e46f4f64de7b2f90375bf365f25682734a",
+          "bytes": 25608
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415342",
+          "fetched": "2026-10-10T04:10:25.321Z",
+          "sha256": "7539e8a6e7e9f8fdcdff6466c897bb10bef2268cb5fa4f8c3bf7fe26b9835fb2",
+          "bytes": 2393
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011911965108827410352",
+          "fetched": "2026-10-10T04:10:25.504Z",
+          "sha256": "2ea69425b2e50d2744d208009ffcba111b185dba4db26f555bf4e7e28f2c83f9",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415343",
+          "fetched": "2026-10-10T04:10:25.642Z",
+          "sha256": "7310c5a580f9dbf114bddb2eec961a1841f94f4a4475298840d2255e2ef3a1e5",
+          "bytes": 28844
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415343",
+          "fetched": "2026-10-10T04:10:25.794Z",
+          "sha256": "159915b90050ab2c815cb50c76d92bf501755c6834c6e1e867c350f2f85fc2d4",
+          "bytes": 2393
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011471121898553118109",
+          "fetched": "2026-10-10T04:10:25.954Z",
+          "sha256": "25444e34411d15069db523da15ce7ba6e5676956dde3a35b730046f2fc337f33",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415344",
+          "fetched": "2026-10-10T04:10:26.123Z",
+          "sha256": "b3de1e20a9a060980d067eaae27fb25a0b7fdb846d3b2ffe8b12be2f80fcf164",
+          "bytes": 25812
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415344",
+          "fetched": "2026-10-10T04:10:26.265Z",
+          "sha256": "1981dee16ca46d253fae599f6bf7f13f62c4fceb7ecf86b7314cef04a747f911",
+          "bytes": 2129
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50069108117113746670105",
+          "fetched": "2026-10-10T04:10:26.425Z",
+          "sha256": "9587c41ba0d050b1f0795c6134e9d5481107f75aaeb0a2a365ccc0992f917deb",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415345",
+          "fetched": "2026-10-10T04:10:26.588Z",
+          "sha256": "3de39c95cfa3785f2687c1d4720e3663a2855897f7d9f896d08dee6ff8736989",
+          "bytes": 27495
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415345",
+          "fetched": "2026-10-10T04:10:26.738Z",
+          "sha256": "51b200669acf392009124f31a17af2e6e9e2d4d41e3f6782ce1c3a879936ddcd",
+          "bytes": 2130
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50055757410510011910898",
+          "fetched": "2026-10-10T04:10:26.901Z",
+          "sha256": "850d333404d7486ff292334952b75697ffd189a8947d07043aaf2a60dcac0206",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415346",
+          "fetched": "2026-10-10T04:10:27.060Z",
+          "sha256": "6c2f733356385034ca45f06b6e4b2cea7ae7c5e0a0114495952602ccf77a9edc",
+          "bytes": 25797
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415346",
+          "fetched": "2026-10-10T04:10:27.214Z",
+          "sha256": "f34da4a4d253ff54ac7bb8ee31b7be9b009a4e01fe6ca8079c0659e726baefa3",
+          "bytes": 2129
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5006567113117774866113",
+          "fetched": "2026-10-10T04:10:27.411Z",
+          "sha256": "3c162e62eef6b0a82958074d15685d4f8ab697d37508139b073aed3e91d7ac62",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415347",
+          "fetched": "2026-10-10T04:10:27.541Z",
+          "sha256": "928a04991de345a834320123236d4a04a47f8295dfa151188160ca7f2aac8942",
+          "bytes": 25293
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415347",
+          "fetched": "2026-10-10T04:10:27.690Z",
+          "sha256": "6222fceeac30ea007731836ea7c1708fc41856962f50954eba1d26a21d2f3d3b",
+          "bytes": 2129
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50011272541051217410598",
+          "fetched": "2026-10-10T04:10:27.858Z",
+          "sha256": "6aba1c2ab519b4834fccb371364c3fb532499c7ed1c69b3536e33c433e0ebf75",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200415348",
+          "fetched": "2026-10-10T04:10:28.016Z",
+          "sha256": "f884413d85cb1ea92550627a9d23c979519803c60c400a0f5181476760bd1e1d",
+          "bytes": 25335
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202415348",
+          "fetched": "2026-10-10T04:10:28.159Z",
+          "sha256": "7e683deb87cdf81ecb82f3bb407f1d2f91327b579d3fb63db3c0ad10e2d05b99",
+          "bytes": 2127
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50010549737676565153",
+          "fetched": "2026-10-10T04:10:28.326Z",
+          "sha256": "9b881bb95d3f5d6ed9d9c05c0630eb597da5b5fcfae4ab6f0359bf4e0c03fb14",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200799073",
+          "fetched": "2026-10-10T04:10:28.488Z",
+          "sha256": "23fe9badda95fbc9ee2d63a330529c36faaa8f006ee57c3160980af3b3e5e19e",
+          "bytes": 27838
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202799073",
+          "fetched": "2026-10-10T04:10:28.649Z",
+          "sha256": "0a9ef0ffc3a02ef9933ba4aab8d1ca3c8de93a3ff9fd4f050f46bd8eead520a1",
+          "bytes": 1933
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500111531099066116117103",
+          "fetched": "2026-10-10T04:10:28.851Z",
+          "sha256": "688f91ff7db54162645f1b52e05ef52aa398bc9505baed5e09c4f16a5e41f12c",
+          "bytes": 632
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20089789",
+          "fetched": "2026-10-10T04:10:29.108Z",
+          "sha256": "fe7b1467c8c9dcdb0dba4059282c62b8561e8603de6707ad0c21f55d72d7c234",
+          "bytes": 16934
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20289789",
+          "fetched": "2026-10-10T04:10:29.211Z",
+          "sha256": "1dfb0f0ad2b3487b4a72f604330b8140abf4967c4639f2c16d07db3d37ab7bf7",
+          "bytes": 1520
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50010011365811069712254",
+          "fetched": "2026-10-10T04:10:29.380Z",
+          "sha256": "469247a16b05abbca0448f5db51a324706f50346c1f5a0f7362a9118a9b6e0b3",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20089790",
+          "fetched": "2026-10-10T04:10:29.528Z",
+          "sha256": "165f1f79c390495bff827d54d1b0aa2a247c44926515ad1d67766d8667a85854",
+          "bytes": 16923
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20289790",
+          "fetched": "2026-10-10T04:10:29.713Z",
+          "sha256": "3c230285db565b3d248cf9b6618648fbe6beb774b6412f9f02577d72874ef83c",
+          "bytes": 1522
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50012167708010510111257",
+          "fetched": "2026-10-10T04:10:29.842Z",
+          "sha256": "b25ad481b5091db85676d6c9e1026bf545788d330f27e4f35c82bcbba5aebf78",
+          "bytes": 630
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20089791",
+          "fetched": "2026-10-10T04:10:29.990Z",
+          "sha256": "b0eddd3e1d24f943528fa3234e326aa0de8f0109cc67ed8fbaf213863231a784",
+          "bytes": 19235
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20289791",
+          "fetched": "2026-10-10T04:10:30.130Z",
+          "sha256": "99987ab607a08dc035b7f441d767813f4e0f0da83653e263609dcf2eaf6bb4a3",
+          "bytes": 1443
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500994810211090726775",
+          "fetched": "2026-10-10T04:10:30.310Z",
+          "sha256": "56aeb77154717415f5693269d03b58e9f9caf4e060161249f37bbe64dd9bbdd4",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20089792",
+          "fetched": "2026-10-10T04:10:30.482Z",
+          "sha256": "841e826d13427702cf52f07a63b21eb358f4fd7d476a25a7c6f54eaff7f566e1",
+          "bytes": 19226
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20289792",
+          "fetched": "2026-10-10T04:10:30.611Z",
+          "sha256": "18c2ab5e79fc3afd50ff30ec568f00152498f30dadbd553f73fdf71aa40d6341",
+          "bytes": 1441
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500118651038873716765",
+          "fetched": "2026-10-10T04:10:30.784Z",
+          "sha256": "d4f1f5dee2645b2b680d0ca87b5f83b40fe6a7308355b0a0aeabfe17bc2adcfe",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20089793",
+          "fetched": "2026-10-10T04:10:30.942Z",
+          "sha256": "25b4515497221d491a1bba4444022215df1e47c3832d0358082d08b65edeaf75",
+          "bytes": 19318
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/20289793",
+          "fetched": "2026-10-10T04:10:31.102Z",
+          "sha256": "4b39431e60a5b64c64891f402713a76574a31a91dd940353ec4d83c05a8c9960",
+          "bytes": 1446
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/500116109115731175367119",
+          "fetched": "2026-10-10T04:10:31.270Z",
+          "sha256": "d744af0a38cd4fbf4263b13e1867cf4d4c1eb1d569c4ecde37a1d1c9f118cb23",
+          "bytes": 631
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107757",
+          "fetched": "2026-10-10T04:10:31.427Z",
+          "sha256": "e33dfb3ffb8e3fcc528fe2e45f8046f42cc076261557bf60609241dcebdc7d8e",
+          "bytes": 24641
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107757",
+          "fetched": "2026-10-10T04:10:31.561Z",
+          "sha256": "7d823cf25c0e65af26fb6722c9ee7b76c660eb02418102371ce8434fc19ac98b",
+          "bytes": 2512
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50051528782671166576",
+          "fetched": "2026-10-10T04:10:31.713Z",
+          "sha256": "4e517af2bbc9d5fdcfba70bf293b1a0a2f4ecceac43b6390b8c2ab057f827adc",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107770",
+          "fetched": "2026-10-10T04:10:31.894Z",
+          "sha256": "d142b181aa3b87e9ff76aa4361360a7ebab17960018275480ba204bd42c9230e",
+          "bytes": 28675
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107770",
+          "fetched": "2026-10-10T04:10:32.045Z",
+          "sha256": "ade724fd46f24ad3c10418248c673c8ce766b34643f6351d001e9db4884610c9",
+          "bytes": 3169
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50078747583791149068",
+          "fetched": "2026-10-10T04:10:32.262Z",
+          "sha256": "649410a09527454519faea74e08e3a8dc6d75d20e5c289589cf4d3441e6466f3",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107771",
+          "fetched": "2026-10-10T04:10:32.359Z",
+          "sha256": "5511597467ba76591e1059c5f8ccb60e9ccddf08cde0232780b405e96196363d",
+          "bytes": 27828
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107771",
+          "fetched": "2026-10-10T04:10:32.531Z",
+          "sha256": "6f24e57a2f2704db4ee7d7b8bfa00ff132a6f25aef197484029ae38f61fb491c",
+          "bytes": 1722
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/50081847556747411081",
+          "fetched": "2026-10-10T04:10:32.684Z",
+          "sha256": "d25dffd95acddaaed602aa66a83bd076690ba6d25da05b7155ef19d1ba09b616",
+          "bytes": 628
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/200107776",
+          "fetched": "2026-10-10T04:10:32.859Z",
+          "sha256": "0615094810a5b8ff13e5945f43dd78123f99985ed6edd362543e1574ed64cf03",
+          "bytes": 47959
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/202107776",
+          "fetched": "2026-10-10T04:10:32.982Z",
+          "sha256": "0111b7ab8aed529c7f0b02f4858ff4c1ddf11652a634a3bb07f29ebd5334d964",
+          "bytes": 3707
+        },
+        {
+          "url": "https://id.rijksmuseum.nl/5001019811210910111312048",
+          "fetched": "2026-10-10T04:10:33.159Z",
+          "sha256": "4630fecdaae592a3f210a280978d89a2c24381a6f1bc63e928bb7e173381904a",
+          "bytes": 633
+        }
+      ],
+      "licenceEvidence": {
+        "url": "https://data.rijksmuseum.nl/policy/information-and-data-policy",
+        "quote": "The Rijksmuseum provides Information and Data that are no longer, or have never been, protected by copyright with a Public Domain Mark (PDM) and/or the Creative Commons Zero 1.0 (CC0 1.0) Public Domain Dedication.",
+        "fixture": "fixtures/evidence/rijksmuseum-data-policy.txt",
+        "fetched": "2026-10-10T03:46:51.335Z",
+        "sha256": "aadc71708608bc9b70a72a6e2555193424c6843aaff383c3fc4c9107737a9be8",
+        "bytes": 32546
+      }
+    },
+    {
+      "id": "commons",
+      "name": "Wikimedia Commons (PD-Art) with Wikidata",
+      "works": 80,
+      "excluded": 27,
+      "licenceCounts": {
+        "PD-Art (artist died 1903)": 3,
+        "PD-Art (artist died 1936)": 4,
+        "PD-Art (artist died 1876)": 1,
+        "PD-Art (artist died 1882)": 2,
+        "PD-Art (artist died 1939)": 1,
+        "PD-Art (artist died 1915)": 1,
+        "PD-Art (artist died 1913)": 1,
+        "PD-Art (artist died 1926)": 62,
+        "PD-Art (artist died 1942)": 1,
+        "CC0-1.0": 4
+      },
+      "requests": [
+        {
+          "url": "https://query.wikidata.org/sparql?format=json&query=SELECT%20DISTINCT%20%3Fartist%20WHERE%20%7B%0A%20%20%3Fartist%20wdt%3AP31%20wd%3AQ5%20%3B%20wdt%3AP106%20wd%3AQ1028181%20%3B%20wdt%3AP570%20%3Fdeath%20%3B%20wdt%3AP27%20%3Fcountry%20.%0A%20%20VALUES%20%3Fcountry%20%7B%20wd%3AQ403%20wd%3AQ36704%20%7D%0A%20%20FILTER(YEAR(%3Fdeath)%20%3C%3D%201955)%0A%7D",
+          "fetched": "2026-10-10T04:56:06.503Z",
+          "sha256": "745e52b67e6ebe70d892b134765b04d79f054d7219b6cc100ce61a48ddc007ea",
+          "bytes": 5150
+        },
+        {
+          "url": "https://query.wikidata.org/sparql?format=json&query=SELECT%20%3Fpainting%20%3Fimg%20%3FtitleEn%20%3FtitleSr%20%3FartistEn%20%3FartistSr%20%3Fdeath%20%3Finception%20%3Fmedium%20%3FcollectionEn%20WHERE%20%7B%0A%20%20VALUES%20%3Fartist%20%7B%20wd%3AQ426092%20wd%3AQ737586%20wd%3AQ752085%20wd%3AQ988519%20wd%3AQ1065954%20wd%3AQ3314486%20wd%3AQ3341564%20wd%3AQ3433217%20wd%3AQ3552448%20wd%3AQ3593877%20wd%3AQ5993024%20wd%3AQ7155809%20wd%3AQ9286452%20wd%3AQ1565196%20wd%3AQ2075216%20%7D%0A%20%20%3Fpainting%20wdt%3AP31%20wd%3AQ3305213%20%3B%20wdt%3AP170%20%3Fartist%20%3B%20wdt%3AP18%20%3Fimg%20.%0A%20%20%3Fartist%20wdt%3AP570%20%3Fdeath%20.%0A%20%20FILTER(YEAR(%3Fdeath)%20%3C%3D%201955)%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleEn%20FILTER(LANG(%3FtitleEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleSr%20FILTER(LANG(%3FtitleSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistEn%20FILTER(LANG(%3FartistEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistSr%20FILTER(LANG(%3FartistSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP571%20%3FinceptionDate%20.%20FILTER(YEAR(%3FinceptionDate)%20%3C%3D%20YEAR(%3Fdeath))%20BIND(YEAR(%3FinceptionDate)%20AS%20%3Finception)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP186%20%3FmediumItem%20.%20%3FmediumItem%20rdfs%3Alabel%20%3Fmedium%20FILTER(LANG(%3Fmedium)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP195%20%3Fcollection%20.%20%3Fcollection%20rdfs%3Alabel%20%3FcollectionEn%20FILTER(LANG(%3FcollectionEn)%20%3D%20%22en%22)%20%7D%0A%7D%20LIMIT%201500",
+          "fetched": "2026-10-10T05:29:02.801Z",
+          "sha256": "80e43c622cc80a75d1453736afe1f3016e2ece4778d1a7e0f6669badae1b90ce",
+          "bytes": 76704
+        },
+        {
+          "url": "https://query.wikidata.org/sparql?format=json&query=SELECT%20%3Fpainting%20%3Fimg%20%3FtitleEn%20%3FtitleSr%20%3FartistEn%20%3FartistSr%20%3Fdeath%20%3Finception%20%3Fmedium%20%3FcollectionEn%20WHERE%20%7B%0A%20%20VALUES%20%3Fartist%20%7B%20wd%3AQ2382623%20wd%3AQ2613585%20wd%3AQ2832633%20wd%3AQ12749585%20wd%3AQ12751766%20wd%3AQ12908674%20wd%3AQ16081050%20wd%3AQ16098557%20wd%3AQ16115163%20wd%3AQ79350828%20wd%3AQ97198278%20wd%3AQ109839608%20wd%3AQ28806164%20wd%3AQ39159248%20wd%3AQ55720321%20%7D%0A%20%20%3Fpainting%20wdt%3AP31%20wd%3AQ3305213%20%3B%20wdt%3AP170%20%3Fartist%20%3B%20wdt%3AP18%20%3Fimg%20.%0A%20%20%3Fartist%20wdt%3AP570%20%3Fdeath%20.%0A%20%20FILTER(YEAR(%3Fdeath)%20%3C%3D%201955)%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleEn%20FILTER(LANG(%3FtitleEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleSr%20FILTER(LANG(%3FtitleSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistEn%20FILTER(LANG(%3FartistEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistSr%20FILTER(LANG(%3FartistSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP571%20%3FinceptionDate%20.%20FILTER(YEAR(%3FinceptionDate)%20%3C%3D%20YEAR(%3Fdeath))%20BIND(YEAR(%3FinceptionDate)%20AS%20%3Finception)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP186%20%3FmediumItem%20.%20%3FmediumItem%20rdfs%3Alabel%20%3Fmedium%20FILTER(LANG(%3Fmedium)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP195%20%3Fcollection%20.%20%3Fcollection%20rdfs%3Alabel%20%3FcollectionEn%20FILTER(LANG(%3FcollectionEn)%20%3D%20%22en%22)%20%7D%0A%7D%20LIMIT%201500",
+          "fetched": "2026-10-10T05:29:04.533Z",
+          "sha256": "1cfad27401f82ae4b64fb50546cb61131ca8e10305928138125d636680c99b35",
+          "bytes": 21185
+        },
+        {
+          "url": "https://query.wikidata.org/sparql?format=json&query=SELECT%20%3Fpainting%20%3Fimg%20%3FtitleEn%20%3FtitleSr%20%3FartistEn%20%3FartistSr%20%3Fdeath%20%3Finception%20%3Fmedium%20%3FcollectionEn%20WHERE%20%7B%0A%20%20VALUES%20%3Fartist%20%7B%20wd%3AQ138509561%20wd%3AQ140226044%20wd%3AQ22019504%20wd%3AQ24013621%20wd%3AQ61065370%20wd%3AQ838985%20wd%3AQ12759120%20wd%3AQ15407250%20wd%3AQ16083960%20wd%3AQ95564784%20wd%3AQ134074305%20wd%3AQ140040059%20%7D%0A%20%20%3Fpainting%20wdt%3AP31%20wd%3AQ3305213%20%3B%20wdt%3AP170%20%3Fartist%20%3B%20wdt%3AP18%20%3Fimg%20.%0A%20%20%3Fartist%20wdt%3AP570%20%3Fdeath%20.%0A%20%20FILTER(YEAR(%3Fdeath)%20%3C%3D%201955)%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleEn%20FILTER(LANG(%3FtitleEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleSr%20FILTER(LANG(%3FtitleSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistEn%20FILTER(LANG(%3FartistEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistSr%20FILTER(LANG(%3FartistSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP571%20%3FinceptionDate%20.%20FILTER(YEAR(%3FinceptionDate)%20%3C%3D%20YEAR(%3Fdeath))%20BIND(YEAR(%3FinceptionDate)%20AS%20%3Finception)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP186%20%3FmediumItem%20.%20%3FmediumItem%20rdfs%3Alabel%20%3Fmedium%20FILTER(LANG(%3Fmedium)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP195%20%3Fcollection%20.%20%3Fcollection%20rdfs%3Alabel%20%3FcollectionEn%20FILTER(LANG(%3FcollectionEn)%20%3D%20%22en%22)%20%7D%0A%7D%20LIMIT%201500",
+          "fetched": "2026-10-10T05:29:06.787Z",
+          "sha256": "63889a9ddc03f384f088b973d2c4ccdb3d47266e80fc567e91583d1d8d4919ee",
+          "bytes": 43364
+        },
+        {
+          "url": "https://query.wikidata.org/sparql?format=json&query=SELECT%20%3Fpainting%20%3Fimg%20%3FtitleEn%20%3FtitleSr%20%3FartistEn%20%3FartistSr%20%3Fdeath%20%3Finception%20%3Fmedium%20%3FcollectionEn%20WHERE%20%7B%0A%20%20VALUES%20%3Fartist%20%7B%20wd%3AQ5598%20wd%3AQ41264%20wd%3AQ762%20wd%3AQ5582%20wd%3AQ41513%20wd%3AQ297%20wd%3AQ5432%20wd%3AQ160538%20wd%3AQ151803%20wd%3AQ5597%20wd%3AQ296%20wd%3AQ47551%20wd%3AQ42207%20wd%3AQ5599%20wd%3AQ167654%20%7D%0A%20%20%3Fpainting%20wdt%3AP31%20wd%3AQ3305213%20%3B%20wdt%3AP170%20%3Fartist%20%3B%20wdt%3AP18%20%3Fimg%20.%0A%20%20%3Fartist%20wdt%3AP570%20%3Fdeath%20.%0A%20%20FILTER(YEAR(%3Fdeath)%20%3C%3D%201955)%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleEn%20FILTER(LANG(%3FtitleEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleSr%20FILTER(LANG(%3FtitleSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistEn%20FILTER(LANG(%3FartistEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistSr%20FILTER(LANG(%3FartistSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP571%20%3FinceptionDate%20.%20FILTER(YEAR(%3FinceptionDate)%20%3C%3D%20YEAR(%3Fdeath))%20BIND(YEAR(%3FinceptionDate)%20AS%20%3Finception)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP186%20%3FmediumItem%20.%20%3FmediumItem%20rdfs%3Alabel%20%3Fmedium%20FILTER(LANG(%3Fmedium)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP195%20%3Fcollection%20.%20%3Fcollection%20rdfs%3Alabel%20%3FcollectionEn%20FILTER(LANG(%3FcollectionEn)%20%3D%20%22en%22)%20%7D%0A%7D%20LIMIT%201500",
+          "fetched": "2026-10-10T05:29:08.093Z",
+          "sha256": "6084a702340246c7c29a2ed7a9743c6f3d477401ad62f9dd43fc53859d64530c",
+          "bytes": 1848474
+        },
+        {
+          "url": "https://query.wikidata.org/sparql?format=json&query=SELECT%20%3Fpainting%20%3Fimg%20%3FtitleEn%20%3FtitleSr%20%3FartistEn%20%3FartistSr%20%3Fdeath%20%3Finception%20%3Fmedium%20%3FcollectionEn%20WHERE%20%7B%0A%20%20VALUES%20%3Fartist%20%7B%20wd%3AQ159758%20wd%3AQ159297%20wd%3AQ104884%20wd%3AQ40599%20wd%3AQ46373%20wd%3AQ39931%20wd%3AQ35548%20wd%3AQ134741%20wd%3AQ37693%20wd%3AQ82445%20wd%3AQ34013%20wd%3AQ34661%20wd%3AQ41406%20wd%3AQ61064%20wd%3AQ344838%20%7D%0A%20%20%3Fpainting%20wdt%3AP31%20wd%3AQ3305213%20%3B%20wdt%3AP170%20%3Fartist%20%3B%20wdt%3AP18%20%3Fimg%20.%0A%20%20%3Fartist%20wdt%3AP570%20%3Fdeath%20.%0A%20%20FILTER(YEAR(%3Fdeath)%20%3C%3D%201955)%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleEn%20FILTER(LANG(%3FtitleEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20rdfs%3Alabel%20%3FtitleSr%20FILTER(LANG(%3FtitleSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistEn%20FILTER(LANG(%3FartistEn)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fartist%20rdfs%3Alabel%20%3FartistSr%20FILTER(LANG(%3FartistSr)%20IN%20(%22sr%22%2C%20%22sr-ec%22%2C%20%22sr-el%22%2C%20%22sh%22))%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP571%20%3FinceptionDate%20.%20FILTER(YEAR(%3FinceptionDate)%20%3C%3D%20YEAR(%3Fdeath))%20BIND(YEAR(%3FinceptionDate)%20AS%20%3Finception)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP186%20%3FmediumItem%20.%20%3FmediumItem%20rdfs%3Alabel%20%3Fmedium%20FILTER(LANG(%3Fmedium)%20%3D%20%22en%22)%20%7D%0A%20%20OPTIONAL%20%7B%20%3Fpainting%20wdt%3AP195%20%3Fcollection%20.%20%3Fcollection%20rdfs%3Alabel%20%3FcollectionEn%20FILTER(LANG(%3FcollectionEn)%20%3D%20%22en%22)%20%7D%0A%7D%20LIMIT%201500",
+          "fetched": "2026-10-10T05:29:14.476Z",
+          "sha256": "5ba3467c11f45dea531ad9a75937c7451dbafe38c9b3b9beb3361d87a2e72ba5",
+          "bytes": 1839632
+        },
+        {
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url%7Csize%7Cmime%7Cextmetadata&iiurlwidth=2048&titles=File%3ADeath+of+King+Marko%2C+by+Novak+Radoni%C4%87.jpg%7CFile%3AEisenhut+Reclining+Odalisque+1892.jpg%7CFile%3AIgnjat+Job+-+Sunday.jpg%7CFile%3AIgnjat+Job+-+Stone+Table+%281935%29.jpg%7CFile%3AIgnjat+Job+-+Self-portrait+%281931%29.jpg%7CFile%3AIgnjat+Job+-+Lumbarda.jpg%7CFile%3AIgnjat+Job+-+Landscape+%281935%29.jpg%7CFile%3AUro%C5%A1+Kne%C5%BEevi%C4%87%2C+Cincar-Janko.jpg%7CFile%3AFerencz+Eisenhut+%281857-1903%29+-+An+Oriental+School+-+NCM+1932-11+-+Nottingham+Museums.jpg%7CFile%3AAleksa+Nenadovi%C4%87.jpg%7CFile%3AA+zentai+csata+Eisenhut+Ferenc+k%C3%A9pe.jpg%7CFile%3ADimitrije+Davidovi%C4%87.jpg%7CFile%3ADuke+Mirko.jpg%7CFile%3AEisenhut+-+The+Healer%2C+Beirut%2C+1886.jpg%7CFile%3AKatarina+Ivanovi%C4%87+-+Autoportret%2C+1836.jpg%7CFile%3AOsvajanje+Beograda.jpg%7CFile%3ASrbin+Matija+Ban+%281818-1903%29+-+Galerija+Matice+srpske.jpg%7CFile%3AAmadeus+Szekulics+-+Der+Bildhauer+Vincenz+Pilz+-+2877+-+Kunsthistorisches+Museum.jpg%7CFile%3AAmadeus+Szekulics+-+Der+Maler+Peter+Johann+Nepomuk+Geiger+-+2878+-+Kunsthistorisches+Museum.jpg%7CFile%3AMali%C5%A1a+Gli%C5%A1i%C4%87+-+Pine+Trees+-+Google+Art+Project.jpg%7CFile%3AVidosava+Kova%C4%8Devi%C4%87+-+Head+of+a+Girl+-+Google+Art+Project.jpg%7CFile%3AHajduk+Veljko%2C+Stevan+Todorovi%C4%87.jpg%7CFile%3AA+girl+in+national+costume.JPG%7CFile%3AA+Muslim+man+in+a+street.JPG%7CFile%3ALandscape+with+Cypresses%2C+Dalmatia+by+Petar+Dobrovi%C4%87.jpg",
+          "fetched": "2026-10-10T05:36:39.941Z",
+          "sha256": "4a128075214a1850edd01da3950a8c1e225e7099fff7cb55ae3ca029d380e523",
+          "bytes": 107367
+        },
+        {
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url%7Csize%7Cmime%7Cextmetadata&iiurlwidth=2048&titles=File%3APeter+Dobrovi%C4%8D+-+%C5%A0t%C3%BAdia+k+portr%C3%A9tu+-+M+38+-+Ernest+Zmet%C3%A1k+Art+Gallery.jpg%7CFile%3ADans-la-prairie-by-Claude-001.jpg%7CFile%3AEglise+de+V%C3%A9theuil.jpg%7CFile%3ALa+Seine+%C3%A0+Asni%C3%A8re+-+Monet.jpg%7CFile%3AClaude+Monet+-+The+Pont+Neuf+-+1985.R.38+-+Dallas+Museum+of+Art.jpg%7CFile%3AClaude+Monet+%28mus%C3%A9e+de+lOrangerie%2C+Paris%29+%288231007934%29.jpg%7CFile%3AClaude+Monet-Madame+Monet+en+costume+japonais.jpg%7CFile%3AClaude+monet+-+marina+%28MCM-RJ%29+01.JPG%7CFile%3AMonet+w343.jpg%7CFile%3AStill+Life+with+Melon+Claude+Monet.jpg%7CFile%3AMonet+-+Nen%C3%BAfares.jpg%7CFile%3APaysage+%C3%A0+Port-Goulphar.jpg%7CFile%3AV%C3%A9theuil+dans+le+brouillard.jpg%7CFile%3AClaude+Monet+-+Champ+de+coquelicots+pr%C3%A8s+de+V%C3%A9theuil.jpg%7CFile%3AClaude+Monet+-+Le+dejeurner+sur+l%27herbe+%28left+panel%29.jpg%7CFile%3ACoint+d%27atelier.jpg%7CFile%3ALe+Pont+d%27Argenteuil+-+Claude+Monet.jpg%7CFile%3AClaude+Monet%2C+The+Japanese+Footbridge%2C+1899%2C+NGA+74796.jpg%7CFile%3AClaude+Monet+-+The+Luncheon+-+Google+Art+Project.jpg%7CFile%3AWLA+metmuseum+Camille+Monet+on+a+Garden+Bench+by+Claude+Monet.jpg%7CFile%3AFemme+%C3%A0+l%27ombrelle+tourn%C3%A9e+vers+la+gauche+-+Claude+Monnet+-+Mus%C3%A9e+d%27Orsay+RF+2621.jpg%7CFile%3AClaude+Monet+-+The+Parc+Monceau.jpg%7CFile%3AClaude+Monet-Etretat+the+Aval+door+fishing+boats+leaving+the+harbour+mg+1819.jpg%7CFile%3ACarri%C3%A8res-Saint-Denis+-+Claude+Monet.jpg%7CFile%3AClaude+Monet+Portrait+Michel+Pompom+Hat.JPG",
+          "fetched": "2026-10-10T05:36:40.486Z",
+          "sha256": "db6a044f372f452059c8999ae07435dea966540a9a9d29685e9341b35763a2b9",
+          "bytes": 127368
+        },
+        {
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url%7Csize%7Cmime%7Cextmetadata&iiurlwidth=2048&titles=File%3AL%27Enfant+a+la+tasse%2C+portrait+de+Jean+Monet.jpg%7CFile%3AClaude+Monet+-+La+Corniche+near+Monaco+-+Google+Art+Project.jpg%7CFile%3ABloemen+Rijksmuseum+SK-A-2933.jpeg%7CFile%3ARouen+Cathedral+Sunlight+W1322.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral%2C+West+Facade%2C+Sunlight.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral+-+The+Portal+%28Sunlight%29.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral%2C+Facade+%28Sunset%29.JPG%7CFile%3ARouen+Cathedrale+Monet+Belgrade+W1329.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral%2C+Facade+I.jpg%7CFile%3AAmgueddfa+Cymru+-+Eglwys+Gadeiriol+Rouen%2C+Machlud+Haul+-+Rouen+Cathedral%2C+setting+sun+-+220716.jpeg%7CFile%3AClaude+Monet+-+The+Cathedral+in+Rouen.+The+portal%2C+Grey+Weather+-+Google+Art+Project.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral%2C+Facade+%28Morning+effect%29.JPG%7CFile%3AClaude+Monet+-+The+Portal+of+Rouen+Cathedral+in+Morning+Light+%281894%29+-+Getty+Center+2001.33.jpg%7CFile%3APortail+effet+de+matin+W1353.jpg%7CFile%3AMonet-RouenKathedrale+von+Rouen+DSC8884.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral%2C+West+Facade.jpg%7CFile%3AClaude+Monet+La+cath%C3%A9drale+de+Rouen%2C+le+portail.jpg%7CFile%3ARouen+Cathedral+Portal+W1359.jpg%7CFile%3ARouen+Cathedral+W1361.jpg%7CFile%3ARouen-cathedral-fog+W1349.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral+Fa%C3%A7ade+and+Tour+d%27Albane+%28Morning+Effect%29+-+Google+Art+Project.jpg%7CFile%3AClaude+Monet+-+Rouen+Cathedral%2C+Facade+and+Tour+d%27AlbaneI.JPG%7CFile%3AMonet-cathedrale-rouen.jpg%7CFile%3AClaude+Monet+-+Argenteuil+-+1872+-+Mus%C3%A9e+d%27Orsay.jpg%7CFile%3AMonet+-+Bateaux+de+plaisance%2C+Argenteuil%2C+1872-1873.jpg",
+          "fetched": "2026-10-10T05:36:41.679Z",
+          "sha256": "1b28d940b586ea52551dceead8d552e8242c448adb36c945b38533f93b589464",
+          "bytes": 112955
+        },
+        {
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url%7Csize%7Cmime%7Cextmetadata&iiurlwidth=2048&titles=File%3AClaude+Monet+Blanche+Hosch%C3%A9d%C3%A9+14+ans+IMG+7804.jpg%7CFile%3AMonet+-+Champ+de+coquelicots+%3B+environs+de+Giverny%2C+1885.jpg%7CFile%3AChamps+de+Tulipes+de+Claude+Monet.jpg%7CFile%3AChasse-mar%C3%A9e+%C3%A0+l%27ancre+-+Claude+Monet.jpg%7CFile%3AClaude+Monet+051.jpg%7CFile%3AMonet+-+Cour+de+ferme+en+Normandie%2C+1863.jpg%7CFile%3AClaude+Monet+-+Effet+de+neige+%C3%A0+V%C3%A9theul.jpg%7CFile%3AClaude+Monet+-+Poplars+%28Wind+effect%29.JPG%7CFile%3AClaude+Monet+020.jpg%7CFile%3AClaude+Monet+%C3%89tretat%2C+la+Manneporte%2C+reflets+sur+l%27eau+15092012413.jpg%7CFile%3AMonet+1+-+Roqueton.jpg%7CFile%3AGrosse+mer+%C3%A0+%C3%89tretat+-+Claude+Monet.jpg%7CFile%3AClaude+Monet+007.jpg%7CFile%3AClaude+Monet%2C+Cabane+des+douaniers+%281882%29+%C2%A9Alban+Gilbert.jpg%7CFile%3AClaude+Monet%2C+The+Portal+of+Rouen+Cathedral%2C+le+Portal+vu+de+face+%28cropped%29.jpg%7CFile%3AMonet%2C+A+Cart+on+the+Snowy+Road+at+Honfleur+%281865+or+1867%29.jpg%7CFile%3ALille+PdBA+monet+la+debacle.JPG%7CFile%3AMonet+-+Wildenstein+1996%2C+242.png%7CFile%3AClaude+Monet+-+The+Seine+at+Argenteuil+1873.jpg%7CFile%3ALa+Seine+%C3%A0+Port-Villez+-+v1890-+Claude+Monet+-+Mus%C3%A9e+d%27Orsay.jpg%7CFile%3AMonet+-+La+Seine+%C3%A0+V%C3%A9theuil%2C+1879.jpg%7CFile%3AMonet+-+LA+SEINE+A+VETHEUIL%2C+1879+entre+%3B+1882+et.jpg%7CFile%3AMonet+-+Vetheuil%2C+vu+de+Lavacourt%2C+1879.jpg%7CFile%3AMonet+-+the-seine-seen-from-the-heights-chantemesle.jpg%7CFile%3AClaude+Monet+-+Le+D%C3%A9jeuner+sur+l%27herbe%2C+partie+gauche.jpg",
+          "fetched": "2026-10-10T05:36:42.215Z",
+          "sha256": "a6bef70334868ccdb8be005065c76522fb7f6f9b9632f896f3279a58c1fd3dd5",
+          "bytes": 87020
+        },
+        {
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url%7Csize%7Cmime%7Cextmetadata&iiurlwidth=2048&titles=File%3AClaude+Monet%2C+Le+Givre+%281880%2C+from+C2RMF%29.jpg%7CFile%3AMonet+-+LE+MONT+KOLSAAS+EN+NORVEGE%2C+1895.jpg%7CFile%3AMonet+Le+Pave+de+Chailly+Musee+dOrsay.JPG%7CFile%3AClaude+Monet+017.jpg%7CFile%3AMonet+w670.jpg%7CFile%3AMonet+-+Wildenstein+1996%2C+669.png%7CFile%3AClaude+Monet+-+The+Coalmen+-+Google+Art+Project.jpg%7CFile%3ALes+Glacons+by+Claude+Monet+%28frame+cropped%29.jpg%7CFile%3AMonet+w1100.jpg%7CFile%3AClaude+Monet+-+Villas+at+Bordighera+-+Google+Art+Project.jpg%7CFile%3ALondon%2C+the+Houses+of+Parliament%2C+Sunlight+Opening+in+Fog%2C+by+Claude+Monet.jpg%7CFile%3AClaude+Monet+036.jpg%7CFile%3AClaude+Monet+-+M%C3%A9ditation.+Madame+Monet+au+canap%C3%A9.jpg%7CFile%3AClaude+Monet+-+Haystacks%2C+end+of+Summer+-+Google+Art+Project.jpg%7CFile%3AMonet-faisan-mus%C3%A9e+de+rouen.jpg%7CFile%3ARoute%2C+effet+de+neige%2C+soleil+couchant+%28Monet%29.jpg%7CFile%3AClaude+Monet+-+Blue+Water+Lilies+-+Google+Art+Project.jpg%7CFile%3AMonet+-+Paysage%2C+Vetheuil%2C+1879.jpg%7CFile%3AMonet+w1942.jpg%7CFile%3AClaude+Monet+-+Train+in+the+Countryside+-+Google+Art+Project.jpg%7CFile%3ATrophies-of-the-hunt-Monet.jpg%7CFile%3AClaude+Monet+-+A+Corner+of+the+Apartment+-+Google+Art+Project.jpg%7CFile%3AClaude+monet%2C+v%C3%A9theuil%2C+sole+al+tramonto%2C+1900+ca.JPG%7CFile%3AMonet+-+Blick+auf+die+Ebene+von+Argenteuil.jpg%7CFile%3AMonet+Zaandam+1871+Musee+d%27Orsay.jpg",
+          "fetched": "2026-10-10T05:36:42.873Z",
+          "sha256": "76d68a85eedc6d8206087245666e4ab8c7fa2cdd67b78d2f797dab5428cb0c78",
+          "bytes": 109204
+        },
+        {
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url%7Csize%7Cmime%7Cextmetadata&iiurlwidth=2048&titles=File%3AGondola+in+Venice+1908+Claude+Monet.jpg%7CFile%3ALes+Nymph%C3%A9as+%C3%A0+Giverny%2C+par+Claude+Monet.jpg%7CFile%3AClaude+Monet+-+Le+Bloc.jpg%7CFile%3A%27Landscape+at+Giverny%27+%281887%29+by+Claude+Monet+-+Museo+Soumaya+-+Mexico+2024.jpg%7CFile%3ALa+grande+all%C3%A9e+%C3%A0+Giverny+%28mus%C3%A9e+des+beaux-arts+de+Montr%C3%A9al%29+%284086369799%29.jpg",
+          "fetched": "2026-10-10T05:36:43.228Z",
+          "sha256": "215d3d8c651b635368ef025349506c3f9db1781f8adf224cd73bbb20f086bf52",
+          "bytes": 16429
+        }
+      ],
+      "licenceEvidence": {
+        "url": "https://commons.wikimedia.org/wiki/Template:PD-Art",
+        "quote": "The official position taken by the Wikimedia Foundation is that \"faithful reproductions of two-dimensional public domain works of art are public domain\".",
+        "fixture": "fixtures/evidence/commons-pd-art.txt",
+        "fetched": "2026-10-10T03:46:51.477Z",
+        "sha256": "0ac19bf58ec01120e2292eec3fd8b4759ff4d540e21e833d51f0bd0eb5d8f8c2",
+        "bytes": 110532
+      }
+    },
+    {
+      "id": "wikidata",
+      "name": "Wikidata",
+      "works": 0,
+      "excluded": 0,
+      "licenceCounts": {},
+      "requests": [],
+      "licenceEvidence": {
+        "url": "https://www.wikidata.org/wiki/Wikidata:Licensing",
+        "quote": "All data in Wikidata has a CC0 license.",
+        "fixture": "fixtures/evidence/wikidata-copyright.txt",
+        "fetched": "2026-10-10T03:46:51.625Z",
+        "sha256": "8e550618bb4395376961889506b512c883730af234e0e569c4ef7945d18c73d8",
+        "bytes": 67062
+      }
+    }
+  ],
+  "failures": []
+}

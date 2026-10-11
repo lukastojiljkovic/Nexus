@@ -1,0 +1,165 @@
+{
+ "source": "fm-21-76",
+ "page": 372,
+ "width": 413,
+ "height": 595,
+ "items": [
+  {
+   "text": "Asparagus",
+   "x": 33.12,
+   "y": 297.36,
+   "width": 48.95174783999999,
+   "height": 9.835,
+   "size": 9.835,
+   "rotated": false
+  },
+  {
+   "text": "Asparagus",
+   "x": 32.16,
+   "y": 286.32,
+   "width": 41.26795199999999,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "officinalis",
+   "x": 78.88968299999998,
+   "y": 286.32,
+   "width": 36.829979999999985,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "Description:",
+   "x": 33.120003,
+   "y": 265.19934,
+   "width": 45.864423000000016,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "The spring growth of this plant resembles a cluster of green fingers. The",
+   "x": 82.80147,
+   "y": 265.19934,
+   "width": 258.97370399999943,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "mature plant has fernlike, wispy foliage and red berries. Its flowers are small and",
+   "x": 32.87992799999999,
+   "y": 255.599013,
+   "width": 288.48629700000026,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "greenish in color. Several species have sharp, thornlike structures.",
+   "x": 32.639951999999994,
+   "y": 245.99868600000002,
+   "width": 237.5970299999999,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "Habitat and Distribution:",
+   "x": 32.87992799999999,
+   "y": 232.318272,
+   "width": 92.81626200000008,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "Asparagus is found worldwide in temperate areas. Look for it",
+   "x": 129.36285299999997,
+   "y": 232.318272,
+   "width": 215.78089499999965,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "in fields, old homesites, and fencerows.",
+   "x": 32.639852999999974,
+   "y": 222.71794500000001,
+   "width": 141.6243509999999,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "Edible Parts:",
+   "x": 33.359879999999976,
+   "y": 208.55748000000003,
+   "width": 48.50475300000002,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "Eat the young stems before leaves form. Steam or boil them for 10 to 15",
+   "x": 85.44150299999998,
+   "y": 208.55748000000003,
+   "width": 259.2257579999997,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "minutes before eating. Raw asparagus may cause nausea or diarrhea. The fleshy roots",
+   "x": 33.119903999999984,
+   "y": 199.43720400000004,
+   "width": 310.8039660000006,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "are a good source of starch.",
+   "x": 32.63985299999998,
+   "y": 189.59690100000003,
+   "width": 107.78021100000008,
+   "height": 7.92,
+   "size": 7.92,
+   "rotated": false
+  },
+  {
+   "text": "B-8",
+   "x": 184.32,
+   "y": 25.44,
+   "width": 12.454153600000028,
+   "height": 8.8767,
+   "size": 8.8767,
+   "rotated": false
+  }
+ ],
+ "images": [
+  {
+   "box": {
+    "x": 41.04,
+    "y": 136.32,
+    "width": 324.24,
+    "height": 50.16
+   },
+   "width": 676,
+   "height": 105
+  },
+  {
+   "box": {
+    "x": 36.96,
+    "y": 307.68,
+    "width": 329.76,
+    "height": 248.88
+   },
+   "width": 687,
+   "height": 519
+  }
+ ]
+}

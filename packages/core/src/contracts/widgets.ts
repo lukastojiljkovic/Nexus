@@ -1,3 +1,5 @@
+import type { LabelText } from "./labels.js";
+
 /**
  * Minimal JSON-Schema-shaped type used to describe per-widget and per-setting
  * config. This is documentation of shape only — no validator is bundled and it
@@ -48,7 +50,7 @@ export interface WidgetCountField {
 /** One answer of a closed choice; `labelKey` resolves through the renderer's `strings` tree, exactly as `WidgetContract.title` does. */
 export interface WidgetChoiceOption {
   id: string;
-  labelKey: string;
+  labelKey: LabelText;
 }
 
 export interface WidgetChoiceField {
@@ -96,8 +98,12 @@ export interface WidgetContract {
    * `@nexus/core` free of user-facing prose, and makes the eventual extraction
    * to an i18n catalogue mechanical: the keys already exist and already read
    * the same way.
+   *
+   * A module discovered from its own folder declares a `{ sr, en }` pair
+   * instead (`LabelText`), because the shell draws a widget's title before any
+   * of that module's page chunk has loaded.
    */
-  title: string;
+  title: LabelText;
   /** Size presets this widget supports; the layout may store only these. */
   sizes: WidgetSize[];
   /** Optional description of the widget's config shape. */

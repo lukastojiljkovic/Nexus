@@ -1,0 +1,132 @@
+/* The day-and-night map. Tokens exclusively, like every other stylesheet in the
+   app: raw colour values are forbidden outside @nexus/tokens, and this file is
+   checked by the same gates the shell's own are (`check:colours`,
+   `check:tokens`, `check:css`, `check:layers`).
+ *
+ * Class prefix `ast-earth__`, after the module this corner belongs to.
+ *
+ * THE LEGEND SAMPLES ARE DRAWN BY THIS FILE, not by a second copy of the
+ * canvas's code, and the four line samples repeat the SAME dash lengths the
+ * canvas strokes (`[6, 3]` civil, `[3, 3]` nautical, `[1, 3]` astronomical,
+ * solid terminator). A marker's sample is the shape the canvas draws for it:
+ * a disc for the Sun, a ring for the Moon, a diamond for the reader's place.
+ */
+
+.ast-earth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  margin: 0;
+}
+
+/* The world is 360 by 180 degrees, so the box is two to one and the projection
+   needs no letterboxing: every pixel of the canvas is a place. */
+.ast-earth__canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface-alt);
+}
+
+.ast-earth__caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+}
+
+/* The instant is the shared hint tier with one difference declared out loud: it
+   is a READING rather than an explanation, so it is set in the mono family with
+   tabular figures, the way every other clock in the app is. The element carries
+   `nx-hint` beside this class for the tier it shares, and this block declares no
+   part of that tier itself. */
+.ast-earth__instant {
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ast-earth__legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--nx-space-2) var(--nx-space-4);
+  margin: 0;
+}
+
+.ast-earth__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+.ast-earth__legend-item dt {
+  margin: 0;
+}
+
+.ast-earth__legend-item dd {
+  margin: 0;
+}
+
+/* The four line samples: one 2px rule, dashed by a repeating gradient whose
+   stops are the canvas's own dash lengths. */
+.ast-earth__sample {
+  flex: none;
+}
+
+.ast-earth__sample--terminator,
+.ast-earth__sample--civil,
+.ast-earth__sample--nautical,
+.ast-earth__sample--astronomical {
+  width: 2.5rem;
+  height: 2px;
+}
+
+.ast-earth__sample--terminator {
+  background: var(--nx-text);
+}
+
+.ast-earth__sample--civil {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--nx-text) 0 6px,
+    transparent 6px 9px
+  );
+}
+
+.ast-earth__sample--nautical {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--nx-text) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.ast-earth__sample--astronomical {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--nx-text) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+.ast-earth__sample--sun {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-accent);
+}
+
+.ast-earth__sample--moon {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--nx-radius-round);
+  border: 2px solid var(--nx-text-muted);
+}
+
+.ast-earth__sample--observer {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--nx-data);
+  transform: rotate(45deg);
+}

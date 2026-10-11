@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { createWriteStream } from "node:fs";
-import { shell, type Session } from "electron";
+import type { Session } from "electron";
 
+import { openExternalUrl } from "../external.js";
 import { assertDeclaredLength, readWithin, UPDATE_LIMITS } from "./limits.js";
 import type { UpdateHttp } from "./service.js";
 
@@ -155,16 +156,16 @@ export function createUpdateHttp(ses: Session): UpdateHttp {
 /**
  * Opens the pinned release page in the user's browser — never in this app.
  *
- * This is the one place the update feature names a URL directly, and it is the
- * reason `scripts/check-egress.mjs` carries an exemption for this file: the
- * `load-remote` rule flags „a remote URL handed to a loader", which is exactly
- * what a browser hand-off looks like, and the exemption's reason is that this
- * loader is the user's own browser rather than this process's network stack.
- * Nothing here fetches anything.
+ * This is the one place the update feature names a URL directly, and the address
+ * goes through the app's ONE external-link door (`main/external.ts`, ADR-107)
+ * rather than to `shell.openExternal`: whether the app may hand an address to
+ * the OS is a rule with one home, and a second call site in this file would be a
+ * second version of it. The loader is still the user's own browser rather than
+ * this process's network stack, and nothing here fetches anything.
  *
  * The literal must stay identical to `RELEASES_PAGE_URL` in `release.ts`;
  * `release.test.ts` reads this file and asserts it, so the two cannot drift.
  */
 export async function openReleasePage(): Promise<void> {
-  await shell.openExternal("https://github.com/lukastojiljkovic/Nexus/releases/latest");
+  await openExternalUrl("https://github.com/lukastojiljkovic/Nexus/releases/latest");
 }

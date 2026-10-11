@@ -34,6 +34,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:
 import { join, resolve } from "node:path";
 import type { BrowserWindow } from "electron";
 import { createModuleRegistry } from "../../shared/modules.js";
+import { isShotSceneHeld } from "../../shared/syncHold.js";
+import { SETTINGS_SHELL_CARDS } from "../../shared/settingsSections.js";
 import { networkModePath } from "../net/offline.js";
 import { AUDIT_SCRIPT, type AuditFinding } from "./audit.js";
 
@@ -96,6 +98,21 @@ export interface ShotPageScene {
    * run, which is how a warning stops being read (DC-15).
    */
   readonly fanout?: string | null;
+  /**
+   * True on a scene whose switcher is a BONUS rather than part of what it owes.
+   *
+   * The generated module-page scenes are the reason this field exists. Their
+   * contract is one frame: the module's landing, at every size and in every
+   * language. Twenty of the twenty-five kit modules have no switcher at all, so
+   * their scenes fired the stale-selector warning twenty times a pass — twice
+   * that with a language pass, forty lines a run saying nothing — and the
+   * warning means „this selector has gone stale", which is the one line in the
+   * output worth reading. Silencing it by hand-listing the five modules that DO
+   * have a switcher would be a list that goes stale itself; this says instead
+   * that on these scenes the default selector is a discovery, and the walk
+   * below sweeps whatever it finds.
+   */
+  readonly fanoutOptional?: true;
   /** Renderer JS to run after the last frame — closes whatever `prepare` opened. */
   readonly cleanup?: string;
 }
@@ -151,7 +168,7 @@ export type ShotScene = ShotPageScene | ShotShellScene;
  * order within one session, so a scene that changes state (opening a note,
  * starting a timer) is followed by scenes that do not depend on it.
  */
-export const SHOT_SCENES: readonly ShotScene[] = [
+const SCENE_PLAN: readonly ShotScene[] = [
   { id: "dashboard", module: "dashboard", fanout: null },
   {
     // „Podesi…" (DASH-004): the per-widget config form, which is the ⋯ menu
@@ -865,6 +882,21 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   },
   { id: "search", module: "dashboard", prepare: OPEN_SEARCH_PAGE(), fanout: null },
   {
+    // „Svi moduli": the overlay the rail's own row opens, with a search field
+    // over a grid of every enabled module by group. It is the one surface of
+    // ADR-093 the rest of this list cannot reach — the group headings and the
+    // pins are drawn on every module scene there is, and this is not.
+    //
+    // The cleanup CLOSES it, and that is not tidiness: it is modal, it traps
+    // focus, and a scene that left it open would type the next scene's text
+    // into its search field.
+    id: "launcher",
+    module: "dashboard",
+    prepare: OPEN_MODULE_LAUNCHER(),
+    fanout: null,
+    cleanup: CLICK_THEN(".launcher__panel .recur-dialog__cancel"),
+  },
+  {
     // The page as it opens: „Profil i sigurnost", the category the two-column
     // layout defaults to and the one a reader lands on from the sidebar.
     id: "settings",
@@ -1009,12 +1041,14 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   // body scrolls to an element that is not there and the harness says the probe
   // missed rather than photographing the page top under the card's name.
   //
-  // WHAT THIS DOES NOT COVER, said plainly so the next reader is not misled by
-  // a list that looks complete: the SHELL's own cards — Profili, Sigurnost,
-  // Izgled, Obaveštenja, Licence and the rest — are written into
-  // `SettingsPage.tsx` in the renderer, and their ids are in no list main can
-  // read. They stay unphotographed, and they are recorded as such in
-  // `docs/STATUS.md` rather than papered over with a second hand-kept list.
+  // AND THE SHELL'S OWN CARDS, by the same rule one layer in: their ids lived in
+  // `SettingsPage.tsx`, in no list main could read, so Profili, Sigurnost,
+  // Izgled, Obaveštenja, Licence and the rest were photographed by NOTHING.
+  // `shared/settingsSections.ts` is the table the page renders from, and
+  // `SETTINGS_SHELL_CARDS` is it flattened into one entry per card with the
+  // route this harness has to take to reach it. The list and the page cannot
+  // disagree about an id or about their order: `settingsCategories.test.ts`
+  // reads the page's own `sectionDomId(…)` call sites back and fails if they do.
   ...createModuleRegistry()
     .all()
     .filter((manifest) => manifest.settings !== undefined)
@@ -1028,6 +1062,23 @@ export const SHOT_SCENES: readonly ShotScene[] = [
       ),
       fanout: null,
     })),
+
+  // --- Every shell card the page draws --------------------------------------
+  //
+  // One frame per card the SHELL owns, from the list the page itself renders
+  // from: see the note above for why that list had to move out of the
+  // renderer, and `settingsCategories.test.ts` for the assertion that keeps the
+  // two in step.
+  //
+  // A card in a sub-page list is reached the way a reader reaches it: the
+  // category, then the row that opens it. `OPEN_SETTINGS_LOCATION` clicks both
+  // and then scrolls to `#set-section-<id>`, which is the card itself.
+  ...SETTINGS_SHELL_CARDS.map((card) => ({
+    id: `settings-card-${card.id}`,
+    module: "settings",
+    prepare: OPEN_SETTINGS_LOCATION(card.category, card.sub, `#set-section-${card.id}`),
+    fanout: null,
+  })),
 
   // --- Overlays -------------------------------------------------------------
   // Surfaces with no sidebar row of their own. Each opens something, is
@@ -1088,6 +1139,74 @@ export const SHOT_SCENES: readonly ShotScene[] = [
   { kind: "shell", id: "onboarding", shell: "onboarding" },
   { kind: "shell", id: "lock", shell: "lock" },
 ];
+
+/**
+ * The scenes one sweep runs: the plan above minus every scene whose surface is
+ * ON HOLD (`shared/syncHold.ts`), plus a landing for every module no scene in
+ * the plan visits.
+ *
+ * A held surface has no card, so a scene that opened it would photograph the
+ * page top under a name that promises a fold — the silence this file keeps
+ * warning about, and worse than a missing frame because it reports as one that
+ * was taken. Filtering keeps `NEXUS_SHOTS_SCENES` honest too: the ids come from
+ * the plan itself, so a name that survives `pickBy` is a name that runs.
+ */
+const MODULE_PAGE_SCENES: readonly ShotScene[] = modulePageScenes();
+
+export const SHOT_SCENES: readonly ShotScene[] = [
+  ...SCENE_PLAN.filter((scene) => !isShotSceneHeld(scene.id)),
+  ...MODULE_PAGE_SCENES,
+];
+
+/**
+ * One PAGE scene per module the registry declares and no scene above lands on.
+ *
+ * **The gap this closes.** The plan above is hand-written, and it grew up
+ * around the sixteen compiled-in modules: every screen of TASK, NOTE, FIN, the
+ * settings card list, the overlays, the pre-shell states. The twenty-five
+ * module-kit modules arrived afterwards as folders (ADR-090), and every one of
+ * them was reachable from the rail on the day it merged while NO scene named
+ * it. The sweep therefore ran, printed a clean headline over its frames, and
+ * had never taken a single frame of the Reader, Maps, Wiki, the Assistant, the
+ * astronomy corner or any of the other twenty-one. Every layout defect on those
+ * pages was, by construction, invisible to the instrument whose whole purpose
+ * is to make layout defects visible; the only reader who could find one was a
+ * person opening the app, which is precisely the failure mode `missingCoverage`
+ * and `duplicateStems` exist to end.
+ *
+ * **Why generated and not twenty-five more entries.** A hand-kept list that
+ * mirrors a registry fails by OMISSION ([[DC-109]]), and an omitted module
+ * looks exactly like a module with nothing wrong with it. The module registry
+ * is the list the rail itself is drawn from, so a module that gains a page here
+ * gains a frame in the same commit that adds it. The settings cards above are
+ * generated from the same registry for the same reason, one layer in.
+ *
+ * **The filter is by MODULE, not by scene id.** A hand-written scene is kept
+ * exactly as it is — its `prepare` opens a fold, a dialog or a detail pane that
+ * this generated landing cannot reach — and this list adds only the module
+ * LANDING for the modules no scene visits at all. Photographing a module's
+ * landing a second time under another name would be duplicate evidence, and
+ * `duplicateStems` would be right to complain about it.
+ *
+ * The demo fixture turns every module on (`main/demo/index.ts`'s
+ * `enableEverything`), including the three that ship `defaultEnabled: false`,
+ * so a generated scene's module has a rail row to click. That is a property of
+ * the fixture, and the sweep says so out loud if it ever stops being one:
+ * `openModule` returning false prints the module id and takes no frame.
+ */
+function modulePageScenes(): readonly ShotScene[] {
+  return createModuleRegistry()
+    .all()
+    .filter(
+      (manifest) =>
+        !SCENE_PLAN.some((scene) => scene.kind === undefined && scene.module === manifest.id),
+    )
+    .map((manifest) => ({
+      id: `page-${manifest.id}`,
+      module: manifest.id,
+      fanoutOptional: true as const,
+    }));
+}
 
 /** Fires a keydown on `window` — where the shell's own global handler listens. */
 function DISPATCH_KEY(key: string, modifiers: Record<string, boolean> = {}): string {
@@ -2361,10 +2480,24 @@ function WRITE_PROBE(text: string): string {
  */
 function OPEN_SEARCH_PAGE(): string {
   return `(() => {
-    const rows = Array.from(document.querySelectorAll(".app__sidebar-foot .nx-nav-item"));
-    const row = rows[0];
+    const row = document.querySelector("[data-nx-search-page]");
     if (row) row.click();
     return true;
+  })()`;
+}
+
+/**
+ * „Svi moduli" (ADR-093 §4) — the launcher, and the one surface of that change
+ * nothing else photographs: it is an overlay, it exists only while it is open,
+ * and its whole subject is the GRID. At 900×600 a list of thirty-five modules is
+ * a scroll region, and this is the answer to that.
+ */
+function OPEN_MODULE_LAUNCHER(): string {
+  return `(() => {
+    const row = document.querySelector("[data-nx-launcher]");
+    if (!row) return "none: no launcher row in the rail";
+    row.click();
+    return "launcher";
   })()`;
 }
 
@@ -2420,11 +2553,58 @@ export const SHOT_SIZES: readonly ShotSize[] = [
 export const SHOT_THEMES = ["noc", "dan"] as const;
 export type ShotTheme = (typeof SHOT_THEMES)[number];
 
+/**
+ * The languages the sweep serves, and the second dimension the COPY gets.
+ *
+ * **Why a language pass had to exist.** The sweep has always run in whatever
+ * language the profile happened to be stored in, which for the demo profile is
+ * Serbian — and that made every frame blind to half of the product's copy. A
+ * page whose English half was never written, or was written in Serbian, renders
+ * as a perfectly ordinary screen under a Serbian camera: no geometry finding,
+ * no missing element, nothing for `auditPage` to see, and the run still prints
+ * „SHOTS OK". That is [[DC-129]]'s shape — an instrument that reports success
+ * over a set it never looked at — in the one dimension the frames carry no
+ * evidence about at all. The gate (`check:english`) can prove that no ENGLISH
+ * TABLE holds Serbian; it cannot prove that a surface READS a table.
+ *
+ * **It is a pass and not a smaller thing.** The alternative designs were
+ * considered and both are worse: a per-scene language switch would reload the
+ * window once per scene (~800 reloads), and a second copy of the plan under a
+ * different name would drift from this one the first time a scene was added.
+ * Serving the locale at the top of the pass costs one reload per language per
+ * size, and it is the SAME control the settings row uses (`nexus.locale` in
+ * `localStorage`, `localePrefs.ts`), so what is photographed is the app's own
+ * language machinery rather than a harness-only shortcut.
+ *
+ * **Serbian first, and it keeps the paths it has always had** (`noc/`), with
+ * every other language beside it (`noc-en/`). Frames from the two passes are
+ * not duplicates of each other any more than two themes are, so the language
+ * joins `duplicateStems`' key below.
+ */
+export const SHOT_LANGUAGES = ["sr", "en"] as const;
+export type ShotLanguage = (typeof SHOT_LANGUAGES)[number];
+
+/**
+ * Where one pass's frames go, relative to the output directory:
+ * `wide/noc/` in Serbian and `wide/noc-en/` in English.
+ *
+ * The Serbian pass keeps the bare theme name deliberately. It is the language
+ * every existing frame on disk was taken in, so renaming its directory would
+ * turn one honest re-run into a directory full of frames that the report no
+ * longer mentions — the staleness `pruneStaleFrames` exists to prevent, one
+ * release step earlier.
+ */
+export function passDir(sizeId: string, theme: ShotTheme, language: ShotLanguage): string {
+  return join(sizeId, language === "sr" ? theme : `${theme}-${language}`);
+}
+
 /** One captured frame and what the page said about itself while it was on screen. */
 export interface ShotFrame {
   readonly file: string;
   readonly scene: string;
   readonly theme: ShotTheme;
+  /** The pass this frame was taken in. `sr` is the default and every legacy frame's language. */
+  readonly language: ShotLanguage;
   readonly size: string;
   readonly findings: readonly AuditFinding[];
 }
@@ -2696,6 +2876,30 @@ async function reloadAndWait(win: BrowserWindow, selector: string): Promise<void
  */
 async function serveTheme(win: BrowserWindow, theme: ShotTheme): Promise<void> {
   await evalIn(win, `(() => { localStorage.setItem("nexus.theme", ${jsLiteral(theme)}); return true; })()`);
+  await reloadAndWait(win, ".app__sidebar");
+}
+
+/**
+ * Serves a language, `serveTheme`'s shape one key over.
+ *
+ * `nexus.locale` in `localStorage` is the prep's own stored preference, read by
+ * `localePrefs.ts` before the first render and rewritten by the settings row
+ * (`STORAGE_KEY` there) - so a scene photographed after this call is in the
+ * language a user who chose it would see, through the app's own machinery
+ * rather than through a harness-only switch. The reload is what makes that
+ * true: the table is served before `main.tsx` renders, so nothing on screen is
+ * a translation of the frame before it.
+ *
+ * The value is written as `"sr"`/`"en"`, the two codes `LOCALES` holds. A
+ * language that is not one of them is refused by the plan's own list
+ * (`SHOT_LANGUAGES`) rather than by this function, and `readStoredLocale`
+ * would fall back to Serbian if one ever reached it.
+ */
+async function serveLocale(win: BrowserWindow, language: ShotLanguage): Promise<void> {
+  await evalIn(
+    win,
+    `(() => { localStorage.setItem("nexus.locale", ${jsLiteral(language)}); return true; })()`,
+  );
   await reloadAndWait(win, ".app__sidebar");
 }
 
@@ -3051,10 +3255,42 @@ export async function runShots(
   outDir: string,
   fixtures: ShotFixtures,
 ): Promise<ShotFrame[]> {
+  // --- The size the app is actually used at -------------------------------
+  //
+  // `SHOT_SIZES` is a fixed list, and it has to be: a frame labelled `wide`
+  // must be 1600 px wide on every machine, or two runs on two laptops would
+  // report different findings under the same label. What that costs is the one
+  // window state MOST people use — a maximised one — because its width is a
+  // property of the display rather than of the plan. `SHOT_SIZES[2]`'s own
+  // comment claims that 1600 IS „a maximised window on a 1080p screen", which
+  // is simply not true of a 1080p screen: the work area of the machine this
+  // runs on is 1920 × 1032, and every page was therefore photographed 320 px
+  // narrow of the window its user is looking at. The failure mode at that width
+  // is the one worth photographing — the plan's own words: content „stops being
+  // cramped and starts being marooned in whitespace" — so the gap was exactly
+  // where the defects were.
+  //
+  // So the work area is MEASURED here, at run time, and added to the plan as a
+  // fourth size named `full`. It is read from the display rather than assumed,
+  // and it is added rather than replacing `wide`, because `wide` is the only
+  // width that two machines can be compared at.
+  //
+  // Read through a dynamic import for one reason: `index.ts` is imported by its
+  // own tests under Vitest, where `electron` is not a module that can be
+  // required at all, and a top-level import of `screen` would make the whole
+  // harness — including `duplicateStems` and `missingCoverage`, which are pure
+  // — unimportable there.
+  const { screen } = await import("electron");
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
+  const sizes: readonly ShotSize[] = [
+    ...SHOT_SIZES,
+    { id: "full", width: workArea.width, height: workArea.height },
+  ];
   const plan = {
     scenes: pickBy(SHOT_SCENES, "NEXUS_SHOTS_SCENES", (scene) => scene.id),
-    sizes: pickBy(SHOT_SIZES, "NEXUS_SHOTS_SIZES", (size) => size.id),
+    sizes: pickBy(sizes, "NEXUS_SHOTS_SIZES", (size) => size.id),
     themes: pickBy(SHOT_THEMES, "NEXUS_SHOTS_THEMES", (theme) => theme),
+    languages: pickBy(SHOT_LANGUAGES, "NEXUS_SHOTS_LANGUAGES", (language) => language),
   };
   // A partial run is a DIFFERENT KIND OF RUN, and every consequence below is
   // about not letting it pretend otherwise. It does not prune (every frame it
@@ -3065,13 +3301,15 @@ export async function runShots(
   // the staleness moved into the other file.
   const partial =
     plan.scenes.length !== SHOT_SCENES.length ||
-    plan.sizes.length !== SHOT_SIZES.length ||
-    plan.themes.length !== SHOT_THEMES.length;
+    plan.sizes.length !== sizes.length ||
+    plan.themes.length !== SHOT_THEMES.length ||
+    plan.languages.length !== SHOT_LANGUAGES.length;
   if (partial) {
     const names = plan.scenes.map((scene) => scene.id).join(", ");
     process.stderr.write(
       `shots: PARTIAL RUN — ${String(plan.scenes.length)} scene(s) [${names}], ` +
-        `${String(plan.sizes.length)} size(s), ${String(plan.themes.length)} theme(s). ` +
+        `${String(plan.sizes.length)} size(s), ${String(plan.themes.length)} theme(s), ` +
+        `${plan.languages.join("/")}. ` +
         "No pruning, no questionnaire, findings in report.partial.md.\n",
     );
   }
@@ -3114,13 +3352,24 @@ export async function runShots(
  * frame the run had not reached — turning one transient capture failure into
  * the loss of the previous run's evidence. It runs only where „this run took
  * every frame it meant to" is true.
+ *
+ * **The walk is over DIRECTORIES, not over a list of passes.** It used to be
+ * `SHOT_SIZES × SHOT_THEMES`, which had two holes and both were silent: the two
+ * pseudo-sizes (`write`, `maximized`) are not in `SHOT_SIZES` and so were never
+ * pruned at all, and a language pass adds a directory per language that a
+ * two-element list cannot know about. Reading the size directory's own
+ * subdirectories closes both at once, and it closes the next one too — a third
+ * dimension would be pruned without an edit here, for the same reason the
+ * scenes above are generated from the registry rather than typed.
  */
 function pruneStaleFrames(outDir: string, frames: readonly ShotFrame[]): void {
   const written = new Set(frames.map((frame) => resolve(frame.file)));
-  for (const size of SHOT_SIZES) {
-    for (const theme of SHOT_THEMES) {
-      const dir = join(outDir, size.id, theme);
-      if (!existsSync(dir)) continue;
+  for (const sizeId of [...SHOT_SIZES.map((size) => size.id), "write", "maximized"]) {
+    const sizeDir = join(outDir, sizeId);
+    if (!existsSync(sizeDir)) continue;
+    for (const pass of readdirSync(sizeDir, { withFileTypes: true })) {
+      if (!pass.isDirectory()) continue;
+      const dir = join(sizeDir, pass.name);
       for (const name of readdirSync(dir)) {
         if (!name.endsWith(".png")) continue;
         const file = join(dir, name);
@@ -3136,6 +3385,7 @@ interface ShotPlan {
   readonly scenes: readonly ShotScene[];
   readonly sizes: readonly ShotSize[];
   readonly themes: readonly ShotTheme[];
+  readonly languages: readonly ShotLanguage[];
 }
 
 async function sweep(
@@ -3163,9 +3413,23 @@ async function sweep(
     win.setSize(size.width, size.height);
     await pause(300);
 
-    for (const theme of plan.themes) {
-      await serveTheme(win, theme);
-      const dir = join(outDir, size.id, theme);
+    // ONE PASS PER (LANGUAGE, THEME), and the language is served once per pass
+    // rather than once per scene.
+    //
+    // The stored preference is read before the first render (`main.tsx` calls
+    // `applyStoredLocale`), so what a scene needs is not a switch but a pass:
+    // eight hundred scenes multiplied by one reload each is eight hundred
+    // reloads to establish a fact that does not change between them. Two
+    // dimensions flattened into one list rather than nested, because the loop
+    // body below is two hundred lines that no re-indentation should be able to
+    // touch — and the frames the extra pass buys are the half of the product's
+    // copy that no frame had ever shown.
+    for (const pass of plan.languages.flatMap((language) =>
+      plan.themes.map((theme) => ({ language, theme })),
+    )) {
+      await serveLocale(win, pass.language);
+      await serveTheme(win, pass.theme);
+      const dir = join(outDir, passDir(size.id, pass.theme, pass.language));
       mkdirSync(dir, { recursive: true });
 
       for (const scene of plan.scenes) {
@@ -3218,7 +3482,7 @@ async function sweep(
           }
           if (named !== stem) {
             process.stderr.write(
-              `shots: two frames named "${stem}" in ${size.id}/${theme} — kept as ${named}.png\n`,
+              `shots: two frames named "${stem}" in ${dir} — kept as ${named}.png\n`,
             );
           }
           const file = join(dir, `${named}.png`);
@@ -3227,7 +3491,8 @@ async function sweep(
           frames.push({
             file,
             scene: stem,
-            theme,
+            theme: pass.theme,
+            language: pass.language,
             size: size.id,
             findings: await auditPage(win),
           });
@@ -3281,7 +3546,9 @@ async function sweep(
           // scene that genuinely has no switcher says so with `fanout: null`
           // and never reaches this line, so an empty match here is always a
           // selector that has gone stale.
-          if (opening.length === 0) {
+          // A scene that says its switcher is OPTIONAL has not gone stale when
+          // it finds none — see `fanoutOptional`.
+          if (opening.length === 0 && scene.fanoutOptional !== true) {
             process.stderr.write(
               `shots: scene "${scene.id}" found nothing to fan out (${selector})
 `,
@@ -3434,6 +3701,10 @@ async function sweep(
     }
     const dir = join(outDir, "write", "noc");
     mkdirSync(dir, { recursive: true });
+    // Serbian, explicitly: the writes are about the DATA path and the frames are
+    // filed under a bare `write/noc`, so this pass must not inherit whichever
+    // language the loop above happened to end on.
+    await serveLocale(win, "sr");
     await serveTheme(win, "noc");
     for (const moduleId of WRITE_MODULES) {
       if (!(await openModule(win, moduleId))) continue;
@@ -3457,6 +3728,7 @@ async function sweep(
         file,
         scene: `write-${moduleId}`,
         theme: "noc",
+        language: "sr",
         size: "write",
         findings: await auditPage(win),
       });
@@ -3475,6 +3747,7 @@ async function sweep(
     const dir = join(outDir, "maximized", "noc");
     mkdirSync(dir, { recursive: true });
     const file = join(dir, "dashboard.png");
+    await serveLocale(win, "sr");
     await serveTheme(win, "noc");
     // THREE ATTEMPTS, ON A GROWING PAUSE.
     //
@@ -3518,6 +3791,7 @@ async function sweep(
         file,
         scene: "dashboard",
         theme: "noc",
+        language: "sr",
         size: "maximized",
         findings: await auditPage(win),
       });
@@ -3542,8 +3816,11 @@ async function sweep(
     win.setSize(size.width, size.height);
     await pause(300);
     for (const theme of plan.themes) {
+      // Serbian, for the write pass's reason: these frames are filed under a
+      // bare `<size>/<theme>` and must not inherit the last pass's language.
+      await serveLocale(win, "sr");
       await serveTheme(win, theme);
-      const dir = join(outDir, size.id, theme);
+      const dir = join(outDir, passDir(size.id, theme, "sr"));
       mkdirSync(dir, { recursive: true });
 
       // These stems are constants, so unlike `shoot`'s they cannot collide with
@@ -3562,7 +3839,14 @@ async function sweep(
         await settle(win);
         const file = join(dir, `${stem}.png`);
         await capture(win, file);
-        frames.push({ file, scene: stem, theme, size: size.id, findings: await auditPage(win) });
+        frames.push({
+          file,
+          scene: stem,
+          theme,
+          language: "sr",
+          size: size.id,
+          findings: await auditPage(win),
+        });
       };
 
       if (!(await openModule(win, "settings"))) {
@@ -3651,11 +3935,23 @@ export function duplicateStems(frames: readonly ShotFrame[]): readonly string[] 
   const seen = new Set<string>();
   const twice = new Set<string>();
   for (const frame of frames) {
-    const key = `${frame.size}/${frame.theme}/${frame.scene}`;
+    const key = `${frame.size}/${passOf(frame)}/${frame.scene}`;
     if (seen.has(key)) twice.add(key);
     else seen.add(key);
   }
   return [...twice].sort();
+}
+
+/**
+ * The pass a frame belongs to, as it is spelled on disk: `noc`, `noc-en`.
+ *
+ * The same rule as `passDir`'s tail, and it is written once because two
+ * spellings of one directory is how a report starts naming files that are not
+ * there. Serbian is bare for `passDir`'s reason: it is the language every
+ * legacy frame was taken in.
+ */
+function passOf(frame: ShotFrame): string {
+  return frame.language === "sr" ? frame.theme : `${frame.theme}-${frame.language}`;
 }
 
 /**
@@ -3704,7 +4000,7 @@ function buildReport(frames: readonly ShotFrame[]): string {
     for (const finding of frame.findings) {
       const key = `${finding.kind}|${finding.where}|${finding.other}`;
       const existing = byKey.get(key);
-      const scene = `${frame.size}/${frame.theme}/${frame.scene}`;
+      const scene = `${frame.size}/${passOf(frame)}/${frame.scene}`;
       if (existing === undefined) byKey.set(key, { finding, scenes: new Set([scene]) });
       else existing.scenes.add(scene);
     }

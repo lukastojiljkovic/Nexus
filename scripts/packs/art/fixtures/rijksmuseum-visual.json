@@ -1,0 +1,15 @@
+{
+  "id": "https://id.rijksmuseum.nl/202106038",
+  "type": "VisualItem",
+  "subject_to": [
+    {
+      "type": "Right",
+      "identified_by": [
+        { "type": "Name", "content": "Publieke domein", "language": [{ "id": "http://vocab.getty.edu/aat/300388256", "type": "Language" }] },
+        { "type": "Name", "content": "Public Domain", "language": [{ "id": "http://vocab.getty.edu/aat/300388277", "type": "Language" }] }
+      ],
+      "classified_as": [{ "id": "https://creativecommons.org/publicdomain/mark/1.0/", "type": "Type" }]
+    }
+  ],
+  "digitally_shown_by": [{ "id": "https://id.rijksmuseum.nl/5008910398567010810098", "type": "DigitalObject" }]
+}

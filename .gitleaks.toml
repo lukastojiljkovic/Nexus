@@ -97,4 +97,36 @@ regexes = [
   # the scan is 0 findings; without it, 1, at
   # defect-classes.md:1546.
   '''^s\.targetMinusDeliveredP2o5$''',
+
+  # THE PACK EVIDENCE FILES. `scripts/packs/<pack>/sources.json` records, for
+  # every file a builder fetched, the publisher's own SHA-256 in the shape
+  # `"name.ext": "<64 hex>"`. Two of the rules in the stock set read a quoted
+  # name followed by a high-entropy value as an API key, so one pack's evidence
+  # file produced eleven findings on 2026-10-11.
+  #
+  # MEASURED, after the first attempt at this entry was wrong: the pattern is
+  # matched against the SECRET the rule extracted, which for `generic-api-key`
+  # is the value alone - not the `"name.ext": "value"` line that gitleaks prints
+  # in its report. The entry that did not work here was that whole line, and it
+  # left all eleven findings standing. It is one bare SHA-256.
+  #
+  # So the entry is the SHAPE rather than the eleven literals, which is the one
+  # place this file bends its own rule, and the reason is that the shape IS the
+  # artefact: every pack builder writes one line per fetched file into
+  # `sources.json`, so the literal list is eleven lines now and eleven more per
+  # pack forever - a gate that gets ignored by the third pack, which is the
+  # failure this file exists to avoid. WHAT IT COSTS, said plainly: a real
+  # credential that happens to be exactly sixty-four lowercase hex characters
+  # with nothing around it stops being reported. That is a narrow miss, and it
+  # is the price of the shape being a hash by construction here.
+  '''^[0-9a-f]{64}$''',
+
+  # A SAVED PUBLIC PAGE. `scripts/packs/car-help/fixtures/ready-car-kit.html` is
+  # the ready.gov page a builder parses offline instead of fetching, and Drupal
+  # puts a `data-contextual-token` in the markup of every page it serves. It is
+  # a UI token in public HTML, not a credential: it appears in the page source
+  # of a site anyone can load, and it authorises nothing outside the browser
+  # session that fetched it. Named literally, so a real key in that file is
+  # still a finding.
+  '''^ELUTvGegwq3zxC8HskTMl4UcXMYZC6h9WN49EVJAld4$''',
 ]

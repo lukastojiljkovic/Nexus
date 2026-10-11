@@ -1,0 +1,130 @@
+{
+  "head": {
+    "vars": [
+      "item",
+      "en",
+      "sr",
+      "year",
+      "creators"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q21127574"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "English Essays from Sir Philip Sidney to Macaulay"
+        },
+        "creators": {
+          "type": "literal",
+          "value": ""
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q136031498"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Harvard Classics, Vol. 1"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Benjamin Franklin; William Penn; John Woolman"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1909"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q136048287"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Harvard Classics, Vol. 10. The Wealth of Nations"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Adam Smith"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1909"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q136052183"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Harvard Classics, Vol. 11. The Origin of Species"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Charles Darwin"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1909"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q136084471"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Harvard Classics, Vol. 16. Stories from The Thousand and One Nights"
+        },
+        "creators": {
+          "type": "literal",
+          "value": ""
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1909"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q136085974"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Harvard Classics, Vol. 18. Modern English Drama"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Lord Byron; Percy Bysshe Shelley; John Dryden; Robert Browning; Oliver Goldsmith; Richard Brinsley Sheridan"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1909"
+        }
+      }
+    ]
+  }
+}

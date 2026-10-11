@@ -1,0 +1,210 @@
+{
+  "layout": 1,
+  "fetched": "2026-10-10",
+  "note": [
+    "Every source this pack is built from, with the digests and sizes measured on 2026-10-10.",
+    "`evidence.quote` is the exact sentence the licence was read from, on `evidence.url`;",
+    "a source without one is not used, and the builder verifies every download against `sha256`.",
+    "CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/",
+    "Solar System Scope's own page credits NASA's Blue Marble as one of its inputs; the Earth maps",
+    "here are NASA's own files, used directly, and the ten Solar System Scope maps are used where",
+    "NASA's equivalent global mosaics are multi-hundred-megabyte simple-cylindrical GeoTIFFs."
+  ],
+  "sources": [
+    {
+      "id": "sun",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_sun.jpg",
+      "bytes": 822427,
+      "sha256": "ff0f076ba65e03b5ab518451bc96699325be38e3ccbdd5869ee1c00f3a0c8816",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Sun: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "mercury",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_mercury.jpg",
+      "bytes": 872555,
+      "sha256": "5a5c80607f643496bac9a631e71957def35ed788895f18b678ac849c2b38e48a",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Mercury: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "venus",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_venus_atmosphere.jpg",
+      "bytes": 229696,
+      "sha256": "225012ad4911730605c4e189ca2a3bf674fce50cc48aab4102b936b47d6991ac",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Venus: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "note": "The atmosphere map, not the surface: Venus is seen as its cloud deck, which is what the sky shows.",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "earth-day",
+      "url": "https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57730/land_ocean_ice_2048.png",
+      "bytes": 1912469,
+      "sha256": "b5e0139834c638d10c2c747f4bac63df5f9387680c00d87e5a2a9ed9a3dfea71",
+      "width": 2048,
+      "height": 1024,
+      "format": "png",
+      "licence": "Public domain (NASA)",
+      "credit": "Earth: NASA Earth Observatory, Blue Marble (day) and Black Marble (night) — not subject to copyright in the United States",
+      "page": "https://visibleearth.nasa.gov/images/57730/the-blue-marble-land-surface-ocean-color-and-sea-ice",
+      "evidence": {
+        "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+        "quote": "NASA content – images, audio, video, and media files used in the rendition of 3-dimensional models, such as texture maps and polygon data in any format – generally are not subject to copyright in the United States."
+      }
+    },
+    {
+      "id": "earth-night",
+      "url": "https://eoimages.gsfc.nasa.gov/images/imagerecords/79000/79765/dnb_land_ocean_ice.2012.3600x1800.jpg",
+      "bytes": 794479,
+      "sha256": "373e5a08c9f378a2ce6320214a613148e4b1e3946b3f39a516c9093b76cb7124",
+      "width": 3600,
+      "height": 1800,
+      "format": "jpeg",
+      "licence": "Public domain (NASA)",
+      "credit": "Earth: NASA Earth Observatory, Blue Marble (day) and Black Marble (night) — not subject to copyright in the United States",
+      "page": "https://visibleearth.nasa.gov/images/79765/night-lights-2012-earth-at-night",
+      "note": "The 2012 Black Marble night-lights map (Suomi NPP VIIRS day/night band), 3600 × 1800; the pack caps it at 2048 × 1024.",
+      "evidence": {
+        "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+        "quote": "NASA content – images, audio, video, and media files used in the rendition of 3-dimensional models, such as texture maps and polygon data in any format – generally are not subject to copyright in the United States."
+      }
+    },
+    {
+      "id": "moon",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_moon.jpg",
+      "bytes": 1053869,
+      "sha256": "2764ba6535ea0481a062846ee033cc7a909dae05b31a8fd13f3e98f3a7fd92bd",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Moon: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "mars",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_mars.jpg",
+      "bytes": 750547,
+      "sha256": "2d187f3e77a98eaa8cea5f4cc722f633c122ef170b9e94ace6b5fb6cbc3f8e01",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Mars: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "jupiter",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg",
+      "bytes": 498976,
+      "sha256": "b0f04d005350252636b0e3396fc592548cbd9e9126b269d32d5c6abd4b0e4f2b",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Jupiter: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "saturn",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_saturn.jpg",
+      "bytes": 199916,
+      "sha256": "54a900ca9bf7ab62e70f862852759abdf342e6d6436a95a2fe9ebdb6bcd3bbac",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Saturn and its rings: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "saturn-rings",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_saturn_ring_alpha.png",
+      "bytes": 12119,
+      "sha256": "4b0644b2f3ef259fd0bfaedd9dc52f9e7d9738f65f50363e8c4dd19f650d7334",
+      "width": 2048,
+      "height": 125,
+      "format": "png",
+      "licence": "CC-BY-4.0",
+      "credit": "Saturn and its rings: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "note": "A radial strip with alpha: the x axis runs from the inner edge of the rings to the outer one.",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "uranus",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_uranus.jpg",
+      "bytes": 77751,
+      "sha256": "d15239d46f82d3ea13d2b260b5b29b2a382f42f2916dae0694d0387b1204a09d",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Uranus: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    },
+    {
+      "id": "neptune",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_neptune.jpg",
+      "bytes": 241580,
+      "sha256": "cb42ea82709741d28b0af44d8b283cbc6dbd0c521a7f0e1e1e010ade00977df6",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Neptune: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
+    }
+  ]
+}

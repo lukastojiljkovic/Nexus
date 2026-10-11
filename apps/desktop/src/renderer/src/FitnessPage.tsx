@@ -5,6 +5,7 @@ import { FitMeasurements } from "./FitMeasurements.js";
 import { FitNutrition } from "./FitNutrition.js";
 import { FitTraining } from "./FitTraining.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { strings } from "./strings.js";
 
 /**
@@ -56,7 +57,11 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
 
   return (
     <div className="fit">
-      <PageHeader title={moduleName("fitness")} sigil="fitness" />
+      <PageHeader
+        title={moduleName("fitness")}
+        sigil="fitness"
+        actions={<ModuleSettingsGear moduleId="fitness" />}
+      />
 
       <div className="fit__sections" role="group" aria-label={s.label}>
         {FIT_SECTIONS.map((option) => (

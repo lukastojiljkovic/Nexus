@@ -161,6 +161,10 @@ function emptyProfileData(): ProfileData {
     circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
+    // The kit's section (ADR-090): always empty here — a foreign import copies
+    // rows of the collections above, and a module's own payload is written only
+    // by the module that owns it (`planForeignImport`).
+    modules: [],
   };
 }
 

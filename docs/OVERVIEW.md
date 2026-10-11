@@ -44,10 +44,9 @@ you need."**
 ## The three ideas that make Nexus different
 
 **1. It works without the internet — always.**
-Your data lives on your own computer. Every core feature works with the internet
-completely off. Online syncing (using it across your phone and laptop) will come
-later as a *bonus*, never as a requirement. There's even a mode where no server is
-ever involved at all.
+Your data lives on your own computer, and every feature works with the internet
+completely off. Nexus has no server at all, so there is nothing to sign up for and
+nothing that stops working when the connection does.
 
 **2. Your privacy is built in, not promised.**
 Private notes are locked so securely that **not even the people who make Nexus could
@@ -166,27 +165,27 @@ thoughtfully designed app throughout.
 
 ## What's coming (the bigger picture)
 
-Nexus is being built one complete piece at a time. What is being worked on now:
+Nexus is being built one complete piece at a time, toward an app that keeps working
+with the internet unplugged. What is being worked on now:
 
-- **The web app** — the same program, in a browser and on a phone, built from this
-  same work rather than started over. The groundwork exists; what a person can
-  actually open does not yet.
-- **Syncing across devices** — so your laptop and phone hold the same data. The
-  machinery underneath is built and tested, and as of 2026-08-17 two copies of the
-  program genuinely exchange a change: one adds a task, the other has it, and when
-  both edit the same thing neither edit is lost. What is missing is the part that
-  runs it for you in the background and the switch that turns it on. Two promises
-  govern it and neither is negotiable: **the server can never read your content**,
-  and **if you never turn syncing on, nothing about the app changes** — no network
-  is involved at any point.
+- **Modules that plug in** — each module becomes a folder the app discovers, so a
+  new one arrives without touching the rest.
+- **New modules** — a library of books, films and series; a log of the museums,
+  theatres and concerts you visit, with your own music; a car log; a pantry; a
+  cookbook; a voice and video diary; an emergency card; a scientific calculator;
+  sunrise, sunset and moon phases; and games: chess, solitaire, minesweeper,
+  falling blocks, board games and puzzles.
+- **Content packs** — signed packs you install from a file or a USB stick: offline
+  encyclopedias, recipes, and survival and first-aid guides from public,
+  openly licensed sources.
 
 Further out:
 
-- **Sharing** — sending a note or a board to someone read-only, and a grocery list
-  two people can edit at the same time. Both need syncing to exist first.
-- **More modules over time** — goals, time tracking, health, car, travel, inventory,
-  shopping, read-later, a library, a password vault, and eventually an AI assistant
-  that helps organize everything for you.
+- **An offline map** of the regions you choose.
+- **A local AI assistant** that runs on your own computer, uses your notes and the
+  installed packs as its knowledge, and asks before it changes anything.
+- **More modules over time** — goals, time tracking, health, travel, inventory,
+  read-later and a password vault.
 - **A continuing polish pass.** The founder's verdict after installing the first
   build was that the app read *raw*. Most of what that named has been fixed, and
   finishing quality still outranks adding breadth.

@@ -1,0 +1,45 @@
+/* PREVOD REČENICA (ADR-090). Tokens exclusively — raw colour values are
+   forbidden outside @nexus/tokens, and this stylesheet is checked by the same
+   gates the shell's own are (`check:colours`, `check:tokens`).
+ *
+ * The class prefix is `sentences__`, for the reason the shell's own split
+ * states: a rule belongs to the surface whose prefix it carries. Only LAYOUT is
+ * declared here — the type, the ink and the box all come from the primitives
+ * (`Card`, `TextArea`, `Chip`, `.nx-hint`), so nothing in this file retypes a
+ * shared tier. The one exception is the deliberate one `TextArea`'s own header
+ * documents: a site that wants a taller box sizes the box, and the box is
+ * `.nx-textarea__input` inside the component.
+ */
+
+.sentences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+.sentences__directions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.sentences__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* Eight rows is about a paragraph: enough that a pasted text is read in place
+   rather than through a scroller, and short enough that the translation is
+   visible without moving the page. */
+.sentences__text .nx-textarea__input {
+  min-height: 8rem;
+}
+
+.sentences__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}

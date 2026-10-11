@@ -48,6 +48,7 @@ import {
   type LlmSkippedRecord,
   type ParsedApkg,
   type ProfileData,
+  type ExportModuleData,
 } from "@nexus/core";
 import { uuidv7 } from "@nexus/db";
 import type {
@@ -62,6 +63,7 @@ import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { CsvReadError, readCsvText } from "./csvReader.js";
 import { IcsReadError, readIcsText } from "./icsReader.js";
+import { ModuleImportError, type ModuleImportBlob } from "./moduleIpc.js";
 import { cancelIdleCompactions } from "./notes.js";
 import type { PrivResealOutcome } from "./priv.js";
 import {
@@ -354,6 +356,42 @@ export interface RestoreDeps extends ProfileDataDeps {
   deleteBlobIfOrphaned(sha256: string, refCount: number): Promise<void>;
   /** The sealed private-note store (ADR-057 §6) — what undo's parallel sealed-rows capture reads through (`gatherPrivateSealedRows`). Never decrypts; it cannot. */
   privateNoteStore(profileId: string): PrivateNoteStore;
+  /**
+   * Refuses an archive whose `data/modules.ndjson` this build cannot import
+   * whole (ADR-090): a module id it did not adopt, a module it cannot restore,
+   * or a payload that module's own `parse` throws on. Called at the PREVIEW, so
+   * the user hears it before confirming, and not at all when the section is
+   * empty or names only modules that are here and take what they are given.
+   *
+   * The refusal carries a `ModuleImportError` code, which is what lets the
+   * preview report an unknown module and an unreadable payload as two different
+   * problems.
+   */
+  assertImportable(modules: readonly ExportModuleData[]): void;
+  /**
+   * Applies the archive's kit-module section to one profile (ADR-090), after
+   * the profile's content has been replaced and inside the same unlocked
+   * session. Every payload is parsed before any module writes, and every
+   * adopted module is then applied inside ONE transaction: a module that
+   * refuses - at either step - leaves the profile exactly as the replace left
+   * it, with no module's rows written.
+   */
+  restoreModuleData(profileId: string, modules: readonly ExportModuleData[]): void;
+  /**
+   * Every blob the archive's kit-module section names, with the module that
+   * names it (ADR-108). Injected because neither this module nor `@nexus/core`
+   * can read a module's payload: the module itself answers the question, off the
+   * same parsed value its own `apply` is handed.
+   *
+   * Read once per apply, for the two things this file owes the section's bytes:
+   * writing each one into the store BEFORE any module's `apply` writes the row
+   * that names it (a row pointing at nothing is the one failure the attachment
+   * loop above already refuses), and reporting - at the preview, exactly as the
+   * reader reports a built-in row's missing blob - the ones the archive does not
+   * carry. Called only after `assertImportable` has passed, so a payload that
+   * module's own `parse` refuses never reaches it.
+   */
+  moduleBlobs(modules: readonly ExportModuleData[]): readonly ModuleImportBlob[];
   /** Whether `profileId`'s private section is set up AND unlocked right now — the preview's `willRestore` fact, re-checked at apply time by the re-seal itself. */
   privUnlocked(profileId: string): boolean;
   /**
@@ -713,8 +751,69 @@ export async function previewRestore(
     };
   }
   const incoming = countProfileModules(parsed.data);
-  const warnings = parsed.problems.filter((problem) => problem.severity === "warning").map(toRestoreProblem);
+  const warnings: RestoreProblem[] = parsed.problems
+    .filter((problem) => problem.severity === "warning")
+    .map(toRestoreProblem);
   const token = randomBytes(16).toString("hex");
+
+  // The kit's section (ADR-090), refused HERE rather than at apply: a module
+  // this build does not know means the archive carries data that would be lost,
+  // and a payload this build cannot read means the archive would be imported
+  // half-way - either way the user has to hear it before they confirm a restore
+  // that replaces their profile, not after. The apply re-reads the section
+  // (`applyImports`) before any module writes, because a plan confirmed against
+  // one build must not be applied by another.
+  try {
+    deps.assertImportable(parsed.data.modules);
+  } catch (error) {
+    await archive.close();
+    return {
+      status: "invalid",
+      problems: [
+        {
+          severity: "error",
+          // Which problem this is comes from the kit's own code: "a module this
+          // build has never heard of" and "a payload this build cannot read" send
+          // the user to different places, and only the module knows the second.
+          code:
+            error instanceof ModuleImportError && error.code === "invalid-module-data"
+              ? "invalid-module-data"
+              : "unknown-module",
+          path: "data/modules.ndjson",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+
+  // The kit section's own files (ADR-108), on `parseImportArchive`'s rule-8
+  // terms exactly: a blob the archive does not carry is a WARNING naming the
+  // path, the row still restores, and the module's page draws the file it cannot
+  // find. The module's rows live inside a payload neither core nor this file can
+  // read, so the module is asked which hashes they name - and asked only now,
+  // after `assertImportable` has passed, so a payload its own `parse` refuses
+  // never reaches the question.
+  let moduleBlobs: readonly ModuleImportBlob[];
+  try {
+    moduleBlobs = deps.moduleBlobs(parsed.data.modules);
+  } catch (error) {
+    // A module's own `importBlobs` throwing is a bug in that module, not a fact
+    // about the archive - so it propagates as an exception rather than through
+    // the two kit problem codes above. The handle is released first, on
+    // `countProfileModules`' own rule: nothing else holds this archive yet, so a
+    // throw through here would keep the user's file locked on Windows.
+    await archive.close().catch(() => {});
+    throw error;
+  }
+  for (const blob of moduleBlobs) {
+    if (archive.blobNames.has(blob.sha256)) continue;
+    warnings.push({
+      severity: "warning",
+      code: "missing-blob",
+      path: `blobs/${blob.sha256}`,
+      detail: blob.moduleId,
+    });
+  }
 
   picked.ready = {
     archive,
@@ -845,6 +944,15 @@ export async function applyRestore(
   ) {
     shasToWrite.add(ready.profilePicture.hash);
   }
+  // The kit section's own files (ADR-108), joining the same set on the same
+  // rule: written when the archive carries them, counted when it does not. They
+  // are written HERE, before the replace and before `restoreModuleData` below
+  // writes the rows that name them - the order that makes a row pointing at
+  // nothing impossible, exactly as for the attachments above.
+  const moduleBlobs = deps.moduleBlobs(ready.data.modules);
+  for (const blob of moduleBlobs) {
+    if (ready.archive.blobNames.has(blob.sha256)) shasToWrite.add(blob.sha256);
+  }
   const addedBlobs: string[] = [];
   for (const sha256 of shasToWrite) {
     const bytes = await ready.archive.readBlob(sha256);
@@ -888,13 +996,27 @@ export async function applyRestore(
     now,
   );
 
+  // The kit's section (ADR-090), applied immediately after the replace. A kit
+  // module's tables are deliberately NOT on `RESTORE_WIPE_TABLES` (section 6 of
+  // the ADR says why), so the replace above left them standing and THIS is what
+  // puts them where the archive says they belong: every adopted module runs,
+  // and one the section does not name is handed `undefined` and resets its own
+  // archived state to empty. All of it, or none of it, in one transaction.
+  deps.restoreModuleData(profileId, ready.data.modules);
+
   // Private attachment files the archive could not supply count beside the
   // content-addressed ones: both are attachment rows restored without their
   // bytes, which is the one fact this number states.
   const missingBlobs =
     restoredAttachments.filter(
       (attachment) => !ready.archive.blobNames.has(attachment.sha256),
-    ).length + missingPrivateBlobs;
+    ).length +
+    // A kit module's file the archive lacks (ADR-108) is the same fact one
+    // section over: the module's row comes back and its bytes do not, which the
+    // module's own page draws as a missing file (`previewRestore` raised the
+    // warning naming it).
+    moduleBlobs.filter((blob) => !ready.archive.blobNames.has(blob.sha256)).length +
+    missingPrivateBlobs;
 
   const summary: RestoreApplyResult = {
     restored: countProfileModules(ready.data),
@@ -973,6 +1095,12 @@ export async function undoRestore(deps: RestoreDeps, profileId: string): Promise
     },
     now,
   );
+
+  // The kit's section is replayed on the same terms as every other member of
+  // the snapshot (ADR-090): the pre-operation payload went in with the
+  // pre-operation rows, so undoing a restore - or a foreign import - puts the
+  // profile's modules back exactly where they were.
+  deps.restoreModuleData(profileId, toUndo.snapshot.data.modules);
 
   let blobsRemoved = 0;
   for (const sha256 of toUndo.addedBlobs) {

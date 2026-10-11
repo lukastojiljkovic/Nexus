@@ -90,9 +90,101 @@ files:
   # the unpacked output afterwards and refuses to leave one behind.
   - "!node_modules/better-sqlite3-multiple-ciphers/prebuilds/*"
   - "node_modules/better-sqlite3-multiple-ciphers/prebuilds/${platform}-${arch}.node"
+  # node-llama-cpp, the assistant's inference engine (ADR-096). Same shape as the
+  # SQLite block above and for the same reason: everything out, then exactly what
+  # this platform can load back in. Measured on 2026-10-10, bytes summed over
+  # each package's files:
+  #
+  #   node-llama-cpp (JS, templates, llama sources)  4.2 MB
+  #   node-llama-cpp/llama/gitRelease.bundle        33.6 MB   DROPPED
+  #   @node-llama-cpp/win-arm64                     10.5 MB   DROPPED
+  #   @node-llama-cpp/win-x64                       29.3 MB
+  #   @node-llama-cpp/win-x64-vulkan                70.9 MB
+  #   @node-llama-cpp/win-x64-cuda                 167.9 MB
+  #   @node-llama-cpp/win-x64-cuda-ext             350.9 MB
+  #                                                 623.2 MB ADDED
+  #
+  # `gitRelease.bundle` is dropped for the SQLite amalgamation's reason: it is a
+  # git bundle of the llama.cpp release tree, shipped so the package CAN be built
+  # from source, and this app never builds it — `getLlama` is called with
+  # `build: "never"` and `skipDownload: true` (`assistant/runtime/llama.ts`), so a
+  # machine with no working prebuilt binary gets a clear refusal rather than a
+  # compiler, a download, or a network request. The REST of `llama/` stays, and
+  # that is not tidiness: `dist/bindings/utils/binariesGithubRelease.js` reads
+  # `llama/binariesGithubRelease.json` in a module-scope top-level await, so
+  # dropping the directory would make `import("node-llama-cpp")` throw before a
+  # single token is generated.
+  #
+  # The CUDA pair is KEPT, and that is a choice worth naming rather than a
+  # default: 518.8 MB of the 622.9 MB this adds serves a backend that requires the
+  # user to have installed CUDA Toolkit 13.1+ (`docs/guide/CUDA.md` at v3.22.1),
+  # and that FAILED its own load test on the machine this was built on —
+  # `getLlamaGpuTypes("supported")` answers `["vulkan", false]` there. It is kept
+  # because upstream ships exactly `${os}-${arch}*` and a user who has the toolkit
+  # would otherwise have no way to get CUDA acceleration at all; dropping the two
+  # lines is the one-line change if the installer's size wins.
+  - "!node_modules/node-llama-cpp/llama/gitRelease.bundle"
+  - "!node_modules/@node-llama-cpp/*/bins/**/*"
+  - "node_modules/@node-llama-cpp/${os}-${arch}*/bins/**/*"
+  # The voice worker's natives (ADR-105), brought in by @huggingface/transformers.
+  # Same shape again, and this time both of them are required FROM MODULE SCOPE,
+  # so neither can be left behind: the worker bundle electron-vite emits
+  # (`out/main/worker-*.js`) begins with `require("@huggingface/transformers")`,
+  # which resolves to the package's `node`+`require` entry
+  # `dist/transformers.node.cjs` — and that file calls
+  # `requireFromHere("onnxruntime-node")` and `require("sharp")` at module scope,
+  # before any `pipeline()` call. Measured on 2026-10-10, bytes summed over each
+  # package's files in `node_modules`:
+  #
+  #   onnxruntime-node 1.30.0, whole package        301.1 MB
+  #     bin/napi-v6/win32/x64                        67.1 MB   KEPT
+  #     bin/napi-v6/win32/arm64                      72.7 MB   DROPPED
+  #     bin/napi-v6/linux/x64                        46.2 MB   DROPPED
+  #     bin/napi-v6/linux/arm64                      25.5 MB   DROPPED
+  #     bin/napi-v6/darwin/arm64                     89.4 MB   DROPPED
+  #   sharp 0.35.5 (dist, src, LICENSE)               1.0 MB   KEPT
+  #   @img/sharp-win32-x64 0.35.5                    19.8 MB   KEPT
+  #   @img/colour 1.1.0                              0.07 MB   KEPT
+  #
+  # DROPPING THE OTHER PLATFORMS SAVES 234.0 MB and costs nothing: onnxruntime-node
+  # is ONE package that carries all five trees, which is also why the exclusion is
+  # needed here and was not for the two blocks above. Its discriminator is the same
+  # one — `${platform}`/`${arch}` are electron-builder's macros for the TARGET, so
+  # one list is correct on both hosts — and the shape is not cosmetic:
+  # `onnxruntime-node/dist/binding.js` builds its path as
+  # `../bin/napi-v6/${platform}/${arch}/onnxruntime_binding.node` from
+  # `process.platform`/`process.arch`, so those directories must survive verbatim.
+  #
+  # sharp is the one place the re-include names TWO packages, and that is Linux's
+  # doing: on Windows both libvips DLLs (19.0 MB of the 19.8) sit inside
+  # `@img/sharp-win32-x64/lib`, while on Linux the library is a separate
+  # `@img/sharp-libvips-linux-x64`. `sharp/dist/sharp.cjs` tries its own
+  # `src/build/Release` first (absent by design — `npmRebuild: false` and nothing
+  # builds it) and then `@img/sharp-${platform}-${arch}/sharp.node`.
+  - "!node_modules/onnxruntime-node/bin/napi-v6/*/*/**/*"
+  - "node_modules/onnxruntime-node/bin/napi-v6/${platform}/${arch}/**/*"
+  - "!node_modules/@img/sharp-*/**/*"
+  - "node_modules/@img/sharp-${platform}-${arch}/**/*"
+  - "node_modules/@img/sharp-libvips-${platform}-${arch}/**/*"
 
 asarUnpack:
   - node_modules/better-sqlite3-multiple-ciphers/**/*
+  # The llama.cpp binaries, and the WHOLE package rather than its `bins/` alone.
+  # Node cannot load a native addon from inside an asar, and the worker loads
+  # `node-llama-cpp` itself by an absolute path into `app.asar.unpacked` — which
+  # is also what keeps an ESM-only package out of the asar's path resolution
+  # (`llama.ts` explains why a `require` of it cannot work at all).
+  - node_modules/node-llama-cpp/**/*
+  - node_modules/@node-llama-cpp/**/*
+  # And the voice worker's, for the reasons above: a `.node` file cannot be
+  # loaded from inside the asar, and onnxruntime-node's loader builds its path
+  # from `process.platform`/`process.arch` at require time, so the directory
+  # layout under `bin/napi-v6/` has to survive verbatim. Whole packages, exactly
+  # as the two above — and `@img/**` covers the libvips files that live inside
+  # the sharp platform package on Windows and in their own package on Linux.
+  - node_modules/onnxruntime-node/**/*
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
 
 npmRebuild: false
 
@@ -218,6 +310,55 @@ appImage:
   # unprivileged user namespaces disabled — there the AppImage refuses to start
   # instead of starting unprotected, and build/gentoo/README.md says what to do.
   executableArgs: []
+
+mac:
+  # A dmg, for the linux block's reason one line over: it is
+  # what a person downloads and drags into /Applications with no package
+  # manager. ONE architecture, and the Intel half is a stated gap rather than a
+  # line somebody forgot: every native dependency here is per-architecture
+  # (`node-llama-cpp`'s `bins/`, `onnxruntime-node`'s
+  # `bin/napi-v6/<platform>/<arch>/`, `@img/sharp-${platform}-${arch}`), and a
+  # build installs only the optional packages of the platform it runs on. So
+  # the CI job on an Apple-silicon runner produces an arm64 dmg that carries
+  # real binaries, while an x64 dmg built the same way would carry arm64 bytes
+  # under x64 paths — an app that opens and then fails at the first database
+  # query, which is exactly the defect class the linux job's comment warns of.
+  # An Intel dmg therefore needs the x64 halves installed first (`pnpm install`
+  # with pnpm's `supportedArchitectures`, or a build on an Intel runner), and
+  # that is one more step rather than one more line here.
+  #
+  # Nothing else in this file needed a darwin line, and that is worth knowing
+  # before adding one: the `files` list above selects its platform packages
+  # with electron-builder's own `${platform}`/`${arch}` macros, which resolve to
+  # the TARGET, so the same two lists are already correct here.
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # electron-builder converts this 512×512 PNG into the app's `.icns`; a source
+  # with more pixels gives sharper Retina output and changes nothing else.
+  icon: build/icon.png
+  # Apple's own name for a tool the user runs directly and that is not a game.
+  category: public.app-category.productivity
+  artifactName: "Nexus-${version}-${arch}.dmg"
+  # UNSIGNED, deliberately, and the consequence written down rather than left
+  # to be discovered. `identity: null` stops electron-builder looking for a
+  # keychain certificate, which is this project's Windows position one platform
+  # over (the NSIS installer ships without an Authenticode certificate): no
+  # code-signing certificate is bought, and no notarisation is asked for.
+  #
+  # What that costs the person installing it is stated plainly, because it is
+  # worse than the Windows first run: macOS quarantines a downloaded app and
+  # refuses to open it until it is allowed once through System Settings →
+  # Privacy & Security → „Open Anyway". Buying an Apple Developer ID and
+  # notarising removes that step, and it is a yearly cost plus a secret in CI
+  # rather than a flag — so it is Luka's decision, and this comment is where
+  # whoever revisits it finds out that it was made.
+  identity: null
+  # No assessment to run: it exists to check a signature this build does not
+  # have, and leaving it on turns a deliberate decision into a build failure.
+  gatekeeperAssess: false
+  hardenedRuntime: false
 
 publish:
   provider: github

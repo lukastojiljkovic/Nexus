@@ -29,9 +29,9 @@ any other, and it is welcome as a contribution; see
 [CONTRIBUTING.md](CONTRIBUTING.md) for how a string is added to both
 `strings.sr.ts` and `strings.en.ts`.
 
-The optional sync service is **not running anywhere**: no hosted backend exists,
-and the shipped build cannot be pointed at one. Issues that assume a working
-account or a sync server cannot be reproduced yet.
+Nexus has **no online service**: no hosted backend exists and there is no
+account on a server, so everything an issue needs to reproduce is on your own
+device.
 
 ## What is not in scope
 

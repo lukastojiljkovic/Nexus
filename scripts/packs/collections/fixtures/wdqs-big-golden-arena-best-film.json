@@ -1,0 +1,130 @@
+{
+  "head": {
+    "vars": [
+      "item",
+      "en",
+      "sr",
+      "year",
+      "creators"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q12760244"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Trophy"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Трофеј"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1979"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Karolj Vicek"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q67175000"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Pismo ćaći"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2012"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Damir Čučić"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q67202798"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Kratki izlet"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2017"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Igor Bezinovic"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q67202845"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Diary of Diana B"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Дневник Диане Будисављевић"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2019"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Dana Budisavljevic"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q100980095"
+        },
+        "en": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Tereza37"
+        },
+        "sr": {
+          "xml:lang": "sr",
+          "type": "literal",
+          "value": "Тереза 37"
+        },
+        "year": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2020"
+        },
+        "creators": {
+          "type": "literal",
+          "value": "Danilo Šerbedžija"
+        }
+      }
+    ]
+  }
+}

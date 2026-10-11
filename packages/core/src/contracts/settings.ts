@@ -1,3 +1,5 @@
+import type { LabelText } from "./labels.js";
+
 /**
  * The settings a MODULE owns, declared the way a module declares its dashboard
  * widgets (ADR-045 / `WidgetContract`) — so the settings page COMPOSES a
@@ -51,7 +53,7 @@ export type SettingsStorage = "device" | "profile";
 /** One answer of a closed choice; `labelKey` resolves through the renderer's `strings` tree, exactly as `WidgetContract.title` does. */
 export interface SettingsChoiceOption {
   id: string;
-  labelKey: string;
+  labelKey: LabelText;
 }
 
 interface SettingsControlBase {
@@ -68,7 +70,7 @@ interface SettingsControlBase {
    * one file that holds all the copy and `@nexus/core` free of user-facing
    * prose.
    */
-  labelKey: string;
+  labelKey: LabelText;
   /**
    * Extra words this control answers to in the settings filter, spelled ALREADY
    * FOLDED (plain ASCII) exactly the way `searchCommands.ts` spells its
@@ -148,8 +150,8 @@ export type SettingsControl =
  * title is `titleKey`, a `strings` path exactly like a widget's.
  */
 export interface SettingsPanel {
-  /** The card's title as an i18n KEY path (`SettingsControlBase.labelKey`'s convention). */
-  titleKey: string;
+  /** The card's title (`SettingsControlBase.labelKey`'s convention). */
+  titleKey: LabelText;
   /** The controls the card draws, in the order it draws them. */
   controls: SettingsControl[];
 }

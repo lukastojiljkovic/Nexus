@@ -35,6 +35,7 @@
     "elecGrid":       "{color.bench.danGrid}",
     "elecPartBody":   "{color.bench.danBody}",
     "elecPartEdge":   "{color.bench.danEdge}",
+    "elecFocus":      "{color.bench.danFocus}",
     "elecWireRed":    "{color.wire.red}",
     "elecWireBlack":  "{color.wire.black}",
     "elecWireYellow": "{color.wire.yellow}",

@@ -38,9 +38,12 @@ import {
   BACKUP_CADENCES,
   BACKUP_KEEP_LAST_CHOICES,
   CSV_IMPORT_COLUMN_ROLES,
+  DEFAULT_UNLOCK_SETTING,
   LLM_IMPORT_KINDS,
   LLM_IMPORT_MAX_ANSWER_LENGTH,
   LLM_PROMPT_LANGUAGES,
+  UNLOCK_SETTINGS,
+  settingNeedsPasscode,
 } from "../../shared/ipc.js";
 import type {
   ApkgImportPreview,
@@ -80,8 +83,10 @@ import type {
   RestoreProblem,
   Subject,
   TaskList,
+  UnlockPolicy,
+  UnlockSetting,
 } from "../../shared/ipc.js";
-import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
+import { SYNC_ON_HOLD } from "../../shared/syncHold.js";
 import { authErrorMessage, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
 import { ALL_NOTIFICATION_SOURCES, NOTIFICATION_PRESETS } from "./notificationFormat.js";
 import { NotificationSettingsControls } from "./NotificationSettingsControls.js";
@@ -99,6 +104,8 @@ import { Kbd } from "./ShortcutsDialog.js";
 import { clearStoredAccent, persistAccent, readStoredAccent } from "./accent.js";
 import { ProfileAvatar } from "./profileAvatar.js";
 import { ProPackList } from "./ProPacks.js";
+import { ModuleVisibilityCard } from "./ModuleVisibilityCard.js";
+import { visibleModuleSet, type ShellVisibility } from "../../shared/moduleVisibility.js";
 import { resolveModuleSelection } from "../../shared/onboardingPresets.js";
 import { heardTrades, planReasonLines } from "./profilePlanCopy.js";
 import { clearStoredSignals, readStoredSignals } from "./signalPrefs.js";
@@ -126,12 +133,11 @@ import {
   foldSettingsQuery,
   labelClass,
   matchSettings,
-  moduleEntryId,
   sectionClass,
   shortcutEntryId,
 } from "./settingsSearch.js";
 import { isDeviceOnlyPanel, moduleSettingsCards } from "./moduleSettings.js";
-import { MODULE_SETTINGS_PANELS } from "./moduleSettingsPanels.js";
+import { settingsPanelRenderer } from "./moduleSettingsPanels.js";
 import { moduleIconName } from "./moduleIcon.js";
 import {
   persistLlmImportKind,
@@ -159,15 +165,19 @@ import { moduleName } from "./moduleName.js";
 import { formatArchiveInstant } from "./timeFormat.js";
 import { SyncSection } from "./SyncSettings.js";
 import { NetworkSettings } from "./NetworkSettings.js";
+import { PacksSettings } from "./PacksSettings.js";
+import { PackLicences } from "./PackLicences.js";
 import { UpdateAbout } from "./UpdateAbout.js";
 import {
   SETTINGS_CATEGORIES,
   categoryOf,
+  moduleSettingsLocation,
   subPageListById,
   visibleSections,
   type CategoryId,
   type SettingsLocation,
 } from "./settingsCategories.js";
+import { scrollRevealedIntoView, useRevealedRow } from "./reveal.js";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "dan", "noc"];
 
@@ -4570,7 +4580,137 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
         </Select>
         <p className="nx-hint">{s.autoLockHint}</p>
       </div>
+
+      <AskPasscodeRow hits={hits} />
     </>
+  );
+}
+
+/**
+ * „Traži pristupni kod" (ADR-110): how often the passcode is asked for.
+ *
+ * Reads its own state rather than taking it as a prop, because the choice is
+ * ACCOUNT-level and main owns it — the row above it is a per-profile
+ * `localStorage` preference, while this one lives in a file beside the key
+ * chain that main reads before the window exists, and only main can say whether
+ * this OS session can honour it at all. Nothing here is optimistic: a weaker
+ * choice is stored only after main has verified the passcode, and the row then
+ * shows what main actually stored.
+ */
+function AskPasscodeRow({ hits }: { hits: ReadonlySet<string> }) {
+  const s = strings.settings.security;
+  const [policy, setPolicy] = useState<UnlockPolicy | null>(null);
+  const [draft, setDraft] = useState<UnlockSetting>(DEFAULT_UNLOCK_SETTING);
+  const [passcode, setPasscode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<SecurityMessage | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    window.nexus
+      .getUnlockPolicy()
+      .then((next) => {
+        if (!live) return;
+        setPolicy(next);
+        setDraft(next.setting);
+      })
+      .catch((error: unknown) => {
+        console.error("Nexus: failed to read the passcode policy:", error);
+        if (live) setMessage({ text: strings.auth.error.generic, failed: true });
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  /**
+   * Stores `next`, with the proof when main will want one. Whether it wants one
+   * is `settingNeedsPasscode` — the SAME function main decides with, so the
+   * field the user is shown and the field main insists on are one condition
+   * rather than two that agree today.
+   */
+  async function store(next: UnlockSetting, proof: string | undefined): Promise<void> {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const result = await window.nexus.setUnlockPolicy(next, proof);
+      if (result.ok) {
+        setPolicy(result.policy);
+        setDraft(result.policy.setting);
+        setPasscode("");
+        setMessage({ text: s.askPasscodeSaved, failed: false });
+      } else {
+        setMessage({ text: authErrorMessage(result.reason), failed: true });
+      }
+    } catch (error) {
+      setMessage({ text: strings.auth.error.generic, failed: true });
+      console.error("Nexus: failed to store the passcode policy:", error);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const available = policy?.available ?? false;
+  const reason = policy?.reason ?? null;
+  const needsProof = policy !== null && draft !== policy.setting && settingNeedsPasscode(draft);
+
+  function choose(next: UnlockSetting): void {
+    setMessage(null);
+    setDraft(next);
+    // Going back to the default is the one choice that only TIGHTENS the
+    // machine, so it is the one applied on the click itself; every weaker choice
+    // waits for the passcode field that appears below it.
+    if (!settingNeedsPasscode(next)) void store(next, undefined);
+  }
+
+  return (
+    <div className={hits.has("security-ask-passcode") ? "set__field set__hit-field" : "set__field"}>
+      <Select
+        label={s.askPasscodeTitle}
+        layout="inline"
+        className="set__select"
+        value={draft}
+        disabled={!available}
+        onChange={(event) => choose(event.target.value as UnlockSetting)}
+      >
+        {UNLOCK_SETTINGS.map((setting) => (
+          <option key={setting} value={setting}>
+            {lookup(s.askPasscodeOptions, setting) ?? setting}
+          </option>
+        ))}
+      </Select>
+      <p className="nx-hint">{s.askPasscodeHint}</p>
+      {!available && reason !== null && (
+        <p className="nx-hint">{lookup(s.askPasscodeUnavailable, reason) ?? ""}</p>
+      )}
+      {needsProof && (
+        <>
+          <p className="nx-hint">{s.askPasscodeWarning}</p>
+          <form
+            className="set__security-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (saving) return;
+              void store(draft, passcode);
+            }}
+          >
+            <TextField
+              type="password"
+              label={s.askPasscodePasscodeLabel}
+              value={passcode}
+              required
+              onChange={(event) => setPasscode(event.target.value)}
+            />
+            <Button type="submit" size="sm" variant="primary" disabled={saving}>
+              {s.save}
+            </Button>
+          </form>
+        </>
+      )}
+      {message != null && (
+        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
+      )}
+    </div>
   );
 }
 
@@ -5051,6 +5191,23 @@ export interface SettingsPageProps {
   onShowShortcuts: () => void;
   /** ADR-065 §5: reopens the onboarding questionnaire over this profile. App owns the flow — it is the same screen the first run draws, not a dialog of this page's. */
   onRerunOnboarding: () => void;
+  /**
+   * The module card a module page's gear asked for (`moduleSettingsGear.tsx`),
+   * or null for an ordinary visit. Read ONCE, by the mount that the gear caused:
+   * this page is keyed by the active profile and reached as a different element
+   * from every module page, so a press always mounts a fresh one.
+   */
+  target: string | null;
+  /** Reports that `target` was applied, so the shell clears it and a later visit is an ordinary one. */
+  onTargetHandled: () => void;
+  /**
+   * The DEVICE's module arrangement (ADR-101) — which modules this machine
+   * shows and in what order. Owned by the shell, exactly as the theme and the
+   * shortcut overrides are: the „Prikaz" card below reads it, writes it through
+   * `onModuleVisibilityChanged`, and every other surface in the app follows.
+   */
+  moduleVisibility: ShellVisibility;
+  onModuleVisibilityChanged: (next: ShellVisibility) => void;
 }
 
 /**
@@ -5106,6 +5263,10 @@ export function SettingsPage({
   globalShortcutTaken,
   onShowShortcuts,
   onRerunOnboarding,
+  target,
+  onTargetHandled,
+  moduleVisibility,
+  onModuleVisibilityChanged,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -5132,7 +5293,6 @@ export function SettingsPage({
   // SET-014: the raw query. Empty means "render everything exactly as before" —
   // the filter is additive, it never becomes the page's normal state.
   const [query, setQuery] = useState("");
-  const [modulesError, setModulesError] = useState<string | null>(null);
   const [notificationSources, setNotificationSources] = useState<NotificationSource[] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
   // Bumped after a preset write. Both the effect below (this page's own
@@ -5154,17 +5314,6 @@ export function SettingsPage({
       active = false;
     };
   }, [profileId, refreshToken]);
-
-  async function toggleModule(moduleId: string, enabled: boolean): Promise<void> {
-    setModulesError(null);
-    try {
-      await window.nexus.setFlag(profileId, moduleId, enabled);
-      onFlagsChanged(await window.nexus.getFlags(profileId));
-    } catch (error) {
-      setModulesError(strings.settings.modulesToggleError);
-      console.error("Nexus: failed to update module flag:", error);
-    }
-  }
 
   async function applyPreset(sources: NotificationSource[]): Promise<void> {
     setPresetError(null);
@@ -5218,7 +5367,7 @@ export function SettingsPage({
       setEventDuration(readStoredEventDuration());
       setClock(readStoredClock());
     } else {
-      MODULE_SETTINGS_PANELS[sectionId]?.resetDevice?.();
+      settingsPanelRenderer(sectionId)?.resetDevice?.();
       setResetCounts((counts) => ({ ...counts, [sectionId]: (counts[sectionId] ?? 0) + 1 }));
     }
     setResetting(null);
@@ -5229,10 +5378,23 @@ export function SettingsPage({
       ? NOTIFICATION_PRESETS.find((preset) => sameSourceSet(preset.sources, notificationSources))
       : undefined;
 
+  /**
+   * The modules this DEVICE shows (ADR-101), built by the one predicate every
+   * consumer filters through. It gates the module cards and the filter index, and
+   * the arrangement behind it orders the „Prikaz" card's own list.
+   */
+  const visibleModules = useMemo(
+    () => visibleModuleSet(registry, moduleVisibility),
+    [registry, moduleVisibility],
+  );
+
   // SET-014: the searchable index is a function of the registry alone, so it is
   // built once per registry rather than on every keystroke; the match itself is
   // a dozen string comparisons and needs no memo of its own.
-  const searchIndex = useMemo(() => buildSettingsIndex(registry), [registry]);
+  const searchIndex = useMemo(
+    () => buildSettingsIndex(registry, visibleModules),
+    [registry, visibleModules],
+  );
   const terms = foldSettingsQuery(query);
   const { sections, hits } = matchSettings(searchIndex, terms);
   // A query is „active" exactly when it folded to at least one term: an empty
@@ -5241,7 +5403,10 @@ export function SettingsPage({
   const searching = terms.length > 0;
   // The module cards this build draws, in registry order and gated by SET-007's
   // flags — the page composes them, it does not know them.
-  const moduleCards = useMemo(() => moduleSettingsCards(registry, flags), [registry, flags]);
+  const moduleCards = useMemo(
+    () => moduleSettingsCards(registry, visibleModules),
+    [registry, visibleModules],
+  );
   // Held in state only so that changing it re-renders THIS page — the copy
   // table itself is one object rewritten in place, so nothing else on screen
   // needs to be told (`strings.ts`).
@@ -5249,12 +5414,21 @@ export function SettingsPage({
   const a = strings.settings.appearance;
   const s = strings.settings;
 
-  // SET-015: where the page is. A category, a sub-page inside it, or — with
-  // both null — the narrow layout's root list. Restored from the last visit in
-  // this session, and defaulting to nothing at all, which the wide layout
-  // resolves to its first category below.
-  const [location, setLocation] = useState<SettingsLocation>(
-    () => lastSettingsLocation ?? { category: null, sub: null },
+  /**
+   * SET-015: where the page is. A category, a sub-page inside it, or — with
+   * both null — the narrow layout's root list. Restored from the last visit in
+   * this session, and defaulting to nothing at all, which the wide layout
+   * resolves to its first category below.
+   *
+   * A gear press (`target`) wins over the restored location, and it is settled
+   * HERE rather than in an effect: the destination is known before the page
+   * draws, so the card is in the same commit as the header and the reveal below
+   * has something to scroll to. The effect below is the other half.
+   */
+  const [location, setLocation] = useState<SettingsLocation>(() =>
+    target !== null
+      ? moduleSettingsLocation(target)
+      : (lastSettingsLocation ?? { category: null, sub: null }),
   );
   // The rail's roving tab stop: one item carries `tabIndex={0}` at a time, and
   // it follows the current category so Tab always lands where the reader is.
@@ -5269,6 +5443,18 @@ export function SettingsPage({
   // A navigation waiting for the render it belongs to; see the effect below.
   const pendingNavigation = useRef<SettingsLocation | null>(null);
   const [navTick, setNavTick] = useState(0);
+  /**
+   * The gear's landing mark, on `reveal.ts`'s one mechanism: the same class the
+   * global search drops on the row it found, and the same timer that takes it
+   * away. `reveal` is stable, which is what lets the effect below name it.
+   */
+  const { revealedId, reveal } = useRevealedRow();
+  /**
+   * The target THIS mount was caused by. Read once because the shell clears the
+   * prop as soon as the page reports it handled (`onTargetHandled`), and a later
+   * render — a keystroke in the filter, a resize — must not replay it.
+   */
+  const deepLink = useRef(target);
 
   // SET-015: what the location — or the query — makes visible. Every other card
   // stays MOUNTED and takes `set__section--hidden`, exactly as the SET-014
@@ -5393,6 +5579,28 @@ export function SettingsPage({
     if (scroller !== null) scroller.scrollTop = 0;
     paneHeadingRef.current?.focus();
   }, [navTick, searching]);
+
+  /**
+   * A module page's gear, arriving: the new page names itself to a screen
+   * reader the way `navigate` makes it, and the card the reader asked for is
+   * scrolled to and marked briefly — on `reveal.ts`'s mechanism, the one the
+   * global search already uses, rather than a second highlight of this page's
+   * own.
+   *
+   * The LOCATION is not set here: the initializer above already resolved it, so
+   * the card exists in this very commit. Both dependencies are stable, and the
+   * target is read from the ref, so this runs exactly once per mount — and the
+   * shell clears the prop on the way out, which is what keeps a later, ordinary
+   * visit from replaying the jump.
+   */
+  useLayoutEffect(() => {
+    const sectionId = deepLink.current;
+    if (sectionId === null) return;
+    paneHeadingRef.current?.focus();
+    reveal(sectionId);
+    scrollRevealedIntoView(sectionDomId(sectionId));
+    onTargetHandled();
+  }, [reveal, onTargetHandled]);
 
   return (
     <div className="set" ref={rootRef}>
@@ -5795,46 +6003,18 @@ export function SettingsPage({
             title={strings.settings.sectionTitle.modules}
             className={sectionClass(visibility.cards.has("modules"))}
           >
-            {[...registry.byCategory()].map(([category, members]) => (
-              <div key={category} className="set__module-group">
-                <h3 className="nx-eyebrow set__module-group-title">
-                  {strings.settings.moduleCategories[category] ?? category}
-                </h3>
-                <div className="set__module-list">
-                  {members.map((manifest) => {
-                    const locked = LOCKED_MODULE_IDS.has(manifest.id);
-                    const enabled = flags[manifest.id] ?? manifest.defaultEnabled;
-                    return (
-                      <div className="set__module-row" key={manifest.id}>
-                        <div className="set__module-info">
-                          <span
-                            className={labelClass(
-                              "set__module-name",
-                              hits.has(moduleEntryId(manifest.id)),
-                            )}
-                          >
-                            {moduleName(manifest.id)}
-                          </span>
-                          <span className="nx-hint">
-                            {lookup(strings.settings.moduleDescriptions, manifest.id) ?? ""}
-                          </span>
-                        </div>
-                        {locked ? (
-                          <Chip>{strings.settings.modulesAlwaysOn}</Chip>
-                        ) : (
-                          <Checkbox
-                            checked={enabled}
-                            aria-label={moduleName(manifest.id)}
-                            onChange={(event) => void toggleModule(manifest.id, event.target.checked)}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {modulesError != null && <p className="set__error">{modulesError}</p>}
+            {/* „Prikaz" (ADR-101) IS the gallery, grown rather than replaced:
+                the same list of every module by group, in the navigation groups
+                (ADR-093) rather than a second taxonomy of this page's own, but
+                drawn from the DEVICE's arrangement instead of this profile's
+                flags — the switches, the drag/keyboard order and the reset of
+                the order are one card, and the rail reads the same arrangement. */}
+            <ModuleVisibilityCard
+              registry={registry}
+              moduleVisibility={moduleVisibility}
+              onModuleVisibilityChanged={onModuleVisibilityChanged}
+              hits={hits}
+            />
           </Card>
 
           {/* The picker, inline rather than behind the drawer's dialog: this is the
@@ -5911,14 +6091,19 @@ export function SettingsPage({
               has no renderer for draws nothing, exactly as an unknown dashboard
               placement does. */}
           {moduleCards.map((card) => {
-            const Body = MODULE_SETTINGS_PANELS[card.moduleId]?.Body;
+            const Body = settingsPanelRenderer(card.moduleId)?.Body;
             if (Body === undefined) return null;
             return (
               <Card
                 key={card.moduleId}
                 id={sectionDomId(card.moduleId)}
                 title={card.title}
-                className={sectionClass(visibility.cards.has(card.moduleId))}
+                // The gear's landing mark rides the card's own class list, so
+                // the accent ring is drawn by `.nx-revealed` — the shared
+                // "you found it" rule — rather than by anything added here.
+                className={`${sectionClass(visibility.cards.has(card.moduleId))}${
+                  revealedId === card.moduleId ? " nx-revealed" : ""
+                }`}
               >
                 {/* The reset count is a remount key: a cleared preference is
                     re-read by the body's own initializers, so the page never
@@ -6084,13 +6269,33 @@ export function SettingsPage({
 
           {/* The cloud half. It is a DEVICE card, not a profile one: the cloud
               switch, the account and the master key belong to this computer, so
-              it takes no `profileId` and shows the same thing in every profile. */}
+              it takes no `profileId` and shows the same thing in every profile.
+
+              ON HOLD since 2026-10-08 (`shared/syncHold.ts`), so it is not
+              mounted: no card, no `sync:status` read and no resume attempt. The
+              component, the copy, the IPC channels and the engine all stay
+              exactly as they are, which is what makes turning it back on
+              flipping one constant rather than rebuilding a surface. */}
+          {SYNC_ON_HOLD ? null : (
+            <Card
+              id={sectionDomId("sync")}
+              title={strings.settings.sectionTitle.sync}
+              className={sectionClass(visibility.cards.has("sync"))}
+            >
+              <SyncSection hits={hits} />
+            </Card>
+          )}
+
+          {/* ADR-091, last in „Podaci": content this device holds that it did not
+              make. A DEVICE card like „Sinhronizacija" above it — the packs live
+              in `<userData>/packs`, not in a profile's database, so it takes no
+              `profileId` and shows the same thing under every profile. */}
           <Card
-            id={sectionDomId("sync")}
-            title={strings.settings.sectionTitle.sync}
-            className={sectionClass(visibility.cards.has("sync"))}
+            id={sectionDomId("content-packs")}
+            title={strings.settings.sectionTitle["content-packs"]}
+            className={sectionClass(visibility.cards.has("content-packs"))}
           >
-            <SyncSection hits={hits} />
+            <PacksSettings />
           </Card>
 
           {searchGroupTitle("privacy")}
@@ -6105,11 +6310,13 @@ export function SettingsPage({
             <NetworkSettings hits={hits} />
           </Card>
           {/* SET-010, local half. Six statements of fact — no toggle, no link, no
-              „saznaj više" on any of them. Every sentence is checkable in the
-              source; see the copy block's own comment, which names the file each
-              one is true because of. Below them, the one thing on this card that
-              IS operable (SRCH-009): the search history is the only place the app
-              stores something about how you used it rather than what you made, so
+              „saznaj više" on any of them; five are drawn while sync is ON HOLD
+              and `privacy.sync` is the one that is not. Every sentence is
+              checkable in the source; see the copy block's own comment, which
+              names the file each one is true because of. Below them, the one
+              thing on this card that IS operable (SRCH-009): the search history
+              is the only place the app stores something about how you used it
+              rather than what you made, so
               the card that lists what is stored is where you erase it. */}
           <Card
             id={sectionDomId("privacy")}
@@ -6119,7 +6326,9 @@ export function SettingsPage({
             <p className="nx-hint">{strings.settings.privacy.storage}</p>
             <p className="nx-hint">{strings.settings.privacy.noTelemetry}</p>
             <p className="nx-hint">{strings.settings.privacy.offline}</p>
-            <p className="nx-hint">{strings.settings.privacy.sync}</p>
+            {SYNC_ON_HOLD ? null : (
+              <p className="nx-hint">{strings.settings.privacy.sync}</p>
+            )}
             <p className="nx-hint">{strings.settings.privacy.exports}</p>
             <p className="nx-hint">{strings.settings.privacy.deletion}</p>
             <SearchHistorySection profileId={profileId} hits={hits} />
@@ -6159,10 +6368,13 @@ export function SettingsPage({
             ) : (
               <p className="nx-hint">{strings.app.loading}</p>
             )}
-            {/* ADR-089: „Proveri sada" lives here, and the row is mode-aware â€”
+            {/* ADR-089: „Proveri sada" lives here, and the row is mode-aware —
                 in offline mode it says so and offers the way to the card that
                 changes it, rather than a button main would refuse. */}
             <UpdateAbout onOpenNetworkCard={() => navigate({ category: "privacy", sub: null })} />
+            {/* ADR-103: every installed pack's licence, attribution and source,
+                in the one place a person looks for "what is this app made of". */}
+            <PackLicences />
           </Card>
 
           {/* The notices this product owes for other people's work. Last on the

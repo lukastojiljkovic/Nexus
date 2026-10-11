@@ -850,6 +850,15 @@ const ID_MINTERS: Record<keyof ProfileData, (data: ProfileData, ctx: PlanContext
   circuitParts: (data, ctx) => mintAll(data.circuitParts, ctx),
   circuitWires: (data, ctx) => mintAll(data.circuitWires, ctx),
   /**
+   * NOT minted and NOT planned, and it is not an omission: a kit module's
+   * payload (ADR-090) is not a collection of rows with ids a foreign import
+   * mints or remaps - it is opaque to this package, and the module that owns it
+   * is the only thing that can say what a foreign import should do with it.
+   * Foreign import therefore leaves it EMPTY, which is the honest answer:
+   * `data/modules.ndjson` is not part of any foreign format this app reads.
+   */
+  modules: () => undefined,
+  /**
    * NOT minted, and it is not an omission: a machine has no id of its own —
    * `circuit_id` is its whole primary key (migration 068) — so there is nothing
    * here to give a new identity to. It still IMPORTS; the remap literal below
@@ -1645,6 +1654,9 @@ export function planForeignImport(
       fromPartId: mapped(row.fromPartId, ctx),
       toPartId: mapped(row.toPartId, ctx),
     })),
+    // Nothing to mint and nothing to remap: a kit module's payload is opaque
+    // here (ADR-090), and no foreign format this app reads carries one.
+    modules: [],
   };
 
   return {

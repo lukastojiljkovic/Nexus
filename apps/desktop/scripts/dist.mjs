@@ -1,6 +1,8 @@
 // Builds the packaged app for the HOST platform (--publish never):
 //   Windows → NSIS x64 installer
 //   Linux   → AppImage x64 + tar.gz (the payload build/gentoo/ installs)
+//   macOS   → dmg, Apple silicon (the `mac` block in electron-builder.yml says
+//             why the Intel half is a stated gap rather than a line here)
 //
 // It builds for the host and only the host, on purpose — but the reason is no
 // longer the one that used to be written here. It USED to be the native module:
@@ -19,24 +21,37 @@
 // build/gentoo/README.md).
 
 import { spawnSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
+import { assertSinglePrebuild } from "./packaged-binary.mjs";
+import { platformNoticeEntriesHere } from "./platform-notices.mjs";
+import { DEFAULT_DATA_FILE, renderNotices } from "./render-notices.mjs";
+
 const require = createRequire(import.meta.url);
 
-// The one place the target architecture is written. electron-builder's `${arch}`
+// One line per platform: the electron-builder flag, the target architecture and
+// the output directory. The architecture is declared EXACTLY ONCE, here, because
+// two declarations are two things to keep in step — electron-builder's `${arch}`
 // macro in electron-builder.yml expands to the TARGET arch, not the host's, so
-// the flag below and the check at the end have to agree — and they can only be
-// made to agree by coming from the same constant.
-const TARGET_ARCH = "x64";
-
-// electron-builder's own directory names for an x64 build. They carry the arch
-// only when it is not x64 (`linux-arm64-unpacked`), which is why TARGET_ARCH
-// appears in the filename below and not here.
+// the `--arch` flag below and the check at the end have to agree, and they can
+// only be made to agree by reading the same value.
+//
+// macOS is arm64 and only arm64. `mac`'s own block says why an Intel dmg is a
+// stated gap rather than a second line: every native dependency in this tree was
+// installed for the architecture of the runner that ran `pnpm install`, so an
+// x64 dmg built here would carry arm64 bytes under x64 paths.
+//
+// The directory names are `platformPackager.js`'s: `<platform><arch suffix>`,
+// with the suffix dropped for the platform's default arch and `-unpacked`
+// appended everywhere except macOS, whose directory holds the `.app` BUNDLE
+// rather than a flat tree — which is why `packaged-binary.mjs` looks inside it
+// for the resources.
 const PLATFORM = {
-  win32: { flag: "--win", unpacked: "win-unpacked" },
-  linux: { flag: "--linux", unpacked: "linux-unpacked" },
+  win32: { flag: "--win", arch: "x64", unpacked: "win-unpacked" },
+  linux: { flag: "--linux", arch: "x64", unpacked: "linux-unpacked" },
+  darwin: { flag: "--mac", arch: "arm64", unpacked: "mac-arm64" },
 };
 
 function run(command, args) {
@@ -47,7 +62,7 @@ function run(command, args) {
 const target = PLATFORM[process.platform];
 if (target === undefined) {
   console.error(
-    `Nexus is not packaged for ${process.platform}. Run this on Windows or Linux ` +
+    `Nexus is not packaged for ${process.platform}. Run this on Windows, Linux or macOS ` +
       "(see the header for why the host platform is the only target).",
   );
   process.exit(1);
@@ -66,57 +81,71 @@ const electronBuilderCli = require.resolve("electron-builder/cli.js");
 run(process.execPath, [
   electronBuilderCli,
   target.flag,
-  `--${TARGET_ARCH}`,
+  `--${target.arch}`,
   "--publish",
   "never",
 ]);
 
 assertPackagedBinary();
+writeTargetNotices();
 
 /**
- * Reads back what was actually packaged, because a `files` pattern that misses
- * says nothing.
- *
- * The native module is the whole database, and electron-builder's globs decide
- * which of its eight prebuilds ship. A pattern that excludes too little costs
- * 17 MB and nobody notices; a pattern that excludes too much produces an
- * installer that starts, paints its unlock screen and throws at the first
- * query — and neither shows up in a build log, in `pnpm test`, or in `smoke`,
- * which runs against `out/` and never opens the package. Until this check
- * existed, the only detector was a person installing the result.
+ * Reads back what was actually packaged — `packaged-binary.mjs` owns the rule
+ * and the reasons for it, because `dist-portable.mjs` builds a second artifact
+ * with the exact same failure mode.
  */
 function assertPackagedBinary() {
-  const expected = `${process.platform}-${TARGET_ARCH}.node`;
-  const prebuilds = join(
-    "release",
-    target.unpacked,
-    "resources",
-    "app.asar.unpacked",
-    "node_modules",
-    "better-sqlite3-multiple-ciphers",
-    "prebuilds",
-  );
-
-  let present;
   try {
-    present = readdirSync(prebuilds).sort();
-  } catch {
-    console.error(
-      `\nPackaging check failed: ${prebuilds} does not exist, so the packaged app ` +
-        "carries no SQLite binary and cannot open a database.",
-    );
+    const only = assertSinglePrebuild({
+      unpackedDir: join("release", target.unpacked),
+      platform: process.platform,
+      arch: target.arch,
+    });
+    console.log(`\nPackaging check: ${only} is the only prebuild in the package.`);
+  } catch (error) {
+    console.error(`\n${error.message}`);
     process.exit(1);
   }
+}
 
-  if (present.length !== 1 || present[0] !== expected) {
-    console.error(
-      `\nPackaging check failed: ${prebuilds} holds [${present.join(", ")}], ` +
-        `expected exactly [${expected}].\n` +
-        "See the `files` list in electron-builder.yml — the exclude and the " +
-        "re-include below it are order-dependent.",
-    );
-    process.exit(1);
-  }
-
-  console.log(`\nPackaging check: ${expected} is the only prebuild in the package.`);
+/**
+ * The third-party notices for the installer this run just built, written beside
+ * it as `release/THIRD-PARTY-NOTICES.md` (`directories.output` in
+ * `electron-builder.yml`).
+ *
+ * WHY THE COMMITTED NOTICES ARE NOT ENOUGH. `licences.json` — what the app's own
+ * Licence screen shows — is generated once and committed, so it must read the
+ * same on the Linux CI runner and in a Windows checkout, and the generator
+ * therefore leaves out every PLATFORM package (`isPlatformBuild`: `os` or `cpu`
+ * is declared, so the package installs only on the machine that can run it).
+ * Those are exactly the natives this installer carries most of:
+ * `@img/sharp-win32-x64`, 19 812 379 B measured on 2026-10-10 and most of it the
+ * two libvips DLLs, plus the `@node-llama-cpp/win-x64*` binaries. An installer
+ * that ships them without their notices has not discharged their licences, and
+ * the CI-rendered `release-docs/THIRD-PARTY-NOTICES.md` is built on a Linux
+ * runner that has never seen them.
+ *
+ * WHY HERE, AND NOT IN THE GENERATOR. This script runs on the machine it
+ * packages for — the header says why an installer is built by a platform that
+ * can run it — so the platform builds in this tree are the ones electron-builder
+ * just copied in, and `platform-notices.mjs` reads their notices off disk with
+ * the same code the committed file is built from. Nothing is invented and
+ * nothing is listed by hand.
+ *
+ * It throws rather than warns when pnpm's licence list cannot be read: a
+ * document that silently omits a package the installer carries is the defect
+ * this function exists to remove.
+ */
+function writeTargetNotices() {
+  const data = JSON.parse(readFileSync(DEFAULT_DATA_FILE, "utf8"));
+  const platform = platformNoticeEntriesHere();
+  const document = renderNotices({ packages: [...data.packages, ...platform], fonts: data.fonts });
+  const outFile = join("release", "THIRD-PARTY-NOTICES.md");
+  writeFileSync(outFile, document);
+  const names = platform.map((entry) => `${entry.name}@${entry.version}`).join(", ");
+  console.log(
+    `Packaging notices: ${outFile} carries ${data.packages.length + platform.length} packages` +
+      `, ${platform.length} of them platform builds this installer ships` +
+      (names === "" ? "." : ` (${names}).`),
+  );
 }

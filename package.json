@@ -49,15 +49,21 @@
     "check:rls": "node supabase/scripts/check-rls-wall.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:copy": "node scripts/check-copy.mjs",
+    "check:english": "node scripts/check-english.mjs",
     "check:runner": "node scripts/check-runner.mjs",
+    "check:reachable": "node scripts/check-reachable.mjs",
     "db:reset": "supabase db reset",
-    "db:test": "supabase db reset && supabase test db"
+    "db:test": "supabase db reset && supabase test db",
+    "check:manual": "node scripts/check-manual.mjs",
+    "eval:assistant": "node scripts/assistant-eval.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
+    "pdfjs-dist": "^6.4.299",
+    "sharp": "^0.35.5",
     "turbo": "^2.11.7",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.71.0",

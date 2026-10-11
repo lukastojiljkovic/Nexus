@@ -1,0 +1,6 @@
+A cut of https://data.rijksmuseum.nl/policy/information-and-data-policy (fetched
+2026-10-10), section 1.1 and the licence section, in the order they appear.
+
+The museum has since made all photos (in all variants, from high resolution to thumbnail) available of collection objects that are no longer subject to copyright as public property.
+
+The Rijksmuseum provides Information and Data that are no longer, or have never been, protected by copyright with a Public Domain Mark (PDM) and/or the Creative Commons Zero 1.0 (CC0 1.0) Public Domain Dedication.

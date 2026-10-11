@@ -61,7 +61,7 @@ interface Harness {
     json: number;
     bytes: number;
     download: number;
-    openPath: string[];
+    launchInstaller: string[];
     quit: number;
   };
   readonly changes: UpdateStateView[];
@@ -72,11 +72,13 @@ function harness(options: {
   json?: UpdateHttp["json"];
   bytes?: UpdateHttp["bytes"];
   download?: UpdateHttp["download"];
+  launchInstaller?: (path: string) => Promise<string>;
   currentVersion?: string;
   platform?: NodeJS.Platform;
   now?: () => number;
+  portable?: boolean;
 }): Harness {
-  const calls = { json: 0, bytes: 0, download: 0, openPath: [] as string[], quit: 0 };
+  const calls = { json: 0, bytes: 0, download: 0, launchInstaller: [] as string[], quit: 0 };
   const changes: UpdateStateView[] = [];
   const http: UpdateHttp = {
     json: async (url, headers) => {
@@ -104,11 +106,13 @@ function harness(options: {
     currentVersion: options.currentVersion ?? "1.4.0",
     platform: options.platform ?? "win32",
     userData,
+    portable: options.portable ?? false,
     mode: () => options.mode ?? "updates",
     http,
     publicKeyPem,
-    openPath: async (path) => {
-      calls.openPath.push(path);
+    launchInstaller: async (path) => {
+      calls.launchInstaller.push(path);
+      if (options.launchInstaller !== undefined) return options.launchInstaller(path);
       return "";
     },
     quit: () => {
@@ -163,6 +167,16 @@ describe("the automatic check", () => {
     expect(calls.json).toBe(0);
     expect(service.view().mode).toBe("offline");
   });
+
+  it("still runs in downloads mode", async () => {
+    // ADR-092's superset order, and the assertion that keeps the third mode
+    // from quietly taking the check away from a user who chose the wider one:
+    // `"downloads"` allows everything `"updates"` allows.
+    const { service, calls } = harness({ mode: "downloads" });
+    await service.autoCheckIfDue();
+    expect(calls.json).toBe(1);
+    expect(service.view().mode).toBe("downloads");
+  });
 });
 
 describe("the manual check", () => {
@@ -216,9 +230,49 @@ describe("installing", () => {
     expect(view.phase).not.toBe("error");
     expect(calls.bytes).toBe(2);
     expect(calls.download).toBe(1);
-    expect(calls.openPath).toHaveLength(1);
-    expect(calls.openPath[0]).toContain(join("updates", "Nexus-Setup-1.5.0-"));
+    // The path is the file main downloaded, hashed and re-hashed — nothing from
+    // the renderer, and nothing the launcher gets to choose.
+    expect(calls.launchInstaller).toHaveLength(1);
+    expect(calls.launchInstaller[0]).toContain(join("updates", "Nexus-Setup-1.5.0-"));
     expect(calls.quit).toBe(1);
+  });
+
+  it("reports a launcher that refused, keeps the verified file and does not quit", async () => {
+    // What a launcher that answers with a message — `spawn`'s own failure,
+    // `update/launch.ts`'s `ENOENT` — looks like from here. The app must stay
+    // open: the update has not started, so quitting would leave the user with
+    // nothing.
+    let written: string | null = null;
+    const { service, calls } = harness({
+      download: async (_url, destination) => {
+        written = destination;
+        writeFileSync(destination, installerBytes);
+        return {
+          status: 200,
+          sha256: createHash("sha256").update(installerBytes).digest("hex"),
+        };
+      },
+      launchInstaller: async () => "spawn Nexus-Setup-1.5.0.exe ENOENT",
+    });
+    await service.checkNow();
+    const view = await service.install();
+    expect(view.problem).toBe("unexpected");
+    expect(calls.quit).toBe(0);
+    // The bytes are correct and the launch is not, so the file stays.
+    expect(written).not.toBeNull();
+    expect(existsSync(written as unknown as string)).toBe(true);
+  });
+
+  it("reports a launcher that threw as the same failure", async () => {
+    const { service, calls } = harness({
+      launchInstaller: async () => {
+        throw new Error("spawn failed");
+      },
+    });
+    await service.checkNow();
+    const view = await service.install();
+    expect(view.problem).toBe("unexpected");
+    expect(calls.quit).toBe(0);
   });
 
   it("refuses to install, and downloads nothing, when the signature does not verify", async () => {
@@ -304,6 +358,46 @@ describe("installing", () => {
     const view = await service.install();
     expect(view.problem).toBe("hash");
     expect(existsSync(written as unknown as string)).toBe(false);
+  });
+});
+
+describe("a portable build (ADR-102)", () => {
+  it("reports the new version and the release page, and never offers Install", async () => {
+    const { service, calls } = harness({ portable: true });
+    const view = await service.checkNow();
+    expect(view.portable).toBe(true);
+    expect(view.phase).toBe("available");
+    expect(view.offer?.version).toBe("v1.5.0");
+    expect(view.offer?.canInstall).toBe(false);
+    // The link that IS the answer in a portable build: the user fetches the
+    // release by hand and replaces the folder on the stick.
+    expect(view.releaseUrl).toBe(RELEASES_PAGE_URL);
+    // A check is a check: the small JSON, and nothing else.
+    expect(calls.download).toBe(0);
+  });
+
+  it("installs nothing, fetches nothing and quits nothing when install is called", async () => {
+    const { service, calls } = harness({ portable: true });
+    await service.checkNow();
+    const view = await service.install();
+    expect(view.problem).toBe("portable");
+    expect(calls.bytes).toBe(0);
+    expect(calls.download).toBe(0);
+    expect(calls.launchInstaller).toEqual([]);
+    expect(calls.quit).toBe(0);
+  });
+
+  it("still checks in the widest mode, so the notice survives on a stick", async () => {
+    const { service, calls, changes } = harness({ portable: true, mode: "downloads" });
+    await service.autoCheckIfDue();
+    expect(calls.json).toBe(1);
+    expect(service.view().portable).toBe(true);
+    expect(changes.at(-1)?.portable).toBe(true);
+  });
+
+  it("marks an installed build as not portable", () => {
+    const { service } = harness({});
+    expect(service.view().portable).toBe(false);
   });
 });
 

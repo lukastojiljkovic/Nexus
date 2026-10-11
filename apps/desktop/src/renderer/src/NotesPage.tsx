@@ -35,6 +35,7 @@ import { formatNotificationWhen } from "./notificationFormat.js";
 import { NotePopover } from "./notePopover.js";
 import { persistRootNoteView, readStoredRootNoteView } from "./notePrefs.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { mergeTemplateEntries } from "./noteTemplates.js";
 import { countUnit, strings } from "./strings.js";
 
@@ -1175,15 +1176,18 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
         actions={
           // A disclosure for the organizer, hidden by CSS at the widths where
           // the organizer is a column and there is nothing to disclose.
-          <Button
-            ref={organizerToggleRef}
-            className="note__org-toggle"
-            aria-expanded={organizerOpen}
-            aria-controls={NOTE_ORGANIZER_PANE_ID}
-            onClick={() => setOrganizerOpen((open) => !open)}
-          >
-            {strings.notes.foldersLabel}
-          </Button>
+          <>
+            <Button
+              ref={organizerToggleRef}
+              className="note__org-toggle"
+              aria-expanded={organizerOpen}
+              aria-controls={NOTE_ORGANIZER_PANE_ID}
+              onClick={() => setOrganizerOpen((open) => !open)}
+            >
+              {strings.notes.foldersLabel}
+            </Button>
+            <ModuleSettingsGear moduleId="notes" />
+          </>
         }
       />
       {/* The library's own summary, not any one note's — a page-level sibling of

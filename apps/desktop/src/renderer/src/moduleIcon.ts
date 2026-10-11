@@ -1,4 +1,5 @@
 import type { IconName } from "@nexus/ui";
+import { kitModuleIcon } from "./moduleKit/icons.js";
 
 /**
  * The mark a module wears: beside its name in the rail, and on every dashboard
@@ -41,5 +42,9 @@ const MODULE_ICONS: Readonly<Record<string, IconName>> = {
  * half of a STORED layout row, and `toString` is not a module.
  */
 export function moduleIconName(id: string): IconName | undefined {
-  return Object.hasOwn(MODULE_ICONS, id) ? MODULE_ICONS[id] : undefined;
+  // The table first, then the DISCOVERED modules (ADR-090): a kit module brings
+  // its own `renderer/icon.ts`, which is where a name for a glyph in
+  // `@nexus/ui`'s set belongs — the table above is for the modules compiled into
+  // this file, and neither of them can name the other's module.
+  return Object.hasOwn(MODULE_ICONS, id) ? MODULE_ICONS[id] : kitModuleIcon(id);
 }

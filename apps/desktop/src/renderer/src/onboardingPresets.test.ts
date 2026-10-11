@@ -213,7 +213,62 @@ describe("resolveModuleSelection", () => {
       tools: true,
       canvas: true,
       electronics: true,
+      // The first discovered module (ADR-090): the questionnaire decides it like
+      // any other selectable module, from its own manifest default.
+      timers: true,
+      reader: true,
+      culture: true,
+      pantry: true,
+      // And the second, on the same terms.
+      cookbook: true,
+      recorder: true,
+      emergency: true,
+      // The calculator joined the kit after „Tajmeri" (order 190), so it is
+      // decided here in the same way and drawn after it.
+      calculator: true,
+      signals: true,
+      // The second discovered module (ADR-090), decided the same way.
+      miniapps: true,
+      // And the second discovered module, on for the same reason.
+      boards: true,
+      // ...and the second, whose board writes nothing until a game is played.
+      chess: true,
+      // And the second, last because a kit module registers after every
+      // compiled-in one and the discovered ones order themselves.
+      scanner: true,
+      // And the second: a viewer stores nothing, so its manifest default is the
+      // whole decision.
+      workshop: true,
+      translator: true,
+      // The assistant (ADR-106), decided here like every other selectable
+      // module: it writes nothing until somebody asks it something.
+      assistant: true,
       pro: false,
+      // The second discovered module, in registry order after Tajmeri.
+      library: true,
+      // And the arcade (ADR-090, PRD 31): selectable, and off in „Osnovno"
+      // because the entertainment section is never suggested on the way in.
+      arcade: false,
+      // The second discovered module, decided the same way and read from its own
+      // manifest default.
+      drawings: true,
+      // The map (ADR-099) is decided here like every other selectable module,
+      // from its own manifest default.
+      maps: true,
+      // The reference library, on the same terms: installed data, so its default
+      // is the whole decision.
+      wiki: true,
+      // The Lab stores nothing until a reading is taken, so `defaultEnabled` is
+      // the decision here too.
+      lab: true,
+      // And the puzzles, whose board stores nothing until a game is started.
+      puzzles: true,
+      // And the car service book, which writes nothing until a vehicle is added.
+      car: true,
+      // The astronomy corner, decided here like every other selectable module
+      // and last in registry order: it stores nothing at all, so its manifest
+      // default is the whole decision.
+      astronomy: true,
     });
   });
 
@@ -249,6 +304,39 @@ describe("moduleFlagWrites", () => {
       // is the whole point of a first run: what modules a profile has is a
       // stored fact of the profile, not an accident of this build's manifests.
       { moduleId: "pro", enabled: false },
+      // And the DISCOVERED modules last, because a kit module registers after
+      // every compiled-in one (ADR-090): ordered by `ModuleManifest.order`, ties
+      // broken by id.
+      { moduleId: "timers", enabled: true },
+      { moduleId: "library", enabled: true },
+      { moduleId: "culture", enabled: true },
+      { moduleId: "car", enabled: true },
+      { moduleId: "pantry", enabled: true },
+      { moduleId: "cookbook", enabled: true },
+      { moduleId: "recorder", enabled: true },
+      { moduleId: "emergency", enabled: true },
+      { moduleId: "calculator", enabled: true },
+      // The Reader (ADR-100) and Signals share `order: 200`; the tie-break by
+      // id puts the reader first.
+      { moduleId: "reader", enabled: true },
+      { moduleId: "signals", enabled: true },
+      // `maps` and `miniapps` share `order: 210`, ordered here by id.
+      { moduleId: "maps", enabled: true },
+      { moduleId: "miniapps", enabled: true },
+      { moduleId: "wiki", enabled: true },
+      { moduleId: "translator", enabled: true },
+      { moduleId: "assistant", enabled: true },
+      { moduleId: "scanner", enabled: true },
+      { moduleId: "workshop", enabled: true },
+      // The arcade is off in Osnovno: PRD 31 keeps the entertainment section
+      // out of the questionnaire.
+      { moduleId: "arcade", enabled: false },
+      { moduleId: "drawings", enabled: true },
+      { moduleId: "lab", enabled: true },
+      { moduleId: "puzzles", enabled: true },
+      { moduleId: "boards", enabled: true },
+      { moduleId: "chess", enabled: true },
+      { moduleId: "astronomy", enabled: true },
     ]);
   });
 

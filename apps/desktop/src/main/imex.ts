@@ -11,12 +11,14 @@ import type {
   ArchiveWriter,
   ExportArchiveInput,
   ExportBinaryEntry,
+  ExportModuleBlob,
   ExportPrivateNotes,
 } from "@nexus/core";
 // Main-process-only subpath (pulls in Argon2id's WASM) — see that module's own
 // header comment on why the renderer must never import it.
 import { ARCHIVE_KDF_PARAMS, deriveArchiveKey, generateSalt } from "@nexus/core/auth";
 import { localToday } from "./clock.js";
+import { mainLocale } from "./locale.js";
 import { gatherProfileData, gatherProfileSettings, type ProfileDataDeps } from "./profileData.js";
 import { shellStrings } from "./shellStrings.js";
 import type { ExportResult, IcsExportResult, PrivateNotesExportSkip } from "../shared/ipc.js";
@@ -31,6 +33,17 @@ import type { ExportResult, IcsExportResult, PrivateNotesExportSkip } from "../s
 export interface ImexArchiveDeps extends ProfileDataDeps {
   /** Decrypted attachment bytes by content hash, or null when the blob is missing from the store. Injected rather than reached for, so this module never touches blob paths or key material itself (mirrors the store getters above). */
   readBlob(sha256: string): Promise<Uint8Array | null>;
+  /**
+   * The kit-module blobs for one profile's export (ADR-108): the hashes the
+   * registered modules declare for it, with the sizes their own rows state
+   * (`ModuleHost.collectBlobs`, wired in `main/index.ts`).
+   *
+   * A getter rather than an array, because an archive is written one profile at
+   * a time and it is that profile's live rows which name the files — the same
+   * shape every store getter above has, and the reason the scheduled backup gets
+   * the module blobs without a second wiring.
+   */
+  moduleBlobs(profileId: string): readonly ExportModuleBlob[];
   /**
    * One private attachment's DECRYPTED bytes by its envelope id, or null when
    * the sealed file is missing or no longer opens — including when the section
@@ -108,8 +121,18 @@ export async function writeProfileArchive(
     createdAt: new Date().toISOString(),
     settings: await gatherProfileSettings(deps, profile.id),
     data: gatherProfileData(deps, profile.id),
+    // The two names the Markdown mirror generates for it (an untitled note, a
+    // folder whose name sanitizes to nothing) are written in the language the
+    // app is serving, exactly as the save dialog's own suggested names are.
+    language: mainLocale(),
     hash: (content) => createHash("sha256").update(content, "utf8").digest("hex"),
   };
+  // The kit section's own blobs, read from the same live rows as the section
+  // itself (ADR-108). ABSENT rather than empty when a module names none, so an
+  // archive with no module blobs is byte for byte what every earlier build
+  // wrote — same entries, same checksums, no schema change.
+  const moduleBlobs = deps.moduleBlobs(profile.id);
+  if (moduleBlobs.length > 0) archiveInput.moduleBlobs = moduleBlobs;
   // Only name a subset when there is one (exactOptionalPropertyTypes): an
   // ABSENT key is what "every module" means to the builder, and an explicit
   // `undefined` is not the same thing.

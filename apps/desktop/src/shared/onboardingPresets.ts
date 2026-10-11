@@ -42,7 +42,103 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   tools: true,
   canvas: true,
   electronics: true,
+  // The first module built on the kit (ADR-090) is decided here like every other
+  // selectable one: nothing about a timer asks to be opted into, so „Osnovno"
+  // turns it on exactly as the manifest's own `defaultEnabled` says.
+  timers: true,
+  // The Reader (ADR-100) is decided here like every other selectable module:
+  // nothing about a shelf of installed packs asks to be opted into, so „Osnovno"
+  // turns it on exactly as the manifest's own `defaultEnabled` says. A profile
+  // with no packs installed sees its empty state, which is the page telling the
+  // person where packs come from.
+  reader: true,
+  // And the same for the culture corner (ADR-090): it holds nothing until a
+  // visit, a plan or an audio file is added, so there is nothing to opt into.
+  culture: true,
+  // And the second (ADR-090): a cookbook writes nothing until somebody saves a
+  // recipe, so there is nothing to opt into either.
+  cookbook: true,
+  // Likewise the recorder: a diary writes nothing until somebody records, so
+  // there is nothing for a user to opt into either.
+  recorder: true,
+  // And the second, on the same terms: a card that is empty until somebody fills
+  // it in is a card nobody needs to be asked about.
+  emergency: true,
+  // And the calculator (CALC, migration 079), on the same terms and for the same
+  // reason: it is a bench rather than a subject, and it writes nothing at all
+  // until somebody types an expression into it.
+  calculator: true,
+  // And the SIGNALS module, on the same terms: its page draws four instruments
+  // and opens the microphone only when one of them is started, so there is
+  // nothing about it to opt into either.
+  signals: true,
+  // The second kit module (ADR-090): a drawer of small tools, which asks to be
+  // opted into no more than a timer does.
+  miniapps: true,
+  // The arcade is decided here like every other selectable module, and its
+  // answer is `false`: PRD 31 hides the entertainment section by default and
+  // never suggests it during onboarding, so a profile that never asks for it
+  // never sees it. The gallery is where it is switched on.
+  arcade: false,
+  // And the second kit module (ADR-090), for the same reason: a board game is a
+  // complete screen the moment it is on, and it writes nothing until somebody
+  // plays one — so „Osnovno" decides it `true`, exactly as its manifest says.
+  boards: true,
+  // Šah, decided the same way and for the same reason: a board writes nothing
+  // until somebody plays a game, so there is nothing here to opt into.
+  chess: true,
+  // The scanner, the kit's second module, is decided the same way. It does need
+  // a language pack before it can read anything, and that is not a reason to
+  // ship it off: the page says which pack is missing and where it is installed,
+  // so the module is on and only RECOGNITION waits for the pack.
+  scanner: true,
+  // The maker's file viewers, decided here like every other selectable module: a
+  // viewer stores nothing and its page is complete the moment it is on, so the
+  // survey's own default turns it on exactly as the manifest's `defaultEnabled`
+  // says.
+  workshop: true,
+  // The second module built on the kit (ADR-090): a dictionary has nothing to
+  // opt into either, so „Osnovno" turns it on as its manifest says.
+  translator: true,
+  // The ASSISTANT (ADR-106), decided here like every other selectable module.
+  // Nothing about it asks to be opted into: it writes nothing until somebody
+  // asks it something, it reaches no network on its own, and its page opens on
+  // the setup screen when no model is installed - which is where the person
+  // learns where models come from.
+  assistant: true,
   pro: false,
+  // The second module built on the kit (ADR-090), decided here like every other
+  // selectable one: a library that had to be switched on first would be hiding
+  // the shelf a person came for, so it follows its manifest's `defaultEnabled`.
+  library: true,
+  // The second kit module, decided here for the same reason: a pantry writes
+  // nothing until the user records a first item, so there is nothing to opt into
+  // and „Osnovno" turns it on exactly as its manifest says.
+  pantry: true,
+  // The second module built on the kit (ADR-090), decided here like every other
+  // selectable one: the viewer reads a file and stores nothing, so it is on.
+  drawings: true,
+  // The map (ADR-099), decided here like every other selectable module: its pack
+  // is installed data and its pins are the user's own, so nothing about it asks
+  // to be opted into and it follows its manifest's `defaultEnabled`.
+  maps: true,
+  // The reference library on the same terms: it holds installed data rather than
+  // the user's, so there is nothing here to opt into.
+  wiki: true,
+  // And the car service book, decided the same way: it writes nothing until
+  // somebody adds a vehicle, so `defaultEnabled` is the whole decision.
+  car: true,
+  // The Lab is an instrument drawer that writes nothing until a reading is
+  // taken, so it is on for the reason every other tool-shaped module is.
+  lab: true,
+  // And the puzzles, on the same terms: a board stores nothing until a game is
+  // started, so nothing about it asks to be opted into either.
+  puzzles: true,
+  // The astronomy corner, decided here like every other selectable module: it
+  // stores nothing at all (its place is a device preference and its textures are
+  // an optional pack), so there is nothing here to opt into and „Osnovno" turns
+  // it on exactly as the manifest's `defaultEnabled` says.
+  astronomy: true,
 };
 
 /**

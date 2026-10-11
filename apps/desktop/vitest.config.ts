@@ -24,6 +24,13 @@ import { defineConfig } from "vitest/config";
  *   nothing and reported nothing, which is indistinguishable from passing.
  *   `ipcCoverage.test.ts` is the first thing that lives there.
  *
+ * - `src/modules/*` — a kit module's own folders (ADR-090). A module built on
+ *   the kit keeps its tests where its code is: its store arithmetic is
+ *   `packages/db`'s, its main half and its timing maths are here. The three
+ *   subfolders are listed separately for the reason this whole list exists — a
+ *   test under a folder nobody named is collected by nothing and reported
+ *   nowhere, which reads exactly like a green run.
+ *
  * An include list is a promise about where tests may be written. Anything not
  * named here is a directory whose tests do not run — so a new root gets added
  * the day something is written in it, never afterwards.
@@ -34,6 +41,9 @@ export default defineConfig({
       "src/main/**/*.test.ts",
       "src/renderer/src/**/*.test.ts",
       "src/shared/**/*.test.ts",
+      "src/modules/*/main/**/*.test.ts",
+      "src/modules/*/renderer/**/*.test.ts",
+      "src/modules/*/shared/**/*.test.ts",
     ],
     /**
      * Raised from Vitest's 5 000 ms default for the reason `packages/db` records

@@ -1,9 +1,11 @@
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
+import { ocrAssets } from "./scripts/ocr-assets.mjs";
 
 // Workspace packages are consumed as TypeScript source, so they must be BUNDLED
 // into the main/preload output rather than externalized and require()d at
@@ -40,9 +42,18 @@ function rendererHardening(): Plugin {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: nx-blob: priv-blob:", // ADR-014 inline previews; ADR-057 private attachments (unlocked-only)
+    // ADR-014 inline previews; ADR-057 private attachments (unlocked-only);
+    // ADR-100 a content pack's own images, and `connect-src` for the same
+    // scheme because a map reads its tiles through `fetch`, not through an
+    // `<img>` - see `main/packs/protocol.ts`. CULTURE's arts guide
+    // (ADR-091) reads its images through the same scheme.
+    "img-src 'self' data: nx-blob: priv-blob: nx-pack:",
+    // ADR-014's read protocol again, for the RECORDER: `<audio>`/`<video>` fall
+    // back to `default-src 'self'`, which does not admit `nx-blob:`, so a
+    // recording would play in dev and be blocked in the build the user runs.
+    "media-src 'self' nx-blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    "connect-src 'self' nx-pack:",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
@@ -187,6 +198,25 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: NEXUS_WORKSPACE })],
     build: {
       rollupOptions: {
+        /**
+         * TWO ENTRIES, and the second one is the assistant's inference process
+         * (ADR-096). llama.cpp blocks the thread it runs on for as long as a
+         * conversation lasts, so it runs in an Electron `utilityProcess`, and a
+         * utility process is forked from a FILE: this is that file, and nothing
+         * else in the app reaches it.
+         *
+         * Naming both entries is what keeps the first one where it has always
+         * been — `out/main/index.js` is `package.json`'s `main`, and the key of
+         * an entry in this object is the name rollup writes. The keys are
+         * therefore load-bearing, and `electron.ts` looks the second one up by
+         * exactly this name (`WORKER_BUNDLE`).
+         */
+        input: {
+          index: fileURLToPath(new URL("./src/main/index.ts", import.meta.url)),
+          "assistant-model-host": fileURLToPath(
+            new URL("./src/main/assistant/runtime/worker.ts", import.meta.url),
+          ),
+        },
         // The SQLite native addon cannot be bundled; it stays external and is
         // require()d at runtime, from the prebuild its own loader picks for
         // this platform.
@@ -230,12 +260,15 @@ export default defineConfig({
           // the dev origin. No 'unsafe-eval' — Vite dev is native ESM.
           "script-src 'self' 'unsafe-inline'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: nx-blob: priv-blob:",
+          "img-src 'self' data: blob: nx-blob: priv-blob: nx-pack:",
+          // The recorder's playback, identical to production — `media-src` is
+          // one of the directives the dev policy deliberately does NOT relax.
+          "media-src 'self' nx-blob:",
           // THE LINE THIS BLOCK EXISTS FOR.
           "font-src 'self' data:",
           // The HMR socket, and nothing else. Not `ws:` — that would admit any
           // host on the network.
-          "connect-src 'self' ws://localhost:* ws://127.0.0.1:*",
+          "connect-src 'self' ws://localhost:* ws://127.0.0.1:* nx-pack:",
           "object-src 'none'",
           "base-uri 'none'",
           "form-action 'none'",
@@ -243,7 +276,7 @@ export default defineConfig({
         ].join("; "),
       },
     },
-    plugins: [react(), rendererHardening(), excalidrawFonts()],
+    plugins: [react(), rendererHardening(), excalidrawFonts(), ocrAssets()],
     /**
      * MINIFIED, which electron-vite's renderer default is not (`minify: false`,
      * beside the Chromium target it picks). Measured 2026-09-26: the startup

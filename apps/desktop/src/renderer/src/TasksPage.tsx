@@ -105,6 +105,7 @@ import { dayUnit, strings } from "./strings.js";
 import { readStoredBlockedInToday, toIncludeBlocked } from "./taskPrefs.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { moduleName } from "./moduleName.js";
+import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { TaskFlow } from "./TaskFlow.js";
 import { persistOverviewOpen, readStoredOverviewOpen } from "./overviewPrefs.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
@@ -4319,7 +4320,16 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         title={moduleName("tasks")}
         sigil="tasks"
         className="tasks__header"
-        {...(headerActions === null ? {} : { actions: headerActions })}
+        // The gear is present even while the lists are loading: it does not act
+        // on a list, and `headerActions` withholds itself for exactly the
+        // opposite reason — every one of those buttons acts on the list this
+        // page does not yet have.
+        actions={
+          <>
+            {headerActions}
+            <ModuleSettingsGear moduleId="tasks" />
+          </>
+        }
         {...(scopeName === null ? {} : { subtitle: scopeName })}
       />
       <aside className="tasks__rail" aria-label={strings.tasks.lists.railLabel}>

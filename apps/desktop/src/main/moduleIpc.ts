@@ -1,0 +1,974 @@
+/**
+ * The main-process half of the module kit: one context per discovered module,
+ * and the four rules that make it worth having.
+ *
+ * **What a module gets.** `register(ctx)` hands a module a context whose
+ * `handle(op, handler)` registers one handler per DECLARED op, wraps it in
+ * `assertTrustedSender` (SEC-EL-02), and gives the handler the shared payload
+ * validators (`./ipcValidators.js`) and the profile's database the way every
+ * store in this app gets it (`new XStore(db.raw, profileId)`).
+ *
+ * **The three refusals, all of them at registration or before the handler
+ * runs**, because a refusal that arrives after a write has happened is not a
+ * refusal:
+ *
+ *  1. an op the module did not declare in its own contract - thrown by
+ *     `handle`, at registration, so a typo is a startup failure rather than a
+ *     channel nobody answers;
+ *  2. a channel outside the module's own `<id>:` prefix - thrown when the
+ *     contract is adopted, so a hand-built contract cannot answer for another
+ *     module;
+ *  3. a message from an untrusted sender - thrown inside the wrapper, before
+ *     the handler is called at all.
+ *
+ * **Why this file has no `electron` import.** Everything above is a rule about
+ * payloads and channels, and rules are testable; `new Notification` and
+ * `ipcMain.handle` are not, under Vitest. So the electron-shaped parts arrive as
+ * `ModulePlatform` - the sender check, the database handle, the toast, the timer
+ * and the clock - and `moduleHost.ts` is the thin wiring that supplies them.
+ * That split is what lets `moduleIpc.test.ts` prove the three refusals.
+ *
+ * **What a timer is for.** A countdown outlives the page that started it, so a
+ * module arms a timer in MAIN and main owns its lifetime: `armUntil` re-arms in
+ * bounded hops (`SLEEP_SAFE_HOP_MS`) so a suspended machine cannot leave a
+ * timer that never fires, and every armed timer is cancelled when the session
+ * ends. A module that forgot to cancel one would keep a locked profile's timer
+ * alive; that is the kit's problem to solve once, not each module's.
+ */
+import type Database from "better-sqlite3-multiple-ciphers";
+import type { ExportModuleData, ModuleText } from "@nexus/core";
+import type { ModuleContract, ModuleOps } from "../shared/moduleApi.js";
+import { mainLocale } from "./locale.js";
+import type { ModuleToolsAccess } from "./moduleTools.js";
+import {
+  asBoolean,
+  asBoundedInteger,
+  asBoundedNumber,
+  asCappedChars,
+  asId,
+  asInteger,
+  asNonEmptyString,
+  asNullableString,
+  asPositiveInteger,
+  asRecord,
+  asString,
+} from "./ipcValidators.js";
+
+type DatabaseHandle = Database.Database;
+
+/**
+ * The shared validators, by the names their handlers have always used, under
+ * one object so a handler call site reads `call.as.id(...)` and nothing in this
+ * kit can shadow one of them.
+ */
+export const MODULE_VALIDATORS = {
+  asRecord,
+  asId,
+  asNonEmptyString,
+  asString,
+  asNullableString,
+  asBoolean,
+  asCappedChars,
+  asInteger,
+  asPositiveInteger,
+  asBoundedInteger,
+  asBoundedNumber,
+} as const;
+
+export type ModuleValidators = typeof MODULE_VALIDATORS;
+
+/**
+ * What writing bytes into the content-addressed blob store answers.
+ *
+ * Deliberately the SAME shape `main/attachments.ts`'s `saveBlob` returns and
+ * `main/index.ts` already hands the restore path: a module that stores bytes
+ * (a photo, a recording, a receipt) gets a plaintext sha256 to name them by and
+ * nothing else — no path, no key, no container.
+ */
+export interface ModuleBlobWrite {
+  /** The plaintext SHA-256 the bytes are named by, lowercase hex. */
+  readonly sha256: string;
+  /** False when byte-identical content was already in the store: a repeated write is a cheap no-op. */
+  readonly created: boolean;
+}
+
+/** Everything one module's handler is given beyond its own payload. */
+export interface ModuleCall {
+  /** The shared payload validators (SEC-EL-02). */
+  readonly as: ModuleValidators;
+  /**
+   * Opens the profile's database for a store, exactly as `main/index.ts` does
+   * it: `call.profileDb(profileId, (db, id) => new TimersStore(db, id))`. The
+   * handle is the same one every compiled-in store is built on, so a module
+   * store is a store like any other and never a second connection.
+   */
+  profileDb<T>(profileId: string, open: (db: DatabaseHandle, profileId: string) => T): T;
+  /**
+   * The installed content packs, as `main/packs/registry.ts` needs them
+   * (ADR-091): where they live, and the key their manifests verify against.
+   *
+   * A module READS packs here, in main, and hands the renderer only what it
+   * worked out from them - never a path, in either direction (`PacksIpc`'s own
+   * rule). The capability is deliberately narrow: a module may list what is
+   * installed and open a file the pack's own manifest lists, and it cannot
+   * install, remove or write anything.
+   */
+  packs(): ModulePacksAccess;
+  /**
+   * The installed TOOL packs (ADR-094): the one way a module finds a program a
+   * pack carries and starts it, in MAIN, for itself.
+   *
+   * On the call as well as on the context, and narrow on purpose: a module lists
+   * what is installed, reads the licence and source it has to show, and opens a
+   * session on one pack. It cannot install, remove or verify anything, no pack id
+   * crosses the bridge, and nothing a renderer sends ever reaches an argument
+   * list — `main/moduleTools.ts` states the whole of that argument.
+   */
+  tools(): ModuleToolsAccess;
+  /**
+   * The blob store's attach path, on a handler's own call object: a handler is
+   * where a module records the row, so a handler is what has to trigger the
+   * dialog. See `ModuleContext.attachFiles` for the whole contract — the two are
+   * the same function, offered at the two places a module can ask from.
+   */
+  attachFiles(
+    maxBytes: number,
+    record: (file: ModuleAttachmentFile) => void,
+  ): Promise<ModuleAttachmentsResult>;
+  /** Gives a hash back once the module's own row naming it is gone — see `ModuleContext.releaseBlob`. */
+  releaseBlob(sha256: string): Promise<void>;
+  /**
+   * Writes bytes into the app's one content-addressed blob store — the same
+   * store every attachment uses (ADR-019) — and answers the plaintext sha256
+   * that names them, which is what the module's own row then holds. `undefined`
+   * when this build supplied no writer (a test harness with no blob roots, or a
+   * main process that has not opened an account yet): a module that needs one
+   * says so in its own refusal rather than writing a row pointing at nothing.
+   */
+  readonly saveBlob: ((bytes: Uint8Array) => Promise<ModuleBlobWrite>) | undefined;
+  /** Current wall-clock milliseconds. Injected so a test can move the clock. */
+  now(): number;
+}
+
+/**
+ * One file main picked and stored, as the module that owns the row records it:
+ * the four facts an attachment index row carries and nothing else. The BYTES
+ * never cross this seam in either direction (SEC-FILE-02), which is what makes
+ * a module's receipts as safe as a task's or a subject's.
+ */
+export interface ModuleAttachmentFile {
+  readonly fileName: string;
+  readonly mime: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+}
+
+/**
+ * What one `attachFiles` call produced. `skippedTooLarge` is reported rather
+ * than thrown for `TaskAttachmentsAddResult`'s reason: refusing one oversize
+ * file must not lose the others the same pick succeeded with.
+ */
+export type ModuleAttachmentsResult =
+  | { readonly canceled: true }
+  | { readonly canceled: false; readonly added: number; readonly skippedTooLarge: number };
+
+/** An unlocked session, as the session hooks and the archive see it. */
+export interface ModuleSession {
+  /** Every profile this session has open, in the app's own order. */
+  readonly profileIds: readonly string[];
+  profileDb<T>(profileId: string, open: (db: DatabaseHandle, profileId: string) => T): T;
+  now(): number;
+}
+
+/**
+ * One module's archive import, in the two halves the kit runs at two different
+ * moments and with two different promises.
+ *
+ * **`parse` is pure and total.** It validates the WHOLE payload - every field,
+ * every row, every bound, and the version the payload was written with - and
+ * throws on anything it will not take, naming what is wrong. The kit runs it at
+ * the PREVIEW (so the refusal reaches the user before they confirm a restore
+ * that replaces their profile) and again at apply time, before any module
+ * writes. It must write nothing at all: the preview has nothing to protect
+ * itself with if it does.
+ *
+ * **`apply` writes, and is handed exactly what this module's own `parse`
+ * answered** - or `undefined` when the archive says nothing about this module.
+ * A restore replaces a profile whole, so `undefined` is not "leave it alone":
+ * it is this profile's archived state going back to empty, which every module
+ * that archives anything has to express in its own tables.
+ *
+ * The pair is registered together so the two cannot disagree about the type:
+ * `T` is inferred once, and `apply` receives what `parse` returned or nothing.
+ */
+export interface ModuleImport<T> {
+  parse(value: unknown): T;
+  apply(parsed: T | undefined, session: ModuleSession): void;
+}
+
+/**
+ * One blob a module's own rows name: the content hash its store holds, and the
+ * size the row states.
+ *
+ * Deliberately the same two fields the archive's manifest already uses for
+ * every other blob, so a module's file joins that union without a shape of its
+ * own - and so nothing here has to describe where the bytes live (SEC-FILE-02,
+ * on `ModuleCall.saveBlob`'s terms).
+ */
+export interface ModuleBlobRef {
+  readonly sha256: string;
+  readonly sizeBytes: number;
+}
+
+/**
+ * One blob an archive's kit-module section names, and the module whose rows
+ * name it. The module id is what lets a restore say WHICH module's file the
+ * archive is missing, the way the built-in rows' own `missing-blob` problem
+ * names the row it belongs to. The size rides because it is the same shape a
+ * module answers for its export; a restore reads only the hash.
+ */
+export interface ModuleImportBlob extends ModuleBlobRef {
+  readonly moduleId: string;
+}
+
+/**
+ * What a module that keeps bytes in the app's one content-addressed blob store
+ * registers once (ADR-108).
+ *
+ * **Why this exists.** `main/index.ts`'s `blobRefCount` and the mime lookup
+ * beside it are the single place that answers "does anything still name this
+ * file", and until ADR-108 a module widened them by hand: culture, cookbook, car
+ * and recorder each added a line to both. A module that forgot to was not
+ * refused - it lost its files to the garbage collector, silently. The same list
+ * built the archive's `blobs/` union, which knew only the built-in tables, so an
+ * exported recipe carried its row and not its photo. One registration answers
+ * all three questions, and a module that names blobs is asked for it by the kit
+ * rather than by a reviewer.
+ *
+ * **What each half answers, and why there are four of them.**
+ *
+ *  - `refCount` is how many of the module's own rows - across every profile, the
+ *    blob store being content-addressed across the whole database - hold this
+ *    hash. Main adds it to the built-in tables' counts; zero from every table is
+ *    what makes a file collectable.
+ *  - `mimeForHash` is what `nx-blob:` must announce for a hash the module's rows
+ *    hold, or null when none of them does. The same union, on `refCount`'s
+ *    terms: the first module that answers wins, exactly as the store order in
+ *    `main/index.ts` decided before.
+ *  - `exportBlobs` is every blob ONE export of the session's profiles carries,
+ *    read off the same live rows `exportData` reads. Main hands the union to
+ *    `buildExportArchive`, which is what puts the file in the zip beside the row
+ *    that names it.
+ *  - `importBlobs` is every blob one IMPORT of this payload names, read off the
+ *    payload - the LIVE rows cannot answer it, because a restore reads the
+ *    archive into a profile whose module tables still hold the previous owner's
+ *    state. It is what lets `main/restore.ts` write a module's bytes BEFORE the
+ *    module's own `apply` writes the rows that name them, and what lets the
+ *    preview report a blob the archive lacks.
+ *
+ * The first two take a `ModuleSession` because the store they read lives behind
+ * the session's own `profileDb`, exactly as a handler's does; the last is a pure
+ * function of the payload. A module with a store but no blobs registers nothing,
+ * and the kit never asks it a question.
+ */
+export interface ModuleBlobSource {
+  /**
+   * How many rows name the hash, across every profile: the store's own count,
+   * on `NoteAttachmentStore.refCount`'s contract.
+   */
+  refCount(session: ModuleSession, profileId: string, sha256: string): number;
+  /** The mime this module stored for the hash, or null when none of its rows names it. */
+  mimeForHash(session: ModuleSession, profileId: string, sha256: string): string | null;
+  /** Every blob one export of the session's profiles carries, with the size each row states. */
+  exportBlobs(session: ModuleSession): readonly ModuleBlobRef[];
+  /**
+   * Every blob one import of this payload names. The value is this module's own
+   * `parse` result, exactly as `apply` receives it.
+   */
+  importBlobs(value: unknown): readonly ModuleBlobRef[];
+}
+
+/**
+ * Why a kit section was refused: a module id this build did not adopt (or one
+ * it cannot restore), or a payload the module's own `parse` will not take.
+ *
+ * A code rather than only a sentence, because the two become different problems
+ * on the wire (`RestoreProblemCode`): `unknown-module` sends the reader to a
+ * newer build, and `invalid-module-data` says the archive's own payload is what
+ * is wrong. `main/restore.ts` maps one onto the other, which is why the class
+ * lives here rather than being duplicated at the seam.
+ */
+export type ModuleImportProblemCode = "unknown-module" | "invalid-module-data";
+
+export class ModuleImportError extends Error {
+  readonly code: ModuleImportProblemCode;
+
+  constructor(code: ModuleImportProblemCode, message: string) {
+    super(message);
+    this.name = "ModuleImportError";
+    this.code = code;
+  }
+}
+
+/** What one module's `register(ctx)` is handed. */
+export interface ModuleContext<Id extends string, Ops extends ModuleOps> {
+  readonly id: Id;
+  /**
+   * Registers the handler for one declared op. Throws at registration for an op
+   * this contract does not declare - see the header's three refusals.
+   */
+  handle<K extends keyof Ops & string>(
+    op: K,
+    handler: (
+      payload: Ops[K]["request"],
+      call: ModuleCall,
+    ) => Ops[K]["response"] | Promise<Ops[K]["response"]>,
+  ): void;
+  /**
+   * Attaches files the way every compiled-in attachment surface does: main opens
+   * its ONE native "pick files" dialog, reads what the user chose, sniffs each
+   * file's real MIME from its bytes (SEC-FILE-02) and writes the bytes into the
+   * content-addressed blob store — then calls `record` per file so the MODULE
+   * writes the index row that names it.
+   *
+   * **Why `record` is a callback rather than a returned list.** The blob is
+   * written before the row exists, so a row that fails to insert has to take the
+   * blob with it or the profile accumulates files nothing names. Handing the
+   * file back for a second call would put that compensation in every module;
+   * called here, main deletes the blob again itself when `record` throws —
+   * `main/index.ts`'s `note-attachments:add` arrangement, for a reason that has
+   * not changed.
+   *
+   * A module has no `BrowserWindow`, no dialog and no blob keys, and this is
+   * deliberately the whole of what it gets instead: it can never name a
+   * filesystem path (SEC-EL), and it never learns how a blob is stored. A
+   * module that stores no blobs simply never calls it.
+   */
+  attachFiles(
+    maxBytes: number,
+    record: (file: ModuleAttachmentFile) => void,
+  ): Promise<ModuleAttachmentsResult>;
+  /**
+   * Gives a hash back after the module removed the row that named it: the blob
+   * is deleted unless some row anywhere still holds it (`main/index.ts`'s
+   * `blobRefCount`, the one place that knows which tables name a hash).
+   *
+   * Called AFTER the row is gone, never before — the count is what decides, and
+   * a module that released first would be asking about its own live row.
+   */
+  releaseBlob(sha256: string): Promise<void>;
+  /**
+   * An OS notification through the app's one notification path, in the language
+   * main is writing in (`main/locale.ts`). `silent` is the one thing a module
+   * may decide: whether this toast carries the OS's own notification sound.
+   */
+  notify(copy: { readonly title: ModuleText; readonly body: ModuleText }, silent?: boolean): void;
+  /**
+   * Runs `run` once the clock passes `atMs`, re-arming in bounded hops so a
+   * machine that slept through the moment still fires on wake. Returns a
+   * cancel function; every armed timer is also cancelled at `sessionEnd`.
+   */
+  armUntil(atMs: number, run: () => void): () => void;
+  /** Runs at every unlock, after the database is open. */
+  onSessionStart(run: (session: ModuleSession) => void): void;
+  /** Runs when the session ends - a lock, a switch, a quit - after every armed timer is cancelled. */
+  onSessionEnd(run: () => void): void;
+  /**
+   * The installed content packs a module may read (see `ModuleCall.packs`). On
+   * the CONTEXT as well as on the call because a module may need the packs when
+   * it arms something at session start, not only inside a handler.
+   */
+  packs(): ModulePacksAccess;
+  /** The installed tool packs (see `ModuleCall.tools`). On the context because a module may need one outside a handler. */
+  tools(): ModuleToolsAccess;
+  /**
+   * Saves a main-authored HTML document as a PDF, where the user says
+   * (`ModulePlatform.savePdf`). Answers the path written, or `null` when the
+   * user closed the dialog without choosing one.
+   */
+  savePdf(request: PdfSaveRequest): Promise<string | null>;
+  /**
+   * Registers this module's archive payload: a versioned JSON value, or
+   * `undefined` for a session with nothing to export (`ProfileData.modules`).
+   */
+  exportData(run: (session: ModuleSession) => unknown): void;
+  /**
+   * Registers this module's archive import (see `ModuleImport`): `parse` runs
+   * when the section is read, `apply` inside the one transaction every module's
+   * write shares.
+   */
+  importData<T>(spec: ModuleImport<T>): void;
+  /**
+   * Registers this module's blob source (ADR-108): the count, the mime and the
+   * export/import hashes of the files its rows name in the app's one
+   * content-addressed store.
+   *
+   * **Why a module registers rather than main enumerating.** The three lists
+   * built from it - `blobRefCount`, the mime lookup, and the archive's `blobs/`
+   * union - were hand-written, one line per module, and a module that forgot its
+   * line lost its files to the garbage collector with no error anywhere. Here
+   * the registration is a line in the module's own folder, beside the handlers
+   * that write the rows, and a module that names blobs and forgets it is a code
+   * review of one file rather than of the largest one in the repository.
+   *
+   * A module with no blobs registers nothing, which is most of them.
+   */
+  blobs(source: ModuleBlobSource): void;
+}
+
+/**
+ * One PDF to render, and the two things about the file the dialog opens on.
+ *
+ * `html` is a document MAIN built - never markup the renderer sent - and both
+ * measurements below are in the inches Electron's own `printToPDF` takes.
+ */
+export interface PdfSaveRequest {
+  /** The whole document to print. Authored in main, escaped there. */
+  readonly html: string;
+  /** The file name the save dialog opens on. A suggestion in a dialog, never a path anything writes to. */
+  readonly defaultPath: string;
+  /** Page size in INCHES. */
+  readonly pageSize: { readonly width: number; readonly height: number };
+  /** Margins in INCHES. */
+  readonly margins: {
+    readonly top: number;
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+  };
+}
+
+/**
+ * What main supplies that this file must not import: the two Electron-shaped
+ * facts (a toast and the sender check), the database's own handle, and the blob
+ * store's attach path — the last one because a module that stores receipts,
+ * photos or audio needs main's dialog and main's blob keys and has neither.
+ */
+export interface ModulePlatform {
+  /** Main's `assertTrustedSender` - the renderer is untrusted (SEC-EL-02). */
+  assertTrustedSender(event: unknown): void;
+  /** The open database's raw handle (`requireDb().raw`). */
+  database(): DatabaseHandle;
+  /**
+   * The blob store's own attach path, in one call: pick, sniff, write, record —
+   * see `ModuleContext.attachFiles` for what it promises a module. Electron-free
+   * here like everything else in this file, so the orphan-blob compensation is
+   * testable (`./moduleAttachments.ts` is the implementation `index.ts` wires).
+   * OPTIONAL like `saveBlob`: a test's platform has no blob store, and a module
+   * that asks for one there is refused by name.
+   */
+  attachFiles?(
+    maxBytes: number,
+    record: (file: ModuleAttachmentFile) => void,
+  ): Promise<ModuleAttachmentsResult>;
+  /** Removes a blob no row references any more — `main/index.ts`'s own count decides. */
+  releaseBlob?(sha256: string): Promise<void>;
+  /**
+   * The blob store's write half, when `index.ts` supplies one. OPTIONAL because
+   * the write needs the account's key material and its blob roots, which only
+   * `index.ts` holds — and because a harness that tests the rules of this file
+   * needs no blob store at all. It is exactly
+   * `saveBlob(blobStorePathsFor(), requireBlobKeys(), bytes)` there.
+   */
+  saveBlob?(bytes: Uint8Array): Promise<ModuleBlobWrite>;
+  /** The app's notification path: one OS toast, in the active locale. */
+  notify(copy: { readonly title: string; readonly body: string; readonly silent: boolean }): void;
+  /** A timer main owns. `atMs` is wall-clock milliseconds (`Date.now()`). */
+  schedule(atMs: number, run: () => void): () => void;
+  /**
+   * The content packs a module may read, or absent in a process that has none (a
+   * test's fake platform). A module that asks through `ctx.packs()` when the
+   * platform carries none is refused by name rather than answered with "no packs
+   * installed": the two are different facts, and only one of them is about the
+   * user's machine.
+   */
+  packs?: ModulePacksAccess;
+  /**
+   * The installed tool packs a module may run (ADR-094), or absent in a process
+   * that has none (a test's fake platform). A module that asks through
+   * `ctx.tools()` when the platform carries none is refused by name rather than
+   * answered with "nothing is installed": the two are different facts, and only
+   * one of them is about the user's machine.
+   */
+  tools?: ModuleToolsAccess;
+  now(): number;
+  /**
+   * Renders a main-authored HTML document to a PDF and saves it where the USER
+   * chooses in a native save dialog, answering the path it wrote or `null` when
+   * they cancelled.
+   *
+   * **Why this is one capability rather than the objects it is made of.** The
+   * print pipeline needs a `BrowserWindow`, `webContents.printToPDF` and
+   * `dialog.showSaveDialog`, and a module reaches none of those: it gets a
+   * handler per declared channel and nothing else (see the note beside the
+   * platform's construction in `index.ts`). What is handed over instead is the
+   * ERRAND - print this document, save it where the user says - which is also
+   * what keeps the path out of the renderer's reach entirely.
+   *
+   * **Optional, and deliberately.** The kit runs electron-free under Vitest, so a
+   * platform built for a test has no printer at all; a module that asks
+   * `ctx.savePdf` then gets a sentence rather than a silent no-op.
+   */
+  savePdf?(request: PdfSaveRequest): Promise<string | null>;
+}
+
+/**
+ * Where content packs live and what their signatures verify against - the two
+ * inputs `readInstalled` and `packVersionDir` take. Deliberately the DIRECTORY
+ * rather than a reader, because the registry's own path arithmetic is what a
+ * module has to go through; what keeps a module from naming an arbitrary file is
+ * its own reader, which opens only a path the signed manifest lists.
+ */
+export interface ModulePacksAccess {
+  /** `<userData>` - resolved per call, like `database()`, so a harness that redirects it is honoured. */
+  userData(): string;
+  /** The release public key an installed pack's manifest was signed with. */
+  readonly publicKeyPem: string;
+}
+
+/**
+ * The non-generic face of the host, which is all the discovery glue sees: a
+ * module's `main/register.ts` calls `host.adopt(its own contract)`, and the
+ * per-op payload and result types then come from that contract rather than from
+ * this file.
+ */
+export interface ModuleHostSurface {
+  adopt<Id extends string, Ops extends ModuleOps>(
+    contract: ModuleContract<Id, Ops>,
+  ): ModuleContext<Id, Ops>;
+}
+
+/** One module's `main/register.ts`, exactly as the glue calls it. */
+export interface ModuleRegisterModule {
+  register(host: ModuleHostSurface): void;
+}
+
+/** How long one armed hop may be before `armUntil` re-checks the clock. */
+const SLEEP_SAFE_HOP_MS = 30_000;
+
+type Dispatch = (event: unknown, payload: unknown) => Promise<unknown>;
+
+interface Armed {
+  /** Replaced on every hop; the cancel function always tears down the latest one. */
+  cancel: () => void;
+}
+
+/**
+ * Holds every discovered module's handlers and session hooks for one main
+ * process. Constructed once, in `moduleHost.ts`.
+ */
+export class ModuleHost implements ModuleHostSurface {
+  private readonly dispatchers = new Map<string, Dispatch>();
+  private readonly sessionStarts: ((session: ModuleSession) => void)[] = [];
+  private readonly sessionEnds: (() => void)[] = [];
+  private readonly exporters = new Map<string, (session: ModuleSession) => unknown>();
+  private readonly importers = new Map<string, ModuleImport<unknown>>();
+  private readonly blobSources = new Map<string, ModuleBlobSource>();
+  private readonly armed: Armed[] = [];
+  /** Every module this build adopted - which is what "a module id this build knows" means. */
+  private readonly adoptedIds = new Set<string>();
+
+  constructor(private readonly platform: ModulePlatform) {}
+
+  /** Every channel this build answers on, in registration order. */
+  channels(): readonly string[] {
+    return [...this.dispatchers.keys()];
+  }
+
+  /**
+   * Adopts one module: its contract's channels become dispatchable, and its
+   * `register` runs. Throws if the module claims a channel that is not under its
+   * own id, or one another module already answers.
+   */
+  adopt<Id extends string, Ops extends ModuleOps>(
+    contract: ModuleContract<Id, Ops>,
+  ): ModuleContext<Id, Ops> {
+    const prefix = `${contract.id}:`;
+    for (const op of contract.ops) {
+      const channel = contract.channels[op];
+      if (!channel.startsWith(prefix)) {
+        throw new Error(
+          `Module "${contract.id}" declares channel "${channel}", which is not under its own "${prefix}" prefix.`,
+        );
+      }
+      if (this.dispatchers.has(channel)) {
+        throw new Error(`Channel "${channel}" is already handled by another module.`);
+      }
+    }
+    this.adoptedIds.add(contract.id);
+
+    const context: ModuleContext<Id, Ops> = {
+      id: contract.id,
+      handle: (op, handler) => {
+        if (!contract.ops.includes(op)) {
+          throw new Error(
+            `Module "${contract.id}" has no declared op "${String(op)}"; a handler may only answer an op its own contract declares.`,
+          );
+        }
+        const channel = contract.channels[op];
+        this.dispatchers.set(channel, async (event, payload) => {
+          this.platform.assertTrustedSender(event);
+          return await handler(payload as Ops[typeof op]["request"], this.call());
+        });
+      },
+      notify: (copy, silent) => {
+        this.platform.notify({
+          title: copy.title[mainLocale()],
+          body: copy.body[mainLocale()],
+          silent: silent ?? false,
+        });
+      },
+      attachFiles: (maxBytes, record) => requireBlobs(this.platform).attachFiles(maxBytes, record),
+      releaseBlob: (sha256) => requireBlobs(this.platform).releaseBlob(sha256),
+      armUntil: (atMs, run) => this.armUntil(atMs, run),
+      packs: () => requirePacks(this.platform),
+      tools: () => requireTools(this.platform),
+      savePdf: (request) => {
+        const print = this.platform.savePdf;
+        if (print === undefined) {
+          // A sentence rather than a silent `null`: `null` means "the user
+          // cancelled", and a build with no printer that answered it would be
+          // telling the page a story about a dialog nobody ever saw.
+          return Promise.reject(new Error("This build cannot write PDF files."));
+        }
+        return print(request);
+      },
+      onSessionStart: (run) => {
+        this.sessionStarts.push(run);
+      },
+      onSessionEnd: (run) => {
+        this.sessionEnds.push(run);
+      },
+      exportData: (run) => {
+        this.exporters.set(contract.id, run);
+      },
+      importData: <T>(spec: ModuleImport<T>) => {
+        this.importers.set(contract.id, {
+          parse: spec.parse,
+          // The map holds every module's pair under one key, so the payload type
+          // is erased here. What keeps `apply` receiving exactly what this
+          // module's own `parse` answered is the single `T` that produced both
+          // halves - erasing it is the only cast that fact needs.
+          apply: spec.apply as (parsed: unknown, session: ModuleSession) => void,
+        });
+      },
+      blobs: (source) => {
+        this.blobSources.set(contract.id, source);
+      },
+    };
+    return context;
+  }
+
+  /**
+   * Answers one IPC call. The channel must be one a module registered: an
+   * undeclared channel is a bug in the calling code, never something to answer
+   * with `undefined`.
+   */
+  async dispatch(channel: string, event: unknown, payload: unknown): Promise<unknown> {
+    const dispatch = this.dispatchers.get(channel);
+    if (dispatch === undefined) {
+      throw new Error(`No module answers channel "${channel}".`);
+    }
+    return await dispatch(event, payload);
+  }
+
+  /** Arms a timer for one module and records it, so `sessionEnd` can cancel it. */
+  private armUntil(atMs: number, run: () => void): () => void {
+    const armed: Armed = { cancel: () => undefined };
+    const step = (): void => {
+      const remaining = atMs - this.platform.now();
+      if (remaining <= 0) {
+        armed.cancel = () => undefined;
+        const index = this.armed.indexOf(armed);
+        if (index >= 0) this.armed.splice(index, 1);
+        run();
+        return;
+      }
+      armed.cancel = this.platform.schedule(
+        this.platform.now() + Math.min(remaining, SLEEP_SAFE_HOP_MS),
+        step,
+      );
+    };
+    this.armed.push(armed);
+    step();
+    return () => {
+      armed.cancel();
+      const index = this.armed.indexOf(armed);
+      if (index >= 0) this.armed.splice(index, 1);
+    };
+  }
+
+  /** Hands every module the just-unlocked session. */
+  sessionStart(profileIds: readonly string[]): void {
+    const session = this.session(profileIds);
+    for (const run of this.sessionStarts) run(session);
+  }
+
+  /** Cancels every armed timer, then tells each module the session is over. */
+  sessionEnd(): void {
+    for (const armed of [...this.armed]) armed.cancel();
+    this.armed.length = 0;
+    for (const run of this.sessionEnds) run();
+  }
+
+  /**
+   * The archive's `modules` section for these profiles: module id to the value
+   * that module exports. A module with nothing to say is omitted rather than
+   * written as `undefined`, so an existing archive's shape does not change the
+   * day a module is added.
+   */
+  collectExports(profileIds: readonly string[]): ExportModuleData[] {
+    const session = this.session(profileIds);
+    const section: ExportModuleData[] = [];
+    for (const [moduleId, exportData] of this.exporters) {
+      const value = exportData(session);
+      if (value !== undefined) section.push({ moduleId, payload: value });
+    }
+    return section;
+  }
+
+  /**
+   * Every blob the registered modules carry in one export of these profiles, in
+   * registration order — what `main/index.ts` hands `buildExportArchive` beside
+   * the module section itself.
+   *
+   * Read off the SAME live rows `collectExports` reads, one call apart, and both
+   * are synchronous: the rows a module claims are the rows the archive carries.
+   * Deduplication is the archive's own (`declareBlob`), so a hash two modules
+   * both name travels once however many times it appears here.
+   */
+  collectBlobs(profileIds: readonly string[]): ModuleBlobRef[] {
+    const session = this.session(profileIds);
+    const blobs: ModuleBlobRef[] = [];
+    for (const source of this.blobSources.values()) blobs.push(...source.exportBlobs(session));
+    return blobs;
+  }
+
+  /**
+   * Every blob an archive's module section names, with the module that names it:
+   * what `main/restore.ts` writes into the store before any module's `apply`
+   * runs, and what it reports against when the archive does not carry one.
+   *
+   * Parsed first, exactly as the apply is: a module id this build does not know,
+   * or a payload its own `parse` refuses, throws here — which is why the restore
+   * asks this only after `assertImportable` has passed, and why the answer is
+   * read off the PARSED payload rather than the live rows (a profile about to be
+   * replaced still holds the previous owner's state).
+   */
+  collectImportBlobs(section: readonly ExportModuleData[]): ModuleImportBlob[] {
+    const parsed = this.parseImports(section);
+    const blobs: ModuleImportBlob[] = [];
+    for (const { moduleId } of section) {
+      const source = this.blobSources.get(moduleId);
+      if (source === undefined) continue;
+      const seen = new Set<string>();
+      for (const ref of source.importBlobs(parsed.get(moduleId))) {
+        // One row's hash twice (a photo and a track over the same bytes, say) is
+        // one entry here: this list is what a restore writes and reports, and a
+        // duplicate would be a second write of the same file.
+        if (seen.has(ref.sha256)) continue;
+        seen.add(ref.sha256);
+        blobs.push({ moduleId, sha256: ref.sha256, sizeBytes: ref.sizeBytes });
+      }
+    }
+    return blobs;
+  }
+
+  /**
+   * How many of the registered modules' rows name this hash, for one profile —
+   * which `main/index.ts`'s `blobRefCount` adds to the built-in tables it unions.
+   * Zero from every table is what makes a file on disk collectable, so a module
+   * that registers here is what keeps its own bytes alive.
+   */
+  blobRefCount(profileId: string, sha256: string): number {
+    const session = this.session([profileId]);
+    let total = 0;
+    for (const source of this.blobSources.values()) {
+      total += source.refCount(session, profileId, sha256);
+    }
+    return total;
+  }
+
+  /**
+   * The mime one of the registered modules stored for this hash, or null when
+   * none of their rows names it — the serve gate the `nx-blob:` protocol asks
+   * (it passes no profile, which is why every source's lookup is the
+   * database-wide one its contract already states).
+   */
+  blobMimeForHash(profileId: string, sha256: string): string | null {
+    const session = this.session([profileId]);
+    for (const source of this.blobSources.values()) {
+      const mime = source.mimeForHash(session, profileId, sha256);
+      if (mime !== null) return mime;
+    }
+    return null;
+  }
+
+  /**
+   * Refuses an archive section this build cannot import whole, naming what is
+   * wrong. Three refusals, in the order a reader would want them:
+   *
+   *  1. a module id this build did not adopt - the data would be lost, and the
+   *     message says so;
+   *  2. a module this build adopted but has no importer for - it cannot restore
+   *     what the archive carries;
+   *  3. a payload that module's own `parse` throws on, wrapped with the module's
+   *     name and refused here rather than half-read later.
+   *
+   * **Its own method, called TWICE, and the second call is the point.** The
+   * preview calls it so the user is told before they confirm a restore that
+   * replaces their profile, and `applyImports` runs the same parse again before
+   * any module writes - a plan confirmed against one build cannot be applied by
+   * another that moved on. Nothing is written by either call: every refusal
+   * leaves the profile exactly as it was found.
+   */
+  assertImportable(section: readonly ExportModuleData[]): void {
+    this.parseImports(section);
+  }
+
+  /**
+   * Reads every payload in the section, and answers them by module id. The one
+   * place a payload is read, so `assertImportable` and `applyImports` cannot
+   * disagree about what "this build can import it" means.
+   */
+  private parseImports(section: readonly ExportModuleData[]): Map<string, unknown> {
+    const parsed = new Map<string, unknown>();
+    for (const { moduleId } of section) {
+      if (!this.adoptedIds.has(moduleId)) {
+        throw new ModuleImportError(
+          "unknown-module",
+          `This archive carries data for module "${moduleId}", which this build does not know. Update Nexus or import the archive with the build that wrote it.`,
+        );
+      }
+    }
+    for (const { moduleId, payload } of section) {
+      const importer = this.importers.get(moduleId);
+      if (importer === undefined) {
+        throw new ModuleImportError(
+          "unknown-module",
+          `This archive carries data for module "${moduleId}", which this build cannot restore.`,
+        );
+      }
+      try {
+        parsed.set(moduleId, importer.parse(payload));
+      } catch (error) {
+        // The module's own sentence rides inside this one: "which module refused,
+        // and why" is what the reader can act on, and a swallowed reason would
+        // leave the wire with a problem code and nothing to explain it.
+        throw new ModuleImportError(
+          "invalid-module-data",
+          `This archive carries data for module "${moduleId}" that this build cannot read: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    return parsed;
+  }
+
+  /**
+   * Applies the archive's `modules` section, all of it or none of it.
+   *
+   * **Parsed first, written second.** Every payload is read before a single
+   * module writes, so a refusal costs nothing: a module that will not take its
+   * payload is refused while the profile is still untouched, rather than after
+   * the modules ahead of it have already written.
+   *
+   * **Then EVERY adopted module's `apply` runs, in one transaction**, inside
+   * `platform.database().transaction(...)()` - where each store's own transaction
+   * nests as a savepoint. A module the section names gets its parsed payload; a
+   * module it does not name gets `undefined`, which is the module's instruction
+   * to reset its archived state to empty (a restore replaces a profile whole).
+   * Because the whole set is one transaction, a module that throws in its own
+   * `apply` rolls back every module's writes with it, and the profile is left
+   * exactly as the archive's reader found it.
+   */
+  applyImports(section: readonly ExportModuleData[], profileIds: readonly string[]): void {
+    const parsed = this.parseImports(section);
+    if (this.importers.size === 0) return;
+    const session = this.session(profileIds);
+    this.platform.database().transaction(() => {
+      for (const [moduleId, importer] of this.importers) {
+        importer.apply(parsed.get(moduleId), session);
+      }
+    })();
+  }
+
+  /** The call object one handler is given; built per call so a stale `now` is impossible. */
+  private call(): ModuleCall {
+    return {
+      as: MODULE_VALIDATORS,
+      profileDb: (profileId, open) => open(this.platform.database(), profileId),
+      packs: () => requirePacks(this.platform),
+      tools: () => requireTools(this.platform),
+      attachFiles: (maxBytes, record) => requireBlobs(this.platform).attachFiles(maxBytes, record),
+      releaseBlob: (sha256) => requireBlobs(this.platform).releaseBlob(sha256),
+      // Bound once per call rather than read from the platform at the call
+      // site, so a module's handler cannot reach anything else `index.ts` holds.
+      saveBlob: this.platform.saveBlob?.bind(this.platform),
+      now: () => this.platform.now(),
+    };
+  }
+
+  /**
+   * The session a module's export, import or blob source is handed: one database
+   * handle, one clock, and the profiles the call is about. Built per call for
+   * the reason `call()` is — a captured handle would outlive the account switch
+   * that replaced it — and shared by the four readers above so a session means
+   * the same thing wherever a module meets one.
+   */
+  private session(profileIds: readonly string[]): ModuleSession {
+    return {
+      profileIds,
+      profileDb: (profileId, open) => open(this.platform.database(), profileId),
+      now: () => this.platform.now(),
+    };
+  }
+}
+
+/** The blob store's attach and release halves, or a refusal in a process that has no blob store. */
+function requireBlobs(
+  platform: ModulePlatform,
+): Required<Pick<ModulePlatform, "attachFiles" | "releaseBlob">> {
+  const { attachFiles, releaseBlob } = platform;
+  if (attachFiles === undefined || releaseBlob === undefined) {
+    throw new Error("This build has no blob store for module attachments.");
+  }
+  return { attachFiles: attachFiles.bind(platform), releaseBlob: releaseBlob.bind(platform) };
+}
+
+/**
+ * The pack access a module asked for, or a refusal that names the missing half.
+ *
+ * Thrown rather than answered with an empty list: "this process supplied no
+ * pack access" and "no pack is installed" would otherwise be one green screen,
+ * and the first is a wiring mistake only the caller can fix.
+ */
+function requirePacks(platform: ModulePlatform): ModulePacksAccess {
+  const packs = platform.packs;
+  if (packs === undefined) {
+    throw new Error(
+      "This process supplied no content-pack access to its modules, so no module can read installed packs.",
+    );
+  }
+  return packs;
+}
+
+/**
+ * The tool-pack access a module asked for, or the refusal that names the missing
+ * half.
+ *
+ * Thrown rather than answered with an empty list, for `requirePacks`'s reason:
+ * "this process supplied no tool access" and "no tool pack is installed" would
+ * otherwise be one green screen, and the first is a wiring mistake only
+ * `index.ts` can fix.
+ */
+function requireTools(platform: ModulePlatform): ModuleToolsAccess {
+  const tools = platform.tools;
+  if (tools === undefined) {
+    throw new Error(
+      "This process supplied no tool-pack access to its modules, so no module can run an installed tool pack.",
+    );
+  }
+  return tools;
+}

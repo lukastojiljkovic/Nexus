@@ -475,7 +475,9 @@ choice of backend**; whatever in them is about the data model still applies.
   Until the Elektronika runner landed the shipped app had exactly one capability
   boundary — the network, off by default, guarded by `check:egress` — and this is
   the second, and the sharper: a network call leaves the machine and a process
-  runs ON it. Five rules. `child-process` is one file and its two tests; `shell`,
+  runs ON it. Five rules. `child-process` is two files and their tests: the runner,
+  and `update/launch.ts`, which starts only the installer the update service
+  verified, with a literal argv (DEV-007's 2026-10-09 amendment); `shell`,
   `exec-family` and `spawn-literal` are exempted for NOBODY, asserted at import
   by `assertNoSecurityExemptions()` because the shortest path from a red gate to
   a green one is to add a rule id to the map, and that path in this gate would
@@ -484,10 +486,10 @@ choice of backend**; whatever in them is about the data model still applies.
   it twice, and the repair a reader reaches for when a gate cries wolf is not a
   narrower gate but an exemption, and then a second one. **The interaction
   between two rules is what does the work, and it reads like a coincidence and is
-  not one: the file allowed to import `child_process` is NOT allowed to contain a
+  not one: the runner, allowed to import `child_process`, is NOT allowed to contain a
   toolchain word, so the program it spawns cannot be a literal it wrote — it can
-  only be `argv[0]` of a plan that came out of the table.** The one file
-  permitted to spawn is the one file that may not know what it is spawning. The
+  only be `argv[0]` of a plan that came out of the table.** The runner
+  may spawn a tool and may not know which tool it is spawning. The
   fifth rule, `toolchain-name` (`colcon|ros2|gazebo|docker|wsl\.exe`), is
   vocabulary and not security — a file that NAMES a tool is not a file that runs
   one — so it has many allowlist entries, each with its reason beside it in the

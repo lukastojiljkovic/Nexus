@@ -1,7 +1,12 @@
 import { foldSearchText } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
-import { createModuleRegistry } from "../../shared/modules.js";
+import { createModuleRegistry, kitManifest } from "../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY, visibleModuleSet } from "../../shared/moduleVisibility.js";
+import {
+  SYNC_HELD_SETTINGS_CARD_IDS,
+  isSettingsCardHeld,
+} from "../../shared/syncHold.js";
 import { moduleSettingsDeclarations, settingsEntryId } from "./moduleSettings.js";
 import {
   buildSettingsIndex,
@@ -14,7 +19,7 @@ import {
   type SettingsSearchEntry,
   type SettingsSectionId,
 } from "./settingsSearch.js";
-import { strings } from "./strings.js";
+import { activeLocale, strings } from "./strings.js";
 
 /**
  * SET-014's filter index. Everything here is pure — no storage, no clock, no
@@ -34,9 +39,45 @@ import { strings } from "./strings.js";
 function s(): typeof strings.settings {
   return strings.settings;
 }
-const INDEX = buildSettingsIndex(createModuleRegistry());
+/**
+ * The device's visible set for an arrangement nothing has touched (ADR-101) —
+ * the app as it ships, which is what this file's expectations describe. A
+ * module the user HIDES leaves the index entirely, which its own case below
+ * states.
+ */
+const REGISTRY = createModuleRegistry();
+const VISIBLE = visibleModuleSet(REGISTRY, DEFAULT_SHELL_VISIBILITY);
+const INDEX = buildSettingsIndex(REGISTRY, VISIBLE);
 const ENTRIES = INDEX.entries;
-const SECTION_IDS = Object.keys(s().sectionTitle) as SettingsSectionId[];
+/** The sections a DISCOVERED module claims for its own card (ADR-090): its module id, which is by definition not a key of the shell's `sectionTitle`. */
+const KIT_SECTION_IDS = moduleSettingsDeclarations(REGISTRY)
+  .filter(({ panel }) => typeof panel.titleKey !== "string")
+  .map(({ moduleId }) => moduleId)
+  .filter((moduleId) => VISIBLE.has(moduleId));
+/** Every module id a card declares — the ids `sectionTitle` carries a title FOR, rather than a shell card of its own. */
+const DECLARED_MODULE_IDS = new Set(
+  moduleSettingsDeclarations(REGISTRY).map((declaration) => declaration.moduleId),
+);
+/**
+ * Every section the page can show: the shell's own table plus the discovered
+ * ones. The union rather than one list, because the two halves are statements
+ * about different things — a compiled-in module's card claims a heading the
+ * shell already carries, and a kit module brings its own. A key a MODULE claims
+ * is that module's card, so it is a section only while the module is shown
+ * (ADR-101) — a hidden module's card is not drawn, so it cannot be searched to.
+ */
+const SECTION_IDS = [
+  ...(Object.keys(s().sectionTitle) as SettingsSectionId[]).filter(
+    (id) => !DECLARED_MODULE_IDS.has(id) || VISIBLE.has(id),
+  ),
+  ...KIT_SECTION_IDS,
+] as SettingsSectionId[];
+/**
+ * The sections the index is expected to hold: every section above
+ * minus the cards whose work is ON HOLD. The full list is kept beside it so the
+ * test below can pin that the difference is exactly the hold's own ids.
+ */
+const VISIBLE_SECTION_IDS = SECTION_IDS.filter((id) => !isSettingsCardHeld(id));
 
 /** The page's own call shape: a raw string in, a result out. */
 function search(query: string): ReturnType<typeof matchSettings> {
@@ -74,13 +115,13 @@ describe("foldSettingsQuery", () => {
 describe("matchSettings with nothing typed", () => {
   it("keeps every section and highlights nothing", () => {
     const result = matchSettings(INDEX, []);
-    expect([...result.sections].sort()).toEqual([...SECTION_IDS].sort());
+    expect([...result.sections].sort()).toEqual([...VISIBLE_SECTION_IDS].sort());
     expect(result.hits.size).toBe(0);
   });
 
   it("treats an all-whitespace query as nothing typed", () => {
     const result = search("   ");
-    expect(result.sections.size).toBe(SECTION_IDS.length);
+    expect(result.sections.size).toBe(VISIBLE_SECTION_IDS.length);
     expect(result.hits.size).toBe(0);
   });
 });
@@ -126,7 +167,7 @@ describe("matchSettings", () => {
 
   it("drops every section that neither matched itself nor holds a match", () => {
     const result = search("preimenuj");
-    for (const sectionId of SECTION_IDS) {
+    for (const sectionId of VISIBLE_SECTION_IDS) {
       if (sectionId === "profile") continue;
       expect(result.sections.has(sectionId), sectionId).toBe(false);
     }
@@ -261,26 +302,62 @@ describe("buildSettingsIndex", () => {
     // card CLAIMS its shell id rather than adding a seventeenth section.
     const sections = INDEX.sections;
     expect(new Set(sections.map((section) => section.id)).size).toBe(sections.length);
-    expect([...sections.map((section) => section.id)].sort()).toEqual([...SECTION_IDS].sort());
+    expect([...sections.map((section) => section.id)].sort()).toEqual(
+      [...VISIBLE_SECTION_IDS].sort(),
+    );
     for (const section of sections) {
+      // A discovered module's card is titled by its own declaration (ADR-090),
+      // so the shell's table has nothing to say about it — the expectation is
+      // the pair it declared, read in the language being read.
+      const kit = kitManifest(section.id);
+      if (kit !== undefined) {
+        expect(section.title, section.id).toBe(kit.copy?.name[activeLocale()]);
+        continue;
+      }
       expect(section.title, section.id).toBe(
         s().sectionTitle[section.id as keyof typeof strings.settings.sectionTitle],
       );
     }
   });
 
-  it("covers every registered module, in the gallery's own grouping order", () => {
+  it("drops a card whose work is ON HOLD, and every control filed under it", () => {
+    // „Hidden" has to mean absent, not merely unmatched: a section the index
+    // still holds would keep the card's title in the query space and could
+    // steer a reader to a card the page does not draw.
+    expect(SECTION_IDS.length).toBeGreaterThan(VISIBLE_SECTION_IDS.length);
+    expect(SECTION_IDS.filter((id) => !VISIBLE_SECTION_IDS.includes(id))).toEqual([
+      ...SYNC_HELD_SETTINGS_CARD_IDS,
+    ]);
+    for (const heldId of SYNC_HELD_SETTINGS_CARD_IDS) {
+      expect(INDEX.sections.map((section) => section.id)).not.toContain(heldId);
+      expect(ENTRIES.filter((entry) => entry.section === heldId)).toEqual([]);
+    }
+  });
+
+  it("covers every VISIBLE module, in the gallery's own grouping order", () => {
     const registry = createModuleRegistry();
-    const expected = [...registry.byCategory()].flatMap(([, members]) =>
-      members.map((manifest) => moduleEntryId(manifest.id)),
+    const expected = [...registry.byGroup()].flatMap(([, members]) =>
+      members
+        .filter((manifest) => VISIBLE.has(manifest.id))
+        .map((manifest) => moduleEntryId(manifest.id)),
     );
-    const actual = buildSettingsIndex(registry)
+    const actual = buildSettingsIndex(registry, VISIBLE)
       .entries.filter((entry) => entry.section === "modules")
       .map((entry) => entry.id);
-    // The „Moduli“ card is now nothing but modules: ADR-065's „ponovo pokreni
-    // upitnik“ row moved to „Kako je Nexus podešen za tebe“ when ADR-086 made
+    // The „Prikaz" card is nothing but modules: ADR-065's „ponovo pokreni
+    // upitnik" row moved to „Kako je Nexus podešen za tebe" when ADR-086 made
     // the questionnaire about more than this gallery.
-    expect(actual).toEqual(expected);
+    // The section also carries the card's OWN entry (ADR-101): its title is
+    // „Prikaz" now, and „moduli" — the word the category and the old gallery
+    // carried — has to keep finding it.
+    expect(actual.filter((id) => id !== "modules-display")).toEqual(expected);
+    expect(actual[0]).toBe("modules-display");
+    // And a module this device hides is gone from the filter too (ADR-101):
+    // the card its entry would steer to is not drawn, so the hit leads
+    // nowhere. The switch that brings the module back is the „Prikaz" card,
+    // whose own entry names every module the build has, hidden or not.
+    expect(actual).not.toContain(moduleEntryId("priv"));
+    expect(actual).not.toContain(moduleEntryId("pro"));
   });
 
   it("labels a module row with the sidebar's name and keywords it with its description", () => {
@@ -308,12 +385,15 @@ describe("buildSettingsIndex", () => {
 
   it("derives one entry per declared control, in registry then declaration order", () => {
     const registry = createModuleRegistry();
-    const expected = moduleSettingsDeclarations(registry).flatMap(({ moduleId, panel }) =>
+    // Only the modules this device SHOWS contribute (ADR-101), so the
+    // declaration list is narrowed through the same predicate the page uses.
+    const declared = moduleSettingsDeclarations(registry).filter(({ moduleId }) =>
+      VISIBLE.has(moduleId),
+    );
+    const expected = declared.flatMap(({ moduleId, panel }) =>
       panel.controls.map((control) => settingsEntryId(moduleId, control.key)),
     );
-    const declaredSections = new Set(
-      moduleSettingsDeclarations(registry).map((declaration) => declaration.moduleId),
-    );
+    const declaredSections = new Set(declared.map((declaration) => declaration.moduleId));
     const actual = ENTRIES.filter((entry) => declaredSections.has(entry.section)).map(
       (entry) => entry.id,
     );
@@ -326,9 +406,6 @@ describe("buildSettingsIndex", () => {
       "calendar:semester-dates",
       "notes:width",
       "notes:markdown",
-      "priv:auto-lock",
-      "priv:lock-minimize",
-      "priv:kit-status",
       "files:view",
       "study:retention",
       "study:new-per-day",
@@ -344,6 +421,51 @@ describe("buildSettingsIndex", () => {
       "focus:long-break-minutes",
       "focus:cycles",
       "tools:default-vat-rate",
+      // The first DISCOVERED card's one control (ADR-090), last for the same
+      // reason its section is: a kit module registers after every compiled-in
+      // one. Its label is its own `{ sr, en }` pair, so the assertion above about
+      // `strings` paths does not apply to it.
+      "timers:sound-on-end",
+      // And the second discovered card's one control, for the same reason.
+      "culture:prompt-past-plans",
+      // The car service book's two thresholds.
+      "car:due-soon-days",
+      "car:due-soon-distance",
+      "pantry:expiry-window",
+      // The second DISCOVERED card's one control (ADR-090), last for the same
+      // reason its section is.
+      "cookbook:unit-system",
+      // The second discovered card's control, for the same reason and in the
+      // same place: it declares its own `{ sr, en }` pair rather than a
+      // `strings` path.
+      "recorder:countdown",
+      // The second DISCOVERED card's two controls (CALC), last for the same
+      // reason its section is.
+      "calculator:angle-mode",
+      "calculator:number-mode",
+      // SIGNALS' three, declared as pairs too: the two Morse preferences and the
+      // tuner's reference.
+      "signals:morse-speed",
+      "signals:morse-pitch",
+      "signals:tuner-a4",
+      // The second DISCOVERED card's two controls (ADR-090).
+      "translator:direction",
+      "translator:recent",
+      // And the assistant's three (ADR-106), declared as pairs in its own
+      // manifest: the default tier, the web-search consent and the knowledge
+      // index's statement of fact.
+      "assistant:tier",
+      "assistant:web-search",
+      "assistant:knowledge",
+      // The second DISCOVERED card, whose one control is a `fact`: the list of
+      // paths this machine opened. It is indexable and has nothing to set.
+      "workshop:recent-files",
+      // The puzzles' one control, and the board games' one.
+      "puzzles:check-while-typing",
+      "boards:default-level",
+      // And the astronomy corner's, the last discovered card this build
+      // registers: the place the sky is drawn for.
+      "astronomy:place",
     ]);
   });
 
@@ -355,7 +477,6 @@ describe("buildSettingsIndex", () => {
     expect(entryById(settingsEntryId("calendar", "semester-dates")).label).toBe(
       s().calendar.datesLabel,
     );
-    expect(entryById(settingsEntryId("priv", "kit-status")).label).toBe(s().priv.caption);
   });
 
   it("folds a choice's option labels into its keywords, so nobody spells them twice", () => {
@@ -367,11 +488,14 @@ describe("buildSettingsIndex", () => {
     expect(blocked.keywords).toContain(s().tasks.blockedInTodayOptions.prikazi);
   });
 
-  it("indexes a switched-off module's controls all the same — the flags are the page's question, not the filter's", () => {
-    // PRIV ships disabled, and its card is still reachable by search: a hit may
-    // steer to a section that is not on the page, exactly as a disabled
-    // module's own gallery row already does.
-    expect(ENTRIES.some((entry) => entry.section === "priv")).toBe(true);
+  it("takes a HIDDEN module's controls out of the index (ADR-101)", () => {
+    // PRIV ships off, so the shipped arrangement hides it — and its controls go
+    // with it: a hit that steered to a card the page does not draw is the one
+    // failure a filter can produce that reads as a page bug. What is left
+    // answering for a hidden module is the „Prikaz" card's own entry, which
+    // names every module the build has.
+    expect(ENTRIES.some((entry) => entry.section === "priv")).toBe(false);
+    expect(ENTRIES.some((entry) => entry.id === "modules-display")).toBe(true);
   });
 
   it("leaves no section without at least one entry — a card must be reachable by search", () => {
@@ -405,8 +529,8 @@ describe("buildSettingsIndex", () => {
   });
 
   it("is rebuilt per call, so the registry it was given is the one it describes", () => {
-    const first = buildSettingsIndex(createModuleRegistry());
-    const second = buildSettingsIndex(createModuleRegistry());
+    const first = buildSettingsIndex(createModuleRegistry(), VISIBLE);
+    const second = buildSettingsIndex(createModuleRegistry(), VISIBLE);
     expect(first).not.toBe(second);
     expect(first.entries.map((entry) => entry.id)).toEqual(second.entries.map((entry) => entry.id));
     expect(first.sections.map((section) => section.id)).toEqual(

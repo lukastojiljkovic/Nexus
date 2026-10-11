@@ -1004,6 +1004,44 @@ function wallToInstant(wall: WallTime, timeZone: string): Instant | null {
   return best === null ? null : makeInstant(best);
 }
 
+/**
+ * The instant at which a clock in `timeZone` reads this wall time, as epoch
+ * milliseconds — or `null` when no such instant exists. The inverse of
+ * `zonedFields`, and the same conversion `nextFireTimes` uses; both
+ * daylight-saving edges are `wallToInstant`'s and are documented there: a wall
+ * time inside a skipped hour answers `null`, and one inside a repeated hour
+ * answers its EARLIER occurrence.
+ *
+ * Exported because `miniapps/worldClock.ts`'s meeting finder turns local working
+ * hours into UTC intervals. A second copy of that arithmetic would be written,
+ * by anyone reading `Intl`'s documentation rather than this file, in the obvious
+ * one-pass form — which is wrong on the repeated hour.
+ */
+export function instantFromWall(
+  wall: {
+    readonly year: number;
+    readonly month: number;
+    readonly day: number;
+    readonly hour?: number;
+    readonly minute?: number;
+    readonly second?: number;
+  },
+  timeZone: string,
+): number | null {
+  const instant = wallToInstant(
+    {
+      year: wall.year,
+      month: wall.month,
+      day: wall.day,
+      hour: wall.hour ?? 0,
+      minute: wall.minute ?? 0,
+      second: wall.second ?? 0,
+    },
+    timeZone,
+  );
+  return instant === null ? null : instant.epochMs;
+}
+
 // ---------------------------------------------------------------------------
 // Serbian plural arithmetic
 // ---------------------------------------------------------------------------
@@ -1455,6 +1493,16 @@ const CRON_FIELD_LABELS_SR: Readonly<Record<CronFieldName, string>> = {
   dayOfWeek: "dan u nedelji",
 };
 
+/** The same six names in English — a refusal is written in both, and the surface picks. */
+const CRON_FIELD_LABELS_EN: Readonly<Record<CronFieldName, string>> = {
+  second: "second",
+  minute: "minute",
+  hour: "hour",
+  dayOfMonth: "day of month",
+  month: "month",
+  dayOfWeek: "day of week",
+};
+
 /** The `@`-macros crontab defines, each with the five-field expression it stands for. */
 export const CRON_MACROS: Readonly<Record<string, string>> = {
   "@yearly": "0 0 1 1 *",
@@ -1481,8 +1529,18 @@ export interface CronError {
   readonly field: CronFieldName | null;
   /** The exact text refused, so a surface can point at it. */
   readonly token: string;
-  /** Serbian, and it always names the field — a refusal that does not is one you have to bisect for. */
-  readonly message: string;
+  /**
+   * The refusal in Serbian, and it always names the field — a refusal that does
+   * not is one you have to bisect for.
+   *
+   * Both languages are built here rather than at the surface, because the
+   * sentence interpolates the field's name and the numbers a field accepts,
+   * and a surface that re-composed it would be a second copy of the arithmetic
+   * that decided the refusal in the first place.
+   */
+  readonly messageSr: string;
+  /** The same sentence in English, under {@link messageSr}'s rule. */
+  readonly messageEn: string;
 }
 
 /** A parsed crontab expression: every field expanded to the values it matches. */
@@ -1511,9 +1569,10 @@ function cronFailure(
   code: CronError["code"],
   field: CronFieldName | null,
   token: string,
-  message: string,
+  messageSr: string,
+  messageEn: string,
 ): CronParseResult {
-  return { ok: false, error: { code, field, token, message } };
+  return { ok: false, error: { code, field, token, messageSr, messageEn } };
 }
 
 /** A number or a three-letter name, resolved against a field's vocabulary; `null` when it is neither. */
@@ -1534,32 +1593,55 @@ function isCronError(value: ParsedField | CronError): value is CronError {
 
 function parseCronField(text: string, field: CronFieldName): ParsedField | CronError {
   const label = CRON_FIELD_LABELS_SR[field];
+  const labelEn = CRON_FIELD_LABELS_EN[field];
   const { min, max, names, nameBase } = CRON_FIELD_RANGES[field];
-  const bad = (code: CronError["code"], token: string, message: string): CronError => ({
-    code,
-    field,
-    token,
-    message,
-  });
+  const bad = (
+    code: CronError["code"],
+    token: string,
+    messageSr: string,
+    messageEn: string,
+  ): CronError => ({ code, field, token, messageSr, messageEn });
 
   if (text.includes("?")) {
     if (field !== "dayOfMonth" && field !== "dayOfWeek") {
-      return bad("syntax", text, `Znak „?“ sme samo u poljima za dan; polje „${label}“ ga ne prima.`);
+      return bad(
+        "syntax",
+        text,
+        `Znak „?“ sme samo u poljima za dan; polje „${label}“ ga ne prima.`,
+        `The “?” character is allowed only in the day fields; the “${labelEn}” field does not take it.`,
+      );
     }
     // „?" means „no opinion about this field"; combining it with anything else in
     // the same field is a contradiction rather than a shorthand.
     if (text !== "?") {
-      return bad("syntax", text, `Znak „?“ u polju „${label}“ mora stajati sam.`);
+      return bad(
+        "syntax",
+        text,
+        `Znak „?“ u polju „${label}“ mora stajati sam.`,
+        `The “?” character in the “${labelEn}” field must stand alone.`,
+      );
     }
   }
 
   const values = new Set<number>();
   for (const item of text.split(",")) {
-    if (item === "") return bad("syntax", text, `Polje „${label}“ ima praznu stavku u listi.`);
+    if (item === "") {
+      return bad(
+        "syntax",
+        text,
+        `Polje „${label}“ ima praznu stavku u listi.`,
+        `The “${labelEn}” field has an empty item in its list.`,
+      );
+    }
 
     const slices = item.split("/");
     if (slices.length > 2) {
-      return bad("syntax", item, `Polje „${label}“ ima više od jednog koraka u „${item}“.`);
+      return bad(
+        "syntax",
+        item,
+        `Polje „${label}“ ima više od jednog koraka u „${item}“.`,
+        `The “${labelEn}” field has more than one step in “${item}”.`,
+      );
     }
     const [rangeText = "", stepText] = slices;
 
@@ -1570,6 +1652,7 @@ function parseCronField(text: string, field: CronFieldName): ParsedField | CronE
           "step",
           item,
           `Korak u polju „${label}“ mora biti ceo broj veći od nule, a dobio je „${stepText}“.`,
+          `The step in the “${labelEn}” field must be a whole number greater than zero, and it was given “${stepText}”.`,
         );
       }
       step = Number(stepText);
@@ -1585,33 +1668,50 @@ function parseCronField(text: string, field: CronFieldName): ParsedField | CronE
       const start = bounds.length === 2 ? cronValue(bounds[0] ?? "", names, nameBase) : null;
       const end = bounds.length === 2 ? cronValue(bounds[1] ?? "", names, nameBase) : null;
       if (start === null || end === null) {
-        return bad("syntax", item, `Polje „${label}“ ne razume opseg „${rangeText}“.`);
+        return bad(
+          "syntax",
+          item,
+          `Polje „${label}“ ne razume opseg „${rangeText}“.`,
+          `The “${labelEn}” field does not understand the range “${rangeText}”.`,
+        );
       }
       if (start < min || start > max || end < min || end > max) {
         return bad(
           "range",
           item,
           `Polje „${label}“ prihvata ${min}–${max}, a dobilo je „${rangeText}“.`,
+          `The “${labelEn}” field accepts ${min}–${max}, and it was given “${rangeText}”.`,
         );
       }
       if (start > end) {
         // Vixie cron does not wrap a range around the end of a field and neither
         // does this: „22-4" would have to mean either nothing or two ranges, and
         // guessing which would silently change a schedule.
-        return bad("range-order", item, `Opseg u polju „${label}“ ide unazad: „${rangeText}“.`);
+        return bad(
+          "range-order",
+          item,
+          `Opseg u polju „${label}“ ide unazad: „${rangeText}“.`,
+          `The range in the “${labelEn}” field runs backwards: “${rangeText}”.`,
+        );
       }
       from = start;
       to = end;
     } else {
       const value = cronValue(rangeText, names, nameBase);
       if (value === null) {
-        return bad("syntax", item, `Polje „${label}“ ne razume „${rangeText}“.`);
+        return bad(
+          "syntax",
+          item,
+          `Polje „${label}“ ne razume „${rangeText}“.`,
+          `The “${labelEn}” field does not understand “${rangeText}”.`,
+        );
       }
       if (value < min || value > max) {
         return bad(
           "range",
           item,
           `Polje „${label}“ prihvata ${min}–${max}, a dobilo je „${rangeText}“.`,
+          `The “${labelEn}” field accepts ${min}–${max}, and it was given “${rangeText}”.`,
         );
       }
       from = value;
@@ -1646,7 +1746,9 @@ function parseCronField(text: string, field: CronFieldName): ParsedField | CronE
  */
 export function parseCron(text: string): CronParseResult {
   const trimmed = text.trim();
-  if (trimmed === "") return cronFailure("empty", null, text, "Cron izraz je prazan.");
+  if (trimmed === "") {
+    return cronFailure("empty", null, text, "Cron izraz je prazan.", "The cron expression is empty.");
+  }
 
   let macro: string | null = null;
   let body = trimmed;
@@ -1658,11 +1760,18 @@ export function parseCron(text: string): CronParseResult {
         null,
         trimmed,
         `„@reboot“ se pokreće pri podizanju sistema i nema vreme okidanja.`,
+        `“@reboot” runs at boot and has no fire time.`,
       );
     }
     const expansion = CRON_MACROS[key];
     if (expansion === undefined) {
-      return cronFailure("unknown-macro", null, trimmed, `Nepoznat makro „${trimmed}“.`);
+      return cronFailure(
+        "unknown-macro",
+        null,
+        trimmed,
+        `Nepoznat makro „${trimmed}“.`,
+        `Unknown macro “${trimmed}”.`,
+      );
     }
     macro = key;
     body = expansion;
@@ -1675,6 +1784,7 @@ export function parseCron(text: string): CronParseResult {
       null,
       trimmed,
       `Cron izraz mora imati 5 ili 6 polja, a ima ${parts.length}.`,
+      `A cron expression must have 5 or 6 fields, and this one has ${parts.length}.`,
     );
   }
   const fieldCount = parts.length === 6 ? 6 : 5;

@@ -930,24 +930,6 @@
   white-space: nowrap;
 }
 
-/* --- The undo bar --------------------------------------------------------
-   The tasks page's own recipe, because it is the same promise. */
-.fin__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border-subtle);
-  border-radius: var(--nx-radius-md);
-}
-.fin__undo-text {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
-
 /* --- The settings card's narrow fields ------------------------------------
    Four fields holding three or four characters, sized to their own content
    rather than stretched across a card — a full-width input over a two-digit
@@ -1310,23 +1292,6 @@
   display: flex;
   flex-direction: column;
   align-self: stretch;
-}
-
-/* The single-slot undo bar, the FIN/TASK recipe outright: one offer at a time,
-   above both sections, because a deleted habit is gone from each of them. */
-.hab__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-}
-.hab__undo-text {
-  flex: 1;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
 }
 
 /* A row: the habit's swatch dot in the leading slot, then its name and its two
@@ -1698,15 +1663,6 @@
   background: var(--nx-surface);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-lg);
-}
-.hab__form-title {
-  font-size: var(--nx-font-size-body);
-  font-weight: var(--nx-font-weight-semibold);
-  color: var(--nx-text);
-}
-.hab__form-actions {
-  display: flex;
-  gap: var(--nx-space-2);
 }
 .hab__pair {
   display: flex;

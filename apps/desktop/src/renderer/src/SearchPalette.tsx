@@ -23,6 +23,7 @@ import {
   type ShortcutBindings,
 } from "./shortcuts.js";
 import { Kbd } from "./ShortcutsDialog.js";
+import { searchKindLabel } from "./moduleKit/labels.js";
 import { strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
@@ -708,7 +709,7 @@ export function SearchPalette({
                 they were meant to qualify. */}
             {showKind && (
               <div className="nx-eyebrow search__row-kind">
-                {strings.search.kindSingular[result.kind]}
+                {searchKindLabel(result.kind, false)}
               </div>
             )}
             <div className="search__row-title">
@@ -916,7 +917,7 @@ export function SearchPalette({
               aria-pressed={activeKinds.has(kind)}
               onClick={() => toggleChip(kind)}
             >
-              {strings.search.kindPlural[kind]}
+              {searchKindLabel(kind, true)}
             </Button>
           ))}
         </div>
@@ -951,7 +952,7 @@ export function SearchPalette({
               )
             : groupByKind(results).map(([kind, list]) => (
                 <div className="search__group" key={kind}>
-                  <div className="search__group-heading">{strings.search.kindPlural[kind]}</div>
+                  <div className="search__group-heading">{searchKindLabel(kind, true)}</div>
                   {list.map((result) => renderResultRow(result, false))}
                 </div>
               ))}

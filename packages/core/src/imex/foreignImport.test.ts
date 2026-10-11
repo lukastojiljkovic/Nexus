@@ -81,6 +81,7 @@ function emptyProfileData(): ProfileData {
     circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
+    modules: [],
   };
 }
 

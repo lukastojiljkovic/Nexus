@@ -1,0 +1,212 @@
+/**
+ * LABORATORIJA's own copy, in Serbian — the SHAPE every other locale of this
+ * module is checked against (ADR-090).
+ *
+ * **Why this is not in `strings.ts`.** The shell's table is part of the startup
+ * chunk and this module's page is not: a module that put its page copy there
+ * would pay for it on every launch, whether or not anybody ever opened the lab.
+ * So the module carries its own table, `copy.ts` registers it with the locale
+ * machinery the moment this chunk loads, and from that moment switching language
+ * rewrites these leaves in place exactly as it rewrites the shell's.
+ *
+ * English is `copy.en.ts`, typed `typeof sr` — one compile error per sentence
+ * left untranslated and one per key invented, which is how the two tables stay
+ * the same shape without anything checking them by hand.
+ *
+ * No `as const`: the literal type of a sentence is not something either locale
+ * should be pinned to, and `typeof sr` widened to `string` is exactly the shape
+ * `en` has to match. The two RECORD leaves (`endings`, `modes`, `kinds`,
+ * `timeDivisions`, `qualityNames`) are read by indexing them with a runtime tag —
+ * a `LineEnding`, a `WaveKind`, a fix quality — which is the shape every table
+ * of labels in this app has.
+ */
+export const sr = {
+  page: {
+    // The page's own header is the module's name, which the shell already draws
+    // from the manifest; this is the line under it.
+    subtitle: "Serijski port, baterija, ton i svetlo — instrumenti u jednoj sobi.",
+    loading: "Učitavanje…",
+  },
+  errors: {
+    load: "Laboratorija nije mogla da se učita.",
+    mutate: "Izmena nije sačuvana.",
+  },
+  serial: {
+    title: "Serijski port",
+    unsupported: "Ovaj Chromium ne izlaže Web Serial, pa port ne može da se otvori.",
+    noPort: "Nijedan port nije izabran",
+    portGeneric: "Serijski port",
+    usbDevice: "USB uređaj",
+    connected: "Povezan",
+    disconnected: "Nije povezan",
+    choosePort: "Izaberi port",
+    disconnect: "Prekini",
+    baud: "Brzina (baud)",
+    ending: "Kraj reda",
+    endings: {
+      crlf: "CRLF (kako Arduino štampa)",
+      lf: "LF",
+      none: "Bez kraja reda",
+    },
+    mode: "Tumačenje",
+    modes: {
+      terminal: "Terminal",
+      nmea: "NMEA GPS",
+      csv: "CSV senzori",
+    },
+    hex: "Hex prikaz",
+    refused: "Port nije otvoren — izbor je otkazan ili ga je zauzela druga aplikacija.",
+    terminalLabel: "Prikaz serijskog porta",
+    hidden: "Prikaz je skraćen na poslednje linije.",
+    saveLog: "Sačuvaj log",
+    clear: "Očisti prikaz",
+    savedTo: "Sačuvano u",
+    fixTitle: "GPS pozicija",
+    fixNone: "Još nema verodostojne rečenice sa pozicijom.",
+    latitude: "Geografska širina",
+    longitude: "Geografska dužina",
+    satellites: "Satelita",
+    quality: "Kvalitet",
+    utcTime: "UTC vreme",
+    gpsDate: "Datum",
+    qualityNone: "Prijemnik još nije stekao poziciju.",
+    qualityNames: {
+      none: "Nema",
+      gps: "GPS",
+      dgps: "Diferencijalni",
+      pps: "PPS",
+      rtk: "RTK",
+      floatRtk: "RTK (plutajući)",
+      estimated: "Procenjeno",
+      manual: "Ručno",
+      simulation: "Simulacija",
+    },
+    useAsLocation: "Koristi kao moju lokaciju",
+    locationIs: "Lokacija uređaja:",
+    forgetLocation: "Zaboravi",
+    csvTitle: "Dnevnik senzora",
+    columnsFound: "Kolone iz zaglavlja",
+    logName: "Naziv dnevnika",
+    createLog: "Napravi dnevnik",
+    logSelect: "Dnevnik",
+    noLog: "Nije izabran",
+    column: "Kolona",
+    startLogging: "Zapisuj",
+    stopLogging: "Zaustavi",
+    logging: "Zapisuje",
+    written: "Broj zapisanih očitavanja:",
+    badLine: "Linija nije pročitana:",
+    chartDescription: "Očitavanja kolone",
+    chartEmpty: "Potrebna su bar dva očitavanja da bi se nacrtao tok.",
+    logsEmpty: "Još nema dnevnika",
+    logsEmptyBody:
+      "Uključi CSV režim i pusti uređaj da prvo pošalje zaglavlje, pa dnevniku daj ime.",
+    columnsLabel: "Kolone",
+    readingsLabel: "Očitavanja",
+    newest: "Poslednje",
+    exportCsv: "Izvezi CSV",
+    removeLog: "Obriši",
+  },
+  battery: {
+    title: "Baterija",
+    read: "Pročitaj izveštaj",
+    live: "Trenutno:",
+    charging: "puni se",
+    onBattery: "na bateriji",
+    onMains: "na struji",
+    liveUnsupported: "Ovaj Chromium ne prijavljuje stanje baterije.",
+    timeout: "Čitanje izveštaja je isteklo.",
+    unavailable: "Windows ovog puta nije dao izveštaj o bateriji.",
+    none: "Ovaj računar ne prijavljuje bateriju.",
+    design: "Projektovani kapacitet",
+    full: "Puni kapacitet",
+    health: "Zdravlje",
+    cycles: "Ciklusi",
+    scanned: "Izveštaj od",
+    healthNote: "Odnos punog i projektovanog kapaciteta je iz same baterije, ne iz Nexus-a.",
+    usageTitle: "Skorašnja upotreba",
+  },
+  offgrid: {
+    title: "Van mreže — dnevni bilans",
+    empty: "Dodaj uređaje i njihovu snagu, pa se izračunava potrošnja i koliko traje baterija.",
+    deviceName: "Uređaj",
+    deviceWatts: "Snaga (W)",
+    deviceHours: "Sati dnevno",
+    addDevice: "Dodaj uređaj",
+    remove: "Ukloni",
+    batteryWh: "Baterija (Wh)",
+    depth: "Dubina pražnjenja",
+    sun: "Sati sunca",
+    days: "Dana zaliha",
+    perDay: "Potrošnja dnevno",
+    lasts: "Traje",
+    daysUnit: "dana",
+    bank: "Baterija za zalihu",
+    panel: "Potreban panel",
+    panelNote: "Panel se računa sa efikasnošću punjenja",
+    save: "Sačuvaj listu",
+    saved: "Sačuvano.",
+  },
+  tone: {
+    title: "Ton i osciloskop",
+    warning:
+      "Ton ide na zvučnike ili slušalice. Kreni tiho i pojačavaj polako — glasna i dugačka reprodukcija trajno oštećuje sluh.",
+    acknowledge: "Razumem da ton može da bude glasan.",
+    kind: "Oblik",
+    kinds: {
+      sine: "Sinus",
+      square: "Pravougaoni",
+      triangle: "Trougaoni",
+      sawtooth: "Testera",
+      white: "Beli šum",
+      pink: "Roze šum",
+    },
+    frequency: "Frekvencija (Hz)",
+    sweep: "Pređi preko opsega (20 Hz → 20 kHz)",
+    play: "Pusti",
+    stop: "Zaustavi",
+    playing: "Svira",
+    level: "Jačina",
+    micStart: "Uključi mikrofon",
+    micStop: "Isključi mikrofon",
+    micProblem: "Mikrofon nije otvoren — dozvola je odbijena ili ga nema.",
+    timeDiv: "Vreme po podeli",
+    timeDivisions: {
+      "0.5": "0,5 ms",
+      "1": "1 ms",
+      "2": "2 ms",
+      "5": "5 ms",
+      "10": "10 ms",
+    },
+    trigger: "Nivo okidanja",
+    frequencyReadout: "Frekvencija",
+    waveLabel: "Talasni oblik sa mikrofona",
+    spectrumLabel: "Spektar mikrofona",
+    inputNote:
+      "Ulaz zvučne kartice je naizmeničan i puna skala je oko 1 V efektivno (≈ 2,8 V od vrha do vrha): iznad toga ulaz seče, pa izvor prvo izmeri instrumentom i stavi razdelnik.",
+  },
+  light: {
+    title: "Svetlo",
+    lampMode: "Površina",
+    lampModes: {
+      white: "Belo svetlo",
+      red: "Crveno (noćni režim)",
+    },
+    intensity: "Jačina",
+    lampOn: "Uključi",
+    lampOff: "Isključi",
+    lampHint: "Lampa prekriva ceo prozor; izlazi se dugmetom ili tasterom Escape.",
+    lampLabel: "Lampa preko celog ekrana",
+    lampClose: "Zatvori",
+    lampEscape: "Escape zatvara lampu.",
+    morseTitle: "Morse lampica",
+    morseText: "Tekst",
+    morseWpm: "Brzina (reči u minuti)",
+    morseAcknowledge: "Razumem da lampica treperi i da treperenje može da smeta.",
+    morseReduced: "Sistem traži smanjenu animaciju, pa lampica ne treperi.",
+    morseStart: "Emituj",
+    morseStop: "Prekini",
+    morseTransliterated: "Poslato kao:",
+    morseTiming: "Tajming je ITU-R M.1677-1 (PARIS): crtica traje tri dit-a.",
+  },
+};

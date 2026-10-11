@@ -125,11 +125,15 @@ export class ProfileStore {
     this.selectMimeByHash = db.prepare(
       `SELECT picture_mime AS mime FROM profiles WHERE picture_hash = ? LIMIT 1`,
     );
-    // The five blob-naming tables, joined through their parents where the row
-    // carries no `profile_id` of its own — the delete-side counterpart of
-    // main's `blobRefCount` union (ADR-019/041/SET-001). UNION deduplicates.
-    // Deliberately NO liveness filter on the parents: a soft-deleted task's
-    // attachment row still holds its hash, and the cascade takes it too.
+    // Every blob-naming table, joined through its parent where the row carries
+    // no `profile_id` of its own — the delete-side counterpart of main's
+    // `blobRefCount` union (ADR-019/041/SET-001), which since ADR-108 counts the
+    // five kit modules' own tables too. UNION deduplicates. Deliberately NO
+    // liveness filter on the parents: a soft-deleted task's attachment row still
+    // holds its hash, and the cascade takes it too — and the same holds for a
+    // soft-deleted VISIT's photos, for the tracks a deleted listing was removed
+    // from (culture, migration 073), for a trashed recording and for a work
+    // taken off a library shelf.
     this.selectBlobHashes = db.prepare(
       `SELECT na.sha256 AS hash FROM note_attachments na
          JOIN notes n ON n.id = na.note_id WHERE n.profile_id = ?
@@ -140,6 +144,23 @@ export class ProfileStore {
        SELECT sa.sha256 FROM subject_attachments sa
          JOIN subjects s ON s.id = sa.subject_id WHERE s.profile_id = ?
        UNION
+      SELECT vp.sha256 FROM culture_visit_photos vp
+        JOIN culture_visits v ON v.id = vp.visit_id WHERE v.profile_id = ?
+      UNION
+      SELECT ct.sha256 FROM culture_tracks ct WHERE ct.profile_id = ?
+      UNION
+      SELECT c.sha256 FROM library_item_covers c
+        JOIN library_items i ON i.id = c.item_id WHERE i.profile_id = ?
+      UNION
+      SELECT r.photo_sha256 FROM cookbook_recipes r
+        WHERE r.profile_id = ? AND r.photo_sha256 IS NOT NULL
+      UNION
+      SELECT a.sha256 FROM service_attachments a
+        JOIN service_entries s ON s.id = a.service_id
+        JOIN vehicles v ON v.id = s.vehicle_id WHERE v.profile_id = ?
+      UNION
+      SELECT rec.sha256 FROM recordings rec WHERE rec.profile_id = ?
+      UNION
        SELECT background_hash FROM dashboard_settings
         WHERE profile_id = ? AND background_hash IS NOT NULL
        UNION
@@ -229,18 +250,36 @@ export class ProfileStore {
   }
 
   /**
-   * Every blob hash this profile's rows name, deduplicated, across all five
-   * blob-naming tables — soft-deleted parents included, since their attachment
+   * Every blob hash this profile's rows name, deduplicated, across every
+   * blob-naming table — soft-deleted parents included, since their attachment
    * rows still hold bytes the cascade is about to take. Main reads this BEFORE
    * `delete` and then runs `deleteBlobIfOrphaned` per hash against the
    * post-delete `blobRefCount`, which is what keeps a deleted profile from
    * leaking files without ever deleting one some other profile still shows.
+   *
+   * **The five kit modules are read here too** (ADR-108). Their cover images,
+   * recipe photos, receipts and recordings are rows in this same database, so
+   * deleting a profile cascades them away — a hash only they name is an orphan
+   * the moment the delete lands, and this list is the last chance to say so.
+   * It is the delete-side half of `ModuleContext.blobs`, and `blobRefCount`
+   * counts the same tables through the module hook, which is what makes removing
+   * one photo through main's GC safe in both directions.
    */
   blobHashes(profileId: string): string[] {
     return (
-      this.selectBlobHashes.all(profileId, profileId, profileId, profileId, profileId) as {
-        hash: string;
-      }[]
+      this.selectBlobHashes.all(
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+        profileId,
+      ) as { hash: string }[]
     ).map((row) => row.hash);
   }
 

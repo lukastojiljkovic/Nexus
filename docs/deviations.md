@@ -268,6 +268,28 @@ a `DOCKER_CONTEXT` pointing at another machine would make every path in the
 argv, and every answer about „is the container still there", be about a computer
 the user is not sitting at.
 
+### Amendment, 2026-10-09 — the updater starts the installer it verified
+
+- **Status:** recorded by Claude for the taskbar-pin fix Luka asked for on
+  2026-10-08; awaiting his confirmation in the pull request.
+- **What:** the update check's last step (ADR-089) starts the downloaded
+  installer from `apps/desktop/src/main/update/launch.ts` with
+  `--updated /S --force-run`, instead of `shell.openPath`. That is a second file
+  in the main process that starts a process.
+- **Why:** electron-builder's assisted NSIS installer keeps the existing shortcuts,
+  and the taskbar pin attached to them, only when it is started with `--updated`;
+  without it the old version's uninstaller deletes them. It reopens the app after
+  an update only when it is silent and given `--force-run`. `shell.openPath`
+  can pass no arguments.
+- **Why it stays inside this deviation's mitigations:** the program is the file
+  the update service downloaded, hashed while streaming and hashed again
+  immediately before the launch; the argv is a literal; there is no shell; the
+  renderer never names a path. `check:runner` allows `child-process` to that file
+  only, and `shell`, `exec-family`, `spawn-literal` and `toolchain-name` still
+  apply to it. A per-machine installation is elevated by the installer's own UAC
+  prompt (the template's silent-upgrade branch); a cancelled prompt leaves the old
+  version installed.
+
 ## DEV-008 — Releases ship without a code signature
 
 - **Date:** 2026-10-02 · **Status:** **confirmed by founder 2026-10-02**

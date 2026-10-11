@@ -1,0 +1,84 @@
+/* THE 3D SOLAR SYSTEM. Tokens exclusively — raw colour values are forbidden
+   outside @nexus/tokens, and this stylesheet is checked by the same gates the
+   shell's own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * Class prefix `solar__`, and `.solar` is the host: the PAGE gives it its
+ * height (a flex child of the astronomy page), which is the one thing CSS
+ * cannot know here.
+ *
+ * No `z-index` anywhere, and that is deliberate: the canvas is the viewport's
+ * first child and the label layer is absolutely positioned, so the labels paint
+ * above it by the ordinary painting order rather than by a number.
+ */
+
+.solar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.solar__viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 240px;
+  /* A drag on the canvas orbits the camera; it must not also scroll or zoom the
+     page, which is what a touch or a trackpad gesture would otherwise do. */
+  touch-action: none;
+}
+
+.solar__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.solar__labels {
+  position: absolute;
+  inset: 0;
+  /* The layer is a frame for the buttons; only they are clickable, so a drag
+     that starts on empty space still reaches the canvas underneath. */
+  pointer-events: none;
+}
+
+/* One body's name. It is a BUTTON, because clicking it selects that body — the
+   same thing clicking the sphere does. Its width is what the placement
+   arithmetic measures; `height` must stay equal to `LABEL_HEIGHT_PX` in
+   `labels.ts`, and `labels.test.ts` reads this file to keep the two together. */
+.solar__label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  height: 18px;
+  margin: 0;
+  padding: 1px var(--nx-space-2);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font-family: var(--nx-font-family-ui);
+  font-size: var(--nx-font-size-caption);
+  line-height: var(--nx-font-leading-tight);
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.solar__label:hover {
+  border-color: var(--nx-border-strong);
+}
+
+.solar__label:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 1px;
+}
+
+/* Selection is typographic here as everywhere else in the product: accent text
+   and weight. No fill, no glow — the border is the label's own, not a state. */
+.solar__label--selected {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-semibold);
+  border-color: var(--nx-accent);
+}

@@ -1,22 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { ModuleRegistry } from "../modules/registry.js";
-import type { ModuleCategory, ModuleManifest } from "../modules/manifest.js";
+import type { ModuleGroup, ModuleManifest } from "../modules/manifest.js";
 import { resolveEnabled } from "./flags.js";
 
 function mod(
   id: string,
   prefix: string,
-  category: ModuleCategory,
+  group: ModuleGroup,
   defaultEnabled: boolean,
 ): ModuleManifest {
-  return { id, prefix, category, defaultEnabled };
+  return { id, prefix, group, defaultEnabled };
 }
 
 function registry(): ModuleRegistry {
   const reg = new ModuleRegistry();
-  reg.register(mod("tasks", "TASK", "Core experience", true));
-  reg.register(mod("finance", "FIN", "Life hubs", false));
-  reg.register(mod("notes", "NOTE", "Content & knowledge", true));
+  reg.register(mod("tasks", "TASK", "plan", true));
+  reg.register(mod("finance", "FIN", "life", false));
+  reg.register(mod("notes", "NOTE", "knowledge", true));
   return reg;
 }
 

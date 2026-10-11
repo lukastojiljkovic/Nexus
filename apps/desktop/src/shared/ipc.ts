@@ -60,6 +60,7 @@ import type {
 // into naming a state the protocol cannot produce — or, worse, into omitting one
 // it can, which is a screen with no message for a case that happens.
 import type { AuthRefusal, DeviceRegisterRefusal, SyncEnableRefusal } from "@nexus/sync-transport";
+import type { NexusModules } from "./moduleApi.js";
 
 /** The only channels the preload bridge and the main handlers agree on. */
 /**
@@ -96,6 +97,13 @@ export const IpcChannel = {
   authCreateAdditional: "auth:create-additional",
   authRenameAccount: "auth:rename-account",
   authDeleteAccount: "auth:delete-account",
+  // ADR-110: how often the app asks for the passcode. Its own pair rather than
+  // fields on `auth:status`, because reading the setting is a Settings-card
+  // question and changing it is a passcode-verified action — and because
+  // `auth:status` is the first message of every launch, which must not grow a
+  // second reading of the account directory for a surface nobody has opened.
+  authUnlockPolicy: "auth:unlock-policy",
+  authSetUnlockPolicy: "auth:set-unlock-policy",
   profilesList: "profiles:list",
   profilesCreate: "profiles:create",
   // The demo profile, offered once at first run and never again — a second
@@ -1023,7 +1031,54 @@ export const IpcChannel = {
   // Main pushes this on every phase change so the About card and the update
   // notice watch instead of polling.
   updateChanged: "update:changed",
+  // Content packs (ADR-091). Five request channels and two events, and the
+  // load-bearing thing about all of them is what they do NOT carry: **no path
+  // ever crosses this bridge in either direction.** A pack is a folder chosen
+  // in a native dialog that MAIN shows, and `packs:inspect` is the only way one
+  // is ever named — the renderer learns what it holds and nothing about where
+  // it is. `packs:install` then takes no argument at all: it installs the
+  // candidate the last inspect left waiting, or refuses because there is none.
+  //
+  // `packs:verify` is its own channel on `elec:runner-detect`'s grounds: it is
+  // the expensive one (it re-reads every byte of a pack that may be twenty
+  // gigabytes) and it must not be something opening a card can accidentally
+  // trigger.
+  packsList: "packs:list",
+  packsInspect: "packs:inspect",
+  packsInstall: "packs:install",
+  packsRemove: "packs:remove",
+  packsVerify: "packs:verify",
+  // Main pushes the whole list when it changes and one progress row while a
+  // copy or a verify runs, so a card that stays open watches instead of
+  // polling a twenty-gigabyte operation.
+  packsChanged: "packs:changed",
+  packsProgress: "packs:progress",
+  // The catalogue and the downloads that start from it (ADR-103). Six
+  // request channels and one event, and the shape is the same as above in the
+  // one way that matters: the renderer names a PACK id, never a URL, a file, a
+  // host or a size. Every address a download reaches came out of a signed
+  // catalogue document that MAIN fetched and verified.
+  packsCatalogue: "packs:catalogue",
+  packsDownload: "packs:download",
+  packsDownloadPause: "packs:download-pause",
+  packsDownloadResume: "packs:download-resume",
+  packsDownloadCancel: "packs:download-cancel",
+  packsDownloadProgress: "packs:download-progress",
+  // The external-link rule (ADR-103). A verified https address handed to the
+  // USER'S browser, never to this process's network stack; the rule itself is a
+  // pure function in main, because `shell.openExternal` on a hostile string is
+  // the phishing primitive ADR-089 refused.
+  externalOpen: "external:open",
   appInfo: "app:info",
+  // The device's module arrangement (ADR-101). Device-level, like `network:*`
+  // and `cloud.json` before them: ONE setting for the whole app, not one per
+  // profile, because the rail, the launcher, the dashboard, the palette and the
+  // notification scheduler all have to agree about which modules this machine
+  // shows. `visibility:get` answers before any page is drawn; `visibility:set`
+  // records a whole arrangement (a switch, a move or a reset), validated in main
+  // against the live registry and written atomically.
+  visibilityGet: "visibility:get",
+  visibilitySet: "visibility:set",
 } as const;
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel];
@@ -1141,6 +1196,90 @@ export type AuthResult =
   | { ok: true; recoveryCode?: string }
   | { ok: false; reason: AuthErrorReason; lockedForMs?: number };
 
+/**
+ * How often the app asks for the passcode (ADR-110, Luka 2026-10-10).
+ *
+ * `"every-time"` is the default and the only value the app shipped before this
+ * existed. Every other member is a deliberate weakening, and its meaning is
+ * exact: after a successful passcode unlock the data key may live in the OS
+ * keystore for that long, so a launch inside the window opens without the
+ * prompt. `"never"` has no expiry at all, which is why it is a member of its own
+ * rather than a very large number.
+ *
+ * The union is the WIRE vocabulary, so it is declared here and in one place:
+ * main validates every payload against it, and the renderer keys its option
+ * labels by it, which is what makes a seventh setting a compile error on both
+ * sides rather than a value the UI cannot draw.
+ */
+export const UNLOCK_SETTINGS = ["every-time", "1h", "8h", "1d", "7d", "never"] as const;
+
+export type UnlockSetting = (typeof UNLOCK_SETTINGS)[number];
+
+/** The default, and the value `readStatus`-time absence of the policy file means. */
+export const DEFAULT_UNLOCK_SETTING: UnlockSetting = "every-time";
+
+/**
+ * Whether choosing `setting` has to be proved with the passcode (ADR-110 §1).
+ *
+ * The rule is the brief's, taken literally: anything weaker than the DEFAULT
+ * asks once more, and the default is „every time". The TARGET decides, not the
+ * direction of the change — moving from „never" to „after 1 hour" is a
+ * weaker-than-default state being entered, and it is asked for. Going back to
+ * „every time" needs nothing, which is also the case where a passcode would
+ * prove nothing: that act only tightens the machine.
+ *
+ * Declared here because BOTH sides ask it: main decides whether to verify, and
+ * the Settings row decides whether to draw the passcode field — and a second
+ * statement of the rule is exactly how those two come to disagree.
+ */
+export function settingNeedsPasscode(setting: UnlockSetting): boolean {
+  return setting !== DEFAULT_UNLOCK_SETTING;
+}
+
+/**
+ * Minutes each setting remembers the data key for; `null` means "with no
+ * expiry" and `0` means "not at all". The minutes are here, beside the union,
+ * so that „after 1 hour" is written down once — main's expiry arithmetic and the
+ * copy the user reads can then never disagree about what a member means.
+ */
+export const UNLOCK_SETTING_MINUTES: Record<UnlockSetting, number | null> = {
+  "every-time": 0,
+  "1h": 60,
+  "8h": 8 * 60,
+  "1d": 24 * 60,
+  "7d": 7 * 24 * 60,
+  never: null,
+};
+
+/**
+ * Why the setting cannot be honoured on this machine (ADR-110 §3). `"keystore"`
+ * is `safeStorage.isEncryptionAvailable() === false`; `"plaintext-backend"` is
+ * Linux's `basic_text` backend, where `safeStorage` answers that encryption IS
+ * available and then encrypts with a hard-coded key — so the wrap would be a
+ * file anyone can read, which is worse than no wrap at all because it looks
+ * protected. The renderer names the reason beside the disabled row.
+ */
+export type UnlockSettingUnavailableReason = "keystore" | "plaintext-backend";
+
+/** The setting as the Settings card reads it: the value, and whether this machine can honour it. */
+export interface UnlockPolicy {
+  setting: UnlockSetting;
+  available: boolean;
+  /** Non-null exactly when `available` is false. */
+  reason: UnlockSettingUnavailableReason | null;
+}
+
+/**
+ * `auth:set-unlock-policy`'s outcome. It answers with the STORED policy rather
+ * than a bare `ok`, so the card never has to re-read what main just wrote, and
+ * with an `AuthErrorReason` because that is what the renderer already maps to
+ * copy (`wrongPasscode`, `throttled`, `keystoreUnavailable`) — the refusal is
+ * the same refusal as an unlock's, on purpose.
+ */
+export type UnlockPolicyResult =
+  | { ok: true; policy: UnlockPolicy }
+  | { ok: false; reason: AuthErrorReason; lockedForMs?: number };
+
 /** `label` names the account on the lock screen and is stored in plaintext (see `AccountSummary`); creation is refused outright once any account exists. */
 export interface AuthCreateRequest {
   label: string;
@@ -1226,9 +1365,20 @@ export interface Profile {
 }
 
 /**
- * Per-profile module enable/disable overrides, keyed by module id. Structurally
- * identical to `@nexus/core`'s `FlagState`; redeclared here so the wire contract
- * stays self-contained and the renderer never imports Node/DB code.
+ * What ONE profile has on, keyed by module id and by `pack:<id>`.
+ *
+ * Two kinds of key and two different owners, which ADR-101 made explicit: a
+ * `pack:` key is this profile's own row (a toolbox is an answer about the
+ * person, and the profile next door has its own), while a MODULE id is answered
+ * from the DEVICE's arrangement — one setting for the whole app, so `flags:get`
+ * lays it over the profile's rows and `flags:set` on a module id writes that
+ * file rather than a row. The questionnaire, its manual override and the
+ * profile plan read and write this map exactly as they always did; what changed
+ * is where a module's answer is stored.
+ *
+ * Structurally identical to `@nexus/core`'s `FlagState`; redeclared here so the
+ * wire contract stays self-contained and the renderer never imports Node/DB
+ * code.
  */
 export type FlagState = Record<string, boolean>;
 
@@ -6916,12 +7066,25 @@ export type ArchiveReadErrorCode =
  * assigns a core `ImportProblemCode` to this type, so a code added in core and
  * forgotten here is a compile error rather than a silent gap.
  *
- * `profile-kind-mismatch` is the one code the core parser can never produce:
- * it needs the TARGET profile, which only main knows (ADR-058). A restore
+ * `profile-kind-mismatch` is a code the core parser can never produce: it
+ * needs the TARGET profile, which only main knows (ADR-058). A restore
  * archive fits only its own KIND of profile — a business archive does not
  * restore into a personal profile, nor the reverse — so main's preview refuses
  * the pair by name. The foreign IMPORT deliberately has no such rule: an
  * import copies rows, and rows are rows whichever kind of profile wrote them.
+ *
+ * `unknown-module` is the second, and it needs the MODULE SET this build
+ * adopted (ADR-090): an archive's `data/modules.ndjson` may name a kit module
+ * this build has never heard of, and that module's payload is data the user
+ * would lose. Core carries such a row without judging it - it has no module
+ * registry - so the refusal is main's, raised at the PREVIEW, where the user
+ * still has a profile left to protect.
+ *
+ * `invalid-module-data` is the third and the second half of the same refusal: a
+ * module this build DOES have may still refuse the payload it is given (a
+ * version it does not know, a row that is not its shape). Each module's own
+ * `parse` is what says so, and it is run at the preview and again before any
+ * module writes, so this code reaches the user before they confirm either time.
  */
 export type RestoreProblemCode =
   | "missing-manifest"
@@ -6938,7 +7101,9 @@ export type RestoreProblemCode =
   | "invalid-ydoc"
   | "missing-ydoc"
   | "missing-blob"
-  | "profile-kind-mismatch";
+  | "profile-kind-mismatch"
+  | "unknown-module"
+  | "invalid-module-data";
 
 /** One thing wrong with an archive. `detail` is a machine-ish English fragment (a field name, an id) — never a sentence for a user; the renderer owns all Serbian copy. */
 export interface RestoreProblem {
@@ -7216,7 +7381,14 @@ export type ImportRecordType =
   | "circuit"
   | "circuit-chassis"
   | "circuit-part"
-  | "circuit-wire";
+  | "circuit-wire"
+  // The module kit's section (ADR-090, interchange `1.42.0`): one row per
+  // discovered module that had something to export. Core validates the row's
+  // shape and never its payload, and main refuses an id this build did not
+  // adopt or a payload the module itself will not take - so the type carries the
+  // record and the REFUSALS are `RestoreProblemCode`'s `unknown-module` and
+  // `invalid-module-data`, exactly as the comment there says.
+  | "module-data";
 
 /**
  * Why rows the archive carried are not in the plan. Mirrors `@nexus/core`'s
@@ -8653,12 +8825,18 @@ export type SyncAdoptView =
   | { outcome: "refused"; reason: SyncAdoptProblem };
 
 /**
- * The network mode (ADR-089), redeclared here rather than imported from
- * `main/net/offline.ts`: this contract may not depend on the main process, and
- * the two-member union is small enough that a drift would be a compile error at
- * every comparison. The spelling order is the choice screen's.
+ * The network mode (ADR-089, ADR-092), redeclared here rather than imported
+ * from `main/net/offline.ts`: this contract may not depend on the main process.
+ *
+ * Written as a VALUE with the type derived from it, which is the one form that
+ * cannot drift: main's IPC validator walks `NETWORK_MODES` and every comparison
+ * against `NetworkMode` typechecks, so a mode added here reaches both or
+ * neither. The order is the choice screen's, and it is also the meaning — each
+ * mode is a superset of the one before it.
  */
-export type NetworkMode = "offline" | "updates";
+export const NETWORK_MODES = ["offline", "updates", "downloads"] as const;
+
+export type NetworkMode = (typeof NETWORK_MODES)[number];
 
 /**
  * What the choice screen and the „Mreža i ažuriranja" card read.
@@ -8674,8 +8852,9 @@ export interface NetworkModeView {
   runningMode: NetworkMode;
   /**
    * Whether the updater may reach the network right now: the launch came up in
-   * „updates" AND the stored choice is still „updates". False the moment the
-   * user switches to offline, whatever a renderer believes.
+   * a mode that allows update checks — „updates", or „downloads", which
+   * contains it — AND the stored choice still names that same mode. False the
+   * moment the user switches to offline, whatever a renderer believes.
    */
   updatesActive: boolean;
   /** True when the stored choice differs from the running one: a restart is owed. */
@@ -8688,7 +8867,7 @@ export interface NetworkModeView {
 export interface UpdateOffer {
   readonly version: string;
   readonly notes: string;
-  /** False on Linux (open the release page) and on a release whose installer is missing or mistyped. */
+  /** False on Linux (open the release page), on a release whose installer is missing or mistyped, and in a portable build, which never installs (ADR-102). */
   readonly canInstall: boolean;
 }
 
@@ -8707,11 +8886,20 @@ export type UpdateProblem =
   | "unexpected"
   | "asset"
   | "signature"
-  | "hash";
+  | "hash"
+  | "portable";
 
 /** Everything the renderer is told about the update check. No key, no token, no asset URL. */
 export interface UpdateStateView {
   readonly mode: NetworkMode;
+  /**
+   * True when this launch runs from a portable build (ADR-102) — the marker
+   * file beside the executable. The check, the notice and the release-page link
+   * all work exactly as they do on an installed build; `offer.canInstall` is
+   * false, and the About card says why instead of offering a button main would
+   * refuse.
+   */
+  readonly portable: boolean;
   readonly phase: UpdatePhase;
   readonly offer: UpdateOffer | null;
   readonly problem: UpdateProblem | null;
@@ -8720,6 +8908,291 @@ export interface UpdateStateView {
   /** Epoch milliseconds of the last completed attempt, or null before the first. */
   readonly lastCheckedAt: number | null;
 }
+
+// --- content packs (ADR-091) -------------------------------------------------
+
+/**
+ * The six kinds of content a pack may carry. Redeclared from
+ * `main/packs/manifest.ts` rather than imported, on this file's usual grounds
+ * for a flat closed list — and it is the same six, because the manifest's
+ * parser is what refuses a seventh.
+ *
+ * `tool` (ADR-094) is the one kind whose manifest also carries a `tool` record
+ * — the program to run, and how to speak to it. That record is deliberately NOT
+ * on `InstalledPackView`: a renderer never starts a process and never needs to
+ * name one, so nothing about a tool crosses this bridge beyond the fact that the
+ * pack is one.
+ */
+export const PACK_KINDS = ["zim", "map", "dataset", "model", "content", "tool"] as const;
+export type PackKind = (typeof PACK_KINDS)[number];
+
+/**
+ * What a pack asks the app to say about it, mirroring
+ * `main/packs/manifest.ts`'s `PackNotice` for `PACK_KINDS`' reason: one flat
+ * closed list, and the manifest's parser is what refuses a second value.
+ */
+export const PACK_NOTICES = ["safety"] as const;
+export type PackNotice = (typeof PACK_NOTICES)[number];
+
+/** One string per language. Both are required: the copy is Serbian and English, always. */
+export interface PackText {
+  readonly sr: string;
+  readonly en: string;
+}
+
+/** Who made the content and under what terms. `attribution` is shown for every pack, always (CC BY-SA requires it). */
+export interface PackLicenceView {
+  readonly spdx: string;
+  readonly attribution: string;
+  readonly url: string;
+}
+
+/** Where the content came from. */
+export interface PackSourceView {
+  readonly name: string;
+  readonly url: string;
+}
+
+/** One installed pack, as the Packs card draws it. */
+export interface InstalledPackView {
+  readonly id: string;
+  readonly version: string;
+  readonly kind: PackKind;
+  readonly title: PackText;
+  readonly description: PackText;
+  readonly licence: PackLicenceView;
+  readonly source: PackSourceView;
+  /** What the app must say about this pack wherever it is read, or `null` (ADR-103). */
+  readonly notice: PackNotice | null;
+  /** Every file's size, added up, in bytes. */
+  readonly size: number;
+  readonly fileCount: number;
+  /** Epoch milliseconds of when this version landed. */
+  readonly installedAt: number;
+}
+
+/**
+ * A pack that has been verified and is waiting to be installed.
+ *
+ * Its own interface rather than an `InstalledPackView` with something added:
+ * `installedAt` has no meaning for a pack that is not installed yet, and a view
+ * that carried a zero there would be a number the card has to remember to
+ * ignore.
+ */
+export interface PackCandidateView {
+  readonly id: string;
+  readonly version: string;
+  readonly kind: PackKind;
+  readonly title: PackText;
+  readonly description: PackText;
+  readonly licence: PackLicenceView;
+  readonly source: PackSourceView;
+  /** The same disclaimer flag an installed pack carries (ADR-103). */
+  readonly notice: PackNotice | null;
+  /** What the manifest says the content will weigh, since it is not on disk here yet. */
+  readonly size: number;
+  readonly fileCount: number;
+  readonly minAppVersion: string;
+}
+
+/** Where a copy or a verify has got to. Pushed on `packs:progress`. */
+export interface PackProgress {
+  readonly id: string;
+  readonly phase: "copy" | "verify";
+  /** The file being read, as the manifest names it. */
+  readonly file: string;
+  readonly filesDone: number;
+  readonly filesTotal: number;
+  readonly bytesDone: number;
+  readonly bytesTotal: number;
+}
+
+/**
+ * Why a pack operation was refused, as machine codes.
+ *
+ * A code rather than prose, for `UpdateProblem`'s reason: the renderer maps each
+ * one to a sentence in its own language, and a sentence written here would be an
+ * English string crossing a boundary that exists in two. This is the ONE
+ * declaration of the vocabulary — `main/packs/errors.ts` imports it as the type
+ * of its refusals, so a code that exists on one side and not the other is a
+ * compile error rather than a card with a blank line on it.
+ *
+ * The set is deliberately closed and deliberately small. `"path-invalid"`
+ * carries a dozen path rules and names them in the log message instead, because
+ * a dozen codes would need a dozen sentences in each locale that all say "this
+ * pack names a file in a way this app will not touch"; the one thing the user
+ * can act on is that the pack is not acceptable.
+ */
+export type PackRefusalCode =
+  /** The chosen folder has no readable `pack.json`. */
+  | "not-a-pack"
+  /** The chosen path is not a directory. */
+  | "not-a-directory"
+  /** `pack.json` is not JSON, is not an object, or carries a field this format does not define. */
+  | "manifest-unreadable"
+  /** `pack.json` is larger than a manifest can be. */
+  | "manifest-too-large"
+  /** `pack.json.sig` is missing, is too large, or is not this key's signature over the manifest. */
+  | "signature"
+  /** `format` is not a version this build knows. */
+  | "format-unknown"
+  /** `id` is not kebab-case, is too long, or is not a usable folder name. */
+  | "id-invalid"
+  /** `version` is not `MAJOR.MINOR.PATCH`. */
+  | "version-invalid"
+  /** `kind` is not one of the five this format defines. */
+  | "kind-unknown"
+  | "title-invalid"
+  | "description-invalid"
+  | "files-invalid"
+  /** A listed path, or one found on disk, breaks a path rule. */
+  | "path-invalid"
+  /** Two entries share a path exactly. */
+  | "path-duplicate"
+  /** Two entries differ only by case, which is one file on Windows. */
+  | "path-duplicate-case"
+  /** A listed `sha256` is not 64 hex characters. */
+  | "hash-invalid"
+  | "size-invalid"
+  /** More files than a pack may list, or one file or the pack total is over its cap. */
+  | "limit"
+  | "licence-invalid"
+  | "source-invalid"
+  | "min-app-version-invalid"
+  /** The pack asks for an app newer than this one, or for one that cannot be compared. */
+  | "min-app-version-too-new"
+  /** A newer version of this pack is already installed; installing this one would roll it back. */
+  | "older-than-installed"
+  /** The source tree holds a symbolic link or a junction. */
+  | "symlink"
+  /** Something in the source tree is neither a directory nor a regular file. */
+  | "not-a-file"
+  /** A file the manifest lists is not in the source tree, or is no longer installed. */
+  | "missing-file"
+  /** A file is in the source tree that the manifest does not list. */
+  | "extra-file"
+  /** A file's size is not the size the manifest states. */
+  | "size-mismatch"
+  /** A file's SHA-256 is not the hash the manifest states. */
+  | "hash-mismatch"
+  /** The volume cannot hold the pack. */
+  | "no-space"
+  /** `install` was called with no inspected candidate waiting. */
+  | "no-candidate"
+  /** This id is not installed. */
+  | "not-found"
+  /** A manifest's `notice` is not one this build knows (ADR-103). */
+  | "notice-invalid"
+  /** The catalogue document is not readable JSON, is not an object, or carries an unknown field. */
+  | "catalogue-unreadable"
+  /** The catalogue's `.sig` is missing, too large, or not this key's signature over those exact bytes. */
+  | "catalogue-signature"
+  /** The catalogue describes a pack from a host this build may not download from. */
+  | "catalogue-host"
+  /** One catalogue entry breaks a rule: a field, the two metadata files, a duplicate path, or a size. */
+  | "catalogue-entry"
+  /** This launch is not in the network mode that allows downloads. */
+  | "downloads-off"
+  /** A download of this pack is already in flight (or of every slot the service allows). */
+  | "busy"
+  /** The download failed: the transport, the disk, or bytes that are not the catalogue's. */
+  | "download-failed"
+  /** Reading or writing the pack failed for a reason none of the above names. */
+  | "io"
+  /**
+   * ADR-094's `tool` record is missing on a `tool` pack, present on another
+   * kind, or breaks one of its own rules — an `entry` that is not a listed file,
+   * an unknown protocol, an argument list that is not one. One code for the
+   * whole record, for `"path-invalid"`'s reason: the rules are many and the one
+   * thing the user can act on is that this pack is not a tool pack this build
+   * will run.
+   */
+  | "tool-invalid";
+
+/** What `packsInspect` answers: the verified candidate, a cancelled dialog, or a refusal. */
+export type PackInspectResult =
+  | { readonly outcome: "ready"; readonly candidate: PackCandidateView }
+  | { readonly outcome: "cancelled" }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** What `packsInstall` answers. */
+export type PackInstallResult =
+  | { readonly outcome: "installed"; readonly pack: InstalledPackView }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** What `packsRemove` answers. */
+export type PackRemoveResult =
+  | { readonly outcome: "removed"; readonly id: string }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** What `packsVerify` answers. */
+export type PackVerifyResult =
+  | { readonly outcome: "ok"; readonly pack: InstalledPackView }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/**
+ * One pack the catalogue offers, as the Packs card draws it before a byte is
+ * downloaded.
+ *
+ * It carries the licence, the attribution and the source because ADR-103's
+ * decision is that a user sees who made the content and under what terms
+ * BEFORE anything arrives — not in a credits screen afterwards.
+ */
+export interface PackCatalogueEntryView {
+  readonly id: string;
+  readonly version: string;
+  readonly kind: PackKind;
+  readonly title: PackText;
+  readonly description: PackText;
+  readonly size: number;
+  readonly fileCount: number;
+  readonly licence: PackLicenceView;
+  readonly source: PackSourceView;
+  readonly notice: PackNotice | null;
+  /**
+   * What this device has of this pack, as main computed it: nothing, the same
+   * version, or an older one. Derived in main rather than here because the
+   * version grammar (`main/update/version.ts`) lives there and one comparator
+   * is the whole reason it is not written twice.
+   */
+  readonly state: PackCatalogueState;
+  readonly installedVersion: string | null;
+}
+
+/** Whether a catalogue entry is missing, current, or newer than what is installed. */
+export type PackCatalogueState = "not-installed" | "installed" | "update-available";
+
+/** What `packsCatalogue` answers: the signed document's entries, or a refusal. */
+export type PackCatalogueResult =
+  | { readonly outcome: "ready"; readonly entries: PackCatalogueEntryView[] }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
+
+/** Where one downloaded file has got to. Pushed on `packs:download-progress`. */
+export interface PackDownloadProgress {
+  readonly id: string;
+  /**
+   * Which half of the operation this is: the file coming down the wire, or the
+   * verified copy the install makes of it. One view for both, because from the
+   * card's side it is one operation and the label is the only difference.
+   */
+  readonly phase: "download" | "install";
+  /** The file being downloaded, as the catalogue names it. */
+  readonly file: string;
+  readonly filesDone: number;
+  readonly filesTotal: number;
+  readonly bytesDone: number;
+  readonly bytesTotal: number;
+}
+
+/**
+ * What `packsDownload` answers. `"paused"` is not a failure: it says the
+ * staging folder was kept and `packsResume` continues from it.
+ */
+export type PackDownloadResult =
+  | { readonly outcome: "installed"; readonly pack: InstalledPackView }
+  | { readonly outcome: "paused"; readonly id: string }
+  | { readonly outcome: "cancelled"; readonly id: string }
+  | { readonly outcome: "refused"; readonly code: PackRefusalCode };
 
 /** Everything `enableSync` can answer. */
 export type SyncEnableView =
@@ -8742,6 +9215,16 @@ export type SyncEnableView =
  * generic. Frozen at exposure time (see preload).
  */
 export interface NexusApi {
+  /**
+   * Kit modules (ADR-090): one namespace per DISCOVERED module, typed by
+   * interface merging from each module's own `shared/ipc.ts` (`moduleApi.ts`).
+   *
+   * A method here is `nexus.modules.<id>.<op>(payload)` and lands on the channel
+   * the module declared for that op - no generic `invoke`, no channel argument,
+   * and no per-module line in the preload bridge. A build with no kit modules
+   * has an empty object, which is the true answer rather than a placeholder.
+   */
+  modules: NexusModules;
   /** ADR-018: the local account's status. The first thing the renderer asks about, before profiles or flags — there is no code path where a data channel is called before this. */
   getAuthStatus(): Promise<AuthStatus>;
   /** First run: creates the local account (encrypting an existing plaintext database in place if one predates this) and returns the one-time Recovery Kit code on success — the only time it is ever handed back. */
@@ -8762,6 +9245,16 @@ export interface NexusApi {
   changePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult>;
   /** Issues a fresh Recovery Kit code, invalidating the old one. Unlocked session only. */
   regenerateRecoveryCode(): Promise<AuthResult>;
+  /** ADR-110: how often the app asks for the passcode, and whether this machine can honour that at all. */
+  getUnlockPolicy(): Promise<UnlockPolicy>;
+  /**
+   * Stores the setting (ADR-110). Anything other than „every time" is weaker
+   * than the default, so it is accepted only with `passcode`, verified against
+   * the live session on the unlock's own throttle counter — and that proof is
+   * also the moment the data key is first wrapped. Going back to „every time"
+   * needs no passcode: a stronger setting is never a privilege.
+   */
+  setUnlockPolicy(setting: UnlockSetting, passcode?: string): Promise<UnlockPolicyResult>;
   /** Closes the database and drops the data key from memory. */
   lock(): Promise<void>;
   listProfiles(): Promise<Profile[]>;
@@ -10252,5 +10745,87 @@ export interface NexusApi {
   relaunchApp(): Promise<void>;
   /** Subscribes to every update-check phase change. Returns an unsubscribe function. */
   onUpdateChanged(listener: (state: UpdateStateView) => void): () => void;
+  /**
+   * The installed content packs (ADR-091), in id order. The renderer sorts them
+   * for display by the active locale's collator; main has no locale of its own.
+   */
+  packsList(): Promise<InstalledPackView[]>;
+  /**
+   * Opens main's folder dialog and verifies the chosen pack WITHOUT installing
+   * it, answering what the folder holds. Takes no argument: the renderer never
+   * names a path, and the candidate this leaves waiting is what `packsInstall`
+   * installs.
+   */
+  packsInspect(): Promise<PackInspectResult>;
+  /** Installs the candidate the last `packsInspect` left waiting, and nothing else. */
+  packsInstall(): Promise<PackInstallResult>;
+  /** Removes an installed pack's folder. */
+  packsRemove(id: string): Promise<PackRemoveResult>;
+  /** Re-hashes every file of an installed pack against its signed manifest. The expensive one. */
+  packsVerify(id: string): Promise<PackVerifyResult>;
+  /**
+   * The packs the signed catalogue offers (ADR-103), with what this device has
+   * of each. Takes no argument and reaches no network of its own: main fetches
+   * and verifies the document, and a refusal is a code.
+   */
+  /** `reload` re-reads and re-verifies the document rather than answering from main's cache. */
+  packsCatalogue(reload?: boolean): Promise<PackCatalogueResult>;
+  /** Downloads one catalogue pack file by file, verifies every hash, then installs it. */
+  packsDownload(id: string): Promise<PackDownloadResult>;
+  /** Asks a running download to stop and keep what it has, so `packsResume` can continue it. */
+  packsDownloadPause(id: string): Promise<void>;
+  /** Continues a paused download. */
+  packsDownloadResume(id: string): Promise<PackDownloadResult>;
+  /** Stops a download and deletes what it had staged. */
+  packsDownloadCancel(id: string): Promise<void>;
+  /** Subscribes to the installed list changing. Returns an unsubscribe function. */
+  onPacksChanged(listener: (packs: InstalledPackView[]) => void): () => void;
+  /** Subscribes to copy and verify progress. Returns an unsubscribe function. */
+  onPacksProgress(listener: (progress: PackProgress) => void): () => void;
+  /** Subscribes to download progress. Returns an unsubscribe function. */
+  onPacksDownloadProgress(listener: (progress: PackDownloadProgress) => void): () => void;
+  /**
+   * Opens an https address in the user's own browser, through main's
+   * external-link rule. Answers whether it was opened; a refused address is
+   * `false` rather than an exception.
+   */
+  openExternal(url: string): Promise<boolean>;
   appInfo(): Promise<AppInfo>;
+  /**
+   * The device's module arrangement (ADR-101) — read once when the shell mounts,
+   * because every rail, tile and card that offers a module is drawn from it.
+   */
+  getModuleVisibility(): Promise<ModuleVisibility>;
+  /**
+   * Records an arrangement and answers with what was actually stored: main
+   * validates the payload, normalizes it against the registry (the two locked
+   * modules can never be hidden, and an entry that merely restates a manifest is
+   * dropped) and writes the file. Called by the four gestures the „Prikaz" card
+   * offers, never by a render on its own.
+   */
+  setModuleVisibility(visibility: ModuleVisibility): Promise<ModuleVisibility>;
+}
+
+/**
+ * The device's module arrangement as it crosses the wire (ADR-101).
+ *
+ * Field-for-field identical to `shared/moduleVisibility.ts`'s `ShellVisibility`,
+ * redeclared here for `FlagState`'s reason: the wire contract stays
+ * self-contained, the renderer never imports main-process code, and
+ * `moduleVisibility.test.ts` pins the two shapes as assignable to each other in
+ * both directions so they cannot drift.
+ *
+ * `hidden` is the list the brief names — the modules the user switched off.
+ * `shown` is its other direction, and it carries the one thing a list of
+ * hidden ids cannot: an opt-in module (`defaultEnabled: false`, like „Privatno
+ * beleške") that somebody switched ON, which is what the migration produces and
+ * what the „Prikaz" card writes. `groupOrder` and `moduleOrder` are overrides
+ * — empty means „the order the registry declares".
+ */
+export interface ModuleVisibility {
+  readonly version: number;
+  readonly hidden: readonly string[];
+  readonly shown: readonly string[];
+  readonly groupOrder: readonly string[];
+  readonly moduleOrder: Readonly<Record<string, readonly string[]>>;
 }

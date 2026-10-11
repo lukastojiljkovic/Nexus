@@ -138,6 +138,47 @@ export function overwrite(target: Node, source: Node): void {
 }
 
 /**
+ * Every kit module's live copy table, keyed by module id.
+ *
+ * A module's page copy is NOT in `strings`, and deliberately: it must not be in
+ * the startup chunk, because the module's page is not either. So the module
+ * brings its own table and registers it here when its chunk loads - which is
+ * also what makes "the module's copy joins the locale machinery when its page
+ * loads" true rather than a promise. From that moment the table is rewritten by
+ * the same `applyLocale` walk, for the same reason and with the same identity
+ * rule: a component that took `const c = copy.section` at module scope keeps
+ * reading the section being rewritten.
+ */
+const moduleTables = new Map<string, { live: Node; sources: Record<Locale, Node> }>();
+
+/**
+ * Declares one module's page copy: the two locale tables, and the one live
+ * object the app reads.
+ *
+ * Returns the live object, whose IDENTITY never changes for the life of the
+ * process - the property this file's header explains at length, one level up.
+ * The active locale is written into it immediately, so a module whose page loads
+ * while the app is in English does not show Serbian until the next switch.
+ *
+ * `en` is typed by the caller as `typeof sr` (the shape's source of truth is
+ * `copy.sr.ts`), so a missing or invented key is a compile error, exactly as it
+ * is for the two big tables.
+ */
+export function defineModuleCopy<Shape extends Node>(
+  id: string,
+  sr: Shape,
+  en: Shape,
+): Shape {
+  const existing = moduleTables.get(id);
+  if (existing !== undefined) return existing.live as Shape;
+  const live = structuredClone(sr) as Node;
+  const table = { live, sources: { sr, en } as Record<Locale, Node> };
+  moduleTables.set(id, table);
+  overwrite(live, table.sources[currentLocale]);
+  return live as Shape;
+}
+
+/**
  * Serve a different language.
  *
  * Must be called BEFORE the React state update that re-renders, so the render
@@ -147,6 +188,10 @@ export function overwrite(target: Node, source: Node): void {
 export function applyLocale(locale: Locale): void {
   currentLocale = locale;
   overwrite(strings as unknown as Node, LOCALES[locale] as unknown as Node);
+  // Kit modules join the same rewrite, one table each (`defineModuleCopy`).
+  for (const table of moduleTables.values()) {
+    overwrite(table.live, table.sources[locale]);
+  }
   // The document's own language follows the interface, so assistive technology
   // and the browser's own hyphenation read the same language the copy does.
   // Guarded rather than assumed: this module is imported by Node tests with no
@@ -158,6 +203,7 @@ export function applyLocale(locale: Locale): void {
 }
 
 const pluralRules = new Map<Locale, Intl.PluralRules>();
+
 
 function rulesFor(locale: Locale): Intl.PluralRules {
   const cached = pluralRules.get(locale);

@@ -1,0 +1,531 @@
+{
+  "pack": "survival-food",
+  "built": "2026.10.10",
+  "note": "Every source the pack carries, with its URL, the date it was fetched, its SHA-256, its licence and the page that states that licence with the sentence quoted from it. A source without evidence is not used.",
+  "sources": [
+    {
+      "id": "usda-guide-introduction",
+      "url": "https://nchfp.uga.edu/papers/guide/INTRO_HomeCanrev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/INTRO_HomeCanrev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 467339,
+      "sha256": "c1683833cb4546858445c787f02bb4027710760bbff08c7e1b54889bf5521568",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Introduction",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-1",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE01_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE01_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 3794234,
+      "sha256": "60d1e1a74a9fe61c19e6f5312a76d291905a8ca51b28d0def04c677294416d86",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 1 — Principles of Home Canning",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-2",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE02_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE02_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 1098841,
+      "sha256": "5f6918678e1410b72f9f87d652ebab2f5f5d39f3806db676399e5c785be0b58e",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 2 — Selecting, Preparing, and Canning Fruit and Fruit Products",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-3",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE03_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE03_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 976490,
+      "sha256": "6f8d166be89c7260964bfa4746fae72e79164f19a712672b0c1aa3bb902d18ff",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 3 — Selecting, Preparing, and Canning Tomatoes and Tomato Products",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-4",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE04_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE04_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 2013613,
+      "sha256": "bb1d6ccce65146b5caad8bdaf766424c702119a90aa834b25269816da165641f",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 4 — Selecting, Preparing, and Canning Vegetables and Vegetable Products",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-5",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE05_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE05_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 1356485,
+      "sha256": "bffe17ee5a99d5b3393894b811508cbe797d30685b1b91d13496d7a768b589b7",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 5 — Preparing and Canning Poultry, Red Meats, and Seafoods",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-6",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE06_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE06_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 3173534,
+      "sha256": "fa4be9f7ac718801178f4f04efa169d74b8c64757d35aa29aa8226fbdaeee4bf",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 6 — Preparing and Canning Fermented Foods and Pickled Vegetables",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "usda-guide-7",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE07_HomeCan_rev0715.pdf",
+      "finalUrl": "https://nchfp.uga.edu/papers/guide/GUIDE07_HomeCan_rev0715.pdf",
+      "fetched": "2026-10-10",
+      "bytes": 1300368,
+      "sha256": "6023faf9ea45f8e20078c54c5d273a7717ce17c66eba57a18f363ba54021e411",
+      "work": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539)",
+      "publisher": "USDA / National Institute of Food and Agriculture",
+      "section": "Guide 7 — Preparing and Canning Jams and Jellies",
+      "reader": "pdf",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "fsis-power-outage",
+      "url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/emergencies/keep-your-food-safe-during-emergencies",
+      "finalUrl": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/emergencies/keep-your-food-safe-during-emergencies",
+      "fetched": "2026-10-10",
+      "bytes": 307468,
+      "sha256": "6aa1226c8c4c35c1dceab0d56198eaaeddef5c985624bea36dd310d709dc20e0",
+      "work": "Keep Your Food Safe During Emergencies: Power Outages, Floods & Fires",
+      "publisher": "USDA Food Safety and Inspection Service",
+      "section": "Power outages",
+      "reader": "html",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "cdc-power-outage",
+      "url": "https://www.cdc.gov/food-safety/foods/keep-food-safe-after-emergency.html",
+      "finalUrl": "https://www.cdc.gov/food-safety/foods/keep-food-safe-after-emergency.html",
+      "fetched": "2026-10-10",
+      "bytes": 62739,
+      "sha256": "ce1ea449b51b719539a3e91ef8f2b45e5d3b81de2608d064156eaf80fb92ec02",
+      "work": "Keep Food Safe After a Disaster or Emergency",
+      "publisher": "US Centers for Disease Control and Prevention",
+      "section": "Power outage",
+      "reader": "html",
+      "licence": "CDC/ATSDR web information — public domain, with attribution, a non-endorsement disclaimer and no substantive changes",
+      "licenceEvidence": {
+        "url": "https://www.cdc.gov/other/agencymaterials.html",
+        "quotes": [
+          "Most of the information on the CDC and ATSDR websites is not subject to copyright, is in the public domain, and may be freely used or reproduced without obtaining copyright permission.",
+          "1) Attribution to the agency that developed the material must be provided in your use of the materials.",
+          "2) You must utilize a disclaimer which clearly indicates that your use of the material, including any links to the materials on the CDC, ATSDR or HHS websites, does not imply endorsement by CDC, ATSDR, HHS or the United States Government of you, your company, product, facility, service or enterprise.",
+          "3) You may not change the substantive content of the materials; and",
+          "Images other than those in the PHIL may have been licensed for use by CDC from a stock photography service or other copyright holder and the license holder may prohibit republication, retransmission, reproduction or other use of the images."
+        ]
+      }
+    },
+    {
+      "id": "foodsafety-power-outage",
+      "url": "https://www.foodsafety.gov/food-safety-charts/food-safety-during-power-outage",
+      "finalUrl": "https://www.foodsafety.gov/food-safety-charts/food-safety-during-power-outage",
+      "fetched": "2026-10-10",
+      "bytes": 60688,
+      "sha256": "d982ebf7e250cf4f57d1888ce32afd40ed991e33a4ceb7fb7a7a10db078163b1",
+      "work": "Food Safety During Power Outage",
+      "publisher": "FoodSafety.gov (US federal food safety portal)",
+      "section": "Food safety during a power outage",
+      "reader": "html",
+      "licence": "FEMA.gov material — free of copyright, licensed photos and graphics excluded",
+      "licenceEvidence": {
+        "url": "https://www.fema.gov/about/website-information",
+        "quotes": [
+          "Most material on FEMA.gov is free of copyright and may be copied and distributed without permission.",
+          "We sometimes use photos or graphics that we licensed or that are restricted."
+        ]
+      }
+    },
+    {
+      "id": "cdc-botulism-about",
+      "url": "https://www.cdc.gov/botulism/about/index.html",
+      "finalUrl": "https://www.cdc.gov/botulism/about/index.html",
+      "fetched": "2026-10-10",
+      "bytes": 54044,
+      "sha256": "530cb1c915a04da0bda266a8dda1f811cfd67ddcfcf4f738492124edbbea0c15",
+      "work": "About Botulism",
+      "publisher": "US Centers for Disease Control and Prevention",
+      "section": "About botulism",
+      "reader": "html",
+      "licence": "CDC/ATSDR web information — public domain, with attribution, a non-endorsement disclaimer and no substantive changes",
+      "licenceEvidence": {
+        "url": "https://www.cdc.gov/other/agencymaterials.html",
+        "quotes": [
+          "Most of the information on the CDC and ATSDR websites is not subject to copyright, is in the public domain, and may be freely used or reproduced without obtaining copyright permission.",
+          "1) Attribution to the agency that developed the material must be provided in your use of the materials.",
+          "2) You must utilize a disclaimer which clearly indicates that your use of the material, including any links to the materials on the CDC, ATSDR or HHS websites, does not imply endorsement by CDC, ATSDR, HHS or the United States Government of you, your company, product, facility, service or enterprise.",
+          "3) You may not change the substantive content of the materials; and",
+          "Images other than those in the PHIL may have been licensed for use by CDC from a stock photography service or other copyright holder and the license holder may prohibit republication, retransmission, reproduction or other use of the images."
+        ]
+      }
+    },
+    {
+      "id": "cdc-botulism-prevention",
+      "url": "https://www.cdc.gov/botulism/prevention/index.html",
+      "finalUrl": "https://www.cdc.gov/botulism/prevention/index.html",
+      "fetched": "2026-10-10",
+      "bytes": 63332,
+      "sha256": "213f2b290a01ed0b1cfcc39b7aab05695f2c6d448e95fb077f61b0d5ec5df5c6",
+      "work": "Botulism Prevention",
+      "publisher": "US Centers for Disease Control and Prevention",
+      "section": "Preventing botulism",
+      "reader": "html",
+      "licence": "CDC/ATSDR web information — public domain, with attribution, a non-endorsement disclaimer and no substantive changes",
+      "licenceEvidence": {
+        "url": "https://www.cdc.gov/other/agencymaterials.html",
+        "quotes": [
+          "Most of the information on the CDC and ATSDR websites is not subject to copyright, is in the public domain, and may be freely used or reproduced without obtaining copyright permission.",
+          "1) Attribution to the agency that developed the material must be provided in your use of the materials.",
+          "2) You must utilize a disclaimer which clearly indicates that your use of the material, including any links to the materials on the CDC, ATSDR or HHS websites, does not imply endorsement by CDC, ATSDR, HHS or the United States Government of you, your company, product, facility, service or enterprise.",
+          "3) You may not change the substantive content of the materials; and",
+          "Images other than those in the PHIL may have been licensed for use by CDC from a stock photography service or other copyright holder and the license holder may prohibit republication, retransmission, reproduction or other use of the images."
+        ]
+      }
+    },
+    {
+      "id": "fsis-jerky",
+      "url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/meat-fish/jerky",
+      "finalUrl": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/meat-fish/jerky",
+      "fetched": "2026-10-10",
+      "bytes": 304861,
+      "sha256": "6aa4a22d8c931b2750eea5c919e2864c867b1c5d2fb25de5152de93997277290",
+      "work": "Jerky and Food Safety",
+      "publisher": "USDA Food Safety and Inspection Service",
+      "section": "Jerky and food safety",
+      "reader": "html",
+      "licence": "USDA web material — public domain, credit requested",
+      "licenceEvidence": {
+        "url": "https://www.usda.gov/about-usda/policies-and-links",
+        "quotes": [
+          "Most information presented on the USDA Web site is considered public domain information. Public domain information may be freely distributed or copied, but use of appropriate byline/photo/image credits is requested.",
+          "Some materials on the USDA Web site are protected by copyright, trademark, or patent, and/or are provided for personal use only."
+        ]
+      }
+    },
+    {
+      "id": "cdc-carbon-monoxide",
+      "url": "https://www.cdc.gov/carbon-monoxide/about/index.html",
+      "finalUrl": "https://www.cdc.gov/carbon-monoxide/about/index.html",
+      "fetched": "2026-10-10",
+      "bytes": 49055,
+      "sha256": "347d6e44388613f55932be11db4d511aa8048404eef39677f40080bad924131e",
+      "work": "About Carbon Monoxide Poisoning",
+      "publisher": "US Centers for Disease Control and Prevention",
+      "section": "Preventing carbon monoxide poisoning",
+      "reader": "html",
+      "licence": "CDC/ATSDR web information — public domain, with attribution, a non-endorsement disclaimer and no substantive changes",
+      "licenceEvidence": {
+        "url": "https://www.cdc.gov/other/agencymaterials.html",
+        "quotes": [
+          "Most of the information on the CDC and ATSDR websites is not subject to copyright, is in the public domain, and may be freely used or reproduced without obtaining copyright permission.",
+          "1) Attribution to the agency that developed the material must be provided in your use of the materials.",
+          "2) You must utilize a disclaimer which clearly indicates that your use of the material, including any links to the materials on the CDC, ATSDR or HHS websites, does not imply endorsement by CDC, ATSDR, HHS or the United States Government of you, your company, product, facility, service or enterprise.",
+          "3) You may not change the substantive content of the materials; and",
+          "Images other than those in the PHIL may have been licensed for use by CDC from a stock photography service or other copyright holder and the license holder may prohibit republication, retransmission, reproduction or other use of the images."
+        ]
+      }
+    },
+    {
+      "id": "ready-power-outages",
+      "url": "https://www.ready.gov/power-outages",
+      "finalUrl": "https://www.ready.gov/power-outages",
+      "fetched": "2026-10-10",
+      "bytes": 63513,
+      "sha256": "512eb799eaa13c57820bc474a50e60f0e4f71c8db2b38bd2796b1daaab9d3b4c",
+      "work": "Power Outages",
+      "publisher": "Ready.gov (FEMA)",
+      "section": "Power outages — food, heat and carbon monoxide",
+      "reader": "html",
+      "licence": "FEMA.gov material — free of copyright, licensed photos and graphics excluded",
+      "licenceEvidence": {
+        "url": "https://www.fema.gov/about/website-information",
+        "quotes": [
+          "Most material on FEMA.gov is free of copyright and may be copied and distributed without permission.",
+          "We sometimes use photos or graphics that we licensed or that are restricted."
+        ]
+      }
+    },
+    {
+      "id": "ready-food",
+      "url": "https://www.ready.gov/food",
+      "finalUrl": "https://www.ready.gov/food",
+      "fetched": "2026-10-10",
+      "bytes": 60705,
+      "sha256": "0f6de113cfdc85e6e037ac9b449a5464740e0dc94c054d79a366b2bb2782337b",
+      "work": "Food",
+      "publisher": "Ready.gov (FEMA)",
+      "section": "Food supply",
+      "reader": "html",
+      "licence": "FEMA.gov material — free of copyright, licensed photos and graphics excluded",
+      "licenceEvidence": {
+        "url": "https://www.fema.gov/about/website-information",
+        "quotes": [
+          "Most material on FEMA.gov is free of copyright and may be copied and distributed without permission.",
+          "We sometimes use photos or graphics that we licensed or that are restricted."
+        ]
+      }
+    },
+    {
+      "id": "ready-water",
+      "url": "https://www.ready.gov/water",
+      "finalUrl": "https://www.ready.gov/water",
+      "fetched": "2026-10-10",
+      "bytes": 62386,
+      "sha256": "04e881cf92fdcd568b972ec8d249d6704165196db3938f96c988715b82ddf585",
+      "work": "Water",
+      "publisher": "Ready.gov (FEMA)",
+      "section": "Water supply and rationing",
+      "reader": "html",
+      "licence": "FEMA.gov material — free of copyright, licensed photos and graphics excluded",
+      "licenceEvidence": {
+        "url": "https://www.fema.gov/about/website-information",
+        "quotes": [
+          "Most material on FEMA.gov is free of copyright and may be copied and distributed without permission.",
+          "We sometimes use photos or graphics that we licensed or that are restricted."
+        ]
+      }
+    },
+    {
+      "id": "tm-10-405",
+      "url": "https://archive.org/download/TM10-405/TM10-405_djvu.txt",
+      "finalUrl": "https://dn790008.ca.archive.org/0/items/TM10-405/TM10-405_djvu.txt",
+      "fetched": "2026-10-10",
+      "bytes": 523636,
+      "sha256": "c4cbf99dea86a5a749cea075567e02f723f4c61e3c2add6078ed2dada53972f3",
+      "work": "TM 10-405, The Army Cook (War Department technical manual, 1941)",
+      "publisher": "US War Department, prepared under direction of The Quartermaster General",
+      "section": "Field cooking (paras 72–78) and the yeast-free breads",
+      "reader": "text",
+      "licence": "Public Domain Mark 1.0 (as tagged by the Internet Archive item)",
+      "licenceEvidence": {
+        "url": "https://archive.org/metadata/TM10-405",
+        "quotes": [
+          "\"licenseurl\":\"http://creativecommons.org/publicdomain/mark/1.0/\""
+        ]
+      }
+    },
+    {
+      "id": "army-cooks-1914",
+      "url": "https://archive.org/download/manualforarmyco00statgoog/manualforarmyco00statgoog_djvu.txt",
+      "finalUrl": "https://dn760105.eu.archive.org/0/items/manualforarmyco00statgoog/manualforarmyco00statgoog_djvu.txt",
+      "fetched": "2026-10-10",
+      "bytes": 305451,
+      "sha256": "e9a3b445e866df04f0d95417f1c822646d2e3bc0bac542ed9b45c5892925fa62",
+      "work": "Manual for Army Cooks (1914)",
+      "publisher": "US War Department, Government Printing Office",
+      "section": "Bread and the ration",
+      "reader": "text",
+      "licence": "Not in copyright (as tagged by the Internet Archive item; US Government Printing Office imprint)",
+      "licenceEvidence": {
+        "url": "https://archive.org/metadata/manualforarmyco00statgoog",
+        "quotes": [
+          "\"possible-copyright-status\":\"NOT_IN_COPYRIGHT\""
+        ]
+      }
+    },
+    {
+      "id": "army-cooks-1917",
+      "url": "https://archive.org/download/extractsfromman00statgoog/extractsfromman00statgoog_djvu.txt",
+      "finalUrl": "https://dn760002.eu.archive.org/0/items/extractsfromman00statgoog/extractsfromman00statgoog_djvu.txt",
+      "fetched": "2026-10-10",
+      "bytes": 200006,
+      "sha256": "57ace12663ecc2411cdc8f1ffaed2fd2e95cb581baec12b4c715d80df322281e",
+      "work": "Extracts from the Manual for Army Cooks (1917)",
+      "publisher": "US War Department, Government Printing Office",
+      "section": "Hard bread in the ration",
+      "reader": "text",
+      "licence": "Not in copyright (as tagged by the Internet Archive item; US Government Printing Office imprint)",
+      "licenceEvidence": {
+        "url": "https://archive.org/metadata/manualforarmyco00statgoog",
+        "quotes": [
+          "\"possible-copyright-status\":\"NOT_IN_COPYRIGHT\""
+        ]
+      }
+    },
+    {
+      "id": "hardtack-and-coffee",
+      "url": "https://archive.org/download/hardtackandcoff00billgoog/hardtackandcoff00billgoog_djvu.txt",
+      "finalUrl": "https://dn760009.eu.archive.org/0/items/hardtackandcoff00billgoog/hardtackandcoff00billgoog_djvu.txt",
+      "fetched": "2026-10-10",
+      "bytes": 684934,
+      "sha256": "8b59f654e50c7d17de2b8f971245c4da58cae46013ca85ecb4ed4ebfc74da3d4",
+      "work": "Hardtack and Coffee; or, The Unwritten Story of Army Life (John D. Billings, 1887)",
+      "publisher": "George M. Smith & Co., Boston",
+      "section": "Hard bread and how the soldiers ate it",
+      "reader": "text",
+      "licence": "Public Domain Mark 1.0 (as tagged by the Internet Archive item)",
+      "licenceEvidence": {
+        "url": "https://archive.org/metadata/TM10-405",
+        "quotes": [
+          "\"licenseurl\":\"http://creativecommons.org/publicdomain/mark/1.0/\""
+        ]
+      }
+    }
+  ],
+  "notShipped": [
+    {
+      "key": "nchfp",
+      "title": "National Center for Home Food Preservation (University of Georgia)",
+      "url": "https://nchfp.uga.edu/",
+      "licence": "All rights reserved — not shipped",
+      "licenceEvidence": {
+        "url": "https://nchfp.uga.edu/",
+        "quotes": [
+          "Copyright © 2026 National Center for Home Food Preservation, All rights reserved"
+        ]
+      }
+    },
+    {
+      "key": "who",
+      "title": "World Health Organization publications",
+      "url": "https://www.who.int/about/policies/publishing/copyright",
+      "licence": "CC BY-NC-SA 3.0 IGO (non-commercial) — not shipped",
+      "licenceEvidence": {
+        "url": "https://www.who.int/about/policies/publishing/copyright",
+        "quotes": [
+          "The CC BY-NC-SA 3.0 IGO licence allows users to freely copy, reproduce, reprint, distribute, translate and adapt the work for non-commercial purposes, provided WHO is acknowledged as the source using the following suggested citation:"
+        ]
+      }
+    },
+    {
+      "key": "sphere",
+      "title": "Sphere Handbook 2018",
+      "url": "https://spherestandards.org/handbook-2018/",
+      "licence": "Copyrighted; free reproduction for educational purposes only, written permission for online reuse — not shipped",
+      "licenceEvidence": {
+        "url": "https://web.archive.org/web/20181112155649id_/https://spherestandards.org/wp-content/uploads/Sphere-Handbook-2018-EN.pdf",
+        "quotes": [
+          "All rights reserved. This material is copyrighted but may be reproduced without fee for educational purposes, including for training, research and programme activities, provided that the copyright holder is acknowledged.",
+          "For copying in other circumstances, posting online, reuse in other publications or for translation or adaptation, prior written permission must be obtained by emailing info@spherestandards.org."
+        ]
+      }
+    },
+    {
+      "key": "solarCookers",
+      "title": "Solar Cookers International",
+      "url": "https://www.solarcookers.org/",
+      "licence": "© Solar Cookers International — not shipped",
+      "licenceEvidence": {
+        "url": "https://www.solarcookers.org/",
+        "quotes": [
+          "© 2026 Solar Cookers International."
+        ]
+      }
+    },
+    {
+      "key": "aprovecho",
+      "title": "Aprovecho Research Center",
+      "url": "https://aprovecho.org/",
+      "licence": "© Aprovecho Research Center — not shipped",
+      "licenceEvidence": {
+        "url": "https://aprovecho.org/",
+        "quotes": [
+          "© Copyright - Aprovecho Research Center"
+        ]
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "id": "recipes-preserving",
+      "url": "https://nchfp.uga.edu/papers/guide/GUIDE06_HomeCan_rev0715.pdf",
+      "sha256": "fa4be9f7ac718801178f4f04efa169d74b8c64757d35aa29aa8226fbdaeee4bf",
+      "licence": "USDA web material — public domain, credit requested"
+    }
+  ],
+  "excluded": {
+    "serbian": [
+      "No Serbian preserving source (ajvar, turšija, slatko, pekmez) was found with a licence that permits shipping, so none is invented here."
+    ]
+  }
+}

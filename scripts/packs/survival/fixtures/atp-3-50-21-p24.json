@@ -1,0 +1,486 @@
+{
+ "source": "atp-3-50-21",
+ "page": 24,
+ "width": 612,
+ "height": 792,
+ "items": [
+  {
+   "text": "Chapter 2",
+   "x": 72.0001,
+   "y": 747.8399,
+   "width": 41.61959999999999,
+   "height": 9,
+   "size": 9,
+   "rotated": false
+  },
+  {
+   "text": "2-6",
+   "x": 72.1201,
+   "y": 38.1585,
+   "width": 13.049999999999988,
+   "height": 9,
+   "size": 9,
+   "rotated": false
+  },
+  {
+   "text": "ATP 3-50.21",
+   "x": 262.56820000000005,
+   "y": 38.1585,
+   "width": 51.08669999999984,
+   "height": 9,
+   "size": 9,
+   "rotated": false
+  },
+  {
+   "text": "\u0014\u001b\u00036HSWHPEHU\u0003\u0015\u0013\u0014\u001b",
+   "x": 450.9661,
+   "y": 38.1585,
+   "width": 81.10530000000014,
+   "height": 9,
+   "size": 9,
+   "rotated": false
+  },
+  {
+   "text": "Figure 2-1. Jaw Thrust Method",
+   "x": 217.5604,
+   "y": 548.3995,
+   "width": 158.99145599999983,
+   "height": 11.04,
+   "size": 11.04,
+   "rotated": false
+  },
+  {
+   "text": "With the casualty's airway open, pinch their nose closed with your thumb and forefinger and blow two",
+   "x": 115.2032,
+   "y": 524.8795,
+   "width": 406.67178000000024,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "complete breaths into their lungs. Allow the lungs to deflate after the second inflation and perform the",
+   "x": 90.00440000000003,
+   "y": 513.35578,
+   "width": 432.0687839999998,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "following:",
+   "x": 90.00440000000003,
+   "y": 501.833056,
+   "width": 41.52921599999999,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 488.2794,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Look for the chest to rise and fall.",
+   "x": 133.2002,
+   "y": 488.2794,
+   "width": 135.47592000000006,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 474.8394,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Listen for escaping air during exhalation.",
+   "x": 133.2002,
+   "y": 474.8394,
+   "width": 164.96349600000002,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 461.3993,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Feel for flow of air on your cheek.",
+   "x": 133.2002,
+   "y": 461.3993,
+   "width": 137.63524800000016,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "If the forced breaths do not stimulate spontaneous breathing, maintain the casualty is breathing by",
+   "x": 115.2032,
+   "y": 443.8793,
+   "width": 406.8550440000002,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "performing mouth-to-mouth resuscitation.",
+   "x": 90.00340399999993,
+   "y": 432.35558,
+   "width": 168.5929200000001,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "There is danger of the victim vomiting during mouth-to-mouth resuscitation. Check the victim's mouth",
+   "x": 115.2032,
+   "y": 414.9592,
+   "width": 406.8799439999994,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "periodically for vomit and clear as needed.",
+   "x": 89.99443999999994,
+   "y": 403.43548,
+   "width": 170.89268400000003,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "If the casualty is unconscious, if respiratory rate is less than 2 in 15 seconds, and/or if the casualty is",
+   "x": 115.2032,
+   "y": 385.9192,
+   "width": 406.747476,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "making snoring or gurgling sounds, insert a nasopharyngeal airway (NPA) from the casualty's IFAK.",
+   "x": 90.00439999999998,
+   "y": 374.39547999999996,
+   "width": 431.8815360000002,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "Remember these things when inserting the NPA:",
+   "x": 90.01436000000001,
+   "y": 362.99127999999996,
+   "width": 195.5506559999999,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 349.4391,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Keep the casualty in a face-up position.",
+   "x": 133.2002,
+   "y": 349.4391,
+   "width": 158.02237200000008,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 335.9991,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Lubricate the tube of the NPA with water.",
+   "x": 133.2002,
+   "y": 335.9991,
+   "width": 168.18555599999996,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 322.4391,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Push the tip of the casualty's nose upward gently.",
+   "x": 133.2002,
+   "y": 322.4391,
+   "width": 196.8783240000001,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 308.9991,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Position the tube of the NPA so that the bevel (pointed end) of the NPA faces toward the septum",
+   "x": 133.2002,
+   "y": 308.9991,
+   "width": 388.8583200000001,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "(the partition inside the nose that separates the nostrils).",
+   "x": 133.2002,
+   "y": 297.47538,
+   "width": 223.04224799999966,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "z",
+   "x": 115.2002,
+   "y": 284.039,
+   "width": 6.005879999999999,
+   "height": 8.04,
+   "size": 8.04,
+   "rotated": false
+  },
+  {
+   "text": "Insert the NPA into the nostril and advance it until the flange rests against the nostril.",
+   "x": 133.2002,
+   "y": 284.039,
+   "width": 341.01346799999936,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "Note: Cardiopulmonary resuscitation (CPR) may be necessary after cleaning the airway, but only",
+   "x": 115.20048799999995,
+   "y": 260.758496,
+   "width": 389.0037359999997,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "after major bleeding is under control.",
+   "x": 115.2002,
+   "y": 249.2389,
+   "width": 148.9308839999999,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "Continue to check for bleeding by performing a blood sweep. Control external bleeding by the",
+   "x": 115.2032,
+   "y": 217.0789,
+   "width": 406.8331319999998,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "application of direct pressure, indirect pressure, elevation, or digital ligation.",
+   "x": 90.00439999999998,
+   "y": 205.55518,
+   "width": 306.08574000000016,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "DIRECT PRESSURE",
+   "x": 72.0001,
+   "y": 179.9988,
+   "width": 92.09039200000004,
+   "height": 12,
+   "size": 12,
+   "rotated": false
+  },
+  {
+   "text": "The most effective way to control external bleeding is by applying pressure directly over the wound.",
+   "x": 115.2032,
+   "y": 162.2387,
+   "width": 406.80325199999953,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "This pressure must not only be firm enough to stop the bleeding, but it must also be maintained long enough",
+   "x": 90.00439999999998,
+   "y": 150.8345,
+   "width": 432.0787439999994,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "to \"seal off\" the damaged surface.",
+   "x": 90.00439999999998,
+   "y": 139.31078,
+   "width": 135.3573959999999,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "If bleeding continues after having applied direct pressure for 30 minutes, apply a pressure dressing.",
+   "x": 115.2032,
+   "y": 121.7987,
+   "width": 406.7644079999996,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "This dressing consists of a thick dressing of gauze or other suitable material applied directly over the wound",
+   "x": 90.00440000000003,
+   "y": 110.27498,
+   "width": 431.8476719999991,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "and held in place with a tightly wrapped bandage. It should be tighter than an ordinary compression bandage",
+   "x": 90.00440000000006,
+   "y": 98.87078,
+   "width": 432.0140039999997,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  },
+  {
+   "text": "but not so tight that it impairs",
+   "x": 90.00440000000006,
+   "y": 87.34706,
+   "width": 118.2212160000001,
+   "height": 9.96,
+   "size": 9.96,
+   "rotated": false
+  }
+ ],
+ "images": [
+  {
+   "box": {
+    "x": 89.394,
+    "y": 523.884,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 89.394,
+    "y": 442.884,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 89.394,
+    "y": 413.964,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 89.394,
+    "y": 384.924,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 89.394,
+    "y": 216.084,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 89.394,
+    "y": 161.244,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 89.394,
+    "y": 120.804,
+    "width": 21.492,
+    "height": 8.592
+   },
+   "width": 45,
+   "height": 18
+  },
+  {
+   "box": {
+    "x": 155.514,
+    "y": 564.144,
+    "width": 282.972,
+    "height": 145.392
+   },
+   "width": 863,
+   "height": 444
+  }
+ ]
+}

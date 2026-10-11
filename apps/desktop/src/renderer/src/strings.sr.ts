@@ -13,7 +13,7 @@
  * is how a second locale gets checked for completeness by the compiler instead
  * of by hand.
  */
-import type { SmartListId } from "@nexus/core";
+import type { SmartListId, ToolTaskGroup } from "@nexus/core";
 import { devtoolsSr } from "./strings/devtools.js";
 import { electronicsSr } from "./strings/electronics.js";
 import { proSr } from "./strings/pro.js";
@@ -41,6 +41,7 @@ import type {
   LlmImportSkipReason,
   LlmPromptLanguage,
   MarkdownImportSkipCode,
+  PackRefusalCode,
   ProfilePicturePickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
@@ -59,28 +60,58 @@ export const sr = {
     brand: "Nexus",
     navLabel: "Glavna navigacija",
     /**
-     * The registry's own category names, translated. The manifests have always
-     * carried the grouping and the sidebar rendered the groups — it simply
-     * threw the NAMES away, so fourteen modules read as one undifferentiated
-     * list (STATUS §5 C item 13). Keys are `ModuleCategory` from `@nexus/core`;
-     * a category with no enabled member never renders, so an unused one costs
-     * nothing. One word each, because this is a 220px rail.
+     * The navigation groups, translated — the sidebar's headings, the
+     * launcher's sections and the module galleries' headings, ONE table because
+     * they are one list (ADR-093). Keys are `ModuleGroup` from `@nexus/core`;
+     * Culture and Play have no module in this build, and a group with no enabled
+     * member never renders, so neither costs anything until the modules it is
+     * for exist. One word each, because this is a 220px rail.
+     *
+     * „Život" is the word this rail already used for the group the change
+     * replaces, and it keeps it. „Stvaranje" is also the name of a „Priprema"
+     * answer about a week, which is a reuse rather than a collision: the answer
+     * and the group name the same way of spending a day.
      */
-    navCategories: {
-      "Core experience": "Osnovno",
-      "Content & knowledge": "Sadržaj",
-      "Life hubs": "Život",
-      "Professional & utilities": "Rad",
-      "Growth & platform": "Rast",
+    navGroups: {
+      plan: "Planiranje",
+      knowledge: "Znanje",
+      life: "Život",
+      culture: "Kultura",
+      make: "Stvaranje",
+      play: "Igra",
+      shell: "Nexus",
     } satisfies Record<string, string>,
     /**
-     * The sidebar's one heading that is not a category (ADR-086): the modules
-     * this profile's own answers put at the top. „Za tebe" and not „Omiljeno" —
-     * nobody marked these as favourites, the app placed them, and the honest
-     * word says so. „Podešavanja → Kako je Nexus podešen za tebe" is where it
-     * says why, and where somebody changes it.
+     * The pinned shortlist's heading (ADR-086; ADR-093 §3): the modules at the
+     * top of the rail. It began as „the ones this profile's answers put there"
+     * and the pin toggle on every row made it a list the user edits too —
+     * „Za tebe" covers both, and the word is chosen against „Omiljeno" because
+     * nobody ticked these as favourites and half of them were never clicked.
+     * „Podešavanja → Kako je Nexus podešen za tebe" is where the questionnaire
+     * says why it placed what it placed.
      */
     navPinned: "Za tebe",
+    /**
+     * Pinning and the launcher (ADR-093 §3 and §4).
+     *
+     * `pinFull` says the number out loud rather than leaving a disabled control
+     * to explain itself: the shortlist holds `MAX_PINNED_MODULES`, and a pin
+     * that silently does nothing is the shape of defect this house fixes by
+     * saying what the rule is.
+     *
+     * The launcher's `label` is one string for the rail's foot row AND the
+     * overlay's heading, because they are one surface — the row that opens the
+     * panel and the panel that appears have to read as the same thing.
+     */
+    pinModule: "Zakači {name} na vrh",
+    unpinModule: "Otkači {name}",
+    pinFull: "Na vrhu je već pet modula. Otkači neki da bi zakačio ovaj.",
+    launcher: {
+      label: "Svi moduli",
+      description: "Svaki uključen modul, po oblastima. Ukucaj deo naziva da suziš listu.",
+      searchLabel: "Pretraga modula",
+      close: "Zatvori",
+    },
     /**
      * The fold over a module landing's chart — NOTE, TASK, UČENJE and NAVIKE.
      *
@@ -215,11 +246,14 @@ export const sr = {
     updatesTitle: "Bez mreže + provere ažuriranja",
     updatesBody:
       "Nexus se javlja samo GitHub-u, i to isključivo da proveri i preuzme novu verziju sebe. Tvoje beleške i podaci ne napuštaju računar; GitHub vidi tvoju IP adresu, kao i svaki sajt.",
+    downloadsTitle: "Bez mreže + provere ažuriranja + preuzimanja",
+    downloadsBody:
+      "Sve što dozvoljava režim „Bez mreže + provere ažuriranja“, i preuzimanja koja pokreneš. Ništa se ne preuzima samo — preuzimanje počinje kad ga pokreneš, i to samo sa adresa ugrađenih u aplikaciju, a ono što stigne proverava se pre nego što Nexus to upotrebi.",
     chooseConfirm: "Nastavi",
     chooseHint:
       "Ako zatvoriš prozor bez izbora, Nexus ostaje u režimu „Samo bez mreže“ i pitaće te ponovo pri sledećem pokretanju.",
     cardIntro:
-      "Režim važi za ceo računar. „Samo bez mreže“ ne otvara nijednu vezu; „Bez mreže + provere ažuriranja“ dozvoljava samo proveru i preuzimanje nove verzije Nexusa.",
+      "Režim važi za ceo računar, i svaki režim dozvoljava sve što i prethodni. „Samo bez mreže“ ne otvara nijednu vezu; „Bez mreže + provere ažuriranja“ dodatno proverava i preuzima novu verziju Nexusa; „Bez mreže + provere ažuriranja + preuzimanja“ dodatno preuzima ono što pokreneš.",
     save: "Sačuvaj izbor",
     saved: "Izbor je sačuvan.",
     restartNote: "Promena režima važi od sledećeg pokretanja Nexusa.",
@@ -236,7 +270,10 @@ export const sr = {
     available: "Dostupna je nova verzija: {version}.",
     install: "Preuzmi i pokreni instalaciju",
     installing: "Preuzimam…",
-    installHint: "Ništa se ne preuzima pre ovog klika. Nexus proverava potpis instalacije, pokreće je i zatvara se.",
+    installHint:
+      "Ništa se ne preuzima pre ovog klika. Nexus proverava potpis instalacije, pokreće je i zatvara se. Instalacija se zatim izvodi tiho i, kada završi, sama otvara novu verziju.",
+    portableNote:
+      "Ovaj primerak Nexusa se pokreće sa USB-a, pa nikad ne instalira sopstveno ažuriranje: sve što čuva ostaje na USB-u. Novu verziju preuzmi sa stranice izdanja i zameni fasciklu na USB-u.",
     later: "Kasnije",
     releasePage: "Stranica izdanja",
     notesTitle: "Šta je novo",
@@ -249,6 +286,8 @@ export const sr = {
       signature:
         "Potpis datoteke sa proverom nije ispravan. Preuzimanje je zaustavljeno pre nego što je instalacija počela.",
       hash: "Preuzeta datoteka ne odgovara svojoj proveri. Obrisana je i nije pokrenuta.",
+      portable:
+        "Primerak koji se pokreće sa USB-a nikad ne instalira sopstveno ažuriranje. Otvori stranicu izdanja i zameni fasciklu na USB-u.",
     },
   },
 
@@ -336,6 +375,15 @@ export const sr = {
         dogadjaji: "Organizujem događaje",
         trenira: "Treniram druge",
         prevodi: "Prevodim i lektorišem",
+        laboratorija: "Radim u laboratoriji",
+        instalacije: "Postavljam instalacije",
+        sistemi: "Održavam mreže i sisteme",
+        servis: "Servisiram vozila",
+        jedrim: "Jedrim",
+        letim: "Letim",
+        "merim-teren": "Merim teren i koordinate",
+        radio: "Radim sa radiom",
+        solar: "Montiram solarne sisteme",
       } satisfies Record<string, string>,
     },
     /** Not what somebody does but HOW — and it decides what every module opens on. */
@@ -4511,6 +4559,46 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
   devtools: devtoolsSr,
   /* „Stručne alatke" — the drawer that hosts every pack, see `strings/pro.ts`. */
   pro: proSr,
+  /**
+   * The tool finder — one search across every tool in BOTH drawers, drawn at the
+   * head of „Alatke“ and „Stručne alatke“ alike.
+   *
+   * A group of its own rather than keys under `tools`, because it belongs to
+   * neither drawer: the same component stands in both rooms and searches the
+   * whole catalogue at once, so hanging its copy under one drawer's group would
+   * have the other drawer's page reading it by name.
+   *
+   * `groups` is the eight `TOOL_TASK_GROUPS`, and one map serves both drawers on
+   * `tools.category`'s exact reasoning — a second map is how a group ends up
+   * labelled in one place and rendered as a raw id in the other.
+   */
+  toolFinder: {
+    searchLabel: "Pretraži sve alatke",
+    searchPlaceholder: "Nađi alatku po imenu, pojmu ili struci…",
+    groupsLabel: "Grupe po potrebi",
+    /** Section headings over an empty box. „Omiljene“ first is the whole point of starring. */
+    favourites: "Omiljene",
+    recent: "Nedavno",
+    allTools: "Sve alatke",
+    /** Nothing matched. Says what happened, and does not scold — `tools.noMatches`' tone. */
+    noMatches: "Nijedna alatka ne odgovara.",
+    clearSearch: "Poništi pretragu",
+    /** The star's two states, as the accessible name of one button. */
+    starAdd: "Dodaj u omiljene",
+    starRemove: "Ukloni iz omiljenih",
+    /** The keyboard line under the list, `search.hint`'s shape and the same keys. */
+    hint: "↑↓ kretanje · Enter otvori · Esc poništi",
+    groups: {
+      money: "Novac i fakture",
+      dates: "Datumi i rokovi",
+      measure: "Mere i pretvaranje",
+      text: "Tekst i dokumenti",
+      design: "Dizajn i mediji",
+      build: "Izgradnja i popravka",
+      data: "Podaci i kod",
+      study: "Učenje i nastava",
+    } satisfies Record<ToolTaskGroup, string>,
+  },
   /* „Elektronika" — the workbench, see `strings/electronics.ts`. */
   electronics: electronicsSr,
   fitness: {
@@ -5698,7 +5786,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       profile: "Profil i sigurnost",
       appearance: "Izgled",
       keyboard: "Tastatura",
-      modules: "Moduli",
+      modules: "Prikaz",
       notifications: "Obaveštenja",
       data: "Podaci",
       privacy: "Privatnost",
@@ -5710,7 +5798,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       keyboard: "Prečice na tastaturi",
       modules: "Koji delovi Nexusa su uključeni i podešavanja svakog modula",
       notifications: "Šta te obaveštava i kada",
-      data: "Rezervna kopija, vraćanje, uvoz, izvoz i sinhronizacija",
+      data: "Rezervna kopija, vraćanje, uvoz i izvoz",
       privacy: "Mreža i ažuriranja, šta se čuva i gde, istorija pretrage",
       about: "Verzija, lokacija podataka i licence",
     },
@@ -5728,6 +5816,37 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     searchResultCountOne: "{n} rezultat",
     searchResultCountMany: "{n} rezultata",
+    /**
+     * The gear a module page wears beside its title (`moduleSettingsGear.tsx`):
+     * the accessible name of the button that opens Podešavanja directly at that
+     * module's card. One entry per module that publishes a card, spelled for
+     * the PHRASE rather than glued together from `sectionTitle` — Serbian puts
+     * the module in the accusative, so „za Zadatke“ and „za Kontrolnu tablu“
+     * are not forms any template can build from the nominative names the rest
+     * of the app holds. The module's own name is kept verbatim, as `moduleName`
+     * and every other sentence that names one does.
+     */
+    moduleSettingsButton: {
+      dashboard: "Podešavanja za Kontrolnu tablu",
+      tasks: "Podešavanja za Zadatke",
+      calendar: "Podešavanja za Kalendar",
+      notes: "Podešavanja za Beleške",
+      priv: "Podešavanja za Privatne beleške",
+      files: "Podešavanja za Datoteke",
+      study: "Podešavanja za Učenje",
+      finance: "Podešavanja za Finansije",
+      habits: "Podešavanja za Navike",
+      fitness: "Podešavanja za Fitnes",
+      focus: "Podešavanja za Fokus",
+      tools: "Podešavanja za Alatke",
+    },
+    /**
+     * The same name for a module this table has no phrase for — one added to
+     * the registry before its copy is written. It names the module in the
+     * nominative, which is what `moduleName` holds, so the phrasing is one that
+     * needs no case a template could not form.
+     */
+    moduleSettingsButtonFallback: "Podešavanja: {name}",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profil",
@@ -5771,6 +5890,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       privacy: "Podaci i privatnost",
       about: "O aplikaciji",
       licences: "Licence",
+      "content-packs": "Paketi sadržaja",
     },
     /**
      * SET §5: the per-card „Vrati na podrazumevano“. One block of copy for
@@ -5872,6 +5992,29 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         "30": "Posle 30 minuta",
         "60": "Posle 1 sata",
         "0": "Nikad",
+      } satisfies Record<string, string>,
+      askPasscodeTitle: "Traži pristupni kod",
+      askPasscodeHint:
+        "Nexus traži pristupni kod kada se pokrene, osim ako je od poslednjeg otključavanja prošlo manje od izabranog vremena. Zaključavanje aplikacije briše zapamćeni ključ, pa sledeće pokretanje ponovo traži kod.",
+      /** UNLOCK_SETTINGS members as option labels, keyed by the member itself. */
+      askPasscodeOptions: {
+        "every-time": "Svaki put kad se Nexus pokrene",
+        "1h": "Posle 1 sata",
+        "8h": "Posle 8 sati",
+        "1d": "Posle 1 dana",
+        "7d": "Posle 7 dana",
+        never: "Nikad",
+      } satisfies Record<string, string>,
+      askPasscodeWarning:
+        "Svako ko može da koristi ovaj Windows nalog može da otvori Nexus bez pristupnog koda u tom periodu.",
+      askPasscodePasscodeLabel: "Pristupni kod",
+      askPasscodeSaved: "Podešavanje je sačuvano.",
+      /** Keyed by UnlockSettingUnavailableReason, read through `lookup` so the table keeps literal keys. */
+      askPasscodeUnavailable: {
+        keystore:
+          "Ovaj računar trenutno ne može bezbedno da čuva ključ, pa Nexus uvek traži pristupni kod.",
+        "plaintext-backend":
+          "Na ovom sistemu ključ bi se čuvao kao običan tekst, pa Nexus uvek traži pristupni kod.",
       } satisfies Record<string, string>,
     },
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
@@ -6183,16 +6326,30 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       pro:
         "Alatke po strukama — uključuješ pakete koji ti trebaju, a fioka pokazuje samo njih.",
     } satisfies Record<string, string>,
-    /** Category-group headings above the module gallery, keyed by registry category. */
-    moduleCategories: {
-      "Core experience": "Osnovno iskustvo",
-      "Content & knowledge": "Sadržaj i znanje",
-      "Life hubs": "Životni centri",
-      "Professional & utilities": "Profesionalno i alati",
-      "Growth & platform": "Rast i platforma",
-    } satisfies Record<string, string>,
+    /**
+     * The gallery's group headings are the navigation groups' own names
+     * (`strings.app.navGroups`), not a second set: the gallery, the onboarding
+     * chooser and the rail list the same modules under the same words, and
+     * ADR-093 collapsed the two tables into one so a group cannot be called two
+     * things. The older, longer headings („Sadržaj i znanje") are gone with
+     * them.
+     */
     modulesAlwaysOn: "Uvek uključeno",
     modulesToggleError: "Promena nije uspela. Pokušaj ponovo.",
+    /**
+     * ADR-101: the „Prikaz" card — what this DEVICE shows, and in what order.
+     * One setting for the whole app rather than one per profile, so the words
+     * here say „this Nexus" rather than „this profile".
+     */
+    visibility: {
+      hint: "Isključeni moduli nestaju sa strane, iz pokretača, sa kontrolne table, iz pretrage i iz obaveštenja. Podaci ostaju — kad modul ponovo uključiš, sve je tu.",
+      orderHint: "Grupe i module raspoređuješ prevlačenjem ili dugmićima za pomeranje.",
+      moveUp: "Pomeri {name} gore",
+      moveDown: "Pomeri {name} dole",
+      moveGroupUp: "Pomeri grupu {name} gore",
+      moveGroupDown: "Pomeri grupu {name} dole",
+      reset: "Vrati podrazumevani raspored",
+    },
     /**
      * ADR-065 §5, moved by ADR-086 — the one row that reopens the
      * questionnaire.
@@ -6546,6 +6703,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         // ADR-058: arhiva se vraća samo u profil svoje vrste (lični ↔ poslovni).
         "profile-kind-mismatch":
           "Arhiva pripada drugoj vrsti profila (lični/poslovni) i ne može se vratiti u ovaj profil — izaberi profil iste vrste.",
+        // ADR-090: arhiva nosi podatke modula koji ova verzija ne poznaje.
+        "unknown-module":
+          "Arhiva sadrži podatke modula koji ova verzija ne poznaje — ažuriraj Nexus ili uvezi arhivu u verziji koja ju je napravila.",
+        // ADR-090: modul je tu, ali njegove podatke ova verzija ne ume da pročita.
+        "invalid-module-data":
+          "Arhiva sadrži podatke modula zapisane u novijoj verziji — ova verzija Nexusa ne može da ih pročita.",
       } satisfies Record<RestoreProblemCode, string>,
     },
     /**
@@ -7346,6 +7509,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * deliberately about what to DO next; several distinct protocol refusals
      * therefore share one sentence, because the user's next move is the same
      * and the distinction is ours, not theirs.
+     *
+     * ON HOLD (2026-10-08, `shared/syncHold.ts`): `SYNC_ON_HOLD` keeps the card
+     * out of the settings page, its search index and the screenshot sweep, so
+     * no sentence here reaches a user. The table stays typed and complete
+     * because turning the work back on is flipping one constant.
      */
     sync: {
       description:
@@ -7575,8 +7743,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /**
      * „Podaci i privatnost“ (SET-010, local half): six plain sentences, each
      * one a fact about how this build is put together rather than a promise.
+     * Five of them are drawn while sync is ON HOLD — `sync` below stays in the
+     * table but `SettingsPage` does not print it (`shared/syncHold.ts`) — so
+     * what a user reads is the five that are still true of this build.
      *
-     * The six sentences have deliberately nothing to operate — no toggle, no
+     * The sentences have deliberately nothing to operate — no toggle, no
      * link, no „saznaj više“. A privacy panel with a switch on it is a panel
      * about a setting; those are about what is already true, and every
      * sentence is checkable in the source:
@@ -7596,7 +7767,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      *  - `sync`      — the other half of the same fact, because a card that
      *                  lists what leaves the device has to name what leaves it
      *                  once the user turns sync on: ciphertext, plus the row
-     *                  metadata migration 003 keeps in the clear.
+     *                  metadata migration 003 keeps in the clear. NOT DRAWN
+     *                  while the work is on hold; the leaf is kept for the day
+     *                  it is turned back on.
      *  - `exports`   — `main/imex.ts` writes to a path chosen in the system
      *                  save dialog, sealed under a passphrase-derived key when
      *                  one is given (ADR-022).
@@ -7651,12 +7824,127 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         error: "Brisanje istorije pretrage nije uspelo. Pokušaj ponovo.",
       },
     },
+    /**
+     * ADR-091 — „Paketi sadržaja". A content pack is a signed folder of public
+     * content (offline Wikipedia, a map, a dataset) installed from a disk or a
+     * USB stick and kept beside the encrypted database rather than inside it.
+     *
+     * The card has to say three things a user cannot see: what a pack IS, that
+     * it is accepted only when Nexus's own key signed it, and that the licence
+     * and the attribution travel with the content because the licence requires
+     * it. `problem` is one sentence per `PackRefusalCode`, in the same shape as
+     * `network.problem` — the codes are main's, and the words are this table's.
+     */
+    contentPacks: {
+      intro:
+        "Paket je fascikla javnog sadržaja — na primer cela Vikipedija za čitanje bez interneta, mapa ili skup podataka — koju Nexus prihvata samo ako je potpisana ključem Nexusa. Sadržaj ostaje na ovom uređaju, u fascikli pored šifrovane baze, i ne ulazi u rezervnu kopiju profila.",
+      emptyTitle: "Nema instaliranih paketa.",
+      emptyBody:
+        "Paket donosiš kao fasciklu na disku ili na USB-u: u njoj su pack.json, njegov potpis i sam sadržaj. Ovde vidiš šta je instalirano, možeš da proveriš sadržaj i da ukloniš paket.",
+      install: "Instaliraj iz fascikle…",
+      installHint:
+        "Nexus prvo proverava potpis i svaki heš, pa tek onda kopira. Ništa se ne šalje na internet i ništa iz profila se ne dira.",
+      verify: "Proveri",
+      verifying: "Provera…",
+      remove: "Ukloni",
+      candidateTitle: "Instalirati ovaj paket?",
+      candidateQuestion: "U fascikli je „{title}“, verzija {version}, veličine {size}.",
+      candidateHint:
+        "Potpis je već proveren. Instaliranje kopira sadržaj u fasciklu paketa na ovom uređaju i dodaje ga na listu.",
+      installConfirm: "Instaliraj",
+      removeTitle: "Ukloniti paket?",
+      removeQuestion: "Sadržaj paketa se briše sa ovog uređaja. Podaci profila se ne diraju.",
+      removeConfirm: "Ukloni",
+      cancel: "Otkaži",
+      versionLabel: "Verzija",
+      sizeLabel: "Veličina",
+      filesLabel: "Datoteke",
+      licenceLabel: "Licenca",
+      attributionLabel: "Atribucija",
+      sourceLabel: "Izvor",
+      verifyOk: "Sadržaj je proveren i odgovara potpisanom manifestu.",
+      progressCopy: "Kopiranje: {file}",
+      progressVerify: "Provera: {file}",
+      progressCount: "{done} od {total}",
+      problemTitle: "Paket nije prihvaćen.",
+      problem: {
+        "not-a-pack": "U izabranoj fascikli nema čitljivog pack.json.",
+        "not-a-directory": "Paket je fascikla; izaberi fasciklu u kojoj je pack.json.",
+        "manifest-unreadable": "pack.json se ne može pročitati.",
+        "manifest-too-large": "pack.json je veći nego što manifest sme da bude.",
+        signature: "Potpis na pack.json nije važeći, pa paket nije instaliran.",
+        "format-unknown": "Format ovog paketa je noviji od ove verzije Nexusa.",
+        "id-invalid": "Oznaka paketa nije ispravna.",
+        "version-invalid": "Verzija paketa nije ispravna.",
+        "kind-unknown": "Vrsta sadržaja ovog paketa nije poznata.",
+        "title-invalid": "Naziv paketa nije ispravan.",
+        "description-invalid": "Opis paketa nije ispravan.",
+        "files-invalid": "Spisak datoteka u manifestu nije ispravan.",
+        "path-invalid": "Manifest navodi putanju koju Nexus ne prihvata.",
+        "path-duplicate": "Manifest dva puta navodi istu datoteku.",
+        "path-duplicate-case": "Manifest navodi dve datoteke koje su na Windowsu jedna.",
+        "hash-invalid": "Heš u manifestu nije ispravan.",
+        "size-invalid": "Veličina u manifestu nije ispravna.",
+        limit: "Paket je veći, ili navodi više datoteka, nego što je dozvoljeno.",
+        "licence-invalid": "Podaci o licenci u manifestu nisu ispravni.",
+        "source-invalid": "Podaci o izvoru u manifestu nisu ispravni.",
+        "min-app-version-invalid": "Najniža verzija aplikacije u manifestu nije ispravna.",
+        "min-app-version-too-new": "Ovaj paket traži noviju verziju Nexusa.",
+        "older-than-installed": "Novija verzija ovog paketa je već instalirana.",
+        symlink: "Paket sadrži simbolički link, što nije dozvoljeno.",
+        "not-a-file": "U paketu je nešto što nije ni datoteka ni fascikla.",
+        "missing-file": "Datoteka koju manifest navodi ne postoji u paketu.",
+        "extra-file": "U paketu je datoteka koju manifest ne navodi.",
+        "size-mismatch": "Veličina datoteke se ne poklapa sa manifestom.",
+        "hash-mismatch": "Sadržaj datoteke se ne poklapa sa hešom u manifestu.",
+        "no-space": "Na disku nema dovoljno mesta za ovaj paket.",
+        "no-candidate": "Nijedan paket nije izabran.",
+        "not-found": "Ovaj paket nije instaliran.",
+        io: "Paket se ne može pročitati ili upisati.",
+        "notice-invalid": "Oznaka bezbednosne napomene u manifestu nije ispravna.",
+        "catalogue-unreadable": "Katalog paketa se ne može pročitati.",
+        "catalogue-signature": "Potpis kataloga nije važeći, pa katalog nije prihvaćen.",
+        "catalogue-host": "Katalog upućuje na adresu sa koje Nexus ne sme da preuzima.",
+        "catalogue-entry": "Unos u katalogu nije ispravan, ili ovaj paket nije u katalogu.",
+        "downloads-off": "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti.",
+        "download-failed": "Preuzimanje nije uspelo. Pokušaj ponovo.",
+        busy: "Drugo preuzimanje je već u toku, ili je ovo već pokrenuto.",
+        "tool-invalid": "Podaci o programu koji paket nosi nisu ispravni.",
+      } satisfies Record<PackRefusalCode, string>,
+      /** ADR-103: the catalogue the card draws and the download it can start. */
+      catalogueTitle: "Katalog paketa",
+      catalogueHint:
+        "Katalog je spisak paketa koji mogu da se preuzmu; potpisuje ga isti ključ kojim su potpisani i sami paketi, pa se prikazuje samo ono što je Nexus zaista objavio. Detalji pokazuju licencu, atribuciju i izvor pre nego što se bilo šta preuzme.",
+      catalogueRefresh: "Osveži katalog",
+      catalogueEmpty: "U katalogu trenutno nema paketa.",
+      catalogueModeOff:
+        "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti da bi preuzimao pakete.",
+      catalogueDetails: "Detalji",
+      download: "Preuzmi",
+      downloadPause: "Pauza",
+      downloadResume: "Nastavi",
+      downloadCancel: "Otkaži",
+      downloadHint:
+        "Preuzimanje ide preko usluge za preuzimanje, datoteku po datoteku, i svaki heš se proverava dok se piše. Ako se veza prekine, možeš da pauziraš i nastaviš; ako server ne ume da nastavi preuzimanje, ta datoteka ide ispočetka.",
+      downloadProgressDownload: "Preuzimanje: {file}",
+      downloadProgressInstall: "Instaliranje: {file}",
+      stateNotInstalled: "Nije instaliran",
+      stateInstalled: "Instaliran",
+      stateUpdate: "Dostupno ažuriranje",
+      installedVersionLabel: "Instalirana verzija",
+      error: "Radnja nije uspela. Pokušaj ponovo.",
+    },
     about: {
       version: "Verzija",
       electron: "Electron",
       chromium: "Chromium",
       node: "Node",
       dataLocation: "Lokacija podataka",
+      /** ADR-103: every installed pack's licence, attribution and source, on the About card. */
+      packLicences: "Licence paketa",
+      packLicencesHint:
+        "Svaki instalirani paket nosi svoju licencu, svoju atribuciju i svoj izvor. Veza se otvara u tvom pregledaču, nikada u Nexusovoj mreži.",
+      packLicencesEmpty: "Nema instaliranih paketa.",
     },
     /**
      * „Licence": the notices this product owes for other people's code.

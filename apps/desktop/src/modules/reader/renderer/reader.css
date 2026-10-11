@@ -1,0 +1,366 @@
+/* READER (ADR-090, ADR-100). Tokens exclusively - raw colour values are
+   forbidden outside @nexus/tokens, and this stylesheet is checked by the same
+   gates the shell's own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`: the shell's
+ * stylesheet is part of the startup chunk, so a rule for a page nobody has
+ * opened would be paid for on every launch. Vite turns this import into a chunk
+ * of its own, loaded with the page - the same shape the module's JavaScript has.
+ *
+ * Class prefix `reader__`, for the reason the shell's split states: a rule
+ * belongs to the module whose prefix it carries.
+ *
+ * The reading view is the one place in this app where prose is the CONTENT
+ * rather than a caption: a book page is a measure of text, so the article column
+ * caps at `--nx-layout-prose` and the three reading sizes move the body type
+ * between the token ramp's steps rather than scaling it by a factor of its own.
+ */
+
+.reader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-3) var(--nx-space-5) var(--nx-space-5);
+  min-height: 0;
+}
+
+.reader__error {
+  margin: 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* The progress line IS the shared hint tier (`nx-hint` at the call site), with one
+   addition: tabular figures, so the number climbing while an index builds does not
+   shuffle the sentence beside it. */
+.reader__status {
+  font-variant-numeric: tabular-nums;
+}
+
+.reader__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.reader__shelf {
+  display: flex;
+  flex-direction: column;
+}
+
+.reader__row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+.reader__book-title,
+.reader__book-name {
+  color: var(--nx-text);
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.reader__book-meta {
+  margin-left: var(--nx-space-2);
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.reader__book {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-height: 0;
+}
+
+.reader__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+
+.reader__text-size {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-left: auto;
+}
+
+.reader__text-size-label,
+.reader__source-label {
+  color: var(--nx-text-subtle);
+  font-size: var(--nx-font-size-label);
+  letter-spacing: var(--nx-font-tracking-label);
+  text-transform: uppercase;
+}
+
+.reader__text-size-options {
+  display: flex;
+  gap: var(--nx-space-1);
+}
+
+/* Two panes at the minimum window: the contents list is a fixed rail and the
+   article takes the rest, so 900x600 needs no horizontal scroll and the Serbian
+   words in the tree wrap rather than pushing the column wider. */
+.reader__panes {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: var(--nx-space-5);
+  align-items: start;
+  min-height: 0;
+}
+
+.reader__toc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: var(--nx-space-2);
+}
+
+.reader__toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reader__toc-row,
+.reader__result {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+  width: 100%;
+  padding: 4px var(--nx-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--nx-radius-md);
+  background: none;
+  color: var(--nx-text-muted);
+  font-family: inherit;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reader__toc-row:hover,
+.reader__result:hover {
+  background: var(--nx-surface-alt);
+  color: var(--nx-text);
+}
+
+/* Selection is typographic (the house rule): accent ink and weight, no fill and
+   no glow, and `aria-current` is what paints it so the state a screen reader is
+   told and the state an eye is shown cannot drift. */
+.reader__toc-row[aria-current="page"] {
+  color: var(--nx-accent);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+.reader__toc-chapter > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: 4px var(--nx-space-2);
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  cursor: pointer;
+}
+
+.reader__toc-chapter > .reader__toc-list {
+  padding-left: var(--nx-space-3);
+}
+
+.reader__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  min-width: 0;
+}
+
+.reader__search-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+
+.reader__search-form > .nx-textfield {
+  flex: 1 1 var(--nx-layout-col-min);
+  min-width: 0;
+}
+
+.reader__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.reader__result {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.reader__result-title {
+  color: var(--nx-text);
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.reader__result-snippet {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* The matched words. `mark`'s user-agent fill is a browser yellow, which is
+   neither theme's ink; the accent's soft ground is the app's own way of saying
+   "this is the part you searched for". */
+.reader mark {
+  background: var(--nx-accent-soft);
+  color: var(--nx-text);
+  border-radius: var(--nx-radius-xs);
+}
+
+.reader__article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  max-width: var(--nx-layout-prose);
+  color: var(--nx-text);
+  line-height: var(--nx-font-leading-loose);
+}
+
+/* The three reading sizes: token steps, not a scale factor, so no size lands
+   between two of the ramp's own values. */
+.reader[data-size="s"] .reader__article {
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.reader[data-size="m"] .reader__article {
+  font-size: var(--nx-font-size-body);
+}
+
+.reader[data-size="l"] .reader__article {
+  font-size: var(--nx-font-size-title);
+  line-height: var(--nx-font-leading-normal);
+}
+
+.reader__title {
+  margin: 0;
+  font-family: var(--nx-font-family-display);
+  font-size: var(--nx-font-size-h1);
+  font-weight: var(--nx-font-weight-semibold);
+  letter-spacing: var(--nx-font-tracking-h1);
+  line-height: var(--nx-font-leading-tight);
+}
+
+.reader__source {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin: 0;
+}
+
+.reader__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nx-accent);
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.reader__article h2,
+.reader__article h3,
+.reader__article h4 {
+  margin: var(--nx-space-4) 0 0;
+  font-family: var(--nx-font-family-display);
+  letter-spacing: var(--nx-font-tracking-tight);
+  line-height: var(--nx-font-leading-snug);
+}
+
+.reader__article p,
+.reader__article ul,
+.reader__article ol,
+.reader__article blockquote,
+.reader__article pre {
+  margin: 0;
+}
+
+.reader__article ul,
+.reader__article ol {
+  padding-left: var(--nx-space-5);
+}
+
+.reader__article blockquote {
+  padding-left: var(--nx-space-3);
+  border-left: 2px solid var(--nx-border);
+  color: var(--nx-text-muted);
+}
+
+.reader__code {
+  padding: var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-body-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reader__table-wrap {
+  overflow-x: auto;
+}
+
+.reader__table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.reader__table th,
+.reader__table td {
+  border: 1px solid var(--nx-border-subtle);
+  padding: var(--nx-space-1) var(--nx-space-2);
+  text-align: left;
+}
+
+.reader__image {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--nx-radius-md);
+}
+
+.reader__article-actions,
+.reader__footer,
+.reader__note {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-3);
+  flex-wrap: wrap;
+}
+
+.reader__note > .nx-textfield {
+  flex: 1 1 var(--nx-layout-col-min);
+  min-width: 0;
+}
+
+.reader__print {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nx-space-2);
+  margin-left: auto;
+}

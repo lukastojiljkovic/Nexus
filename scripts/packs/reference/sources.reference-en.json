@@ -1,0 +1,360 @@
+{
+  "pack": "reference-en",
+  "language": "en",
+  "built": "2026-10-10",
+  "documents": [
+    {
+      "id": "us-declaration-of-independence",
+      "work": "Declaration of Independence",
+      "section": "The unanimous Declaration of the thirteen united States of America",
+      "url": "https://www.archives.gov/founding-docs/declaration-transcript",
+      "canonical": "https://www.archives.gov/founding-docs/declaration-transcript",
+      "fetched": "2026-10-10",
+      "bytes": 48690,
+      "sha256": "ecda8dea84c043b9df4c4ad6e74aeec9be2ad48e8dc78d95c0cb4f753aa54f36",
+      "format": "html",
+      "licence": {
+        "spdx": "LicenseRef-US-Government-Work",
+        "name": "Work of the United States Government — no copyright (17 U.S.C. § 105)",
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "evidence": [
+          {
+            "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+            "quote": "Copyright protection under this title is not available for any work of the United States Government"
+          }
+        ]
+      }
+    },
+    {
+      "id": "us-constitution",
+      "work": "Constitution of the United States",
+      "section": "Articles I–VII",
+      "url": "https://www.archives.gov/founding-docs/constitution-transcript",
+      "canonical": "https://www.archives.gov/founding-docs/constitution-transcript",
+      "fetched": "2026-10-10",
+      "bytes": 70555,
+      "sha256": "868cdde901687ddd171a876e969a17ba7169257df6febd921ce1a9223e55d434",
+      "format": "html",
+      "licence": {
+        "spdx": "LicenseRef-US-Government-Work",
+        "name": "Work of the United States Government — no copyright (17 U.S.C. § 105)",
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "evidence": [
+          {
+            "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+            "quote": "Copyright protection under this title is not available for any work of the United States Government"
+          }
+        ]
+      }
+    },
+    {
+      "id": "us-bill-of-rights",
+      "work": "Bill of Rights",
+      "section": "Amendments I–X",
+      "url": "https://www.archives.gov/founding-docs/bill-of-rights-transcript",
+      "canonical": "https://www.archives.gov/founding-docs/bill-of-rights-transcript",
+      "fetched": "2026-10-10",
+      "bytes": 47259,
+      "sha256": "c9d7617b4ec4c4f97ddcfecdd570cab80ed40c061b175c9086c62fec2931073e",
+      "format": "html",
+      "licence": {
+        "spdx": "LicenseRef-US-Government-Work",
+        "name": "Work of the United States Government — no copyright (17 U.S.C. § 105)",
+        "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+        "evidence": [
+          {
+            "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title17/html/USCODE-2023-title17-chap1-sec105.htm",
+            "quote": "Copyright protection under this title is not available for any work of the United States Government"
+          }
+        ]
+      }
+    },
+    {
+      "id": "un-charter",
+      "work": "Charter of the United Nations",
+      "section": "Preamble and Chapters I–XIX",
+      "url": "https://www.un.org/en/about-us/un-charter/full-text",
+      "canonical": "https://www.un.org/en/about-us/un-charter/full-text",
+      "fetched": "2026-10-10",
+      "bytes": 150983,
+      "sha256": "8adbf384debdda0c2dfc570d88a3590f67a13a9a52e8e1b90f82716e930c1486",
+      "format": "html",
+      "licence": {
+        "spdx": "LicenseRef-UN-Public-Domain",
+        "name": "United Nations document — left in the public domain by the UN's own policy (ST/AI/189/Add.9/Rev.2)",
+        "url": "https://en.wikisource.org/wiki/Administrative_Instruction_ST/AI/189/Add.9/Rev.2",
+        "note": "The UN's website notice claims copyright in the site; its own administrative instruction carves Official Records and documents issued under a UN symbol out of that claim, and every document taken from a UN page here is one of those. The UN's own commentary on the page is not taken.",
+        "evidence": [
+          {
+            "url": "https://en.wikisource.org/wiki/Administrative_Instruction_ST/AI/189/Add.9/Rev.2",
+            "quote": "The following categories of material will, as at present, be left in the public domain"
+          },
+          {
+            "url": "https://www.un.org/en/about-us/copyright",
+            "quote": "None of the materials provided on this web site may be used, reproduced or transmitted, in whole or in part"
+          }
+        ]
+      }
+    },
+    {
+      "id": "udhr",
+      "work": "Universal Declaration of Human Rights",
+      "section": "Preamble and Articles 1–30",
+      "url": "https://www.un.org/en/about-us/universal-declaration-of-human-rights",
+      "canonical": "https://www.un.org/en/about-us/universal-declaration-of-human-rights",
+      "fetched": "2026-10-10",
+      "bytes": 105813,
+      "sha256": "af837b5c48935e9ac1692a2260577d29cc98f12c801c8cb9109eeab3b048eccc",
+      "format": "html",
+      "licence": {
+        "spdx": "LicenseRef-UN-Public-Domain",
+        "name": "United Nations document — left in the public domain by the UN's own policy (ST/AI/189/Add.9/Rev.2)",
+        "url": "https://en.wikisource.org/wiki/Administrative_Instruction_ST/AI/189/Add.9/Rev.2",
+        "note": "The UN's website notice claims copyright in the site; its own administrative instruction carves Official Records and documents issued under a UN symbol out of that claim, and every document taken from a UN page here is one of those. The UN's own commentary on the page is not taken.",
+        "evidence": [
+          {
+            "url": "https://en.wikisource.org/wiki/Administrative_Instruction_ST/AI/189/Add.9/Rev.2",
+            "quote": "The following categories of material will, as at present, be left in the public domain"
+          },
+          {
+            "url": "https://www.un.org/en/about-us/copyright",
+            "quote": "None of the materials provided on this web site may be used, reproduced or transmitted, in whole or in part"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iccpr",
+      "work": "International Covenant on Civil and Political Rights",
+      "section": "Preamble, Parts I–VI and the footnotes of the printed text",
+      "url": "https://en.wikisource.org/w/api.php?action=parse&page=International%20Covenant%20on%20Civil%20and%20Political%20Rights&prop=text&format=json&formatversion=2",
+      "canonical": "https://en.wikisource.org/wiki/International_Covenant_on_Civil_and_Political_Rights",
+      "fetched": "2026-10-10",
+      "bytes": 74563,
+      "sha256": "ff7ce435c781b0d8a895484dd45792fc76cad473ace8ffef6da35aada513b466",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      }
+    },
+    {
+      "id": "icescr",
+      "work": "International Covenant on Economic, Social and Cultural Rights",
+      "section": "Preamble and Parts I–V",
+      "url": "https://en.wikisource.org/w/api.php?action=parse&page=International%20Covenant%20on%20Economic%2C%20Social%20and%20Cultural%20Rights&prop=text&format=json&formatversion=2",
+      "canonical": "https://en.wikisource.org/wiki/International_Covenant_on_Economic,_Social_and_Cultural_Rights",
+      "fetched": "2026-10-10",
+      "bytes": 56623,
+      "sha256": "3245c9449ba10f88380aa0c2c622993a3093ed2e5dc18a3f566457ab235c0691",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      }
+    },
+    {
+      "id": "genocide-convention",
+      "work": "Convention on the Prevention and Punishment of the Crime of Genocide",
+      "section": "Articles I–XIX",
+      "url": "https://en.wikisource.org/w/api.php?action=parse&page=Convention%20on%20the%20Prevention%20and%20Punishment%20of%20the%20Crime%20of%20Genocide&prop=text&format=json&formatversion=2",
+      "canonical": "https://en.wikisource.org/wiki/Convention_on_the_Prevention_and_Punishment_of_the_Crime_of_Genocide",
+      "fetched": "2026-10-10",
+      "bytes": 32083,
+      "sha256": "0d9b3540d0d8e7050b3b818d99556a00e8702a405892a217b8dfd90928ce211d",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      }
+    },
+    {
+      "id": "crc",
+      "work": "Convention on the Rights of the Child",
+      "section": "Preamble and Articles 1–54",
+      "url": "https://en.wikisource.org/w/api.php?action=parse&page=Convention%20on%20the%20Rights%20of%20the%20Child&prop=text&format=json&formatversion=2",
+      "canonical": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+      "fetched": "2026-10-10",
+      "bytes": 97807,
+      "sha256": "2ce027c824b1dd90c366d9933762f01a553efa7f0b31c182d3a8d2b39b4ce9e1",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      }
+    },
+    {
+      "id": "eu-charter",
+      "work": "Charter of Fundamental Rights of the European Union",
+      "section": "The Charter as proclaimed on 12 December 2007 (2007/C 303/01)",
+      "url": "https://publications.europa.eu/resource/cellar/c0c63e95-a752-49e4-a88c-6120f5b8230b.0007.03/DOC_1",
+      "canonical": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:12012P/TXT",
+      "fetched": "2026-10-10",
+      "bytes": 46357,
+      "sha256": "ab32cc144cde0ab648f0e397bc51c8f426642a78eb56b6d3364b3cc4aaf2a2b5",
+      "format": "xhtml",
+      "licence": {
+        "spdx": "CC-BY-4.0",
+        "name": "European Union document — reuse under Commission Decision 2011/833/EU and CC BY 4.0",
+        "url": "https://commission.europa.eu/legal-notice_en",
+        "note": "EUR-Lex's own legal notice states the same in the negative — the legal documents published there may be re-used for commercial or non-commercial purposes unless otherwise specified — and adds the caveat this pack repeats in each EU article: only the Official Journal is authentic. That notice could not be read from this build environment (EUR-Lex answers every path with its “today's Official Journal” shell), which is why the quote above is the Commission's reuse notice and the documents are taken from the Publications Office's Cellar, the store EUR-Lex itself serves from.",
+        "evidence": [
+          {
+            "url": "https://commission.europa.eu/legal-notice_en",
+            "quote": "This means that reuse is allowed, provided appropriate credit is given and changes are indicated."
+          }
+        ]
+      }
+    },
+    {
+      "id": "eu-teu",
+      "work": "Consolidated version of the Treaty on European Union",
+      "section": "Official Journal C 202 of 7 June 2016, pages 1–46",
+      "url": "https://publications.europa.eu/resource/cellar/2021d50a-3468-11e6-969e-01aa75ed71a1.0005.01/DOC_1",
+      "canonical": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:12016M/TXT",
+      "fetched": "2026-10-10",
+      "bytes": 834528,
+      "sha256": "4122d5168aa78e5e4a3b8cb51888decd999a7c5b02c8ce21354593ab74552c5b",
+      "format": "xhtml",
+      "licence": {
+        "spdx": "CC-BY-4.0",
+        "name": "European Union document — reuse under Commission Decision 2011/833/EU and CC BY 4.0",
+        "url": "https://commission.europa.eu/legal-notice_en",
+        "note": "EUR-Lex's own legal notice states the same in the negative — the legal documents published there may be re-used for commercial or non-commercial purposes unless otherwise specified — and adds the caveat this pack repeats in each EU article: only the Official Journal is authentic. That notice could not be read from this build environment (EUR-Lex answers every path with its “today's Official Journal” shell), which is why the quote above is the Commission's reuse notice and the documents are taken from the Publications Office's Cellar, the store EUR-Lex itself serves from.",
+        "evidence": [
+          {
+            "url": "https://commission.europa.eu/legal-notice_en",
+            "quote": "This means that reuse is allowed, provided appropriate credit is given and changes are indicated."
+          }
+        ]
+      }
+    },
+    {
+      "id": "eu-tfeu",
+      "work": "Consolidated version of the Treaty on the Functioning of the European Union",
+      "section": "Official Journal C 202 of 7 June 2016, pages 47–388",
+      "url": "https://publications.europa.eu/resource/cellar/f1bcba61-0d85-4e7f-b41e-a72c42eb5c49.0005.01/DOC_1",
+      "canonical": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:12016E/TXT",
+      "fetched": "2026-10-10",
+      "bytes": 1613238,
+      "sha256": "9edd9ff12dfe0824d4648631c48b97d458cf19bab7a4c273e99370a1eec00560",
+      "format": "xhtml",
+      "licence": {
+        "spdx": "CC-BY-4.0",
+        "name": "European Union document — reuse under Commission Decision 2011/833/EU and CC BY 4.0",
+        "url": "https://commission.europa.eu/legal-notice_en",
+        "note": "EUR-Lex's own legal notice states the same in the negative — the legal documents published there may be re-used for commercial or non-commercial purposes unless otherwise specified — and adds the caveat this pack repeats in each EU article: only the Official Journal is authentic. That notice could not be read from this build environment (EUR-Lex answers every path with its “today's Official Journal” shell), which is why the quote above is the Commission's reuse notice and the documents are taken from the Publications Office's Cellar, the store EUR-Lex itself serves from.",
+        "evidence": [
+          {
+            "url": "https://commission.europa.eu/legal-notice_en",
+            "quote": "This means that reuse is allowed, provided appropriate credit is given and changes are indicated."
+          }
+        ]
+      }
+    },
+    {
+      "id": "magna-carta",
+      "work": "Magna Carta",
+      "section": "The translation by William Sharp McKechnie (1914), as printed in Source Problems in English History (1915)",
+      "url": "https://en.wikisource.org/w/api.php?action=parse&page=Source%20Problems%20in%20English%20History/Appendix/Magna%20Carta.%201215&prop=text&format=json&formatversion=2",
+      "canonical": "https://en.wikisource.org/wiki/Source_Problems_in_English_History/Appendix/Magna_Carta._1215",
+      "fetched": "2026-10-10",
+      "bytes": 42232,
+      "sha256": "fb44efe8d06729e08863e91bb2a6541e863bfb31c6024d6dcf4279e3d63f13e5",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      },
+      "translation": "William Sharp McKechnie (1914), in Albert Beebe White and Wallace Notestein, Source Problems in English History (1915)"
+    },
+    {
+      "id": "declaration-of-the-rights-of-man",
+      "work": "Declaration of the Rights of Man and of the Citizen",
+      "section": "The translation by Frank Maloy Anderson (1908)",
+      "url": "https://en.wikisource.org/w/api.php?action=parse&page=The%20Constitutions%20and%20Other%20Select%20Documents%20Illustrative%20of%20the%20History%20of%20France%2C%201789%E2%80%931907/15&prop=text&format=json&formatversion=2",
+      "canonical": "https://en.wikisource.org/wiki/The_Constitutions_and_Other_Select_Documents_Illustrative_of_the_History_of_France,_1789%E2%80%931907/15",
+      "fetched": "2026-10-10",
+      "bytes": 123588,
+      "sha256": "7e620b4bb1e3f21d371b71f0e00ec7a11b8f802c70996dfb28061c0274dc8758",
+      "format": "wikisource-parse",
+      "licence": {
+        "spdx": "CC-BY-SA-4.0",
+        "name": "Wikisource transcription — CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "note": "The transcription is the work; the document transcribed under it is older and freer than the site. Both are named, because share-alike attaches to the transcription and nothing in this pack modifies one.",
+        "evidence": [
+          {
+            "url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+            "quote": "Please note that these licenses do allow commercial uses of your contributions, as long as such uses are compliant with the terms of the respective licenses."
+          },
+          {
+            "url": "https://en.wikisource.org/wiki/Convention_on_the_Rights_of_the_Child",
+            "quote": "This work is excerpted from an official document of the United Nations."
+          }
+        ]
+      },
+      "translation": "Frank Maloy Anderson (1908), The Constitutions and Other Select Documents Illustrative of the History of France, 1789–1907"
+    }
+  ]
+}

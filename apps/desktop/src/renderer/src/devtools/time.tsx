@@ -339,7 +339,13 @@ function CronTool() {
         <ToolOutput label={s.meaning} value="" empty={strings.pro.common.awaitingInput} />
       ) : result === null ? null : !result.ok ? (
         <>
-          <ToolFailure>{result.error.message}</ToolFailure>
+          {/* The refusal is written in both languages by `parseCron` — the field
+              it names and the numbers it accepts are the parser's arithmetic,
+              so a surface that composed its own sentence would be a second
+              copy of the reason. */}
+          <ToolFailure>
+            {activeLocale() === "en" ? result.error.messageEn : result.error.messageSr}
+          </ToolFailure>
           <ResultRow label={s.offendingToken} value={result.error.token} />
         </>
       ) : (

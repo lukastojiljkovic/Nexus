@@ -1,0 +1,125 @@
+/* REFERENCE (the WIKI module, ADR-090/ADR-098). Tokens exclusively — raw colour
+   values are forbidden outside @nexus/tokens, and this stylesheet is checked by
+   the same gates the shell's own are (`check:colours`, `check:tokens`,
+   `check:layers`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`: the shell's
+ * stylesheet is part of the startup chunk, so a rule for a page nobody has
+ * opened would be paid for on every launch. Vite turns this import into a chunk
+ * of its own, loaded with the page.
+ *
+ * Class prefix `wiki__`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries.
+ */
+
+.wiki {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.wiki__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.wiki__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.wiki__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.wiki__list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* History and the hit list are long and bounded at both ends: a vertical scroll
+   inside the card keeps the page short without ever clipping a row, and the
+   width never scrolls sideways. */
+.wiki__list-scroll {
+  max-height: 18rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.wiki__title {
+  margin-inline-end: var(--nx-space-3);
+}
+
+.wiki__meta {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wiki__note {
+  color: var(--nx-text-subtle);
+}
+
+.wiki__error {
+  color: var(--nx-danger);
+}
+
+.wiki__frame {
+  inline-size: 100%;
+  block-size: 60vh;
+  min-block-size: 20rem;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-raised);
+}
+
+.wiki__frame-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wiki__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.wiki__progress-track {
+  block-size: 0.5rem;
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-sunken);
+  overflow: hidden;
+}
+
+.wiki__progress-bar {
+  block-size: 100%;
+  background: var(--nx-accent);
+}
+
+.wiki__collection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+
+.wiki__collection-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.wiki__widget {
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,297 @@
+{
+  "format": 1,
+  "notes": [
+    "Every voice this repository can build a pack from, with the licence EVIDENCE that",
+    "lets it ship at all: the URL of the page that states the licence and the sentence",
+    "on it, quoted verbatim. The rules those licences are judged against are in the",
+    "pack brief (Nexus stays free, so a NON-COMMERCIAL source may ship as a pack) and",
+    "docs/packs/voice.md says what the built pack contains. A source without a quotable",
+    "licence statement does not go in this file, and therefore cannot be built.",
+    "",
+    "`files` is written by build.mjs from what it actually downloaded (--update-sources),",
+    "because a hash nobody can compute by hand is a hash nobody keeps correct. Everything",
+    "else in an entry is hand-written, and the tool refuses to touch it.",
+    "",
+    "`harvestedAt` is the date the repository was fetched for those hashes."
+  ],
+  "host": "https://huggingface.co",
+  "voices": [
+    {
+      "id": "whisper-tiny",
+      "version": "2026.10.0",
+      "kind": "stt",
+      "engine": "whisper",
+      "languages": [
+        "sr",
+        "en"
+      ],
+      "sampleRate": 16000,
+      "repo": "Xenova/whisper-tiny",
+      "revision": "main",
+      "paths": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "normalizer.json",
+        "preprocessor_config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "onnx/encoder_model_quantized.onnx",
+        "onnx/decoder_model_merged_quantized.onnx"
+      ],
+      "harvestedAt": "2026-10-10",
+      "files": {
+        "added_tokens.json": "ce949fe720c14311cb6c446e69cfe340dc669d7b006077a6feed6ae571dd7e88",
+        "config.json": "2b2e4e519084e0ea028b19b153f95202735a971870d6844aa26e559edd292e94",
+        "generation_config.json": "68ac791fcb4999461a313472125042934656240ba1cba7d1c2627fcbb19ac24c",
+        "merges.txt": "2df2990a395e35e8dfbc7511e08c12d56018d8d04691e0133e5d63b21e154dc6",
+        "normalizer.json": "bf1c507dc8724ca9cf9903640dacfb69dae2f00edee4f21ceba106a7392f26dd",
+        "onnx/decoder_model_merged_quantized.onnx": "6c0c125986b007d2e3734bec84c18bda0152071b90b87fadac6d7764499927a0",
+        "onnx/encoder_model_quantized.onnx": "fd9d995b9dcb0520f0dbf6cf68651af639fc385f594d9d876e69ca2802dc438e",
+        "preprocessor_config.json": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+        "special_tokens_map.json": "e67ae3a0aaa99abcd9f187138e12db1f65c16a14761c50ef10eef2c174a7a691",
+        "tokenizer.json": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
+        "tokenizer_config.json": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
+        "vocab.json": "50d6a919f0a0601d56a04eb583c780d18553aa388254ba3158eb6a00f13e2c1a"
+      },
+      "title": {
+        "sr": "Whisper, najmanji model",
+        "en": "Whisper, smallest model"
+      },
+      "description": {
+        "sr": "Prepoznavanje govora, najbrže i najmanje tačno. Za starije uređaje.",
+        "en": "Speech recognition, the fastest and the least accurate. For older machines."
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "attribution": "Whisper by OpenAI; ONNX weights by Xenova",
+        "url": "https://huggingface.co/Xenova/whisper-tiny"
+      },
+      "source": {
+        "name": "Xenova/whisper-tiny (ONNX conversion of openai/whisper-tiny)",
+        "url": "https://huggingface.co/Xenova/whisper-tiny"
+      },
+      "evidence": [
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny/raw/main/README.md",
+          "sentence": "base_model: openai/whisper-tiny\nlibrary_name: transformers.js\nlicense: apache-2.0"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-tiny/raw/main/README.md",
+          "sentence": "https://huggingface.co/openai/whisper-tiny with ONNX weights to be compatible with Transformers.js."
+        },
+        {
+          "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+          "sentence": "MIT License"
+        }
+      ]
+    },
+    {
+      "id": "whisper-base",
+      "version": "2026.10.0",
+      "kind": "stt",
+      "engine": "whisper",
+      "languages": [
+        "sr",
+        "en"
+      ],
+      "sampleRate": 16000,
+      "repo": "Xenova/whisper-base",
+      "revision": "main",
+      "paths": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "normalizer.json",
+        "preprocessor_config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "onnx/encoder_model_quantized.onnx",
+        "onnx/decoder_model_merged_quantized.onnx"
+      ],
+      "harvestedAt": "2026-10-10",
+      "files": {
+        "added_tokens.json": "ce949fe720c14311cb6c446e69cfe340dc669d7b006077a6feed6ae571dd7e88",
+        "config.json": "d1d347fdb422e6347c2f843a90d375aa67ea3f4b3e20d2c3075f9a9f6243685b",
+        "generation_config.json": "3bba359e33fdd6dc1c10f71846a477d339b0242f462f70ea1dd73274caa38d05",
+        "merges.txt": "2df2990a395e35e8dfbc7511e08c12d56018d8d04691e0133e5d63b21e154dc6",
+        "normalizer.json": "bf1c507dc8724ca9cf9903640dacfb69dae2f00edee4f21ceba106a7392f26dd",
+        "onnx/decoder_model_merged_quantized.onnx": "a6beb6baabb66f00b6a686d828c95ffca6146d51900cbad0266cad38f64cf861",
+        "onnx/encoder_model_quantized.onnx": "3e345e977b55620a37c0c2b2af0644e019afdfad562dcf71eb929bb7274285f9",
+        "preprocessor_config.json": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+        "special_tokens_map.json": "e67ae3a0aaa99abcd9f187138e12db1f65c16a14761c50ef10eef2c174a7a691",
+        "tokenizer.json": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
+        "tokenizer_config.json": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
+        "vocab.json": "50d6a919f0a0601d56a04eb583c780d18553aa388254ba3158eb6a00f13e2c1a"
+      },
+      "title": {
+        "sr": "Whisper, osnovni model",
+        "en": "Whisper, base model"
+      },
+      "description": {
+        "sr": "Prepoznavanje govora, dobar odnos brzine i tačnosti. Preporučen izbor.",
+        "en": "Speech recognition, the balance of speed and accuracy. The recommended choice."
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "attribution": "Whisper by OpenAI; ONNX weights by Xenova",
+        "url": "https://huggingface.co/Xenova/whisper-base"
+      },
+      "source": {
+        "name": "Xenova/whisper-base (ONNX conversion of openai/whisper-base)",
+        "url": "https://huggingface.co/Xenova/whisper-base"
+      },
+      "evidence": [
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base/raw/main/README.md",
+          "sentence": "base_model: openai/whisper-base\nlibrary_name: transformers.js\nlicense: apache-2.0"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-base/raw/main/README.md",
+          "sentence": "https://huggingface.co/openai/whisper-base with ONNX weights to be compatible with Transformers.js."
+        },
+        {
+          "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+          "sentence": "MIT License"
+        }
+      ]
+    },
+    {
+      "id": "whisper-small",
+      "version": "2026.10.0",
+      "kind": "stt",
+      "engine": "whisper",
+      "languages": [
+        "sr",
+        "en"
+      ],
+      "sampleRate": 16000,
+      "repo": "Xenova/whisper-small",
+      "revision": "main",
+      "paths": [
+        "added_tokens.json",
+        "config.json",
+        "generation_config.json",
+        "merges.txt",
+        "normalizer.json",
+        "preprocessor_config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "onnx/encoder_model_quantized.onnx",
+        "onnx/decoder_model_merged_quantized.onnx"
+      ],
+      "harvestedAt": "2026-10-10",
+      "files": {
+        "added_tokens.json": "ce949fe720c14311cb6c446e69cfe340dc669d7b006077a6feed6ae571dd7e88",
+        "config.json": "5a6429d21d7a3379dd0861b74510f9f7076f32b563bffc9fcb072482d55ab3be",
+        "generation_config.json": "0b7407a4e53a677f826e03c75d409e6f830663932bf43dda3b08c5efa2223279",
+        "merges.txt": "2df2990a395e35e8dfbc7511e08c12d56018d8d04691e0133e5d63b21e154dc6",
+        "normalizer.json": "bf1c507dc8724ca9cf9903640dacfb69dae2f00edee4f21ceba106a7392f26dd",
+        "onnx/decoder_model_merged_quantized.onnx": "fcfc6100dc7339e7507e10f8b274350be7c4f8d8b575f0293f94cc0e156d6d24",
+        "onnx/encoder_model_quantized.onnx": "969f5ac12974340386bf7a02ea6626003e5e2dee396ffc6ab0eec282bf55ba06",
+        "preprocessor_config.json": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+        "special_tokens_map.json": "e67ae3a0aaa99abcd9f187138e12db1f65c16a14761c50ef10eef2c174a7a691",
+        "tokenizer.json": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
+        "tokenizer_config.json": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
+        "vocab.json": "50d6a919f0a0601d56a04eb583c780d18553aa388254ba3158eb6a00f13e2c1a"
+      },
+      "title": {
+        "sr": "Whisper, mali model",
+        "en": "Whisper, small model"
+      },
+      "description": {
+        "sr": "Prepoznavanje govora, najtačnije i najsporije. Za jače računare.",
+        "en": "Speech recognition, the most accurate and the slowest. For stronger machines."
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "attribution": "Whisper by OpenAI; ONNX weights by Xenova",
+        "url": "https://huggingface.co/Xenova/whisper-small"
+      },
+      "source": {
+        "name": "Xenova/whisper-small (ONNX conversion of openai/whisper-small)",
+        "url": "https://huggingface.co/Xenova/whisper-small"
+      },
+      "evidence": [
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small/raw/main/README.md",
+          "sentence": "base_model: openai/whisper-small\nlibrary_name: transformers.js\nlicense: apache-2.0"
+        },
+        {
+          "url": "https://huggingface.co/Xenova/whisper-small/raw/main/README.md",
+          "sentence": "https://huggingface.co/openai/whisper-small with ONNX weights to be compatible with Transformers.js."
+        },
+        {
+          "url": "https://github.com/openai/whisper/blob/main/LICENSE",
+          "sentence": "MIT License"
+        }
+      ]
+    },
+    {
+      "id": "mms-tts-eng",
+      "version": "2026.10.0",
+      "kind": "tts",
+      "engine": "vits",
+      "languages": [
+        "en"
+      ],
+      "sampleRate": 16000,
+      "repo": "Xenova/mms-tts-eng",
+      "revision": "main",
+      "paths": [
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "onnx/model_quantized.onnx"
+      ],
+      "harvestedAt": "2026-10-10",
+      "files": {
+        "config.json": "57ec08764d2b37808462757cffc38125abdcc60ffc253aac30a36cc9ae63372e",
+        "onnx/model_quantized.onnx": "13cf610a20d9bec7d8948801ab073a65d85bf65b793927e3243f6fbf367cd0a5",
+        "tokenizer.json": "c97490f8dab9b14d9a17a9a05411f42d1345360d7672fb666b26862ca612b5a4",
+        "tokenizer_config.json": "f0b81ebfd014d109e4467fc3cfa15adab2bf1c09052313ad1b2d2771b3ddf287",
+        "vocab.json": "304f7e71c40d601f9b89d81904609512eebe96b2a941f0a251fc0c9f397bcc45"
+      },
+      "title": {
+        "sr": "Glas na engleskom",
+        "en": "English voice"
+      },
+      "description": {
+        "sr": "Čita odgovore naglas na engleskom. Srpski glas još ne postoji.",
+        "en": "Reads answers aloud in English. A Serbian voice does not exist yet."
+      },
+      "licence": {
+        "spdx": "CC-BY-NC-4.0",
+        "attribution": "MMS-TTS by Meta AI; ONNX weights by Xenova",
+        "url": "https://huggingface.co/facebook/mms-tts-eng"
+      },
+      "source": {
+        "name": "Xenova/mms-tts-eng (ONNX conversion of facebook/mms-tts-eng)",
+        "url": "https://huggingface.co/Xenova/mms-tts-eng"
+      },
+      "evidence": [
+        {
+          "url": "https://huggingface.co/facebook/mms-tts-eng/raw/main/README.md",
+          "sentence": "license: cc-by-nc-4.0"
+        },
+        {
+          "url": "https://huggingface.co/facebook/mms-tts-eng/raw/main/README.md",
+          "sentence": "This repository contains the **English (eng)** language text-to-speech (TTS) model checkpoint."
+        },
+        {
+          "url": "https://huggingface.co/Xenova/mms-tts-eng/raw/main/README.md",
+          "sentence": "https://huggingface.co/facebook/mms-tts-eng with ONNX weights to be compatible with Transformers.js."
+        }
+      ]
+    }
+  ]
+}

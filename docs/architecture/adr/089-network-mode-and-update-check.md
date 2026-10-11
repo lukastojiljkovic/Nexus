@@ -111,7 +111,11 @@ release page.** The pinned chain in `update/electron.ts` and `update/service.ts`
 
 Only URLs under `https://github.com/lukastojiljkovic/Nexus/releases/download/`
 are accepted. The installer is written to a generated name under
-`userData/updates/` and launched with `shell.openPath`; the app then quits.
+`userData/updates/` and started by `update/launch.ts` with `--updated /S --force-run`,
+the flags electron-builder's NSIS templates need to keep the old version's shortcuts
+(and with them the taskbar pin) and to open the new version when they finish; the app
+then quits. (Amended 2026-10-09: it was `shell.openPath`, which lost the pin; see
+DEV-007's amendment of that date.)
 
 **Every fetch runs under a resource cap**
 (`apps/desktop/src/main/update/limits.ts`): 1 MiB for the `releases/latest`

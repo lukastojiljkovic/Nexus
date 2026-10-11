@@ -1,0 +1,135 @@
+/* The WORKSHOP PDF tool set (ADR-090). Tokens only - raw colour values are
+   forbidden outside @nexus/tokens, and this stylesheet is checked by the same
+   gates the shell's own are (`check:colours`, `check:tokens`, `check:css`,
+   `check:tiers`, `check:rows`, `check:layers`).
+ *
+ * The prefix is the TOOL's (`pdf-tools__`), not the module's: the module's page
+ * carries two tool sets from two runs, and a shared `workshop__` prefix would
+ * put two authors' rules under one name.
+ */
+
+.pdf-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+.pdf-tools__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* A row that mixes a stacked field with bare controls aligns its CONTROLS at
+   the end, not its centres: `center` lines the short control up with the middle
+   of the tall box and leaves the input sitting below the button beside it
+   (`check:rows`' rule, stated here so this row cannot drift into it). */
+.pdf-tools__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.pdf-tools__field {
+  width: 15rem;
+}
+
+.pdf-tools__queue {
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-tools__queue-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  padding: var(--nx-space-2) 0;
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+
+.pdf-tools__name {
+  flex: 1 1 8rem;
+  overflow-wrap: anywhere;
+}
+
+.pdf-tools__meta {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-tools__problem {
+  color: var(--nx-danger);
+  flex: 1 1 100%;
+}
+
+.pdf-tools__notice {
+  color: var(--nx-text-muted);
+  flex: 1 1 100%;
+}
+
+/* The page grid. A tile is an OUTLINE and says so: pdf-lib parses documents and
+   does not draw them, so what this draws is what the app knows - the number,
+   the orientation and the size - rather than a promise of a preview. */
+.pdf-tools__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--nx-space-4);
+}
+
+.pdf-tools__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+/* A4's own proportion, so a portrait page and a landscape one are told apart
+   without measuring anything: the ratio of the sheet is the shape of the box. */
+.pdf-tools__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.25rem;
+  aspect-ratio: 1 / 1.414;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-sunken);
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-tools__frame--landscape {
+  aspect-ratio: 1.414 / 1;
+}
+
+/* The page's own /Rotate, drawn: a reader shows the sheet turned, and a grid
+   that showed it straight would hide the thing the rotate button did. */
+.pdf-tools__frame--turn-90 {
+  transform: rotate(90deg);
+}
+
+.pdf-tools__frame--turn-180 {
+  transform: rotate(180deg);
+}
+
+.pdf-tools__frame--turn-270 {
+  transform: rotate(270deg);
+}
+
+.pdf-tools__page-number {
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-title);
+}
+
+.pdf-tools__tile-size {
+  color: var(--nx-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-tools__tile-actions {
+  display: flex;
+  gap: var(--nx-space-1);
+}

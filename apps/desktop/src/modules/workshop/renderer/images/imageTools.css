@@ -1,0 +1,68 @@
+/* The WORKSHOP image tool set (ADR-090). Tokens only, like the PDF tool set's
+   stylesheet beside it: no raw colour values, no glows, and the shared
+   typographic tiers are used rather than re-declared (`check:tiers`).
+ */
+
+.image-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+}
+
+.image-tools__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* A row mixing stacked fields and bare controls aligns its controls at the end
+   (`check:rows`): the field boxes are taller than a button, and centring them
+   would leave the two things the user touches out of line. */
+.image-tools__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.image-tools__field {
+  width: 11rem;
+}
+
+.image-tools__select {
+  width: 13rem;
+}
+
+.image-tools__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.image-tools__row-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  padding: var(--nx-space-2) 0;
+  border-bottom: 1px solid var(--nx-border-subtle);
+}
+
+.image-tools__name {
+  flex: 1 1 8rem;
+  overflow-wrap: anywhere;
+}
+
+.image-tools__meta {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.image-tools__problem {
+  color: var(--nx-danger);
+  flex: 1 1 100%;
+}
+
+.image-tools__notice {
+  color: var(--nx-text-muted);
+  flex: 1 1 100%;
+}

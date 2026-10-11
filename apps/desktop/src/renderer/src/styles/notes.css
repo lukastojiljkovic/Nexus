@@ -858,7 +858,13 @@
      `PANEL_MAX_HEIGHT` in anchoredPlacement.ts carries the same number. What
      actually applies is the inline value the helper computes from the room the
      viewport has left — inline wins over this rule, so a short window shrinks
-     the panel rather than pushing it off the edge. Keep the two in step. */
+     the panel rather than pushing it off the edge. Keep the two in step.
+
+     ONE panel overrides the ceiling on purpose, and it is the one that is not a
+     note's: the app menu behind the title bar's mark is a list of commands, so
+     `TitleBar` passes `UNBOUNDED_PANEL_HEIGHT` and the room the window has left
+     becomes its only limit (see `.app__menu-list`, which is where its rows
+     scroll instead of here). */
   max-height: 320px;
   overflow-y: auto;
   padding: var(--nx-space-1);

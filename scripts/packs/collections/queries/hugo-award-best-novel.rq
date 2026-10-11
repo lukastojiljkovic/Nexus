@@ -1,0 +1,12 @@
+# collection: hugo-award-best-novel   kind: book
+# Objective criterion: P166 -> Hugo Award for Best Novel (Q255032).
+SELECT ?item ?en ?sr (MIN(?y) AS ?year) (GROUP_CONCAT(DISTINCT ?cr; separator="; ") AS ?creators) WHERE {
+  ?item wdt:P166 wd:Q255032 ;
+        wdt:P31/wdt:P279* wd:Q7725634 .
+  OPTIONAL { ?item rdfs:label ?en . FILTER(lang(?en) = "en") }
+  OPTIONAL { ?item rdfs:label ?sr . FILTER(lang(?sr) = "sr") }
+  OPTIONAL { ?item wdt:P577 ?d . BIND(YEAR(?d) AS ?y) }
+  OPTIONAL { ?item wdt:P50 ?a . ?a rdfs:label ?cr . FILTER(lang(?cr) = "en") }
+}
+GROUP BY ?item ?en ?sr
+ORDER BY ?year ?item

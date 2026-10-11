@@ -747,6 +747,10 @@ export function translateCsvTasks(
     circuitChassis: [],
     circuitParts: [],
     circuitWires: [],
+    // No kit-module data: a translator produces rows for the collections it
+    // understands, and a module's own payload is written by that module
+    // (ADR-090). Empty here, on every other field's terms.
+    modules: [],
   };
 
   return {

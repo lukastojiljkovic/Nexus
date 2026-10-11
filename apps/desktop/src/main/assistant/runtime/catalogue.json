@@ -1,0 +1,282 @@
+{
+  "format": 1,
+  "checked": "2026-10-10",
+  "models": [
+    {
+      "id": "qwen3.5-2b-q4-k-m",
+      "origin": "catalogue",
+      "title": "Qwen3.5 2B (Q4_K_M)",
+      "family": "Qwen3.5",
+      "repo": "unsloth/Qwen3.5-2B-GGUF",
+      "file": "Qwen3.5-2B-Q4_K_M.gguf",
+      "projectorFile": "mmproj-F16.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://huggingface.co/Qwen/Qwen3.5-2B/blob/main/LICENSE"
+      },
+      "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "sizeBytes": 1280835840,
+      "contextTokens": 262144,
+      "languages": [],
+      "projector": {
+        "file": "mmproj-F16.gguf",
+        "sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+        "sizeBytes": 668227264
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 1911883008,
+        "hostRamBytes": 1059186688,
+        "cpuRamBytes": 1911883008
+      }
+    },
+    {
+      "id": "qwen3.5-4b-q4-k-m",
+      "origin": "catalogue",
+      "title": "Qwen3.5 4B (Q4_K_M)",
+      "family": "Qwen3.5",
+      "repo": "unsloth/Qwen3.5-4B-GGUF",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "projectorFile": "mmproj-F16.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/LICENSE"
+      },
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "sizeBytes": 2740937888,
+      "contextTokens": 262144,
+      "languages": [],
+      "projector": {
+        "file": "mmproj-F16.gguf",
+        "sha256": "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864",
+        "sizeBytes": 672423616
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 3578550304,
+        "hostRamBytes": 1370052640,
+        "cpuRamBytes": 3578550304
+      }
+    },
+    {
+      "id": "qwen3.5-9b-q4-k-m",
+      "origin": "catalogue",
+      "title": "Qwen3.5 9B (Q4_K_M)",
+      "family": "Qwen3.5",
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "projectorFile": "mmproj-F16.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/blob/main/LICENSE"
+      },
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "sizeBytes": 5680522464,
+      "contextTokens": 262144,
+      "languages": [],
+      "projector": {
+        "file": "mmproj-F16.gguf",
+        "sha256": "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f",
+        "sizeBytes": 918166080
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 6524426272,
+        "hostRamBytes": 1427001376,
+        "cpuRamBytes": 6524426272
+      }
+    },
+    {
+      "id": "qwen3.5-27b-q4-k-m",
+      "origin": "catalogue",
+      "title": "Qwen3.5 27B (Q4_K_M)",
+      "family": "Qwen3.5",
+      "repo": "unsloth/Qwen3.5-27B-GGUF",
+      "file": "Qwen3.5-27B-Q4_K_M.gguf",
+      "projectorFile": "mmproj-F16.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://huggingface.co/Qwen/Qwen3.5-27B/blob/main/LICENSE"
+      },
+      "sha256": "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
+      "sizeBytes": 16740812704,
+      "contextTokens": 262144,
+      "languages": [],
+      "projector": {
+        "file": "mmproj-F16.gguf",
+        "sha256": "458bc46d8f275866fde5d88c9c554d9d462a6e8e3a028090d9850e17ab6a1217",
+        "sizeBytes": 927607040
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 17972008992,
+        "hostRamBytes": 1957351456,
+        "cpuRamBytes": 17972008992
+      }
+    },
+    {
+      "id": "gemma-4-e4b-it-q4-0",
+      "origin": "catalogue",
+      "title": "Gemma 4 E4B (QAT q4_0)",
+      "family": "Gemma 4",
+      "repo": "google/gemma-4-E4B-it-qat-q4_0-gguf",
+      "file": "gemma-4-E4B_q4_0-it.gguf",
+      "projectorFile": "gemma-4-E4B-it-mmproj.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://ai.google.dev/gemma/docs/gemma_4_license"
+      },
+      "sha256": "676c35070db6dbe52f93e9c864ee0fba4eddea94b9c875d9cb10daff453fbaee",
+      "sizeBytes": 5154941280,
+      "contextTokens": 131072,
+      "languages": [],
+      "projector": {
+        "file": "gemma-4-E4B-it-mmproj.gguf",
+        "sha256": "7498a37cb619e55f2fcf87eb931f56e99389ed6d432e4c5c66110694c0d65578",
+        "sizeBytes": 991552256
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 5883933760,
+        "hostRamBytes": 1295317760,
+        "cpuRamBytes": 5883932584
+      }
+    },
+    {
+      "id": "gemma-4-12b-it-q4-0",
+      "origin": "catalogue",
+      "title": "Gemma 4 12B (QAT q4_0)",
+      "family": "Gemma 4",
+      "repo": "google/gemma-4-12B-it-qat-q4_0-gguf",
+      "file": "gemma-4-12b-it-qat-q4_0.gguf",
+      "projectorFile": "mmproj-gemma-4-12b-it-qat-q4_0.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://ai.google.dev/gemma/docs/gemma_4_license"
+      },
+      "sha256": "93567e57a8fe10b23569b9d9ec38cd005deedf71e29477c421a4b83f418a538b",
+      "sizeBytes": 6975879296,
+      "contextTokens": 262144,
+      "languages": [],
+      "projector": {
+        "file": "mmproj-gemma-4-12b-it-qat-q4_0.gguf",
+        "sha256": "cb018338a7538a9814d994bfe54644c71eb7ed54e31eae2f721e45fd3c260da7",
+        "sizeBytes": 175115616
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 8245421280,
+        "hostRamBytes": 2111119072,
+        "cpuRamBytes": 8245419936
+      }
+    },
+    {
+      "id": "qwen3-vl-4b-instruct-q4-k-m",
+      "origin": "catalogue",
+      "title": "Qwen3-VL 4B Instruct (Q4_K_M)",
+      "family": "Qwen3-VL",
+      "repo": "Qwen/Qwen3-VL-4B-Instruct-GGUF",
+      "file": "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+      "projectorFile": "mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf",
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF"
+      },
+      "sha256": "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a",
+      "sizeBytes": 2497281664,
+      "contextTokens": 262144,
+      "languages": [],
+      "projector": {
+        "file": "mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf",
+        "sha256": "30ba2c7dd3127a4561b6cba9d13d0f711c91bdb38742e2f56d73c8cb596bd06d",
+        "sizeBytes": 453974304
+      },
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 4036664832,
+        "hostRamBytes": 1864406528,
+        "cpuRamBytes": 4036664832
+      }
+    },
+    {
+      "id": "slava-qwen3-14b-serbian-q4-k-m",
+      "origin": "catalogue",
+      "title": "Slava Qwen3 14B Serbian (Q4_K_M)",
+      "family": "Slava (Qwen3 14B)",
+      "repo": "mradermacher/Slava-Qwen3-14B-Serbian-GGUF",
+      "file": "Slava-Qwen3-14B-Serbian.Q4_K_M.gguf",
+      "capabilities": [
+        "chat"
+      ],
+      "licence": {
+        "name": "CC-BY-NC-SA-4.0",
+        "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "sha256": "4830f466f42d41a37201222551d7e76c4acbb4a53fcc71b741a1764b6f38f855",
+      "sizeBytes": 9001753184,
+      "contextTokens": 40960,
+      "languages": [
+        "sr"
+      ],
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 10670109696,
+        "hostRamBytes": 2111891456,
+        "cpuRamBytes": 10670109696
+      }
+    },
+    {
+      "id": "qwen3-embedding-0.6b-q8-0",
+      "origin": "catalogue",
+      "title": "Qwen3 Embedding 0.6B (Q8_0)",
+      "family": "Qwen3-Embedding",
+      "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+      "file": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "capabilities": [
+        "embedding"
+      ],
+      "licence": {
+        "name": "Apache-2.0",
+        "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF"
+      },
+      "sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
+      "sizeBytes": 639150592,
+      "contextTokens": 32768,
+      "languages": [],
+      "fit": {
+        "contextTokens": 8192,
+        "vramBytes": 1887543616,
+        "hostRamBytes": 1419354432,
+        "cpuRamBytes": 1887543616
+      }
+    }
+  ]
+}

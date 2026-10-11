@@ -48,9 +48,16 @@ export interface ShellStrings {
   statementDialogTitle: string;
   statementFilterName: string;
   imageFilterName: string;
+  packDialogTitle: string;
+  packDialogButton: string;
+  portableRefusedTitle: string;
+  portableRefusedBody: string;
+  zimDialogTitle: string;
+  zimFilterName: string;
   defaultAccountLabel: string;
   noteCopySuffix: string;
   backupProfileSlugFallback: string;
+  cardPdfFilterName: string;
 }
 
 const SR: ShellStrings = {
@@ -112,6 +119,33 @@ const SR: ShellStrings = {
    */
   imageFilterName: "Slika",
   /**
+   * The folder picker for a content pack (ADR-091, `index.ts`'s `packs:inspect`).
+   * A folder and not a file, because that is what a pack IS: `pack.json`, its
+   * signature and the content beside them. The title says which thing is being
+   * chosen, and the button says that the folder named is the pack — Electron's
+   * own default is „Select Folder", which reads as a step rather than an answer.
+   */
+  packDialogTitle: "Izaberi fasciklu paketa",
+  packDialogButton: "Izaberi ovu fasciklu",
+  /**
+   * The early-startup dialog a portable launch shows when the stick refuses to
+   * be written to (ADR-102, `index.ts`). The title names the stick, the body
+   * says why nothing can continue and what to do instead; `index.ts` adds the
+   * OS's own words for the failed write on a second paragraph, untranslated,
+   * because a diagnostic is not copy.
+   */
+  portableRefusedTitle: "Nexus ne može da piše na ovaj USB",
+  portableRefusedBody:
+    "Fascikla NexusData pored programa je samo za čitanje, pa Nexus ne sme da čuva tvoje podatke na ovom računaru. Kopiraj Nexus na disk ili na USB na koji može da se piše, pa ga pokreni ponovo.",
+  /**
+   * The ZIM file picker (ADR-098). A pack is a FOLDER and a ZIM is one FILE, so
+   * the two dialogs say which of the two is being chosen rather than sharing the
+   * pack's words — a title that said „fasciklu" over a file picker would be the
+   * wrong promise.
+   */
+  zimDialogTitle: "Izaberi ZIM datoteku",
+  zimFilterName: "ZIM datoteke",
+  /**
    * The label given to an account nobody named (`accounts.ts`'s
    * `defaultAccountLabel`, ADR-044 section 3) - renameable from the picker, so
    * a generic name costs the user one rename and never costs them their data.
@@ -124,6 +158,8 @@ const SR: ShellStrings = {
    * sanitizes to nothing (`backup.ts`'s `backupProfileSlug`, SET-011).
    */
   backupProfileSlugFallback: "profil",
+  /** Save-dialog filter for the emergency card's PDF (`cardPdf.ts`, the EMERGENCY module). */
+  cardPdfFilterName: "Hitna karta (PDF)",
 };
 
 const EN: ShellStrings = {
@@ -139,9 +175,17 @@ const EN: ShellStrings = {
   statementDialogTitle: "Choose a statement (.csv)",
   statementFilterName: "Statement (CSV)",
   imageFilterName: "Image",
+  packDialogTitle: "Choose a pack folder",
+  packDialogButton: "Choose this folder",
+  portableRefusedTitle: "Nexus cannot write to this USB stick",
+  portableRefusedBody:
+    "The NexusData folder beside the program is read-only, so Nexus cannot keep your data on this computer. Copy Nexus to a disk or a USB stick that can be written to, then start it again.",
+  zimDialogTitle: "Choose a ZIM file",
+  zimFilterName: "ZIM files",
   defaultAccountLabel: "My account",
   noteCopySuffix: " (copy)",
   backupProfileSlugFallback: "profile",
+  cardPdfFilterName: "Emergency card (PDF)",
 };
 
 const SHELL_STRINGS: Record<MainLocale, ShellStrings> = { sr: SR, en: EN };

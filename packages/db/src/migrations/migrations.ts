@@ -70,6 +70,27 @@ import { migration067 } from "./067-electronics.js";
 import { migration068 } from "./068-electronics-chassis.js";
 import { migration069 } from "./069-elec-settings.js";
 import { migration070 } from "./070-circuit-search.js";
+import { migration071 } from "./071-timers.js";
+import { migration072 } from "./072-library.js";
+import { migration073 } from "./073-culture.js";
+import { migration074 } from "./074-car.js";
+import { migration075 } from "./075-pantry.js";
+import { migration076 } from "./076-cookbook.js";
+import { migration077 } from "./077-recorder.js";
+import { migration078 } from "./078-emergency.js";
+import { migration079 } from "./079-calculator.js";
+import { migration080 } from "./080-arcade-scores.js";
+import { migration081 } from "./081-card-games.js";
+import { migration082 } from "./082-chess.js";
+import { migration083 } from "./083-miniapps.js";
+import { migration084 } from "./084-reader.js";
+import { migration085 } from "./085-maps.js";
+import { migration086 } from "./086-wiki.js";
+import { migration087 } from "./087-lab.js";
+import { migration088 } from "./088-puzzles.js";
+import { migration089 } from "./089-boards.js";
+import { migration090 } from "./090-assistant-knowledge.js";
+import { migration091 } from "./091-assistant-conversations.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -151,6 +172,27 @@ export const MIGRATIONS: readonly Migration[] = [
   migration068,
   migration069,
   migration070,
+  migration071,
+  migration072,
+  migration073,
+  migration074,
+  migration075,
+  migration076,
+  migration077,
+  migration078,
+  migration079,
+  migration080,
+  migration081,
+  migration082,
+  migration083,
+  migration084,
+  migration085,
+  migration086,
+  migration087,
+  migration088,
+  migration089,
+  migration090,
+  migration091,
 ];
 
 /**

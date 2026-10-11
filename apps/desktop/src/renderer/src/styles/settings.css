@@ -1022,6 +1022,127 @@
   overflow-wrap: anywhere;
 }
 
+/* ADR-091: THE PACKS CARD.
+   ------------------------------------------------------------------------
+   A pack is one row of facts a user cannot otherwise check (title, version,
+   size, licence, attribution, source) plus the two things that can be done to
+   it. Rows are separated by a hairline rather than by a border each: a
+   bordered box per entry inside a bordered card is the card-inside-card
+   nesting this app does not draw, and the pack count is one digit.
+
+   The attribution is the licence author's own words and is shown verbatim,
+   which is why the row's lines are `.nx-hint` paragraphs and not a key/value
+   table: one of the six values can be a sentence.
+
+   The empty state is not a shorter version of the list — it is the only place
+   that says what a pack IS, because a user who has never installed one has
+   nothing else to read. */
+.packs__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-3);
+}
+.packs__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin-top: var(--nx-space-3);
+}
+.packs__list {
+  list-style: none;
+  margin: var(--nx-space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.packs__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding-top: var(--nx-space-3);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.packs__row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.packs__row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nx-space-2);
+}
+.packs__row-title {
+  font-weight: var(--nx-font-weight-semibold);
+}
+.packs__row-meta {
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.packs__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-2);
+}
+.packs__problem {
+  margin: var(--nx-space-2) 0 0;
+  color: var(--nx-danger);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+/* ADR-101: THE „PRIKAZ" CARD.
+   ------------------------------------------------------------------------
+   It is the module gallery, grown: a heading per group and one row per module,
+   both drawn with the classes above (`.set__module-group`, `.set__module-row`,
+   `.set__module-info`, `.set__module-name`), so the list still reads as the
+   card it grew out of rather than as a second kind of list.
+
+   What is new is the trailing cluster: a grip, the two move buttons, and — on
+   a module's row — the switch. It is one cluster in both places, so a group
+   heading and a module row arrange the same way and the eye learns one column.
+
+   The grip is the MOUSE's half of the arrangement and the two buttons are the
+   KEYBOARD's (`aria-hidden` on the grip, because it is not a control: nothing
+   about dragging is reachable by Tab, and a button-shaped handle that cannot
+   be pressed would be a lie). */
+.set__visibility {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+}
+.set__visibility-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-5);
+}
+.set__visibility-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+.set__visibility-grip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nx-text-subtle);
+  cursor: grab;
+}
+.set__visibility-grip:active {
+  cursor: grabbing;
+}
+/* No horizontal padding: three of these sit in one row and a padded button
+   would push the switch away from the row's line. The 24px pointer floor is
+   the primitive's (`Button size="sm"`), so only the width is stated here. */
+.set__visibility-move {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* SET-014: THE SEARCH HIT — and it is the last rule in the file on purpose.
    ------------------------------------------------------------------------
    A hit is typographic: accent text plus weight, exactly like
@@ -1054,4 +1175,75 @@
 .set__field.set__hit-field > .nx-select--inline > .nx-select__label {
   color: var(--nx-accent-strong);
   font-weight: var(--nx-font-weight-semibold);
+}
+
+/* ADR-103: THE CATALOGUE, THE DISCLAIMER AND THE CREDITS.
+   ------------------------------------------------------------------------
+   Appended rather than woven into the packs block above, because several
+   agents are editing this file at once and a block at the end is the only
+   edit that cannot collide with anybody else's.
+
+   `.packs__catalogue` reuses the card's own row geometry: a group heading, a
+   list of rows, the same hairline between them. A group is a heading and its
+   rows rather than a bordered box, which is the nesting the packs block above
+   already refuses.
+
+   `.packs__notice` is the safety disclaimer. It is set apart by a rule and a
+   tint rather than by a red or an icon: it is not an error and not a warning
+   about this app, it is a sentence the content's author requires to travel
+   with it, and the quiet register is the honest one. It uses `--nx-surface-alt`
+   and `--nx-text-muted`, the pair `.nx-hint` already uses, so it cannot fall
+   below the body text's contrast.
+
+   `.packs__link` is the one control in this app that opens an address. It is a
+   button because the renderer may not navigate itself (SEC-EL-03): the rule
+   that decides whether the address may be opened at all is main's, and a click
+   is a call, not a location. */
+.packs__catalogue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
+  padding-top: var(--nx-space-4);
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.packs__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-3);
+}
+.packs__group-title {
+  margin: 0;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+  font-weight: var(--nx-font-weight-semibold);
+  text-transform: uppercase;
+}
+.packs__notice {
+  margin: var(--nx-space-2) 0 0;
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-surface-alt);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.packs__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.packs__link:hover {
+  color: var(--nx-text);
+}
+.packs__licences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-4);
 }

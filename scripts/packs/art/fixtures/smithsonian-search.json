@@ -1,0 +1,85 @@
+{
+  "status": 200,
+  "response": {
+    "rowCount": 4067,
+    "rows": [
+      {
+        "id": "ld1-1643381040022-1643381052268-0",
+        "title": "The Broyling of Their Fish over the Flame of Fier",
+        "unitCode": "SAAM",
+        "url": "edanmdm:saam_1985.66.403_415",
+        "content": {
+          "freetext": {
+            "name": [{ "label": "Artist", "content": "Spencer Nichols, born Washington, DC 1875-died Kent, CT 1950" }],
+            "objectRights": [{ "label": "Restrictions & Rights", "content": "CC0" }],
+            "physicalDescription": [{ "label": "Medium", "content": "oil on canvas" }]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk7005e02ab-d565-404e-8015-507842d3c0af",
+            "title": { "label": "Title", "content": "The Broyling of Their Fish over the Flame of Fier" },
+            "record_ID": "saam_1985.66.403_415",
+            "unit_code": "SAAM",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=18693",
+            "metadata_usage": { "access": "CC0" },
+            "online_media": {
+              "mediaCount": 1,
+              "media": [
+                {
+                  "type": "Images",
+                  "idsId": "SAAM-1985.66.403415_1",
+                  "usage": { "access": "CC0" },
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1985.66.403415_1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ld1-1643381040022-1643381043647-1",
+        "title": "Louisa Catherine Adams Clement",
+        "unitCode": "SAAM",
+        "url": "edanmdm:saam_1950.6.15",
+        "content": {
+          "freetext": {
+            "date": [{ "label": "Date", "content": "ca. 1910" }],
+            "name": [
+              { "label": "Artist", "content": "Mary Louisa Adams Clement, born Newbury, MA 1882-died Warrenton, VA 1950" },
+              { "label": "Sitter", "content": "Louisa Catherine Adams Clement" }
+            ],
+            "creditLine": [
+              {
+                "label": "Credit Line",
+                "content": "Smithsonian American Art Museum, Adams-Clement Collection, gift of Mary Louisa Adams Clement in memory of her mother, Louisa Catherine Adams Clement"
+              }
+            ],
+            "objectRights": [{ "label": "Restrictions & Rights", "content": "CC0" }],
+            "physicalDescription": [
+              { "label": "Medium", "content": "watercolor on ivory" },
+              { "label": "Dimensions", "content": "sight 3 1/4 x 2 1/4 in. (8.3 x 5.7 cm) rectangle" }
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "guid": "http://n2t.net/ark:/65665/vk7bd021515-4c4a-4a81-a9ec-d0c54f5b0a8c",
+            "title": { "label": "Title", "content": "Louisa Catherine Adams Clement" },
+            "record_ID": "saam_1950.6.15",
+            "unit_code": "SAAM",
+            "record_link": "https://americanart.si.edu/collections/search/artwork/?id=4969",
+            "metadata_usage": { "access": "CC0" },
+            "online_media": {
+              "mediaCount": 1,
+              "media": [
+                {
+                  "type": "Images",
+                  "idsId": "SAAM-1950.6.15_1",
+                  "usage": { "access": "CC0" },
+                  "content": "https://ids.si.edu/ids/deliveryService?id=SAAM-1950.6.15_1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

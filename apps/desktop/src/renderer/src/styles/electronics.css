@@ -242,6 +242,13 @@
 .elec__svg {
   display: block;
 }
+/* The bench is focused programmatically, by Escape out of the wires group: Tab
+   never reaches it and it is not a control, so it draws no ring, exactly as
+   `.set__pane-title` does not. Without this the browser paints its own outline
+   around the whole canvas, in a colour no theme here owns. */
+.elec__svg:focus {
+  outline: none;
+}
 .elec__ground {
   fill: var(--nx-elec-canvas);
 }
@@ -395,6 +402,33 @@
   stroke: transparent;
   stroke-width: 14;
   cursor: pointer;
+}
+
+/* The keyboard's box around a wire (see `ElecBench.tsx`). Two of these
+   declarations are about the POINTER, and both exist so that the keyboard can
+   be given a target without the bench changing for a mouse: `pointer-events:
+   none`, because the box overlaps the wire it rings, the parts and their pins,
+   and a ring that could be clicked would quietly take the hit path's clicks;
+   and `fill: none`, so the box is a box rather than a lid over what is inside
+   it. Nothing is painted until the element is focused.
+
+   The ring is the app's own focus treatment: a 2-unit line, offset from what it
+   rings (`outline-offset`, in circuit units, computed in `elecGeometry.ts`), so
+   it reads as a ring on all nine jumper colours instead of fighting the one it
+   surrounds. It is drawn in the BENCH's ink rather than in `--nx-accent`,
+   deliberately: the accent is chosen against the theme's own ground, and Dan's
+   is a dark gold that measures under 3:1 on this mat — the one thing a focus
+   ring may not be. Its own pair is enrolled in `scripts/check-contrast.mjs`,
+   at the 3:1 floor that file holds every mark on this bench to. */
+.elec-wire__focus {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+.elec-wire__focus:focus-visible {
+  outline: none;
+  stroke: var(--nx-elec-focus);
+  stroke-width: 2;
 }
 
 /* --- The component drawer ------------------------------------------------ */

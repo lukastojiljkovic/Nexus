@@ -6,9 +6,11 @@ import {
   clearStoredToolPreferences,
   isPdvRate,
   persistDefaultVatRate,
+  readFavouriteTools,
   readRecentTools,
   readStoredDefaultVatRate,
   rememberRecentTool,
+  toggleFavouriteTool,
 } from "./toolPrefs.js";
 
 afterEach(() => {
@@ -55,80 +57,108 @@ describe("the default PDV rate (UTIL slice c)", () => {
 });
 
 /**
- * „Nedavno" — the only list in the drawer that is not derived from the registry,
- * which is why every one of these is about what happens when the stored value is
- * not what this build wrote.
+ * Favourites and „Nedavno" — the drawer's two per-profile lists, and the only
+ * state in it that is not derived from the registry. Every one of these is about
+ * what happens when the store holds something this build did not write, or holds
+ * what another profile wrote.
  */
-describe("„Nedavno“ (PRO slice a)", () => {
-  it("is empty on a device that has opened nothing", () => {
+describe("the drawer's per-profile lists (C10a)", () => {
+  it("stars and unstars a tool, and answers with the new list", () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    expect(readRecentTools("professional")).toEqual([]);
+    expect(readFavouriteTools("p1")).toEqual([]);
+    expect(toggleFavouriteTool("p1", "pdv")).toEqual(["pdv"]);
+    expect(toggleFavouriteTool("p1", "kredit")).toEqual(["pdv", "kredit"]);
+    expect(readFavouriteTools("p1")).toEqual(["pdv", "kredit"]);
+    expect(toggleFavouriteTool("p1", "pdv")).toEqual(["kredit"]);
+  });
+
+  /**
+   * The reason these are keyed by profile at all: two people share a machine and
+   * their drawers are different drawers, so the electrician's stars must not be
+   * drawn under the student's name.
+   */
+  it("keeps each profile's stars and history to itself", () => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    toggleFavouriteTool("p1", "cable-cross-section");
+    rememberRecentTool("p1", "cable-cross-section");
+    expect(readFavouriteTools("p2")).toEqual([]);
+    expect(readRecentTools("p2")).toEqual([]);
+    expect(readFavouriteTools("p1")).toEqual(["cable-cross-section"]);
+    expect(readRecentTools("p1")).toEqual(["cable-cross-section"]);
   });
 
   it("puts the newest first and never lists a tool twice", () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    rememberRecentTool("professional", "a");
-    rememberRecentTool("professional", "b");
-    expect(rememberRecentTool("professional", "a")).toEqual(["a", "b"]);
-    expect(readRecentTools("professional")).toEqual(["a", "b"]);
+    rememberRecentTool("p1", "a");
+    rememberRecentTool("p1", "b");
+    expect(rememberRecentTool("p1", "a")).toEqual(["a", "b"]);
+    expect(readRecentTools("p1")).toEqual(["a", "b"]);
   });
 
-  it("stops at eight, dropping the oldest", () => {
+  it("stops the history at eight, dropping the oldest", () => {
     vi.stubGlobal("localStorage", memoryStorage());
     for (const id of ["1", "2", "3", "4", "5", "6", "7", "8", "9"]) {
-      rememberRecentTool("professional", id);
+      rememberRecentTool("p1", id);
     }
-    expect(readRecentTools("professional")).toEqual(["9", "8", "7", "6", "5", "4", "3", "2"]);
+    expect(readRecentTools("p1")).toEqual(["9", "8", "7", "6", "5", "4", "3", "2"]);
   });
 
   /**
-   * The two drawers share one key and must never share a list: „Alatke" and
-   * „Stručne alatke" have no tool in common, so one drawer's history under the
-   * other's name would be a row that opens nothing, every row.
+   * A list this build never wrote is not bounded by what this build writes: a
+   * hand-edited file feeds a row per entry, and 500 of them would be 500 rows of
+   * a finder panel somebody has to scroll past.
    */
-  it("keeps each drawer's history to itself", () => {
-    vi.stubGlobal("localStorage", memoryStorage());
-    rememberRecentTool("utilities", "kredit");
-    rememberRecentTool("professional", "omov-zakon");
-    expect(readRecentTools("utilities")).toEqual(["kredit"]);
-    expect(readRecentTools("professional")).toEqual(["omov-zakon"]);
+  it("bounds a list a hand wrote, and drops what is not an id", () => {
+    const many = Array.from({ length: 500 }, (_value, index) => `t${String(index)}`);
+    vi.stubGlobal(
+      "localStorage",
+      memoryStorage({
+        "nexus.tools.favourites.p1": JSON.stringify(many),
+        "nexus.tools.recent.p1": '["a",3,null,{},"b","a"]',
+      }),
+    );
+    expect(readFavouriteTools("p1")).toHaveLength(64);
+    expect(readRecentTools("p1")).toEqual(["a", "b"]);
   });
 
   it("answers with an empty list rather than throwing on anything a hand could store", () => {
-    for (const stored of ["", "not json", "null", "[]", "42", '"a"', '{"professional":7}']) {
-      vi.stubGlobal("localStorage", memoryStorage({ "nexus.tools.recent": stored }));
-      expect(readRecentTools("professional"), stored).toEqual([]);
+    for (const stored of ["", "not json", "null", "[]", "42", '"a"', '{"a":1}', "{}"]) {
+      for (const key of ["nexus.tools.favourites.p1", "nexus.tools.recent.p1"]) {
+        vi.stubGlobal("localStorage", memoryStorage({ [key]: stored }));
+        expect(readFavouriteTools("p1"), `${key}:${stored}`).toEqual([]);
+        expect(readRecentTools("p1"), `${key}:${stored}`).toEqual([]);
+      }
     }
   });
 
-  it("drops entries that are not strings, and keeps the ones that are", () => {
-    vi.stubGlobal(
-      "localStorage",
-      memoryStorage({ "nexus.tools.recent": '{"professional":["a",3,null,{},"b"]}' }),
-    );
-    expect(readRecentTools("professional")).toEqual(["a", "b"]);
+  /**
+   * „Vrati na podrazumevano" is one promise about the whole device, so it covers
+   * every profile's stars — not only the one that happens to be open. A key list
+   * here would have to grow one entry per profile to be able to say so.
+   */
+  it("is forgotten by „Vrati na podrazumevano“, for every profile", () => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    toggleFavouriteTool("p1", "pdv");
+    toggleFavouriteTool("p2", "aes");
+    rememberRecentTool("p1", "pdv");
+    rememberRecentTool("p2", "aes");
+    clearStoredToolPreferences();
+    for (const profile of ["p1", "p2"]) {
+      expect(readFavouriteTools(profile), profile).toEqual([]);
+      expect(readRecentTools(profile), profile).toEqual([]);
+    }
   });
 
   /**
-   * The cap is applied on READ as well as on write. A hand-edited file is not
-   * bounded by what this build wrote, and the list feeds a row per entry.
+   * The device-wide map an earlier build wrote is read by nobody, so the reset is
+   * the only thing that can ever remove it, and the prefix walk alone misses it.
    */
-  it("caps a list that was never written by this build", () => {
-    const ids = Array.from({ length: 500 }, (_value, index) => `t${String(index)}`);
-    vi.stubGlobal(
-      "localStorage",
-      memoryStorage({ "nexus.tools.recent": JSON.stringify({ professional: ids }) }),
-    );
-    expect(readRecentTools("professional")).toHaveLength(8);
-  });
-
-  it("is forgotten by „Vrati na podrazumevano“, in both drawers", () => {
-    vi.stubGlobal("localStorage", memoryStorage());
-    rememberRecentTool("utilities", "pdv");
-    rememberRecentTool("professional", "aes");
+  it("forgets the device-wide history an earlier build kept", () => {
+    const storage = memoryStorage({ "nexus.tools.recent": JSON.stringify({ utilities: ["pdv"] }) });
+    vi.stubGlobal("localStorage", storage);
+    expect(readRecentTools("p1")).toEqual([]);
     clearStoredToolPreferences();
-    expect(readRecentTools("utilities")).toEqual([]);
-    expect(readRecentTools("professional")).toEqual([]);
+    expect(storage.getItem("nexus.tools.recent")).toBeNull();
   });
 
   /**
@@ -144,7 +174,8 @@ describe("„Nedavno“ (PRO slice a)", () => {
         throw new Error("QuotaExceededError");
       },
     });
-    expect(() => rememberRecentTool("professional", "aes")).not.toThrow();
-    expect(rememberRecentTool("professional", "aes")).toEqual(["aes"]);
+    expect(() => rememberRecentTool("p1", "aes")).not.toThrow();
+    expect(rememberRecentTool("p1", "aes")).toEqual(["aes"]);
+    expect(toggleFavouriteTool("p1", "aes")).toEqual(["aes"]);
   });
 });

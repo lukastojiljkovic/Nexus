@@ -22,7 +22,7 @@ function manifest(id: string, widgets: readonly string[] = []): ModuleManifest {
   return {
     id,
     prefix: id.toUpperCase().slice(0, 4),
-    category: "Life hubs",
+    group: "life",
     defaultEnabled: true,
     widgets: widgets.map(widget),
   };

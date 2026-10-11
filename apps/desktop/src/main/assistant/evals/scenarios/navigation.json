@@ -1,0 +1,402 @@
+{
+  "scenarios": [
+    {
+      "id": "navigation-passcode-sr",
+      "title": "Gde se menja šifra za otključavanje",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Gde da promenim šifru za otključavanje?" }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-security",
+            "title": "Bezbednost i šifra",
+            "locator": "Podešavanja › Bezbednost"
+          },
+          "text": "Šifra za otključavanje menja se u modulu Podešavanja, na kartici Bezbednost. Tamo se menja i šifra za Privatno.",
+          "score": 0.93
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": { "module": { "eq": "settings" }, "settings": { "eq": "security" } }
+          }
+        ],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["Bezbednost"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "app.open", "arguments": { "module": "settings", "settings": "security" } }
+          ]
+        },
+        {
+          "text": "Šifru menjaš u Podešavanjima, na kartici Bezbednost. Otvorio sam ti tu stranicu. Ako menjaš i šifru za Privatno, na istoj kartici je odvojeno polje."
+        }
+      ]
+    },
+    {
+      "id": "navigation-export-sr",
+      "title": "Kako se izvoze svi podaci",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Kako da izvezem sve svoje podatke iz aplikacije?" }
+      ],
+      "tools": [
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napraviću belešku.", "en": "I will create a note." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-export",
+            "title": "Izvor podataka",
+            "locator": "Podešavanja › Podaci"
+          },
+          "text": "Izvor svih podataka je na kartici Podaci u Podešavanjima. Izvoz pravi jednu arhivu sa svim profilima, a uvoz je vraća.",
+          "score": 0.9
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": { "module": { "eq": "settings" }, "settings": { "oneOf": ["data", "izvor"] } }
+          }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "app.open", "arguments": { "module": "settings", "settings": "data" } }
+          ]
+        },
+        {
+          "text": "Izvor podataka je u Podešavanjima, na kartici Podaci. Tamo je dugme za izvoz, koje pravi jednu arhivu sa svim profilima. Otvorio sam ti tu karticu."
+        }
+      ]
+    },
+    {
+      "id": "navigation-private-vault-sr",
+      "title": "Gde je Privatno",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Gde se nalazi Privatno, ne mogu da ga nađem u meniju?" }
+      ],
+      "tools": [
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napraviću belešku.", "en": "I will create a note." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-private",
+            "title": "Privatno",
+            "locator": "Moduli › Privatno"
+          },
+          "text": "Privatno je modul koji se uključuje u Podešavanjima, na kartici Moduli. Kada je uključen, pojavljuje se u levom meniju i traži svoju šifru.",
+          "score": 0.88
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": { "module": { "eq": "settings" }, "settings": { "oneOf": ["modules", "moduli"] } }
+          }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "answerContains": ["Moduli"],
+        "language": "sr",
+        "maxSteps": 3
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "app.open", "arguments": { "module": "settings", "settings": "modules" } }
+          ]
+        },
+        {
+          "text": "Privatno je modul koji se uključuje u Podešavanjima, na kartici Moduli. Ako ga tamo uključiš, pojaviće se u levom meniju i tražiće svoju šifru. Otvorio sam ti karticu Moduli."
+        }
+      ]
+    },
+    {
+      "id": "navigation-focus-timer-sr",
+      "title": "Kako se pokreće tajmer za fokus",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Kako da pokrenem tajmer za fokus?" }
+      ],
+      "tools": [
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-timers",
+            "title": "Tajmeri",
+            "locator": "Moduli › Tajmeri"
+          },
+          "text": "Tajmeri drže odbrojavanja i šablone. Fokus je jedno odbrojavanje koje se pokreće iz modula Tajmeri ili sa kontrolne table.",
+          "score": 0.86
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "app.open", "args": { "module": { "eq": "timers" } } }
+        ],
+        "toolsNotCalled": ["tasks.create"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "app.open", "arguments": { "module": "timers" } }] },
+        {
+          "text": "Fokus je odbrojavanje u modulu Tajmeri. Tamo izabereš trajanje i pritisneš dugme za početak, a isto odbrojavanje vidiš i na kontrolnoj tabli. Otvorio sam ti Tajmere."
+        }
+      ]
+    },
+    {
+      "id": "navigation-passcode-en",
+      "title": "Where the passcode is changed",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Where do I change my passcode?" }
+      ],
+      "tools": [
+        { "name": "knowledge.search", "effect": "read" },
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-security",
+            "title": "Security and the passcode",
+            "locator": "Settings › Security"
+          },
+          "text": "The unlock passcode is changed in Settings, on the Security card. The private passcode is changed on the same card, in a field of its own.",
+          "score": 0.93
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": { "module": { "eq": "settings" }, "settings": { "eq": "security" } }
+          }
+        ],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["Security"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "app.open", "arguments": { "module": "settings", "settings": "security" } }
+          ]
+        },
+        {
+          "text": "The passcode is changed in Settings, on the Security card. I have opened that page for you. The private passcode is on the same card, in a field of its own."
+        }
+      ]
+    },
+    {
+      "id": "navigation-export-en",
+      "title": "How the data is exported",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "How do I export all of my data?" }
+      ],
+      "tools": [
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napraviću belešku.", "en": "I will create a note." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-export",
+            "title": "Your data",
+            "locator": "Settings › Data"
+          },
+          "text": "Everything is exported from the Data card in Settings. The export writes one archive holding every profile, and the import restores it.",
+          "score": 0.9
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": { "module": { "eq": "settings" }, "settings": { "oneOf": ["data", "izvor"] } }
+          }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "app.open", "arguments": { "module": "settings", "settings": "data" } }
+          ]
+        },
+        {
+          "text": "Your data is exported from Settings, on the Data card. The button there writes one archive that holds every profile, and the same card restores it. I have opened that card for you."
+        }
+      ]
+    },
+    {
+      "id": "navigation-private-vault-en",
+      "title": "Where the private vault is",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "I cannot find the private vault in the menu. Where is it?" }
+      ],
+      "tools": [
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "notes.create",
+          "effect": "write",
+          "summary": { "sr": "Napraviću belešku.", "en": "I will create a note." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-private",
+            "title": "The private vault",
+            "locator": "Modules › Private"
+          },
+          "text": "The private vault is a module that is switched on in Settings, on the Modules card. Once it is on it appears in the sidebar and asks for its own passcode.",
+          "score": 0.88
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": { "module": { "eq": "settings" }, "settings": { "oneOf": ["modules", "moduli"] } }
+          }
+        ],
+        "toolsNotCalled": ["notes.create"],
+        "answerContains": ["Modules"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "app.open", "arguments": { "module": "settings", "settings": "modules" } }
+          ]
+        },
+        {
+          "text": "The private vault is a module, and modules are switched on in Settings, on the Modules card. Turn it on there and it appears in the sidebar with its own passcode. I have opened the Modules card for you."
+        }
+      ]
+    },
+    {
+      "id": "navigation-focus-timer-en",
+      "title": "How a focus timer is started",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "How do I start a focus timer?" }
+      ],
+      "tools": [
+        { "name": "app.open", "effect": "navigate" },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "app-manual",
+            "id": "manual-timers",
+            "title": "Timers",
+            "locator": "Modules › Timers"
+          },
+          "text": "Timers hold countdowns and presets. A focus session is one countdown, started from the Timers module or from the dashboard.",
+          "score": 0.86
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "app.open", "args": { "module": { "eq": "timers" } } }],
+        "toolsNotCalled": ["tasks.create"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "app.open", "arguments": { "module": "timers" } }] },
+        {
+          "text": "A focus session is a countdown in the Timers module. Pick a duration there and press start, and the same countdown is on the dashboard. I have opened Timers for you."
+        }
+      ]
+    }
+  ]
+}

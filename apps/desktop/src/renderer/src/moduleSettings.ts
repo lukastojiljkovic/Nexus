@@ -1,12 +1,6 @@
-import {
-  resolveEnabled,
-  type FlagState,
-  type ModuleRegistry,
-  type SettingsPanel,
-} from "@nexus/core";
+import type { ModuleRegistry, SettingsPanel } from "@nexus/core";
 
-import { lookupString } from "./dashboardLayout.js";
-import { strings } from "./strings.js";
+import { resolveLabel } from "./moduleKit/labels.js";
 
 /**
  * The renderer's reader for the per-module settings contract (`SettingsPanel`)
@@ -50,6 +44,22 @@ export function moduleSettingsDeclarations(registry: ModuleRegistry): ModuleSett
     );
 }
 
+/**
+ * The same modules, as a SET of ids — what a module page asks before it offers
+ * the gear that opens its own card.
+ *
+ * A set rather than a lookup per press because the question is asked once per
+ * header render and answered against the same registry every time: the gear is
+ * a fact about the manifest (`settings`), so a module that declares none has no
+ * card to open and no button, and nothing at the call site can forget that.
+ * Flags are deliberately not consulted, on `moduleSettingsDeclarations`' own
+ * rule: the gear is on the module's OWN page, which a switched-off module does
+ * not have.
+ */
+export function moduleSettingsCardIds(registry: ModuleRegistry): ReadonlySet<string> {
+  return new Set(moduleSettingsDeclarations(registry).map((declaration) => declaration.moduleId));
+}
+
 /** A card the settings page draws for one module: its section id, its resolved title, and the declaration behind both. */
 export interface ModuleSettingsCard extends ModuleSettingsDeclaration {
   /** The card's Serbian title, resolved from `panel.titleKey`. */
@@ -58,20 +68,24 @@ export interface ModuleSettingsCard extends ModuleSettingsDeclaration {
 
 /**
  * The module cards the page renders, in registry order — nothing at all for a
- * module the profile has switched off (SET-007), on the rule the dashboard's
- * own placements already follow: a card for a module the sidebar does not show
- * is a dangling control.
+ * module the DEVICE hides (SET-007, now app-wide: ADR-101), on the rule the
+ * dashboard's own placements already follow: a card for a module the sidebar
+ * does not show is a dangling control.
+ *
+ * The caller hands in the visible set (`visibleModuleSet`, the one predicate
+ * every consumer filters through) rather than a profile's flags, so the gallery,
+ * the rail, the launcher and the search index cannot disagree about which
+ * modules this machine shows.
  */
 export function moduleSettingsCards(
   registry: ModuleRegistry,
-  flags: FlagState,
+  enabled: ReadonlySet<string>,
 ): ModuleSettingsCard[] {
-  const enabled = new Set(resolveEnabled(registry, flags));
   return moduleSettingsDeclarations(registry)
     .filter((declaration) => enabled.has(declaration.moduleId))
     .map((declaration) => ({
       ...declaration,
-      title: lookupString(strings, declaration.panel.titleKey) ?? declaration.moduleId,
+      title: resolveLabel(declaration.panel.titleKey),
     }));
 }
 

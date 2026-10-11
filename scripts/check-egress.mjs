@@ -128,6 +128,24 @@ export const EGRESS_RULES = [
   { id: "css-remote", pattern: /(url\s*\(|@import\s+)["']?\s*(https?):\/\/(?!localhost|127\.0\.0\.1)/, what: "a remote CSS url() or @import" },
   { id: "src-assign", pattern: /\.\s*(src|href)\s*=\s*["'`](https?|wss?):\/\/(?!localhost|127\.0\.0\.1)/, what: "an assignment of a remote URL to .src/.href" },
   { id: "load-remote", pattern: /\b(loadURL|openExternal|open)\s*\(\s*["'`](https?|wss?):\/\/(?!localhost|127\.0\.0\.1)/, what: "a remote URL handed to a loader" },
+  /**
+   * A NODE DNS MODULE, which is egress with no request in sight.
+   *
+   * This rule arrived with the assistant's web service (ADR-097), and it closed
+   * a hole that had been open the whole time: every other rule in this list
+   * looks for a REQUEST, and `dns.lookup` makes one - a UDP or TCP query to
+   * whatever resolver the machine is configured with - while containing none of
+   * the words the other rules match. That the switch is off by default does not
+   * make a lookup free: the question „which name did this process ask about" is
+   * exactly the metadata an offline-first app promises not to leak.
+   *
+   * It is a rule and not a note in `check:egress`'s header because there is no
+   * way for a reader to see a lookup in a review: `dnsLookup(hostname)` is a
+   * function call with a variable in it, and the URL rules would sail past a
+   * module that resolved names it never fetched. The ONE legitimate caller is
+   * named in `ALLOWLIST` below.
+   */
+  { id: "node-dns", pattern: /from\s+["']node:dns(\/promises)?["']|require\s*\(\s*["']node:dns(\/promises)?["']\s*\)/, what: "a Node DNS module (a lookup is egress)" },
 ];
 
 /**
@@ -175,19 +193,98 @@ export const ALLOWLIST = new Map([
     ["electron-net-fetch"],
   ],
   [
-    // The update feature's Electron half (ADR-089). Its one flagged construct
-    // is `shell.openExternal("<the pinned release page>")`, which the
-    // `load-remote` rule reads as „a remote URL handed to a loader" — and it
-    // is, deliberately: the loader is the USER'S BROWSER, not this process's
-    // network stack. Nothing here fetches anything; the actual update traffic
-    // goes through `ses.fetch` on the dedicated `nexus-update` session, which
-    // the rule set already allows because it is a method on a session rather
-    // than the global `fetch`. The exemption is scoped to the one rule id so
-    // this file is still forbidden from reaching for the global, and it names
-    // one file rather than `main/update/` so a new module there never inherits
-    // the permission.
-    "apps/desktop/src/main/update/electron.ts",
+    // A LOOPBACK TEST SERVER, and nothing else. The download service's promises
+    // are about the WIRE — a pause must become a `Range` request, a server
+    // without ranges must make the file restart rather than continue, a
+    // redirect out of the allowlist must cost one request and not two — so the
+    // suite serves real bytes from 127.0.0.1 instead of stubbing a reply, and
+    // `node:http` is both the server and the client (which does not follow
+    // redirects, the one property `service.ts` requires of a port). The port
+    // this stands in for is `ses.fetch` on the dedicated in-memory session;
+    // nothing here can leave the machine, and the single exempted rule id is
+    // why this entry may not grow a second one.
+    "apps/desktop/src/main/download/service.test.ts",
+    ["node-http"],
+  ],
+  [
+    // The pack downloader's end-to-end suite (ADR-103): the same shape as the
+    // entry above and for the same reason. What it proves is that a catalogue
+    // entry becomes an INSTALLED pack through the real download service and the
+    // real install, which means bytes have to arrive over a wire — so a loopback
+    // server serves a fixture pack, and `node:http` is both server and client.
+    // Nothing here can leave the machine, and the one exempted rule id is why
+    // this entry may not grow a second.
+    "apps/desktop/src/main/packs/download.test.ts",
+    ["node-http"],
+  ],
+  [
+    // The external-link rule's Electron half (ADR-103). Its one flagged
+    // construct is `shell.openExternal`, which the `load-remote` rule reads as
+    // "a remote URL handed to a loader" — and it is, deliberately: the loader is
+    // the USER'S BROWSER, not this process's network stack. Nothing here fetches
+    // anything, and the exemption is scoped to the one rule id and to one file,
+    // so the rule (which is pure and lives beside it) still fails the gate if it
+    // ever grows a call of its own.
+    "apps/desktop/src/main/external.ts",
     ["load-remote"],
+  ],
+  [
+    // A LOCAL SCHEME, and one file of one module. `nx-pack://<packId>/<path>`
+    // is answered in this process by `protocol.handle`, which opens a file
+    // under `<userData>/packs/<id>/` and serves a byte range of it - that is
+    // how the map pack's tiles, style and glyphs reach the renderer, and it is
+    // the same mechanism MapLibre's own loader uses a few lines away (in
+    // `node_modules`, which this gate does not read). The URL cannot leave the
+    // machine: there is no host in it, and the handler has no branch that
+    // resolves anything outside the pack folder. The exemption names ONE file
+    // and ONE rule id, so the rest of the module - and every other module -
+    // stays forbidden from reaching for the global, which is the substitution
+    // that would put a real request behind a URL that reads like a local one.
+    "apps/desktop/src/modules/maps/renderer/packFile.ts",
+    ["fetch"],
+  ],
+  [
+    // The translation worker's `fetch`, declared on its own worker-scope type.
+    // The rule fires on the declaration, which is the shape it must not ignore —
+    // and the two things that URL is ever given are both served from THIS
+    // process: the wasm asset the build emitted, and
+    // `nx-pack://<packId>/<file>` model files, which `protocol.handle` answers
+    // out of a signed, hash-verified pack folder (ADR-091). There is no host in
+    // the module and no way for one to arrive: the URLs come from
+    // `models.ts`, which builds them from a pack id and three constants.
+    // Exempted from `fetch` alone, so reaching for anything else still fails.
+    "apps/desktop/src/modules/translator/renderer/sentences/bergamot.worker.ts",
+    ["fetch"],
+  ],
+  [
+    // THE SECOND SANCTIONED EGRESS PATH (ADR-097), and the only place in the
+    // assistant's web service that has a socket or a resolver. Both rule ids are
+    // the SAME decision seen twice: this feature asks for a page on the open web
+    // (`node:https`) and has to resolve the name before it may, because the
+    // address is what tells a public host from `169.254.169.254` (`node:dns`).
+    //
+    // WHY AN EXEMPTION AT ALL, RATHER THAN THE DEDICATED SESSION. ADR-089/092's
+    // single non-renderer session allows https to a COMPILED-IN list of hosts,
+    // and that is the whole of its value. A search result's host is not a fact
+    // about the binary: it is a fact about the internet, and the user typed the
+    // question. The alternatives were to lift `host-resolver-rules` for any
+    // launch with the switch on (which would weaken the two features that do
+    // depend on that layer, an update check and a content download, in the
+    // session they share) or to give this feature its own socket. ADR-097 takes
+    // the second, and states the consequence instead of hiding it: what protects
+    // this path is `web/gate.ts` (the switch, off by default, AND a network mode
+    // that allows a connection), `web/target.ts` (https only, and every resolved
+    // address public, re-checked on every redirect hop) and `web/limits.ts`
+    // (bytes and time), not Chromium's proxy, resolver or session rules.
+    //
+    // WHY IT IS ONE FILE AND NOT A DIRECTORY. This entry names
+    // `web/transport.ts` and nothing beside it, so the six files that DECIDE
+    // what may be requested - `index.ts`, `gate.ts`, `target.ts`, `fetch.ts`,
+    // `providers.ts`, `secrets.ts` - still fail this gate if one of them ever
+    // reaches for a socket, which is the mistake that would make the gate
+    // irrelevant. `check-egress.test.mjs` asserts exactly that.
+    "apps/desktop/src/main/assistant/web/transport.ts",
+    ["node-http", "node-dns"],
   ],
 ]);
 

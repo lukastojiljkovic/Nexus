@@ -38,6 +38,20 @@ import { PRO_TRANSPORT_SR } from "./pro.transport.js";
 import { PRO_AGRO_SR } from "./pro.agro.js";
 import { PRO_ZANAT_SR } from "./pro.zanat.js";
 import { PRO_EVENT_SR } from "./pro.event.js";
+import { PRO_LABORATORIJA_SR } from "./pro.laboratorija.js";
+import { PRO_ELEKTRO_SR } from "./pro.elektro.js";
+import { PRO_IT_SR } from "./pro.it.js";
+import { PRO_AUTO_SR } from "./pro.auto.js";
+import { PRO_NAUTIKA_SR } from "./pro.nautika.js";
+import { PRO_VAZDUHOPLOVSTVO_SR } from "./pro.vazduhoplovstvo.js";
+import { PRO_GEODEZIJA_SR } from "./pro.geodezija.js";
+import { PRO_RADIO_SR } from "./pro.radio.js";
+import { PRO_ENERGIJA_SR } from "./pro.energija.js";
+import { PRO_GREJANJE_SR } from "./pro.grejanje.js";
+import { PRO_METAL_SR } from "./pro.metal.js";
+import { PRO_STOLARIJA_SR } from "./pro.stolarija.js";
+import { PRO_KROJENJE_SR } from "./pro.krojenje.js";
+import { PRO_VINO_SR } from "./pro.vino.js";
 
 export const proSr = {
   title: "Stručne alatke",
@@ -217,6 +231,62 @@ export const proSr = {
       name: "Događaji i organizacija",
       who: "organizatori događaja, venčanja, konferencija",
     },
+    laboratorija: {
+      name: "Laboratorija i rastvori",
+      who: "laboranti, hemičari, tehničari u laboratoriji",
+    },
+    elektro: {
+      name: "Elektroinstalacije",
+      who: "električari, elektromonteri, serviseri",
+    },
+    it: {
+      name: "Mreže i sistemi",
+      who: "administratori, mrežni tehničari, inženjeri sistema",
+    },
+    auto: {
+      name: "Auto i motori",
+      who: "automehaničari, autoelektričari, serviseri",
+    },
+    nautika: {
+      name: "Nautika i jedrenje",
+      who: "jedriličari, nautičari, skiperi, ribari",
+    },
+    vazduhoplovstvo: {
+      name: "Vazduhoplovstvo",
+      who: "piloti, instruktori letenja, jedriličari, padobranci",
+    },
+    geodezija: {
+      name: "Geodezija i GIS",
+      who: "geodete, geometri, katastarski inženjeri, GIS analitičari",
+    },
+    radio: {
+      name: "Radio-amaterizam",
+      who: "radio-amateri, tehničari, operateri repetitora",
+    },
+    energija: {
+      name: "Energija i solar",
+      who: "solarni instalateri, vikendaši, kamperi, korisnici van mreže",
+    },
+    grejanje: {
+      name: "Grejanje i vodovod",
+      who: "instalateri, vodoinstalateri, grejači, serviseri",
+    },
+    metal: {
+      name: "Obrada metala",
+      who: "bravari, metalci, strugari, zavarivači, limari",
+    },
+    stolarija: {
+      name: "Stolarija",
+      who: "stolari, tesaři, monteri nameštaja",
+    },
+    krojenje: {
+      name: "Krojenje i šivenje",
+      who: "krojači, konfekcija, modni dizajneri, tapetari",
+    },
+    vino: {
+      name: "Vino i rakija",
+      who: "vinari, podrumari, destileri, proizvođači rakije",
+    },
   },
 
   /**
@@ -386,13 +456,19 @@ export const proSr = {
    * not change when its neighbours arrived (`./devtools.ts`).
    */
   name: {
+    "air-fuel-ratio": "Odnos vazduh-gorivo",
     "allocation-remainder": "Raspodela bez ostatka",
+    "altimeter-units": "Visinomer i pritisak",
     "amount-in-words": "Iznos i broj slovima",
+    "anchor-rode": "Anker i uže",
     "angle-of-view": "Ugao vidnog polja",
     "angle-units": "Uglovi i direkcioni ugao",
+    "antenna-lengths": "Dužine antena",
     "anuitet-otplatni-plan": "Anuitet i otplatni plan",
+    "array-sizing": "Polje panela",
     "aspect-ratio-fit": "Odnos stranica",
     "audio-level-reference": "dBu, dBV i volti",
+    "autonomy-days": "Dani autonomije",
     "average-to-target": "Ocene do proseka",
     "awg-to-mm2": "AWG i mm²",
     "axle-load-distribution": "Osovinsko opterećenje",
@@ -405,6 +481,7 @@ export const proSr = {
     "barbell-plate-loading": "Nalaganje diskova",
     "baseline-rhythm": "Prored i vertikalni ritam",
     "battery-bank-runtime": "Baterija i autonomija",
+    "battery-bank-sizing": "Veličina banke baterija",
     "beam-check": "Greda i konzola",
     "beam-spot-diameter": "Snop reflektora",
     "bee-syrup-mix": "Sirup za pčele",
@@ -420,6 +497,7 @@ export const proSr = {
     "breakeven-cvp": "Prelomna tačka rentabiliteta",
     "brine-salt": "Salamura i soljenje",
     "budget-per-guest": "Budžet po gostu",
+    "buffer-ph": "Pufer pH",
     "cable-cross-section": "Potreban presek",
     "cadastral-area-units": "Katastarske mere",
     "cadence-stride-length": "Kadenca i korak",
@@ -429,29 +507,40 @@ export const proSr = {
     "cents-ratio": "Centi i odnos frekvencija",
     "chained-discount": "Kaskadni popusti",
     "chargeable-weight": "Obračunska masa",
+    "charge-controller-current": "Struja punjača",
     "check-digits-id": "Provera PIB i JMBG",
     "child-age": "Uzrast deteta",
+    "coax-loss": "Gubitak u napojnom vodu",
     "coffee-extraction": "Ekstrakcija kafe",
     "column-grid": "Mreža kolona",
     "combinatorics": "Kombinatorika",
+    "compression-ratio": "Stepen kompresije",
     "compressor-curve": "Kriva kompresora",
+    "concentration-units": "Jedinice koncentracije",
     "concrete-takeoff": "Kubatura i oplata",
+    "conduit-fill": "Ispuna cevi",
     "copyfitting": "Proračun obima teksta",
     "cost-allocation": "Raspodela troškova",
     "cost-per-km-transport": "Trošak po kilometru",
+    "course-to-steer": "Kurs sa strujom",
     "crop-factor": "Crop faktor",
     "css-typographic-units": "Tipografske jedinice",
     "decibel-ratio": "Decibeli i odnosi",
+    "decimal-dms": "Decimalni stepeni i DMS",
     "delta-e": "Razlika boja ΔE",
+    "device-daily-energy": "Potrošnja po uređajima",
     "deposit-instalments": "Avans i rate",
     "depreciation-schedule": "Amortizacija osnovnih sredstava",
     "depth-of-field": "Dubinska oštrina",
     "diffraction-limit": "Difrakcija",
+    "dilution": "Razblaživanje",
     "dough-water-temp": "Temperatura vode",
     "drawing-scale": "Razmera crteža",
     "driving-hours-planner": "Vožnja i pauze",
     "ean-barcode": "EAN barkod",
     "earthwork-prismoidal": "Zapremina između profila",
+    "energy-cost": "Cena potrošnje",
+    "engine-displacement": "Radna zapremina",
     "erg-split-watts": "Split i vati",
     "eta-with-breaks": "Procena dolaska",
     "exposure-equivalent": "Ekvivalentna ekspozicija",
@@ -462,15 +551,23 @@ export const proSr = {
     "font-metrics-trim": "Metrike fonta",
     "fractions-decimals": "Razlomci i decimale",
     "frame-rate-conform": "Konform i usporenje",
+    "frequency-wavelength": "Frekvencija i talasna dužina",
+    "fresnel-zone": "Frenelova zona",
     "fuel-consumption-cost": "Potrošnja i cena goriva",
+    "fuel-range": "Domet goriva",
+    "fuel-reserve": "Gorivo i rezerva",
     "fx-difference": "Kurs i kursne razlike",
     "gear-ratio-road-speed": "Prenosni odnos i brzina",
     "generator-sizing": "Snaga agregata",
+    "geodesic-direct": "Tačka iz azimuta i rastojanja",
+    "geodesic-inverse": "Rastojanje i azimut na elipsoidu",
     "glass-pane-weight": "Masa stakla",
     "glossary-check": "Provera terminologije",
     "grade-scale-points": "Bodovna skala testa",
     "grade-statistics": "Statistika ocena",
     "grain-moisture-shrink": "Kalo sušenja zrna",
+    "great-circle": "Ortodroma i azimut",
+    "grid-ground-ratio": "Mreža i teren",
     "gross-up": "Bruto iz neta",
     "growing-degree-days": "Suma temperatura",
     "guessing-correction": "Korekcija za pogađanje",
@@ -482,12 +579,16 @@ export const proSr = {
     "iban-check": "IBAN",
     "ice-and-chilling": "Led za rashlađivanje",
     "ice-cream-overrun": "Naduv sladoleda",
+    "hull-speed": "Brzina trupa",
     "illuminance-to-aperture": "Luks u blendu",
     "induction-motor-rating": "Asinhroni motor",
+    "injector-flow": "Protok dizni",
     "interest-periods": "Kamata po periodima",
     "interval-session-timing": "Intervalni trening",
     "inventory-costing": "Zalihe FIFO i prosek",
+    "inverter-sizing": "Invertor i udarna snaga",
     "irrigation-depth-volume": "Norma zalivanja",
+    "isa-atmosphere": "Standardna atmosfera",
     "isbn-issn-check": "ISBN i ISSN",
     "iso-286-fits": "Tolerancije i naleganje",
     "iso-paper-sizes": "ISO formati papira",
@@ -506,22 +607,30 @@ export const proSr = {
     "lesson-timeline": "Tempo časa",
     "levain-hydration": "Hidratacija i starter",
     "level-run": "Nivelman",
+    "lighting-count": "Osvetljenje prostorije",
     "limb-symmetry-index": "Simetrija strana",
     "linear-cutting-stock": "Krojenje šipki",
+    "link-budget": "Bilans veze",
     "livestock-ration-dm": "Obrok po suvoj materiji",
     "load-lashing-force": "Sila u vezicama",
     "loading-space-utilisation": "Iskorišćenje tovarnog prostora",
     "loan-amortization": "Plan otplate",
     "loan-schedule": "Otplatni plan kredita",
+    "luminaire-spacing": "Razmak svetiljki",
+    "mac-normalise": "MAC adresa",
     "machine-field-capacity": "Učinak mašine",
     "margin-markup": "Marža i markup",
+    "mean-piston-speed": "Brzina klipa",
     "metric-thread-strength": "Metrički navoj",
     "mired-shift": "Mired korekcija",
     "mitre-angles": "Gerung i složeni gerung",
     "modular-type-scale": "Tipografska skala",
     "mojibake-repair": "Popravka kodiranja",
+    "molar-mass": "Molarna masa",
+    "molarity-to-mass": "Molarnost i masa",
     "mortar-mix-quantity": "Malter i lepak",
     "motion-blur": "Zamućenje pokreta",
+    "motor-starting-current": "Struja pokretanja motora",
     "nd-filter-exposure": "ND filter",
     "nominalna-efektivna-stopa": "Nominalna i efektivna stopa",
     "note-frequency": "Nota, MIDI i frekvencija",
@@ -539,9 +648,11 @@ export const proSr = {
     "paper-weight": "Gramatura i masa papira",
     "parcel-polygon-area": "Površina parcele",
     "parking-cloakroom": "Parking i garderoba",
+    "path-loss": "Slabljenje na putu",
     "payment-due-date": "Rok plaćanja",
     "payment-reference-97": "Poziv na broj 97",
     "pcm-file-size": "Veličina PCM zapisa",
+    "ph-strong-acid-base": "pH jakih kiselina i baza",
     "pipe-flow-velocity": "Protok kroz cev",
     "plant-spacing-density": "Razmak sadnje",
     "plate-cost": "Kalkulacija jela",
@@ -551,12 +662,14 @@ export const proSr = {
     "portions-from-pack": "Porcije iz pakovanja",
     "power-factor-correction": "Kompenzacija reaktivne snage",
     "pq-nits": "PQ i nitovi",
+    "pressure-altitude": "Visina po pritisku",
     "pressure-and-piston-force": "Pritisak i sila klipa",
     "print-resolution": "Rezolucija za štampu",
     "pro-rata-days": "Pro-rata po danima",
     "projector-throw-screen": "Projekcija i platno",
     "racun-iban-provera": "Račun, IBAN i modul 97",
     "radni-dani": "Radni dani",
+    "raid-capacity": "RAID kapacitet",
     "raster-image-size": "Veličina rastera",
     "rate-conversion": "Proporcionalna i konformna stopa",
     "ratio-split": "Podela po odnosu",
@@ -578,6 +691,7 @@ export const proSr = {
     "room-modes": "Modovi prostorije",
     "room-quad-area": "Površina prostorije",
     "room-surfaces": "Površine prostorije",
+    "rule-of-twelfths": "Pravilo dvanaestina",
     "run-of-show": "Satnica događaja",
     "running-pace-splits": "Tempo trke",
     "saddle-stitch-imposition": "Slog knjižice",
@@ -602,6 +716,7 @@ export const proSr = {
     "solution-concentration": "Koncentracija rastvora",
     "sound-wavelength": "Talasna dužina zvuka",
     "speaker-load": "Impedansa i snaga zvučnika",
+    "speed-run": "Brzina, vreme i put",
     "speedometer-tyre-deviation": "Odstupanje brzinomera",
     "spl-distance": "SPL na udaljenosti",
     "split-into-groups": "Podela na grupe",
@@ -617,6 +732,7 @@ export const proSr = {
     "survey-bearing-distance": "Geodetski zadatak",
     "suvlasnicki-udeli": "Udeli i ciljni imenilac",
     "sweat-rate-hydration": "Stopa znojenja",
+    "swr-match": "SWR i prilagođenje",
     "tank-mix-dose": "Doza po rezervoaru",
     "tank-volume-by-level": "Zapremina rezervoara",
     "tap-drill-size": "Bušenje za navoj",
@@ -632,21 +748,29 @@ export const proSr = {
     "topic-hour-allocation": "Raspodela po temama",
     "torque-speed-power": "Moment i snaga",
     "training-volume-load": "Tonaža i intenzitet",
+    "transfer-rate": "Brzina prenosa",
+    "transfer-time": "Vreme prenosa",
+    "transformer-current": "Struja transformatora",
     "translation-volume": "Obim prevoda",
     "transposition": "Transpozicija",
     "trench-volume": "Iskop rova",
     "trial-balance-check": "Kontrola zbira",
     "trip-cost-quote": "Cena ture",
     "troskovi-srazmerno-uspehu": "Troškovi srazmerno uspehu",
+    "true-airspeed": "Prava brzina",
     "truss-hoist-reactions": "Opterećenje trase i motora",
     "tvm-solver": "Vremenska vrednost novca",
     "typography-cleanup": "Tipografsko čišćenje",
     "ugovorna-kazna": "Ugovorna kazna",
     "unwrap-paragraphs": "Sređivanje preloma",
+    "uptime-downtime": "Dostupnost sistema",
     "us-customary-kitchen-units": "Američke mere",
+    "utm-mgrs": "UTM i MGRS",
     "varispeed-repitch": "Rastimovanje i brzina",
     "venue-occupancy-area": "Kapacitet prostora",
     "video-bitrate-storage": "Bitrejt i kartica",
+    "vlsm-split": "Podela podmreža",
+    "vmg": "VMG",
     "voltage-drop": "Pad napona na vodu",
     "wall-ceiling-area": "Zidovi i plafon",
     "wall-u-value": "U-vrednost sklopa",
@@ -655,11 +779,39 @@ export const proSr = {
     "weighted-area": "Obračunska površina",
     "weighted-grade": "Ponderisana ocena",
     "weld-consumable": "Potrošnja za zavarivanje",
+    "wgs84-utm": "WGS84 i UTM",
+    "wheel-offset": "ET i backspace",
+    "wind-components": "Vetar i pista",
+    "wind-triangle": "Trougao vetra",
     "wood-moisture-movement": "Rad drveta po vlazi",
     "word-frequency": "Učestalost reči",
     "yield-estimate-samples": "Procena prinosa",
     "yield-trim-cook": "Randman i kalo",
     "zbir-perioda": "Zbir perioda",
+    // Wave 2b — the five new toolkits' tools. Appended rather than merged into
+    // the alphabetical run above, so the addition reads as one block in review;
+    // the table's order is cosmetic and the rail sorts by category.
+    "abv-gravity": "Alkohol iz gustine",
+    "bias-binding": "Pristrasna traka",
+    "board-foot": "Bord stopa",
+    "button-spacing": "Razmak dugmadi",
+    "circle-skirt": "Kružna suknja",
+    "cutting-speed": "Brzina rezanja",
+    "feed-per-tooth": "Pomak po zubu",
+    "gather-ratio": "Nabiranje tkanine",
+    "heating-cost": "Cena grejanja",
+    "metal-weight": "Masa metala",
+    "must-sugar": "Šećer u moštu",
+    "pipe-pressure-drop": "Pad pritiska u cevi",
+    "power-units": "Jedinice snage",
+    "radiator-output": "Učinak radijatora",
+    "room-heat-loss": "Toplotni gubici prostorije",
+    "seam-allowance": "Dodatak na šav",
+    "spirit-dilution": "Razblaživanje rakije",
+    "sugar-addition": "Dodavanje šećera",
+    "sulfite": "Sulfit i SO₂",
+    "water-heater-time": "Grejanje vode",
+    "weld-throat-leg": "Grlo i krak šava",
   },
 
   /**
@@ -668,27 +820,42 @@ export const proSr = {
    * zadovoljava", which would be a claim the tool is forbidden to make.
    */
   blurb: {
+    "air-fuel-ratio":
+      "Odnos masa vazduha i goriva, lambda uz stehiometrijski odnos koji uneseš, i koliko goriva " +
+      "traži ciljni odnos.",
     "allocation-remainder":
       "Deli iznos po zadatom ključu tako da zbir delova bude tačno jednak celini, bez pare koja " +
       "se izgubi na zaokruživanju.",
+    "altimeter-units":
+      "Pritisak na visinomeru u inHg, hPa i mbar, po tačnoj definiciji inča žive.",
     "amount-in-words":
       "Ispisuje iznos slovima na srpskom — sa valutom, gde oblik reči za dinare i pare prati " +
       "broj, ili bez valute, kao goli broj.",
+    "anchor-rode":
+      "Koliko užeta treba za izabrani odnos prema dubini merenoj pod pramcem, u metrima i stopama.",
     "angle-of-view":
       "Za unete dimenzije senzora i žižnu daljinu daje ugao snimanja po širini, visini i " +
       "dijagonali i koliko metara kadar obuhvata na zadatom rastojanju.",
     "angle-units":
       "Prevodi ugao između stepeni-minuta-sekundi, decimalnih stepeni, gona, radijana i mila i " +
       "svodi ga na pun krug.",
+    "antenna-lengths":
+      "Talasna dužina u provodniku i fizičke dužine polutalasnog dipola i četvrtvalnog elementa, sa " +
+      "faktorom skraćenja koji uneseš.",
     "anuitet-otplatni-plan":
       "Koliki je jednak obrok i kako se svaka rata deli na kamatu i glavnicu kad se dug " +
       "isplaćuje u N jednakih rata.",
+    "array-sizing":
+      "Potrebna snaga polja iz dnevne potrošnje, vršnih sunčanih sati koje uneseš i sistemskih " +
+      "gubitaka, sa brojem panela kad je zadat i jedan panel.",
     "aspect-ratio-fit":
       "Skraćeni celobrojni odnos stranica i dimenzije pri uklapanju u okvir, popunjavanju okvira " +
       "ili zadatoj širini, sa veličinom traka odnosno reza.",
     "audio-level-reference":
       "Prevodi nivo linijskog signala između dBu, dBV, dBm i napona — efektivnog, vršnog i " +
       "međuvršnog.",
+    "autonomy-days":
+      "Koliko dana bez sunca daje banka zadatog kapaciteta, uz napon sistema i dubinu pražnjenja.",
     "average-to-target":
       "Računa koliko još ocena zadate vrednosti treba da bi prosek dostigao cilj, ili koliko " +
       "slabijih ocena prosek još može da izdrži a da ne padne ispod cilja.",
@@ -724,6 +891,9 @@ export const proSr = {
     "battery-bank-runtime":
       "Računa napon i energiju paketa, iskoristivi deo i vreme rada pod zadatim opterećenjem, sa " +
       "Pojkertovom korekcijom kada je korisnik unese.",
+    "battery-bank-sizing":
+      "Kapacitet banke za zadatu autonomiju iz dnevne potrošnje, dubine pražnjenja i napona " +
+      "sistema.",
     "beam-check":
       "Za četiri osnovne statičke šeme daje reakcije, maksimalni moment, napon i ugib iz unetih " +
       "E i I.",
@@ -766,6 +936,8 @@ export const proSr = {
     "budget-per-guest":
       "Sabira fiksne troškove, troškove po gostu i po stolu, procentualne stavke, rezervu i " +
       "porez, i daje cenu po gostu i cenu karte na nuli.",
+    "buffer-ph":
+      "pH pufera iz pKa i odnosa kiselinskog i baznog oblika, ili odnos koji daje željeni pH.",
     "cable-cross-section":
       "Iz pada napona koji korisnik zada računa koliko je najmanje bakra ili aluminijuma " +
       "potrebno da se u taj pad stane, i pad koji se dobija na preseku koji korisnik izabere.",
@@ -787,6 +959,8 @@ export const proSr = {
       "rastimavanja za zadati broj centi.",
     "chained-discount":
       "Slaže niz popusta i doplata jedan na drugi i kaže koji bi jedan popust dao istu cenu.",
+    "charge-controller-current":
+      "Struja koju punjač treba da propusti (MPPT), sa rezervom koju sam zadaješ.",
     "chargeable-weight":
       "Iz dimenzija i stvarne mase pošiljke daje zapreminsku masu po zadatom deliocu i " +
       "obračunsku masu koja se fakturiše.",
@@ -796,6 +970,8 @@ export const proSr = {
     "child-age":
       "Za datum rođenja i zadati dan računa uzrast u godinama, mesecima i danima, ukupan broj " +
       "navršenih meseci i dana, i datum kada osoba navršava zadati broj godina.",
+    "coax-loss":
+      "Gubitak u kablu iz podatka proizvođača u dB na 100 m i dužine, sa snagom na kraju kabla.",
     "coffee-extraction":
       "Iz doze, vode, mase napitka i izmerenog TDS-a računa odnose kuvanja i procenat " +
       "ekstrakcije, i obrnuto — koliko vode ide na zadati odnos.",
@@ -805,12 +981,19 @@ export const proSr = {
     "combinatorics":
       "Računa faktorijel, varijacije i kombinacije sa ponavljanjem i bez njega, i permutacije sa " +
       "ponavljanjem, u celobrojnoj aritmetici bez zaokruživanja.",
+    "compression-ratio":
+      "Stepen kompresije iz provrta, hoda i zapremina komore, dihtunga, nivoa klipa i čela klipa.",
     "compressor-curve":
       "Za zadati prag, odnos i koleno pokazuje šta se dešava sa ulaznim nivoom — izlazni nivo, " +
       "redukciju pojačanja i potreban makeup.",
+    "concentration-units":
+      "Prevodi koncentraciju između mol/l, mmol/l, g/l, mg/ml, procenta, ppm i ppb, uz molarnu " +
+      "masu za molarne jedinice.",
     "concrete-takeoff":
       "Za ploču, gredu, stub ili temelj daje zapreminu betona, površinu oplate i broj tura " +
       "mešalice.",
+    "conduit-fill":
+      "Koliki deo unutrašnjosti cevi zauzima snop provodnika, iz prečnika, uz tvoju granicu ispune.",
     "copyfitting":
       "Koliko će redova, kolona i strana zauzeti tekst od N znakova pri zadatoj širini reda i " +
       "visini kolone, i koliki red staje u tačan broj strana.",
@@ -820,6 +1003,8 @@ export const proSr = {
     "cost-per-km-transport":
       "Iz godišnjih fiksnih troškova i troškova po kilometru daje cenu koštanja kilometra i " +
       "kilometra pod teretom.",
+    "course-to-steer":
+      "Kurs koji drži zadatu putanju kroz poznatu struju, sa uglom zanošenja i brzinom preko zemlje.",
     "crop-factor":
       "Iz unetih dimenzija senzora računa crop faktor u odnosu na format 135 i preračunava žižnu " +
       "daljinu i blendu u ekvivalent za pun kadar.",
@@ -829,9 +1014,14 @@ export const proSr = {
     "decibel-ratio":
       "Pretvara decibele u linearni odnos i natrag — posebno za amplitudu i posebno za snagu — i " +
       "sabira više nivoa u decibelima.",
+    "decimal-dms":
+      "Decimalni stepeni u stepene, minute i sekunde i natrag, sa znakom samo na stepenima.",
     "delta-e":
       "Koliko se dve boje brojčano razlikuju po formulama ΔE*ab, ΔE94 i CIEDE2000; granicu " +
       "prihvatljivosti postavlja i tumači korisnik.",
+    "device-daily-energy":
+      "Dnevna energija iz liste uređaja — snaga puta vreme po uređaju, sabrano u vat-satima i " +
+      "kilovat-satima.",
     "deposit-instalments":
       "Deli ugovorenu vrednost na avans i jednake rate sa datumima, bez razlike u zbiru.",
     "depreciation-schedule":
@@ -843,6 +1033,9 @@ export const proSr = {
     "diffraction-limit":
       "Daje prečnik Erijevog diska za zadatu blendu i blendu na kojoj disk dostigne veličinu " +
       "jednog piksela unetog senzora.",
+    "dilution":
+      "Razblaživanje po C1·V1 = C2·V2: koliko matičnog rastvora uzeti, do koje zapremine dolivati " +
+      "i koliko rastvarača dodati.",
     "dough-water-temp":
       "Računa temperaturu vode da bi testo posle mešenja imalo željenu temperaturu i, obrnuto, " +
       "iz izmerene šarže izvlači faktor trenja mešalice.",
@@ -858,6 +1051,11 @@ export const proSr = {
     "earthwork-prismoidal":
       "Sabira zapreminu iskopa i nasipa iz površina poprečnih profila, po metodi srednjih " +
       "preseka ili prizmoidnoj formuli.",
+    "energy-cost":
+      "Koliko kilovat-časova potroši uređaj u zadatom periodu i koliko to košta po tvojoj ceni " +
+      "struje.",
+    "engine-displacement":
+      "Radna zapremina iz provrta, hoda i broja cilindara, u kubnim centimetrima i litrima.",
     "erg-split-watts":
       "Pretvara split na 500 metara u vate i nazad po objavljenoj Concept2 relaciji i daje vreme " +
       "za zadatu distancu pri tom splitu.",
@@ -890,9 +1088,18 @@ export const proSr = {
     "frame-rate-conform":
       "Kada snimak sa jedne brzine kadrova legne na tajmlajn sa drugom, daje brzinu " +
       "reprodukcije, novo trajanje i pomeraj u odnosu na original.",
+    "frequency-wavelength":
+      "Frekvencija u talasnu dužinu slobodnog prostora i natrag, sa polovinom i četvrtinom za antenu.",
+    "fresnel-zone":
+      "Poluprečnik prve Frenelove zone na mestu prepreke i prohodnost od 60 %, iz dužine puta i " +
+      "položaja prepreke.",
     "fuel-consumption-cost":
       "Iz pređenog puta i utrošenog goriva daje potrošnju, cenu po kilometru i cenu po " +
       "tona-kilometru.",
+    "fuel-range":
+      "Iz rezervoara, potrošnje i brzine daje trajanje i domet, sa rezervom koju čuvaš za sebe.",
+    "fuel-reserve":
+      "Trajanje i dolet iz goriva u avionu, potrošnje i rezerve izražene u minutama leta.",
     "fx-difference":
       "Preračunava devizni iznos po kursu koji korisnik unosi, računa kursnu razliku između dva " +
       "kursa i izvodi unakrsni kurs iz dva odnosa.",
@@ -902,6 +1109,11 @@ export const proSr = {
     "generator-sizing":
       "Sabira potrošače sa faktorom snage i istovremenošću u radnu prividnu snagu i računa vršnu " +
       "prividnu snagu u trenutku polaska najvećeg motora.",
+    "geodesic-direct":
+      "Tačka dolaska iz polazišta, azimuta i rastojanja po WGS84 elipsoidu, sa azimutom na dolasku.",
+    "geodesic-inverse":
+      "Rastojanje, početni i završni azimut između dve tačke po WGS84 elipsoidu (Vincenti), sa " +
+      "kontrolnom linijom četvrtine meridijana.",
     "glass-pane-weight":
       "Masa monolitnog, laminiranog i izo-stakla po m², po komadu i ukupno, iz dimenzija i " +
       "sastava paketa.",
@@ -917,6 +1129,11 @@ export const proSr = {
     "grain-moisture-shrink":
       "Koliko kilograma ostane kada zrno sa izmerene vlage padne na vlagu iz ugovora, koliko je " +
       "vode izašlo i kolika je masa posle odbitka primesa.",
+    "great-circle":
+      "Rastojanje i početni i završni azimut po ortodromi, uz loksodromu — kurs koji se drži — i " +
+      "njenu dužinu.",
+    "grid-ground-ratio":
+      "Odnos rastojanja na mreži i po elipsoidu između dve tačke, uz faktore razmere obe tačke.",
     "gross-up":
       "Rešava linearnu jednačinu bruto–neto unazad: iz neto iznosa i stopa koje korisnik unosi " +
       "izvodi bruto, iznos poreza i doprinosa, i vraća kontrolu.",
@@ -948,12 +1165,18 @@ export const proSr = {
     "ice-cream-overrun":
       "Računa overrun iz mase iste posude napunjene smesom i gotovim sladoledom, i iz zadatog " +
       "overruna daje zapreminu i težinu pakovanja.",
+    "hull-speed":
+      "Brzina deplasmanskog trupa iz dužine vodene linije po Frudovom broju, uz klasičan odnos " +
+      "brzina–dužina.",
     "illuminance-to-aperture":
       "Pretvara luks i fut-kandele i, uz konstantu kalibracije unetu sa tvog svetlomera, računa " +
       "blendu za zadati ISO i vreme zatvarača.",
     "induction-motor-rating":
       "Iz podataka sa natpisne pločice računa nazivnu struju, ulaznu snagu, sinhronu brzinu, " +
       "klizanje i obrtni moment.",
+    "injector-flow":
+      "Protok koji dizna mora da isporuči za ciljnu snagu, iz potrošnje po kilovat-času, broja " +
+      "cilindara i radnog ciklusa.",
     "interest-periods":
       "Računa kamatu na glavnicu kroz više perioda sa različitim stopama i po izabranoj osnovi " +
       "za brojanje dana, sa prikazom dana i kamate po svakom periodu.",
@@ -963,9 +1186,14 @@ export const proSr = {
     "inventory-costing":
       "Iz liste ulaza i izlaza računa nabavnu vrednost prodate robe i stanje zaliha po FIFO " +
       "metodi i po prosečnoj ponderisanoj ceni.",
+    "inverter-sizing":
+      "Trajna i udarna prividna snaga invertora iz opterećenja i faktora snage, uz odnos udara.",
     "irrigation-depth-volume":
       "Pretvara unetu zalivnu normu u milimetrima u kubike po hektaru, daje vreme rada sistema " +
       "pri zadatom protoku i intenzitet kiše rasprskivača.",
+    "isa-atmosphere":
+      "Temperatura, pritisak, gustina i brzina zvuka po ICAO standardnoj atmosferi na zadatoj " +
+      "geopotencijalnoj visini.",
     "isbn-issn-check":
       "Proverava kontrolnu cifru ISBN, ISSN, ISMN i EAN-13 broja i pretvara ISBN-10 u ISBN-13 i " +
       "nazad.",
@@ -1019,12 +1247,17 @@ export const proSr = {
     "level-run":
       "Iz očitanja nivelira i kote repera računa kote svih tačaka, aritmetičku kontrolu i " +
       "nezatvaranje vlaka.",
+    "lighting-count":
+      "Koliko svetiljki treba za zadatu osvetljenost prostorije, po lumen-metodu, i koliko se " +
+      "time postiže.",
     "limb-symmetry-index":
       "Odnos vrednosti sa dve strane tela u procentima, razlika do sto posto, i koju vrednost " +
       "slabija strana treba da dostigne za odnos koji korisnik sam zada.",
     "linear-cutting-stock":
       "Iz spiska potrebnih komada, dužine šipke i širine reza daje koliko šipki treba, koji " +
       "komadi idu na koju šipku i koliki ostatak pada.",
+    "link-budget":
+      "Bilans veze u decibelima: EIRP, snaga na prijemu, napon na 50 Ω i neto dobitak sistema.",
     "livestock-ration-dm":
       "Pretvara uneti unos suve materije po grlu u sveže kilograme svakog hraniva, dnevnu i " +
       "ukupnu potrošnju stada i potrebnu zalihu za zadat broj dana.",
@@ -1040,12 +1273,19 @@ export const proSr = {
     "loan-schedule":
       "Pravi otplatni plan po ratama — anuitetski ili sa jednakom glavnicom — sa podelom svake " +
       "rate na kamatu i glavnicu.",
+    "luminaire-spacing":
+      "Najveći razmak između svetiljki iz odnosa razmak-visina, meren od radne površine, i koliko " +
+      "ih staje u prostoriju.",
+    "mac-normalise":
+      "Ista MAC adresa u svim zapisima, sa OUI-jem i sa dva bita koja nosi prvi oktet.",
     "machine-field-capacity":
       "Iz radnog zahvata, brzine i iskorišćenja vremena daje hektare na sat, vreme za celu " +
       "parcelu i potrošnju goriva po hektaru.",
     "margin-markup":
       "Povezuje nabavnu cenu, prodajnu cenu, maržu i markup i računa najveći popust do zadate " +
       "marže.",
+    "mean-piston-speed":
+      "Srednja brzina klipa iz hoda i broja obrtaja, uz odnos prema granici koju sam uneseš.",
     "metric-thread-strength":
       "Iz nominalnog prečnika i koraka računa srednji, jezgreni i unutrašnji prečnik, presek " +
       "napona i silu koja odgovara čvrstoći koju korisnik unese.",
@@ -1061,12 +1301,21 @@ export const proSr = {
     "mojibake-repair":
       "Vraća pokvarene znakove tipa „Å¡“ i „Ä‡“ u ispravna slova, birajući kojim je kodiranjem " +
       "tekst pisan a kojim pročitan.",
+    "molar-mass":
+      "Molarna masa iz hemijske formule, sa razlaganjem na elemente i udele, po standardnim " +
+      "atomskim masama (CIAAW 2021).",
+    "molarity-to-mass":
+      "Koliko grama odmeriti za rastvor zadate koncentracije i zapremine, ili koja je " +
+      "koncentracija nastala iz odmerene mase.",
     "mortar-mix-quantity":
       "Količina gotove smeše ili sastojaka za mešanje iz površine i debljine sloja, sa vodom, " +
       "brojem vreća i rasturom.",
     "motion-blur":
       "Koliko se piksela subjekat razmaže tokom ekspozicije i koji zatvarač ga zadržava unutar " +
       "zadatog broja piksela.",
+    "motor-starting-current":
+      "Struja pokretanja motora iz nazivne struje i odnosa polazne i nazivne struje, za direktan, " +
+      "zvezda-trougao i soft start.",
     "nd-filter-exposure":
       "Pretvara jačinu ND filtera između blendi, optičke gustine i faktora i računa vreme " +
       "ekspozicije posle filtera.",
@@ -1116,6 +1365,8 @@ export const proSr = {
     "parking-cloakroom":
       "Iz broja gostiju, udela koji dolazi kolima i popunjenosti vozila računa broj vozila i " +
       "površinu parkinga, dužinu šipki u garderobi i broj radnika za zadati prozor prijema.",
+    "path-loss":
+      "Slabljenje u slobodnom prostoru po Friisu iz rastojanja i frekvencije, i deo snage koji stiže.",
     "payment-due-date":
       "Iz datuma i roka koji sam unosiš daje datum dospeća, dan u nedelji i broj dana razlike do " +
       "referentnog datuma.",
@@ -1124,6 +1375,8 @@ export const proSr = {
     "pcm-file-size":
       "Koliko zauzima nekompresovan snimak zadate dužine pri zadatoj frekvenciji, rezoluciji i " +
       "broju kanala — i koliki je protok podataka.",
+    "ph-strong-acid-base":
+      "pH i pOH jake kiseline ili baze iz analitičke koncentracije i broja grupa koje se jonizuju.",
     "pipe-flow-velocity":
       "Povezuje unutrašnji prečnik, protok i brzinu u cevi i računa Rejnoldsov broj i maseni " +
       "protok iz svojstava koja korisnik unese.",
@@ -1150,6 +1403,9 @@ export const proSr = {
     "pq-nits":
       "Pretvara PQ signal u luminanciju u nitovima i nazad, po krivoj iz ST 2084, uz 10-bitni i " +
       "12-bitni kod u punom i suženom opsegu.",
+    "pressure-altitude":
+      "Visina po pritisku i visina po gustini iz stvarnog pritiska i spoljne temperature, " +
+      "inverzijom standardne atmosfere.",
     "pressure-and-piston-force":
       "Prevodi bar, Pa, psi, kgf/cm², mmHg i metre vodenog stuba, razlikuje nadpritisak od " +
       "apsolutnog i računa silu na klipu i na strani klipnjače.",
@@ -1168,6 +1424,9 @@ export const proSr = {
     "radni-dani":
       "Koliko kalendarskih, radnih i neradnih dana ima između dva datuma, po spisku neradnih " +
       "dana koji korisnik sam unosi.",
+    "raid-capacity":
+      "Iskoristiv kapacitet i tolerancija kvara za RAID 0, 1, 5, 6 i 10, uz vreme rebilda kad " +
+      "uneseš brzinu.",
     "raster-image-size":
       "Nekompresovana veličina slike iz dimenzija, broja kanala i dubine bita, i koliko takvih " +
       "fajlova staje na dati prostor.",
@@ -1229,6 +1488,8 @@ export const proSr = {
     "room-surfaces":
       "Iz mera prostorije i spiska otvora daje neto zidnu površinu, plafon, špaletne i potrebnu " +
       "količinu materijala.",
+    "rule-of-twelfths":
+      "Visina plime između okretanja po pravilu dvanaestina, sa tabelom po satima.",
     "run-of-show":
       "Iz trajanja tačaka, prelaza između njih i tačaka zakovanih za tačan sat pravi satnicu " +
       "unapred i unazad i pokazuje praznine i prekoračenje.",
@@ -1298,6 +1559,9 @@ export const proSr = {
     "speaker-load":
       "Za zvučnike vezane paralelno ili redno daje ukupnu impedansu i koliko snage dobija svaka " +
       "kutija.",
+    "speed-run":
+      "Iz dve od tri veličine daje treću — brzinu u čvorovima, km/h i m/s, rastojanje u nautičkim " +
+      "miljama i kilometrima i vreme u satima i minutima.",
     "speedometer-tyre-deviation":
       "Pri promeni dimenzije gume računa stvarnu brzinu, grešku kilometraže i promenu visine " +
       "vozila.",
@@ -1343,6 +1607,8 @@ export const proSr = {
     "sweat-rate-hydration":
       "Iz mase pre i posle treninga, popijene tečnosti i trajanja računa gubitak znojem, stopu " +
       "znojenja po satu i procenat izgubljene telesne mase.",
+    "swr-match":
+      "SWR, povratni gubitak, koeficijent refleksije i gubitak zbog neprilagođenja — jedno iz drugog.",
     "tank-mix-dose":
       "Preračunava unetu dozu preparata sa hektara na jedno punjenje rezervoara i daje ukupne " +
       "količine preparata i vode za unetu površinu.",
@@ -1387,6 +1653,13 @@ export const proSr = {
     "training-volume-load":
       "Iz redova programa (serije × ponavljanja × kilogrami) sabira ponavljanja i tonažu i daje " +
       "prosečno opterećenje po ponavljanju, a uz unet 1RM i prosečan intenzitet u procentima.",
+    "transfer-rate":
+      "Brzina prenosa u svim jedinicama, uz strogo razdvajanje decimalnih i binarnih prefiksa.",
+    "transfer-time":
+      "Koliko traje prenos zadate veličine na zadatoj brzini, sa odvojenim decimalnim i binarnim " +
+      "jedinicama.",
+    "transformer-current":
+      "Struje primara i sekundara na punom opterećenju iz nazivne snage u kVA i napona namotaja.",
     "translation-volume":
       "Broji znakove, reči i prevodilačke strane u nalepljenom tekstu i množi ih cenom koju " +
       "upišeš.",
@@ -1405,6 +1678,9 @@ export const proSr = {
     "troskovi-srazmerno-uspehu":
       "Koliki je odnos usvojenog i traženog iznosa i koliki srazmerni deo svojih troškova nosi " +
       "svaka strana po tom odnosu.",
+    "true-airspeed":
+      "Prava brzina iz kalibrisane brzine, visine po pritisku i spoljne temperature, uz gustinu iz " +
+      "idealnog gasa.",
     "truss-hoist-reactions":
       "Za trasu obešenu o dve tačke računa silu na svakoj tački od sopstvene težine i " +
       "pojedinačnih tereta, položaj težišta i moguće podizanje kraja.",
@@ -1420,9 +1696,14 @@ export const proSr = {
     "unwrap-paragraphs":
       "Spaja redove prelomljene kopiranjem iz PDF-a natrag u pasuse i sastavlja reči rastavljene " +
       "crticom na kraju reda.",
+    "uptime-downtime":
+      "Procenat dostupnosti i prekid koji mu odgovara po godini, mesecu, nedelji i danu, ili " +
+      "obrnuto.",
     "us-customary-kitchen-units":
       "Pretvara šoljice, unce, funte, pinte i stepene Farenhajta iz stranih recepata u " +
       "mililitre, grame i stepene Celzijusa, i odbija da pretvori zapreminu u masu bez gustine.",
+    "utm-mgrs":
+      "WGS84 koordinate u MGRS oznaku i natrag, sa preciznošću od 100 km do 1 m.",
     "varispeed-repitch":
       "Kada se semplu promeni visina ili se snimak sviran na jednoj frekvenciji odsvira na " +
       "drugoj — daje odnos brzine, dobijeni tempo, dobijeno trajanje i pomeraj u centima.",
@@ -1432,6 +1713,11 @@ export const proSr = {
     "video-bitrate-storage":
       "Veže bitrejt, trajanje i veličinu fajla i računa koliko snimka staje na karticu ili disk " +
       "zadatog kapaciteta.",
+    "vlsm-split":
+      "Deljenje IPv4 mreže na podmreže po zadatim brojevima domaćina, od najveće ka najmanjoj, uz " +
+      "ostatak.",
+    "vmg":
+      "Korisna komponenta brzine uz vetar ili niz vetar, za zadati ugao pravog vetra.",
     "voltage-drop":
       "Za zadati presek, dužinu i struju računa otpornost voda, pad napona u voltima i " +
       "procentima i gubitak snage.",
@@ -1457,6 +1743,16 @@ export const proSr = {
     "weld-consumable":
       "Masa navara i potrebnog dodatnog materijala iz preseka šava i dužine, sa dužinom žice ili " +
       "brojem elektroda.",
+    "wgs84-utm":
+      "Širina i dužina u UTM zonu, koordinate, faktor razmere i konvergenciju, i natrag — po " +
+      "Gaus-Krigerovom redu na WGS84.",
+    "wheel-offset":
+      "Backspace i spoljna mera iz širine felne i ET-a, i koliko se ivice pomeraju prema drugoj " +
+      "felni.",
+    "wind-components":
+      "Čeona i poprečna komponenta vetra za pistu, sa istim komponentama za suprotan smer piste.",
+    "wind-triangle":
+      "Korekcija kursa, kurs za let i brzina preko zemlje iz kursa, prave brzine i vetra.",
     "wood-moisture-movement":
       "Koliko se dimenzija drveta promeni pri promeni vlažnosti i koliki zazor ostaje za " +
       "očekivani raspon vlage u prostoriji.",
@@ -1471,6 +1767,65 @@ export const proSr = {
     "zbir-perioda":
       "Koliko ukupno dana daje niz perioda, kako se taj zbir razlaže na godine, mesece i dane, i " +
       "gde se periodi preklapaju.",
+    // Wave 2b — see the note at the foot of the `name` table.
+    "abv-gravity":
+      "Iz početne i krajnje gustine daje alkohol po zapremini i po masi i naizglednu " +
+      "fermentaciju, uz linearna pravila sa Balling/Plato skale.",
+    "bias-binding":
+      "Iz kvadrata tkanine daje dužinu pristrasne trake date širine, broj paralelnih traka i " +
+      "dijagonalu kvadrata.",
+    "board-foot":
+      "Prevodi mere komada, zapreminu i bord stope jedno u drugo, uz nominalnu (grubu) " +
+      "debljinu kakvu trgovina obračunava.",
+    "button-spacing":
+      "Raspoređuje zadati broj dugmadi ravnomerno između krajnjih tačaka i daje svaki položaj " +
+      "od prvog dugmeta.",
+    "circle-skirt":
+      "Iz obima struka i dužine daje poluprečnik kroja za pun krug, polukrug ili četvrtinu, " +
+      "obim poruba i kvadrat potreban za kroj.",
+    "cutting-speed":
+      "Prevodi brzinu rezanja u broj obrtaja i nazad, za zadati prečnik alata ili obratka.",
+    "feed-per-tooth":
+      "Iz pomaka po zubu i broja zuba daje pomak po obrtaju i pomak tabele, i obrnuto.",
+    "gather-ratio":
+      "Iz dužine komada pre i posle nabiranja daje odnos nabiranja i višak tkanine po " +
+      "centimetru šava.",
+    "heating-cost":
+      "Iz cene goriva, energije u jednoj jedinici i stepena korisnosti daje cenu jednog " +
+      "kilovat-časa isporučene i korisne toplote, za više goriva odjednom.",
+    "metal-weight":
+      "Iz dimenzija preseka i gustine materijala daje masu šipke, cevi, ploče ili profila — po " +
+      "metru, po komadu i ukupno.",
+    "must-sugar":
+      "Iz očitavanja refraktometra i hidrometra daje šećer u moštu, Oechsle i potencijalni " +
+      "alkohol, uz prinos fermentacije koji se unosi.",
+    "pipe-pressure-drop":
+      "Iz prečnika, dužine i protoka daje brzinu, Reynoldsov broj, faktor trenja i pad " +
+      "pritiska po Darcy–Weisbachu.",
+    "power-units":
+      "Prevodi toplotnu snagu između vata, kilovata, BTU/h i kcal/h.",
+    "radiator-output":
+      "Iz nazivnog učinka i eksponenta daje učinak radijatora pri drugoj temperaturnoj " +
+      "razlici, i obrnuto.",
+    "room-heat-loss":
+      "Sabira transmisiju kroz omotač i ventilaciju po uprošćenoj metodi EN 12831 i daje " +
+      "projektni toplotni gubitak prostorije.",
+    "seam-allowance":
+      "Prevodi gotovu meru u krojnu i nazad, uz dodatak po svakom šavu koji mera prelazi.",
+    "spirit-dilution":
+      "Iz sadašnje jačine, ciljane jačine i zapremine daje koliko vode ili jačeg destilata " +
+      "treba dodati, po prostoj jednačini mešanja.",
+    "sugar-addition":
+      "Iz zapremine mošta, šećera koji već postoji i ciljanog alkohola daje koliko šećera " +
+      "treba dodati.",
+    "sulfite":
+      "Prevodi masu kalijum metabisulfita u SO₂ i nazad, uz udeo i dozu po litru.",
+    "water-heater-time":
+      "Iz zapremine, temperatura i snage daje energiju i vreme zagrevanja vode, uz stalne " +
+      "gubitke koji se unose.",
+    "weld-throat-leg":
+      "Iz krakova ugaonog šava daje grlo i presek šava, i nazad — za jednake i nejednake " +
+      "krakove.",
   },
 
   /**
@@ -1577,6 +1932,9 @@ export const proSr = {
       "Koraci navoja: ISO 261:1998. Profil i prečnik jezgra: ISO 68-1:1998. Prolazne rupe: ISO " +
       "273:1979 (fina, srednja i gruba serija). Procenat zahvata je radionička konvencija koju " +
       "bira korisnik i ne stoji ni u jednom od ta tri standarda.",
+    "iupac-ciaaw-2021-atomic-weights":
+      "Standardne atomske mase po skraćenoj tabeli IUPAC/CIAAW za 2021. godinu. Elementi za koje " +
+      "standardna atomska masa nije objavljena odbijaju se po imenu, a ne dobijaju maseni broj.",
     "jmbg-check-digit":
       "Struktura JMBG-a (13 cifara, ponderi 7,6,5,4,3,2 ponovljeni dvaput, modul 11) — Zakon o " +
       "jedinstvenom matičnom broju građana (SFRJ); struktura nepromenjena od uvođenja registra. " +
@@ -1635,6 +1993,25 @@ export const proSr = {
     "whatwg-encoding-standard":
       "WHATWG Encoding Standard (Living Standard) — indeksne tabele windows-1250, windows-1252 i " +
       "iso-8859-2; UTF-8 po RFC 3629. Tabele čita platforma, ne prepisuju se u kod.",
+    // Wave 2b — see the note at the foot of the `name` table.
+    "balling-plato-abv-rule":
+      "Uobičajena linearna pravila sa Balling/Plato skale: ABV = (OG − FG)·131,25 i " +
+      "ABW = (OG − FG)·105; aproksimacija za uobičajene pivske granice.",
+    "darcy-weisbach-swamee-jain-1976":
+      "Darcy–Weisbach za pad pritiska i Swamee–Jain (1976) eksplicitna aproksimacija faktora " +
+      "trenja; laminarno 64/Re.",
+    "en-12831-1-2017":
+      "EN 12831-1:2017 — projektno toplotno opterećenje, uprošćena metoda: transmisija Σ(U·A) i " +
+      "ventilacija 0,34 Wh/(m³·K).",
+    "en-442-1-2014":
+      "EN 442-1:2014 — radijatori i konvektori: nominalni učinak i eksponent u " +
+      "Φ = Φ_n·(Δθ/Δθ_n)^n, uz nominalnu razliku 50 K.",
+    "iupac-atomic-weights-2021":
+      "Standardne atomske mase (IUPAC/CIAAW 2021) i Gay-Lussac: C₆H₁₂O₆ → 2 C₂H₅OH + 2 CO₂; " +
+      "gustina etanola 789,3 kg/m³ na 20 °C.",
+    "it-btu-calorie-definitions":
+      "Tačne definicije: 1 BTU_IT = 1055,05585262 J i 1 cal_IT = 4,1868 J (International Steam " +
+      "Table); 1 BTU/h = 0,293071 W, 1 kcal/h = 1,163 W.",
   },
 
   /* One group per TOOLKIT — see the header. */
@@ -1655,4 +2032,18 @@ export const proSr = {
   agro: PRO_AGRO_SR,
   zanat: PRO_ZANAT_SR,
   event: PRO_EVENT_SR,
+  laboratorija: PRO_LABORATORIJA_SR,
+  elektro: PRO_ELEKTRO_SR,
+  it: PRO_IT_SR,
+  auto: PRO_AUTO_SR,
+  nautika: PRO_NAUTIKA_SR,
+  vazduhoplovstvo: PRO_VAZDUHOPLOVSTVO_SR,
+  geodezija: PRO_GEODEZIJA_SR,
+  radio: PRO_RADIO_SR,
+  energija: PRO_ENERGIJA_SR,
+  grejanje: PRO_GREJANJE_SR,
+  metal: PRO_METAL_SR,
+  stolarija: PRO_STOLARIJA_SR,
+  krojenje: PRO_KROJENJE_SR,
+  vino: PRO_VINO_SR,
 } as const;

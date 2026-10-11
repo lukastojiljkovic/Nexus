@@ -45,6 +45,7 @@ import type {
   LlmImportSkipReason,
   LlmPromptLanguage,
   MarkdownImportSkipCode,
+  PackRefusalCode,
   ProfilePicturePickErrorCode,
   RestoreModuleCounts,
   RestoreProblemCode,
@@ -63,28 +64,51 @@ export const en = {
     brand: "Nexus",
     navLabel: "Main navigation",
     /**
-     * The registry's own category names, translated. The manifests have always
-     * carried the grouping and the sidebar rendered the groups — it simply
-     * threw the NAMES away, so fourteen modules read as one undifferentiated
-     * list (STATUS §5 C item 13). Keys are `ModuleCategory` from `@nexus/core`;
-     * a category with no enabled member never renders, so an unused one costs
-     * nothing. One word each, because this is a 220px rail.
+     * The navigation groups, translated — the sidebar's headings, the
+     * launcher's sections and the module galleries' headings, ONE table because
+     * they are one list (ADR-093). Keys are `ModuleGroup` from `@nexus/core`;
+     * Culture and Play have no module in this build, and a group with no enabled
+     * member never renders, so neither costs anything until the modules it is
+     * for exist. One word each, because this is a 220px rail.
      */
-    navCategories: {
-      "Core experience": "Essentials",
-      "Content & knowledge": "Content",
-      "Life hubs": "Life",
-      "Professional & utilities": "Work",
-      "Growth & platform": "Growth",
+    navGroups: {
+      plan: "Plan",
+      knowledge: "Knowledge",
+      life: "Life",
+      culture: "Culture",
+      make: "Make",
+      play: "Play",
+      shell: "Nexus",
     } satisfies Record<string, string>,
     /**
-     * The sidebar's one heading that is not a category (ADR-086): the modules
-     * this profile's own answers put at the top. „Za tebe" and not „Omiljeno" —
-     * nobody marked these as favourites, the app placed them, and the honest
-     * word says so. „Podešavanja → Kako je Nexus podešen za tebe" is where it
-     * says why, and where somebody changes it.
+     * The pinned shortlist's heading (ADR-086; ADR-093 §3): the modules at the
+     * top of the rail. It began as „the ones this profile's answers put there"
+     * and the pin toggle on every row made it a list the user edits too, so the
+     * word has to cover both. „Podešavanja → Kako je Nexus podešen za tebe" is
+     * where the questionnaire says why it placed what it placed.
      */
     navPinned: "For you",
+    /**
+     * Pinning and the launcher (ADR-093 §3 and §4).
+     *
+     * `pinFull` says the number out loud rather than leaving a disabled control
+     * to explain itself: the shortlist holds `MAX_PINNED_MODULES`, and a pin
+     * that silently does nothing is the shape of defect this house fixes by
+     * saying what the rule is.
+     *
+     * The launcher's `label` is one string for the rail's foot row AND the
+     * overlay's heading, because they are one surface — the row that opens the
+     * panel and the panel that appears have to read as the same thing.
+     */
+    pinModule: "Pin {name} to the top",
+    unpinModule: "Unpin {name}",
+    pinFull: "Five modules are already at the top. Unpin one to pin this one.",
+    launcher: {
+      label: "All modules",
+      description: "Every module that is on, by group. Type part of a name to narrow the list.",
+      searchLabel: "Search modules",
+      close: "Close",
+    },
     /**
      * The fold over a module landing's chart — NOTE, TASK, UČENJE and NAVIKE.
      *
@@ -219,11 +243,14 @@ export const en = {
     updatesTitle: "Offline + update checks",
     updatesBody:
       "Nexus contacts GitHub only, and only to check for and download a new version of itself. Your notes and data never leave this computer; GitHub sees your IP address, as any website does.",
+    downloadsTitle: "Offline + update checks + downloads",
+    downloadsBody:
+      "Everything “Offline + update checks” allows, plus downloads you start yourself. Nothing is downloaded on its own — a download happens only when you start one, only from the addresses built into the app, and what arrives is checked before Nexus uses it.",
     chooseConfirm: "Continue",
     chooseHint:
       "If you close the window without choosing, Nexus stays in “Offline only” and asks again on the next start.",
     cardIntro:
-      "The mode is for the whole computer. “Offline only” opens no connection; “Offline + update checks” allows only checking for and downloading a new version of Nexus.",
+      "The mode is for the whole computer, and each mode allows everything the one before it does. “Offline only” opens no connection; “Offline + update checks” additionally checks for and downloads a new version of Nexus; “Offline + update checks + downloads” additionally downloads what you start yourself.",
     save: "Save the choice",
     saved: "The choice is saved.",
     restartNote: "The change takes effect the next time Nexus starts.",
@@ -241,7 +268,9 @@ export const en = {
     install: "Download and install",
     installing: "Downloading…",
     installHint:
-      "Nothing downloads until you press this. Nexus checks the installer's signature, starts it and closes.",
+      "Nothing downloads until you press this. Nexus checks the installer's signature, starts it and closes. The installation then runs quietly and opens the new version by itself when it finishes.",
+    portableNote:
+      "This copy of Nexus runs from a USB stick, so it never installs its own update: everything it keeps stays on the stick. Get the new version from the release page and replace the folder on the stick.",
     later: "Later",
     releasePage: "Release page",
     notesTitle: "What is new",
@@ -254,6 +283,8 @@ export const en = {
       signature:
         "The signature on the checksum file is not valid. The download stopped before anything was installed.",
       hash: "The downloaded file does not match its checksum. It was deleted and not started.",
+      portable:
+        "A copy that runs from a USB stick never installs its own update. Open the release page and replace the folder on the stick.",
     },
   },
 
@@ -341,6 +372,15 @@ export const en = {
         dogadjaji: "I organise events",
         trenira: "I train others",
         prevodi: "I translate and proofread",
+        laboratorija: "I work in a lab",
+        instalacije: "I wire installations",
+        sistemi: "I run networks and systems",
+        servis: "I service vehicles",
+        jedrim: "I sail",
+        letim: "I fly",
+        "merim-teren": "I survey and map",
+        radio: "I work with radio",
+        solar: "I install solar systems",
       } satisfies Record<string, string>,
     },
     /** Not what somebody does but HOW — and it decides what every module opens on. */
@@ -4505,6 +4545,34 @@ export const en = {
   devtools: devtoolsEn,
   /* „Stručne alatke" — the drawer that hosts every pack, see `strings/pro.ts`. */
   pro: proEn,
+  /**
+   * The tool finder — one search across every tool in BOTH drawers. See
+   * `strings.sr.ts` for why this is a group of its own rather than keys under
+   * `tools`, and for why the eight task groups live in one map.
+   */
+  toolFinder: {
+    searchLabel: "Search all tools",
+    searchPlaceholder: "Find a tool by name, idea or trade…",
+    groupsLabel: "Groups by need",
+    favourites: "Favourites",
+    recent: "Recent",
+    allTools: "All tools",
+    noMatches: "No tool matches.",
+    clearSearch: "Clear search",
+    starAdd: "Add to favourites",
+    starRemove: "Remove from favourites",
+    hint: "↑↓ move · Enter open · Esc clear",
+    groups: {
+      money: "Money and invoices",
+      dates: "Dates and deadlines",
+      measure: "Measure and convert",
+      text: "Text and documents",
+      design: "Design and media",
+      build: "Build and repair",
+      data: "Data and code",
+      study: "Study and teaching",
+    },
+  },
   /* „Elektronika" — the workbench, see `strings/electronics.ts`. */
   electronics: electronicsEn,
   fitness: {
@@ -5692,7 +5760,7 @@ export const en = {
       profile: "Profile and security",
       appearance: "Appearance",
       keyboard: "Keyboard",
-      modules: "Modules",
+      modules: "Display",
       notifications: "Notifications",
       data: "Data",
       privacy: "Privacy",
@@ -5704,7 +5772,7 @@ export const en = {
       keyboard: "Keyboard shortcuts",
       modules: "Which parts of Nexus are on, and each module's settings",
       notifications: "What notifies you, and when",
-      data: "Backup, restore, import, export and sync",
+      data: "Backup, restore, import and export",
       privacy: "Network and updates, what is stored and where, search history",
       about: "Version, data location and licences",
     },
@@ -5722,6 +5790,29 @@ export const en = {
      */
     searchResultCountOne: "1 result",
     searchResultCountMany: "{n} results",
+    /**
+     * The gear a module page wears beside its title (`moduleSettingsGear.tsx`):
+     * the accessible name of the button that opens Settings directly at that
+     * module's card. One entry per module that publishes a card — see the
+     * Serbian table for why this is a phrase per module rather than a template
+     * over the module's name.
+     */
+    moduleSettingsButton: {
+      dashboard: "Settings for Dashboard",
+      tasks: "Settings for Tasks",
+      calendar: "Settings for Calendar",
+      notes: "Settings for Notes",
+      priv: "Settings for Private notes",
+      files: "Settings for Files",
+      study: "Settings for Study",
+      finance: "Settings for Finance",
+      habits: "Settings for Habits",
+      fitness: "Settings for Fitness",
+      focus: "Settings for Focus",
+      tools: "Settings for Tools",
+    },
+    /** The same name for a module whose phrase this table does not carry — see the Serbian table. */
+    moduleSettingsButtonFallback: "Settings: {name}",
     /** Section-card titles, in the order they appear on the page. */
     sectionTitle: {
       profile: "Profile",
@@ -5765,6 +5856,7 @@ export const en = {
       privacy: "Data and privacy",
       about: "About",
       licences: "Licences",
+      "content-packs": "Content packs",
     },
     /**
      * SET §5: the per-card „Vrati na podrazumevano“. One block of copy for
@@ -5866,6 +5958,29 @@ export const en = {
         "30": "After 30 minutes",
         "60": "After 1 hour",
         "0": "Never",
+      } satisfies Record<string, string>,
+      askPasscodeTitle: "Ask for the passcode",
+      askPasscodeHint:
+        "Nexus asks for the passcode when it starts, unless less than the chosen time has passed since the last unlock. Locking the app forgets the remembered key, so the next launch asks for the passcode again.",
+      /** UNLOCK_SETTINGS members as option labels, keyed by the member itself. */
+      askPasscodeOptions: {
+        "every-time": "Every time Nexus starts",
+        "1h": "After 1 hour",
+        "8h": "After 8 hours",
+        "1d": "After 1 day",
+        "7d": "After 7 days",
+        never: "Never",
+      } satisfies Record<string, string>,
+      askPasscodeWarning:
+        "Anyone who can use this Windows account can open Nexus without the passcode for that long.",
+      askPasscodePasscodeLabel: "Passcode",
+      askPasscodeSaved: "The setting was saved.",
+      /** Keyed by UnlockSettingUnavailableReason, read through `lookup` so the table keeps literal keys. */
+      askPasscodeUnavailable: {
+        keystore:
+          "This computer cannot keep a key safely at the moment, so Nexus always asks for the passcode.",
+        "plaintext-backend":
+          "On this system the key would be stored as plain text, so Nexus always asks for the passcode.",
       } satisfies Record<string, string>,
     },
     /** Theme-preference option labels; Dan/Noć reuse `strings.app.themeDan/themeNoc`. */
@@ -6177,16 +6292,29 @@ export const en = {
       pro:
         "Tools by trade — turn on the packs you need, and the drawer shows only those.",
     } satisfies Record<string, string>,
-    /** Category-group headings above the module gallery, keyed by registry category. */
-    moduleCategories: {
-      "Core experience": "Essentials",
-      "Content & knowledge": "Content and knowledge",
-      "Life hubs": "Life hubs",
-      "Professional & utilities": "Professional and utilities",
-      "Growth & platform": "Growth and platform",
-    } satisfies Record<string, string>,
+    /**
+     * The gallery's group headings are the navigation groups' own names
+     * (`strings.app.navGroups`), not a second set: the gallery, the onboarding
+     * chooser and the rail list the same modules under the same words, and
+     * ADR-093 collapsed the two tables into one so a group cannot be called two
+     * things.
+     */
     modulesAlwaysOn: "Always on",
     modulesToggleError: "The change failed. Try again.",
+    /**
+     * ADR-101: the „Display" card — what this DEVICE shows, and in what order.
+     * One setting for the whole app rather than one per profile, so the words
+     * here say „this Nexus" rather than „this profile".
+     */
+    visibility: {
+      hint: "Modules you switch off leave the sidebar, the launcher, the dashboard, search and notifications. Their data stays — switch one back on and everything is there.",
+      orderHint: "Reorder groups and modules by dragging them, or with the move buttons.",
+      moveUp: "Move {name} up",
+      moveDown: "Move {name} down",
+      moveGroupUp: "Move the {name} group up",
+      moveGroupDown: "Move the {name} group down",
+      reset: "Restore the default order",
+    },
     /**
      * ADR-065 §5, moved by ADR-086 — the one row that reopens the
      * questionnaire.
@@ -6540,6 +6668,14 @@ export const en = {
         // ADR-058: arhiva se vraća samo u profil svoje vrste (lični ↔ poslovni).
         "profile-kind-mismatch":
           "The archive belongs to another profile type (personal/business) and cannot be restored into this profile — pick a profile of the same type.",
+        // The module kit (ADR-090): the archive carries a module this build
+        // does not ship, and that module's data has nowhere to go.
+        "unknown-module":
+          "The archive carries data for a module this version does not know — update Nexus, or import the archive in the version that wrote it.",
+        // ADR-090: the module is here, but its payload was written by a build
+        // that knew more than this one does.
+        "invalid-module-data":
+          "The archive carries module data written by a newer version — this version of Nexus cannot read it.",
       } satisfies Record<RestoreProblemCode, string>,
     },
     /**
@@ -7340,6 +7476,11 @@ export const en = {
      * deliberately about what to DO next; several distinct protocol refusals
      * therefore share one sentence, because the user's next move is the same
      * and the distinction is ours, not theirs.
+     *
+     * ON HOLD (2026-10-08, `shared/syncHold.ts`): `SYNC_ON_HOLD` keeps the card
+     * out of the settings page, its search index and the screenshot sweep, so
+     * no sentence here reaches a user. The table stays typed and complete
+     * because turning the work back on is flipping one constant.
      */
     sync: {
       description:
@@ -7569,8 +7710,11 @@ export const en = {
     /**
      * „Podaci i privatnost“ (SET-010, local half): six plain sentences, each
      * one a fact about how this build is put together rather than a promise.
+     * Five of them are drawn while sync is ON HOLD — `sync` below stays in the
+     * table but `SettingsPage` does not print it (`shared/syncHold.ts`) — so
+     * what a user reads is the five that are still true of this build.
      *
-     * The six sentences have deliberately nothing to operate — no toggle, no
+     * The sentences have deliberately nothing to operate — no toggle, no
      * link, no „saznaj više“. A privacy panel with a switch on it is a panel
      * about a setting; those are about what is already true, and every
      * sentence is checkable in the source:
@@ -7590,7 +7734,9 @@ export const en = {
      *  - `sync`      — the other half of the same fact, because a card that
      *                  lists what leaves the device has to name what leaves it
      *                  once the user turns sync on: ciphertext, plus the row
-     *                  metadata migration 003 keeps in the clear.
+     *                  metadata migration 003 keeps in the clear. NOT DRAWN
+     *                  while the work is on hold; the leaf is kept for the day
+     *                  it is turned back on.
      *  - `exports`   — `main/imex.ts` writes to a path chosen in the system
      *                  save dialog, sealed under a passphrase-derived key when
      *                  one is given (ADR-022).
@@ -7645,12 +7791,121 @@ export const en = {
         error: "Deleting the search history failed. Try again.",
       },
     },
+    /**
+     * ADR-091 — the „Paketi sadržaja" card. See the Serbian table's block for
+     * what the card has to say and why; the two tables carry the same keys, so
+     * the compiler is what keeps them honest.
+     */
+    contentPacks: {
+      intro:
+        "A pack is a folder of public content — offline Wikipedia, a map, a dataset — and Nexus accepts it only when it is signed with Nexus's own key. The content stays on this device, in a folder beside the encrypted database, and it is not part of a profile backup.",
+      emptyTitle: "No packs are installed.",
+      emptyBody:
+        "You bring a pack as a folder on a disk or a USB stick: pack.json, its signature, and the content itself. Here you can see what is installed, verify it, and remove a pack.",
+      install: "Install from a folder…",
+      installHint:
+        "Nexus checks the signature and every hash first, and only then copies. Nothing is sent to the internet and nothing in your profile is touched.",
+      verify: "Verify",
+      verifying: "Verifying…",
+      remove: "Remove",
+      candidateTitle: "Install this pack?",
+      candidateQuestion: "The folder holds “{title}”, version {version}, {size}.",
+      candidateHint:
+        "The signature is already verified. Installing copies the content into this device's packs folder and adds it to the list.",
+      installConfirm: "Install",
+      removeTitle: "Remove the pack?",
+      removeQuestion: "The pack's content is deleted from this device. Your profile data is not touched.",
+      removeConfirm: "Remove",
+      cancel: "Cancel",
+      versionLabel: "Version",
+      sizeLabel: "Size",
+      filesLabel: "Files",
+      licenceLabel: "Licence",
+      attributionLabel: "Attribution",
+      sourceLabel: "Source",
+      verifyOk: "The content was verified and matches the signed manifest.",
+      progressCopy: "Copying: {file}",
+      progressVerify: "Verifying: {file}",
+      progressCount: "{done} of {total}",
+      problemTitle: "The pack was not accepted.",
+      problem: {
+        "not-a-pack": "The chosen folder has no readable pack.json.",
+        "not-a-directory": "A pack is a folder; choose the folder that holds pack.json.",
+        "manifest-unreadable": "pack.json cannot be read.",
+        "manifest-too-large": "pack.json is larger than a manifest may be.",
+        signature: "The signature on pack.json is not valid, so the pack was not installed.",
+        "format-unknown": "This pack's format is newer than this version of Nexus.",
+        "id-invalid": "The pack's id is not valid.",
+        "version-invalid": "The pack's version is not valid.",
+        "kind-unknown": "This pack's kind of content is not known.",
+        "title-invalid": "The pack's title is not valid.",
+        "description-invalid": "The pack's description is not valid.",
+        "files-invalid": "The list of files in the manifest is not valid.",
+        "path-invalid": "The manifest names a path this app will not accept.",
+        "path-duplicate": "The manifest names the same file twice.",
+        "path-duplicate-case": "The manifest names two files that are one file on Windows.",
+        "hash-invalid": "A hash in the manifest is not valid.",
+        "size-invalid": "A size in the manifest is not valid.",
+        limit: "The pack is larger, or lists more files, than is allowed.",
+        "licence-invalid": "The licence details in the manifest are not valid.",
+        "source-invalid": "The source details in the manifest are not valid.",
+        "min-app-version-invalid": "The minimum app version in the manifest is not valid.",
+        "min-app-version-too-new": "This pack needs a newer version of Nexus.",
+        "older-than-installed": "A newer version of this pack is already installed.",
+        symlink: "The pack contains a symbolic link, which is not allowed.",
+        "not-a-file": "The pack holds something that is neither a file nor a folder.",
+        "missing-file": "A file the manifest names is not in the pack.",
+        "extra-file": "The pack holds a file the manifest does not name.",
+        "size-mismatch": "A file's size does not match the manifest.",
+        "hash-mismatch": "A file's content does not match the hash in the manifest.",
+        "no-space": "There is not enough room on this disk for the pack.",
+        "no-candidate": "No pack has been chosen.",
+        "not-found": "That pack is not installed.",
+        io: "The pack could not be read or written.",
+        "notice-invalid": "The manifest's safety notice is not one this app knows.",
+        "catalogue-unreadable": "The pack catalogue cannot be read.",
+        "catalogue-signature": "The catalogue's signature is not valid, so the catalogue was refused.",
+        "catalogue-host": "The catalogue points at an address this app may not download from.",
+        "catalogue-entry": "An entry in the catalogue is not valid, or this pack is not in the catalogue.",
+        "downloads-off": "Downloads are off. Turn on Downloads in Privacy.",
+        "download-failed": "The download failed. Try again.",
+        busy: "Another download is already in progress, or this one already is.",
+        "tool-invalid": "The program this pack carries is not described in a way this build accepts.",
+      } satisfies Record<PackRefusalCode, string>,
+      /** ADR-103: the catalogue the card draws and the download it can start. */
+      catalogueTitle: "Pack catalogue",
+      catalogueHint:
+        "The catalogue is the list of packs that can be downloaded, signed with the same key the packs themselves are signed with, so only what Nexus has published is shown. Details show the licence, the attribution and the source before anything downloads.",
+      catalogueRefresh: "Refresh the catalogue",
+      catalogueEmpty: "The catalogue lists no packs right now.",
+      catalogueModeOff:
+        "Downloads are off. Turn on Downloads in Privacy to download packs.",
+      catalogueDetails: "Details",
+      download: "Download",
+      downloadPause: "Pause",
+      downloadResume: "Resume",
+      downloadCancel: "Cancel",
+      downloadHint:
+        "A download goes through the download service, file by file, and every hash is checked while it is written. If the connection drops, you can pause and resume; if the server cannot resume, that file is downloaded again from the beginning.",
+      downloadProgressDownload: "Downloading: {file}",
+      downloadProgressInstall: "Installing: {file}",
+      stateNotInstalled: "Not installed",
+      stateInstalled: "Installed",
+      stateUpdate: "Update available",
+      installedVersionLabel: "Installed version",
+      error: "That did not work. Try again.",
+    },
     about: {
       version: "Version",
       electron: "Electron",
       chromium: "Chromium",
       node: "Node",
       dataLocation: "Data location",
+      /** ADR-103: every installed pack's licence, attribution and source, on the About card. */
+      packLicences: "Pack licences",
+      packLicencesHint:
+        "Every installed pack carries its own licence, its own attribution and its own source. A link opens in your browser, never through Nexus's network.",
+      packLicencesEmpty: "No packs are installed.",
     },
     /**
      * „Licence": the notices this product owes for other people's code.

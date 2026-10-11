@@ -14,19 +14,29 @@ export {
 export type { AttachmentTextCandidate } from "./attachmentText.js";
 
 export {
+  ArcadeValidationError,
   BackupSettingsValidationError,
+  CardGameValidationError,
   PrivateNoteNotFoundError,
   PrivateNoteValidationError,
   PrivateSettingsValidationError,
   AttachmentIndexValidationError,
   CalendarOverlayValidationError,
   CalendarSettingsValidationError,
+  CalcHistoryNotFoundError,
+  CalculatorValidationError,
   CanvasBoardNotFoundError,
   CanvasValidationError,
+  CarNotFoundError,
+  CarValidationError,
   CardNotFoundError,
   CardValidationError,
+  ChessNotFoundError,
+  ChessValidationError,
   CircuitNotFoundError,
   CircuitValidationError,
+  CultureNotFoundError,
+  CultureValidationError,
   DashboardSetNotFoundError,
   DashboardSetValidationError,
   DashboardSettingsValidationError,
@@ -40,6 +50,8 @@ export {
   DocumentNotFoundError,
   DocumentValidationError,
   ElecSettingsValidationError,
+  EmergencyCardNotFoundError,
+  EmergencyCardValidationError,
   EventNotFoundError,
   EventTemplateNotFoundError,
   EventTemplateValidationError,
@@ -76,6 +88,8 @@ export {
   FocusValidationError,
   HabitNotFoundError,
   HabitValidationError,
+  LibraryNotFoundError,
+  LibraryValidationError,
   NoteAttachmentNotFoundError,
   NoteAttachmentValidationError,
   NoteCategoryNotFoundError,
@@ -91,6 +105,8 @@ export {
   NoteVersionNotFoundError,
   NotificationNotFoundError,
   NotificationValidationError,
+  PantryNotFoundError,
+  PantryValidationError,
   PersonNotFoundError,
   PersonValidationError,
   PlanNotFoundError,
@@ -99,6 +115,10 @@ export {
   ProfileLastDeleteError,
   ProfileNotFoundError,
   ProfileValidationError,
+  RecipeNotFoundError,
+  RecipeValidationError,
+  RecorderNotFoundError,
+  RecorderValidationError,
   RestoreValidationError,
   SchemaVersionError,
   SearchValidationError,
@@ -695,6 +715,26 @@ export type {
 
 export { ForeignImportStore } from "./imex/foreignImportStore.js";
 
+// --- TIMERS (migration 071, ADR-090) ----------------------------------------
+//
+// ONE store over THREE tables, on `ElectronicsStore`'s terms: a preset, a
+// running countdown and the module's one preference are one subject, and the
+// module that owns them is one folder.
+//
+// Its two error classes live beside it rather than in `errors.ts`, and that is a
+// decision rather than an oversight: `errors.ts` is the package's shared
+// vocabulary with a doc comment per class, and a module built on the kit adds
+// nothing there. They extend the same `DatabaseError`, so a caller that catches
+// by the base class sees no difference at all.
+export {
+  MAX_TIMER_DURATION_SECONDS,
+  MAX_TIMER_NAME_LENGTH,
+  TimersNotFoundError,
+  TimersStore,
+  TimersValidationError,
+} from "./timers/timersStore.js";
+export type { TimersCountdown, TimersPreset, TimersSettings } from "./timers/timersStore.js";
+
 export { SyncJournal } from "./sync/syncJournal.js";
 export type {
   ApplyOutcome,
@@ -708,3 +748,708 @@ export type { SyncAccount, SyncAccountInput } from "./sync/syncAccount.js";
 export { SyncProgressStore } from "./sync/syncProgress.js";
 export type { QuarantinedObject } from "./sync/syncProgress.js";
 export { syncStoreFor } from "./sync/syncStore.js";
+
+// --- LIBRARY (books, films and series, migration 072) ----------------------
+//
+// ONE store over SIX tables, because a pass or a thought is not a thing with a
+// page of its own: it is part of the work's story. Everything a renderer can
+// send is revalidated here (SEC-EL-02), the collection's progress is computed on
+// every read and never stored, and `exportData`/`importData` are the versioned
+// value the profile archive will carry in stage 2 — see the module's own docs for
+// why the six tables are not yet in `RESTORE_WIPE_TABLES`.
+export { LibraryStore, MAX_LIBRARY_COVER_BYTES } from "./library/libraryStore.js";
+export type {
+  AddLibraryPassInput,
+  AddLibraryThoughtInput,
+  AdoptResult,
+  CreateLibraryCollectionInput,
+  CreateLibraryItemInput,
+  LibraryCollectionWithProgress,
+  LibraryCoverInput,
+  LibraryImportCounts,
+  LibraryItemWithCover,
+  UpdateLibraryCollectionFields,
+  UpdateLibraryItemFields,
+  UpdateLibraryPassFields,
+  UpdateLibraryThoughtFields,
+} from "./library/libraryStore.js";
+
+// --- CULTURE (the culture corner, migration 073) ----------------------------
+//
+// ONE store over six tables: visits with their photos, the listening log, the
+// user's own tracks and playlists over them. The groups are read together (the
+// period statistics take visits, entries and tracks at once) and they travel
+// together - `exportData`/`importData` are one versioned value, which is the
+// piece stage 2 plugs into the profile archive.
+//
+// The photos and the tracks name BLOBS but never hold them: the bytes live in
+// the content-addressed store main owns (`apps/desktop/src/main/attachments.ts`,
+// the same one the note, task and subject attachments use), and these rows
+// carry the name, the mime, the size and the hash exactly as those three do.
+export {
+  CULTURE_EXPORT_VERSION,
+  CultureStore,
+  MAX_CULTURE_CITY_LENGTH,
+  MAX_CULTURE_COMPANIONS_LENGTH,
+  MAX_CULTURE_DURATION_MS,
+  MAX_CULTURE_NAME_LENGTH,
+  MAX_CULTURE_NOTES_LENGTH,
+  MAX_CULTURE_PHOTO_BYTES,
+  MAX_CULTURE_PLAYLIST_NAME_LENGTH,
+  MAX_CULTURE_PLAY_COUNT,
+  MAX_CULTURE_TITLE_LENGTH,
+  MAX_CULTURE_TRACK_BYTES,
+  MAX_CULTURE_TRACK_NUMBER,
+  MAX_CULTURE_VENUE_LENGTH,
+  MAX_CULTURE_YEAR,
+  MIN_CULTURE_YEAR,
+} from "./culture/cultureStore.js";
+export type {
+  CreateEntryInput,
+  CreateTrackInput,
+  CreateVisitInput,
+  CultureDateRange,
+  CultureExport,
+  CultureExportEntry,
+  CultureExportItem,
+  CultureExportPhoto,
+  CultureExportPlaylist,
+  CultureExportTrack,
+  CultureExportVisit,
+  CultureImportSummary,
+  CultureMusicEntry,
+  CulturePhotoInput,
+  CulturePlaylist,
+  CulturePlaylistItem,
+  CulturePrice,
+  CultureTrack,
+  CultureVisit,
+  CultureVisitPhoto,
+  UpdateEntryFields,
+  UpdateTrackFields,
+  UpdateVisitFields,
+} from "./culture/cultureStore.js";
+
+/**
+ * CAR (migration 074) — vehicles and everything that hangs off one. Stage 1 is
+ * the store and the logic only; the page, the IPC channels and the profile
+ * archive wiring arrive with the module kit.
+ */
+export {
+  CarStore,
+  DEFAULT_DUE_SOON_DAYS,
+  DEFAULT_DUE_SOON_DISTANCE,
+  MAX_FAULT_FIX_NOTES_LENGTH,
+  MAX_FAULT_SYMPTOM_LENGTH,
+  MAX_FUEL_QUANTITY,
+  MAX_DUE_SOON_DAYS,
+  MAX_INTERVAL_KM,
+  MAX_INTERVAL_MONTHS,
+  MAX_ODOMETER_READING,
+  MAX_SERVICE_ATTACHMENT_BYTES,
+  MAX_SERVICE_DESCRIPTION_LENGTH,
+  MAX_SERVICE_PARTS_LENGTH,
+  MAX_SERVICE_WORKSHOP_LENGTH,
+  MAX_VEHICLE_MAKE_LENGTH,
+  MAX_VEHICLE_MODEL_LENGTH,
+  MAX_VEHICLE_NAME_LENGTH,
+  MAX_VEHICLE_NOTES_LENGTH,
+  MAX_VEHICLE_PLATE_LENGTH,
+} from "./car/carStore.js";
+export type {
+  AddOdometerReadingInput,
+  AddServiceAttachmentInput,
+  CarExport,
+  CarSettings,
+  CreateFaultInput,
+  CreateFuelEntryInput,
+  CreateServiceInput,
+  CreateVehicleInput,
+  Fault,
+  FuelEntry,
+  OdometerReading,
+  ServiceAttachment,
+  ServiceEntry,
+  ServiceInterval,
+  SetServiceIntervalInput,
+  UpdateFaultFields,
+  UpdateFuelEntryFields,
+  UpdateServiceFields,
+  UpdateVehicleFields,
+  Vehicle,
+} from "./car/carStore.js";
+
+// --- PANTRY (migration 075) -------------------------------------------------
+//
+// THREE tables and one store, and it is the store that owns every rule a
+// validator cannot see: a location id that has to resolve, a reorder that has to
+// describe a gap, a quantity change that must not go below zero, and an import
+// whose references must all be inside the value it came in.
+//
+// `exportData`/`importData` are a versioned plain JSON value rather than an
+// archive record type: stage 2 is what carries it into the profile archive, and
+// the version check is why an older build refuses a newer file outright instead
+// of importing half of it.
+export {
+  DEFAULT_PANTRY_EXPIRY_WINDOW_DAYS,
+  MAX_PANTRY_EXPORT_ROWS,
+  MAX_PANTRY_EXPIRY_WINDOW_DAYS,
+  PANTRY_EXPORT_VERSION,
+  PantryStore,
+  parsePantryExport,
+} from "./pantry/pantryStore.js";
+export type {
+  AddPantryShoppingLineInput,
+  CreatePantryItemInput,
+  CreatePantryLocationInput,
+  PantryExport,
+  PantryExportItem,
+  PantryExportLocation,
+  PantryExportLogEntry,
+  PantryItem,
+  PantryLocation,
+  PantryLogEntry,
+  PantrySettings,
+  PantryShoppingLine,
+  UpdatePantryItemFields,
+} from "./pantry/pantryStore.js";
+
+// --- COOK (the cookbook, migration 076) -------------------------------------
+//
+// ONE store over THREE tables: a recipe, its ingredient lines and its steps. The
+// two child tables reach a profile only through their recipe, so every read joins
+// for its scope rather than filtering a column that is deliberately not there.
+//
+// A recipe's photo is the attachment INDEX row, not the bytes: the blob lives
+// content-addressed on disk under main's ownership, exactly as `note_attachments`
+// (migration 013) and the dashboard's background (migration 030) already work.
+// `exportData`/`importData` are the module's arm of the profile archive — a
+// versioned plain JSON value, validated whole before anything is written.
+export {
+  COOKBOOK_EXPORT_VERSION,
+  MAX_INGREDIENT_GROUP_LENGTH,
+  MAX_INGREDIENT_NAME_LENGTH,
+  MAX_INGREDIENT_PREPARATION_LENGTH,
+  MAX_INGREDIENT_QUANTITY,
+  MAX_INGREDIENT_UNIT_GRAMS,
+  MAX_LICENCE_ATTRIBUTION_LENGTH,
+  MAX_LICENCE_TEXT_LENGTH,
+  MAX_LICENCE_URL_LENGTH,
+  MAX_RECIPE_CUISINE_LENGTH,
+  MAX_RECIPE_DESCRIPTION_LENGTH,
+  MAX_RECIPE_INGREDIENTS,
+  MAX_RECIPE_NOTES_LENGTH,
+  MAX_RECIPE_PHOTO_BYTES,
+  MAX_RECIPE_SERVINGS,
+  MAX_RECIPE_STEPS,
+  MAX_RECIPE_STEP_TEXT_LENGTH,
+  MAX_RECIPE_STEP_TIMER_MINUTES,
+  MAX_RECIPE_TAGS,
+  MAX_RECIPE_TAG_LENGTH,
+  MAX_RECIPE_TIME_MINUTES,
+  MAX_RECIPE_TITLE_LENGTH,
+  RecipeStore,
+} from "./cookbook/recipeStore.js";
+export type {
+  CookbookExport,
+  CreateRecipeInput,
+  ExportedIngredient,
+  ExportedRecipe,
+  ExportedStep,
+  Recipe,
+  RecipeIngredient,
+  RecipeIngredientInput,
+  RecipePhoto,
+  RecipeStepInput,
+  RecipeStepRow,
+  UpdateRecipeFields,
+} from "./cookbook/recipeStore.js";
+
+// --- RECORDER (voice and video diary, migration 077) ------------------------
+//
+// ONE store over TWO tables, because a recording is a recording plus the markers
+// inside it — and the markers reach a profile only through their recording, so
+// every marker statement here resolves that recording first (migration 077's
+// `habit_entries` arrangement).
+//
+// The media never enters this package: `create` takes the `sha256` main's blob
+// store returned after writing the bytes, so the recorder reuses the ONE
+// content-addressed store every attachment uses rather than growing a second.
+// `MAX_RECORDING_BYTES` says how large the existing whole-buffer write path can
+// be taken, with the measurement behind it; `exportData`/`importData` are the
+// profile archive's half of the module, metadata only, for stage 2 to plug in.
+export {
+  MAX_RECORDING_BYTES,
+  MAX_RECORDING_DURATION_MS,
+  MAX_RECORDING_LABEL_LENGTH,
+  MAX_RECORDING_MARKERS,
+  MAX_RECORDING_NOTES_LENGTH,
+  MAX_RECORDING_TAG_LENGTH,
+  MAX_RECORDING_TAGS,
+  MAX_RECORDING_TITLE_LENGTH,
+  MAX_RECORDING_TRANSCRIPT_LENGTH,
+  RECORDER_EXPORT_VERSION,
+  parseRecorderExport,
+  RecorderStore,
+} from "./recorder/recorderStore.js";
+export type {
+  AddMarkerInput,
+  CreateRecordingInput,
+  ExportedRecording,
+  RecorderExport,
+  RecorderImportResult,
+  Recording,
+  RecordingMarker,
+  UpdateMarkerFields,
+  UpdateRecordingFields,
+} from "./recorder/recorderStore.js";
+
+// --- EMERGENCY (the emergency card, migration 078) --------------------------
+//
+// The card and the two ordered lists it owns, in ONE aggregate store per profile.
+// `exportData`/`importData` carry the whole module as a versioned plain JSON value
+// so stage 2's profile archive can plug it in without a second definition of what
+// a card is.
+export {
+  EMERGENCY_EXPORT_VERSION,
+  EmergencyCardStore,
+  parseEmergencyCardExport,
+} from "./emergency/emergencyCardStore.js";
+export type {
+  AddEmergencyContactInput,
+  AddEmergencyDocumentInput,
+  CreateEmergencyCardInput,
+  EmergencyCard,
+  EmergencyCardContact,
+  EmergencyCardDocumentRef,
+  EmergencyCardExport,
+  EmergencyCardFieldsInput,
+  ExportedEmergencyCard,
+  ExportedEmergencyCardContact,
+  ExportedEmergencyCardDocument,
+  UpdateEmergencyCardFields,
+  UpdateEmergencyContactFields,
+  UpdateEmergencyDocumentFields,
+} from "./emergency/emergencyCardStore.js";
+
+// --- CALC (the calculator's history and session, migration 079) --------------
+//
+// One store over two tables, and neither of them evaluates anything: an entry is
+// the expression that was typed and the result in BOTH forms (what was shown,
+// and the engine's own lexical text, which is what a `#3` reuse substitutes),
+// and the session is `@nexus/core`'s own JSON re-validated through
+// `parseCalculatorSession` on the way in and on the way out. That is what keeps
+// mathjs out of this package.
+//
+// `importData` takes a `now` beside the value, unlike the other readers here:
+// every write in this package is stamped by main rather than by a clock inside
+// the store (CLAUDE.md's rule), and an import writes a session row.
+export {
+  CALCULATOR_EXPORT_VERSION,
+  CALC_HISTORY_UNPINNED_LIMIT,
+  CalculatorStore,
+  DEFAULT_CALCULATOR_SETTINGS,
+  MAX_CALC_HISTORY_IMPORT_ENTRIES,
+  MAX_CALC_HISTORY_READ,
+  MAX_CALC_HISTORY_RESULT_LENGTH,
+} from "./calculator/calculatorStore.js";
+export type {
+  AddCalcHistoryInput,
+  CalcHistoryEntry,
+  CalcHistoryExportEntry,
+  CalculatorExport,
+  CalculatorSettings,
+} from "./calculator/calculatorStore.js";
+
+// --- GAMES (the arcade's scores, migration 080) ------------------------------
+//
+// ONE store over ONE table, and the row is a running total rather than a game: a
+// finished game folds into (profile, game, variant) in a single transaction, so
+// the two bests, the two streaks and „when" can never disagree about a game that
+// happened. The variant is the BOARD — a Minesweeper preset's own name or
+// `custom:CxRxM`, derived by `@nexus/core`'s `minesweeperVariant` rather than
+// named by a caller — because a best time across two board shapes means nothing.
+//
+// `exportData`/`importData` are the profile archive's door: a versioned plain
+// value in, a full validation before a single row moves, and an unknown version
+// refused rather than guessed at.
+export {
+  ARCADE_EXPORT_VERSION,
+  ARCADE_GAMES,
+  ArcadeScoreStore,
+  MAX_ARCADE_LINES,
+  MAX_ARCADE_SCORE,
+  MAX_ARCADE_TIME_MS,
+  MAX_ARCADE_VARIANT_LENGTH,
+  // The kit's pure half of the archive: `ModuleImport.parse` runs it at the
+  // preview, where `importData` may not write yet. See its own doc.
+  parseArcadeExport,
+} from "./games/arcade/arcadeStore.js";
+export type {
+  ArcadeExport,
+  ArcadeExportScore,
+  ArcadeGame,
+  ArcadeResult,
+  ArcadeScore,
+} from "./games/arcade/arcadeStore.js";
+
+// --- GAMES: cards (stage 1 — the engines' storage, migration 081) ------------
+//
+// Two tables and one store, keyed by (profile, game, variant) so that Klondike
+// draw-one and draw-three are two records and two saved games rather than one.
+//
+// The validation is the ENGINE's: this store hands every move list to the same
+// `replay*` fold the renderer's own moves go through, so nothing here has to know
+// what a legal Spider move is. `exportData`/`importData` are the module's door
+// into stage 2's profile archive, and `importData` refuses an unknown version
+// before it writes anything.
+export {
+  CardGameStore,
+  CARD_GAME_ARCHIVE_VERSION,
+  MAX_CARD_GAME_ELAPSED_SECONDS,
+  MAX_CARD_GAME_MOVES,
+  MAX_CARD_GAME_MOVES_BYTES,
+} from "./games/cards/cardGameStore.js";
+export type {
+  CardGameData,
+  CardGameProgress,
+  CardGameProgressInput,
+  CardGameResultInput,
+  CardGameStats,
+} from "./games/cards/cardGameStore.js";
+
+// --- CHESS (migration 082) ---------------------------------------------------
+//
+// Saved games, the one game in progress, and the ladder record. Deliberately NOT
+// in `RESTORE_WIPE_TABLES`: that list and `@nexus/sync`'s collection map are held
+// equal by `sync/collectionGuard.test.ts`, sync is on hold, and these tables carry
+// no journal triggers — the pair of edits belongs together on the day sync
+// resumes. `ON DELETE CASCADE` is what takes them when a profile goes, which is
+// the path privacy depends on.
+export {
+  ChessStore,
+  MAX_CHESS_LEVEL,
+  MAX_CHESS_PGN_LENGTH,
+  MAX_CHESS_RESUME_MOVES,
+  // The archive reader, whole — what stage 2's `imex.parse` runs so that the
+  // preview refuses a payload the store would refuse, before anything is written.
+  readChessArchive,
+} from "./games/chess/chessStore.js";
+export type {
+  ChessArchive,
+  ChessArchiveGame,
+  ChessArchiveResume,
+  ChessArchiveStats,
+  ChessGameResult,
+  ChessLevelStats,
+  ChessOpponent,
+  ResumableGame,
+  SaveGameInput,
+  SavedGame,
+  SetResumeInput,
+} from "./games/chess/chessStore.js";
+
+// --- READER (migration 084, ADR-100) -----------------------------------------
+//
+// The reading positions, the bookmarks and their notes, the reading size, and
+// the safety notices a profile has accepted - one store, four tables, and not a
+// byte of a pack's own content: a pack belongs to no profile (ADR-091 §5), and
+// what this module stores is what the person WROTE while reading it.
+//
+// Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own rows
+// inside one restore (`ModuleContext.importData`), and that list is held equal to
+// `@nexus/sync`'s collection map by `sync/collectionGuard.test.ts`, which a
+// module may not edit. The four names are documented in
+// `imex/restoreStore.test.ts` beside the timers module's, with the same reason.
+export {
+  MAX_READER_ARTICLE_PATH_LENGTH,
+  MAX_READER_NOTE_LENGTH,
+  MAX_READER_PACK_ID_LENGTH,
+  READER_DEFAULT_TEXT_SIZE,
+  READER_TEXT_SIZES,
+  ReaderStore,
+  ReaderValidationError,
+} from "./reader/readerStore.js";
+export type {
+  ReaderArchiveInput,
+  ReaderBookmark,
+  ReaderPosition,
+  ReaderSettings,
+  ReaderTextSize,
+} from "./reader/readerStore.js";
+
+// --- CULTURE stage 2 (migration 073's three later tables) --------------------
+//
+// Appended rather than folded into the CULTURE block above so the edit stays one
+// mechanical block at the end of the file: the places, the programme and the
+// module's one preference arrived with stage 2, and a second block over one
+// module has a precedent here already (a store whose later slice added exports
+// beside its own earlier ones).
+export { MAX_CULTURE_LINK_LENGTH, parseCultureExportPayload } from "./culture/cultureStore.js";
+export type {
+  CreateCulturePlanInput,
+  CreateVenueInput,
+  CultureExportPlan,
+  CultureExportVenue,
+  CulturePlan,
+  CulturePlanCompletion,
+  CulturePlanKind,
+  CultureSettings,
+  CultureVenue,
+  UpdateCulturePlanFields,
+  UpdateVenueFields,
+} from "./culture/cultureStore.js";
+
+// --- COOK (the cookbook, migration 076) -------------------------------------
+//
+// Stage 2's additions to the cookbook's own store, added as one block at the end
+// of this file rather than inside the COOK section above: several runs append to
+// this index at once, and a block nobody has to thread between other lines is
+// what keeps the merge mechanical. The module's archive section reads
+// `parseCookbookExport` (the same validator `RecipeStore.importData` runs), and
+// `foldIngredientName` is the key an ingredient link is remembered under.
+export {
+  DEFAULT_UNIT_SYSTEM,
+  MAX_FOOD_MATCHES,
+  MAX_INGREDIENT_RAW_LENGTH,
+  RECIPE_UNIT_SYSTEMS,
+  foldIngredientName,
+  parseCookbookExport,
+} from "./cookbook/recipeStore.js";
+export type {
+  CookbookSettings,
+  FoodMatch,
+  FoodMatchInput,
+  RecipeUnitSystem,
+} from "./cookbook/recipeStore.js";
+
+// --- MINI-APPS (migration 083) -----------------------------------------------
+//
+// ONE store over ONE table, because the nine small tools' kept state is one
+// authored document rather than a set of collections: see the migration's and
+// the store's own comments for why. Deliberately NOT in `RESTORE_WIPE_TABLES` -
+// that list is derived into `@nexus/sync`'s collection map, which a module built
+// on the kit may not edit (ADR-090 section 6) - and the module's own
+// `importData` is what empties the row; `restoreStore.test.ts` names it in the
+// exemption list.
+export {
+  MAX_MINIAPPS_JSON_CHARS,
+  MINIAPPS_EXPORT_VERSION,
+  MINIAPPS_MAX_CITIES,
+  MINIAPPS_MAX_HISTORY,
+  MINIAPPS_MAX_TYPING_RECORDS,
+  MINIAPPS_MAX_ZONE_LENGTH,
+  MiniappsStore,
+  MiniappsValidationError,
+  emptyMiniappsData,
+  parseMiniappsData,
+} from "./miniapps/miniappsStore.js";
+export type {
+  MiniappsData,
+  MiniappsDiceEntry,
+  MiniappsTypingProgress,
+  MiniappsTypingRecord,
+} from "./miniapps/miniappsStore.js";
+
+// --- PUZZLES (migration 088) -------------------------------------------------
+//
+// THREE tables and one store, and the module owns them rather than sharing the
+// games' two, for the reason migration 088's header gives: the arcade's row is a
+// running total per game and the cards' is a seed plus a move list, and a puzzle
+// in progress is a grid or an arrangement — neither shape.
+//
+// Its two error classes live beside it rather than in `errors.ts`, on the TIMERS
+// module's terms: `errors.ts` is the package's shared vocabulary with a doc
+// comment per class, and a module built on the kit adds nothing there.
+export {
+  MAX_PUZZLE_ELAPSED_SECONDS,
+  MAX_PUZZLE_HINTS,
+  MAX_PUZZLE_SEED,
+  MAX_PUZZLE_SHUFFLES,
+  MAX_PUZZLE_STATE_BYTES,
+  PUZZLE_IDS,
+  PUZZLE_VARIANTS,
+  PuzzlesStore,
+  PuzzlesValidationError,
+  readElapsed,
+  readExpression,
+  readPuzzleId,
+  readPuzzleState,
+  readSaveExport,
+  readSeed,
+  readSettings,
+  readStatsExport,
+  readVariant,
+} from "./puzzles/puzzlesStore.js";
+export type {
+  BrojState,
+  FinishPuzzleInput,
+  MahjongState,
+  NonogramState,
+  PuzzleId,
+  PuzzlesSettings,
+  PuzzlesStats,
+  PuzzlesStatsExport,
+  PuzzleSave,
+  PuzzleSaveExport,
+  PuzzleState,
+  SavePuzzleInput,
+  SudokuState,
+} from "./puzzles/puzzlesStore.js";
+
+// --- GAMES: boards (stage 2 of the boards run, migration 089) ----------------
+//
+// The six board games' storage: the game in progress per game, the record against
+// each level, and the module's one preference. The rules are `@nexus/core`'s —
+// this store folds a saved move log back through `replayBoard` to insist that a
+// position and its log describe the same game, and reads the winner from the
+// engine rather than from the caller.
+//
+// Deliberately NOT in `RESTORE_WIPE_TABLES`, for `chess_games`' own reason: that
+// list and `@nexus/sync`'s collection map are held equal by
+// `sync/collectionGuard.test.ts`, sync is on hold, and these tables carry no
+// journal triggers. `ON DELETE CASCADE` is what takes them when a profile goes,
+// which is the path privacy depends on.
+export {
+  BOARDS_ARCHIVE_VERSION,
+  BoardsNotFoundError,
+  BoardsStore,
+  BoardsValidationError,
+  MAX_BOARDS_EVENTS,
+  MAX_BOARDS_EVENTS_CHARS,
+  MAX_BOARDS_SEED,
+  MAX_BOARDS_STATE_CHARS,
+  readBoardsArchive,
+} from "./games/boards/boardsStore.js";
+export type {
+  BoardArchiveSave,
+  BoardArchiveStats,
+  BoardEnding,
+  BoardFinishInput,
+  BoardRecordedOutcome,
+  BoardSave,
+  BoardSaveInput,
+  BoardsArchive,
+  BoardsSettings,
+  BoardStats,
+} from "./games/boards/boardsStore.js";
+
+// --- MAPS (the offline map's pins, migration 85, ADR-099) --------------------
+//
+// ONE store over ONE table, because a pin is one thing: a title, a note, a
+// colour and a point. The map itself - tiles, style, place index - is the
+// installed pack and never this database (ADR-091 §5); a live GPS fix is a fact
+// about now and is kept in main's memory rather than in a row.
+//
+// The colour is stored as the NAME of one of the eight accent swatches
+// (`--nx-swatch-*`), never as a value: a hex in a column would be a palette
+// decision frozen into somebody's data.
+export {
+  MAX_MAPS_PINS,
+  MAX_PIN_NOTE_LENGTH,
+  MAX_PIN_TITLE_LENGTH,
+  MapsPinNotFoundError,
+  MapsStore,
+  MapsValidationError,
+  PIN_COLORS,
+} from "./maps/mapsStore.js";
+export type { MapsPin, PinColor } from "./maps/mapsStore.js";
+
+// The WIKI module's storage (migration 086): the reading log and the marks, both
+// profile-scoped. The ZIM files themselves are device-level and live in
+// `apps/desktop/src/main/zim/libraries.ts` — a 119 GB pack is one file on one
+// disk, and this table only records what a person did inside it. These two tables
+// are deliberately NOT in `RESTORE_WIPE_TABLES`: that list and `@nexus/sync`'s
+// collection map are held equal by `sync/collectionGuard.test.ts`, sync is on
+// hold, and the wiki module replaces its own rows in its own `importData`
+// (ADR-090's kit rule). `ON DELETE CASCADE` takes them when a profile goes.
+export {
+  MAX_WIKI_BOOKMARKS,
+  MAX_WIKI_HISTORY,
+  MAX_WIKI_LIBRARY_ID_LENGTH,
+  MAX_WIKI_PATH_LENGTH,
+  MAX_WIKI_TITLE_LENGTH,
+  WikiNotFoundError,
+  WikiStore,
+  WikiValidationError,
+} from "./wiki/wikiStore.js";
+export type {
+  WikiArchive,
+  WikiBookmark,
+  WikiHistoryEntry,
+  WikiPlaceInput,
+} from "./wiki/wikiStore.js";
+
+// --- LAB (migration 087, ADR-090's kit) -------------------------------------
+//
+// THREE tables and one store: a named sensor log, the readings inside it, and
+// the profile's off-grid budget. The readings reach a profile only through their
+// log, so every sample statement here resolves that log first
+// (migration 087's `recording_markers` arrangement) — and the off-grid row is a
+// single row per profile because a budget is computed from the whole list.
+//
+// Its error classes live beside it rather than in `errors.ts`, on
+// `TimersStore`'s terms: a module built on the kit adds nothing to the package's
+// shared vocabulary, and both extend the same `DatabaseError`.
+//
+// Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own rows
+// through `ModuleContext.importData` (`docs`-free: the reason is in `LabStore.
+// replaceFromArchive` and in the module's `main/register.ts`), and that list is
+// held equal to `@nexus/sync`'s collection map, which a module may not edit.
+export {
+  LAB_EXPORT_VERSION,
+  LabNotFoundError,
+  LabStore,
+  LabValidationError,
+  MAX_LAB_APPEND_BATCH,
+  MAX_LAB_BATTERY_WH,
+  MAX_LAB_DEVICES,
+  MAX_LAB_DEVICE_NAME_LENGTH,
+  MAX_LAB_DEVICE_WATTS,
+  MAX_LAB_LOGS,
+  MAX_LAB_LOG_NAME_LENGTH,
+  MAX_LAB_SAMPLES,
+  MAX_LAB_SAMPLES_READ,
+} from "./lab/labStore.js";
+export type {
+  LabLog,
+  LabOffGrid,
+  LabOffGridDevice,
+  LabSample,
+} from "./lab/labStore.js";
+
+// --- ASSISTANT (migration 091, ADR-106) -------------------------------------
+//
+// The assistant's conversations: the threads a person had with the local model,
+// their messages, the citations each reply drew on and the tool calls it asked
+// for. Deliberately NOT in `RESTORE_WIPE_TABLES`: a kit module replaces its own
+// rows through `ModuleContext.importData` (ADR-090 section 6), and that list is
+// held equal to `@nexus/sync`'s collection map by `sync/collectionGuard.test.ts`,
+// which a module may not edit. The module's own `importData` is what empties the
+// three tables; `imex/restoreStore.test.ts` names them in the exemption list.
+export {
+  ASSISTANT_EXPORT_VERSION,
+  ASSISTANT_TIERS,
+  AssistantNotFoundError,
+  AssistantValidationError,
+  ConversationStore,
+  MAX_CONVERSATION_TITLE_LENGTH,
+  MAX_CONVERSATIONS,
+  MAX_MESSAGE_CHARS,
+  MAX_MESSAGE_CITATIONS,
+  MAX_MESSAGE_JSON_CHARS,
+  MAX_MESSAGE_TOOL_CALLS,
+  MAX_MESSAGES_PER_CONVERSATION,
+  emptyAssistantExport,
+  parseAssistantExport,
+} from "./assistant/conversationStore.js";
+export type {
+  AssistantConversation,
+  AssistantExport,
+  AssistantMessage,
+  AssistantMessageInput,
+  AssistantRole,
+  AssistantSettings,
+  ExportedAssistantConversation,
+  ExportedAssistantMessage,
+} from "./assistant/conversationStore.js";

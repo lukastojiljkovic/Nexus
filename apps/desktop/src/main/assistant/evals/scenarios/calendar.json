@@ -1,0 +1,222 @@
+{
+  "scenarios": [
+    {
+      "id": "calendar-create-accepted-sr",
+      "title": "Termin zakazan posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Zakaži kontrolu kod zubara u petak u 10." }
+      ],
+      "tools": [
+        {
+          "name": "calendar.create",
+          "effect": "write",
+          "summary": { "sr": "Zakazaću „Kontrola kod zubara“ za petak u 10.", "en": "I will schedule “Dentist check-up” for Friday at 10." },
+          "content": "Event created: Kontrola kod zubara, Friday 10:00."
+        },
+        { "name": "calendar.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "calendar.create", "args": { "title": { "contains": "zubar" } } }
+        ],
+        "toolsNotCalled": ["calendar.list"],
+        "answerContains": ["Zakazao sam"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "calendar.create",
+              "arguments": { "title": "Kontrola kod zubara", "start": "2026-10-16T10:00", "end": "2026-10-16T11:00" }
+            }
+          ]
+        },
+        {
+          "text": "Zakazao sam termin za petak. Termin je u petak u 10 časova, a naslov je Kontrola kod zubara."
+        }
+      ]
+    },
+    {
+      "id": "calendar-create-declined-sr",
+      "title": "Termin nije zakazan kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Zakaži mi sastanak sa Markom u sredu u 14." }
+      ],
+      "tools": [
+        {
+          "name": "calendar.create",
+          "effect": "write",
+          "summary": { "sr": "Zakazaću „Sastanak sa Markom“ za sredu u 14.", "en": "I will schedule “Meeting with Marko” for Wednesday at 14." },
+          "content": "Event created: Sastanak sa Markom, Wednesday 14:00."
+        },
+        { "name": "calendar.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "calendar.create" }],
+        "toolsNotCalled": ["calendar.list"],
+        "answerContains": ["Nisam zakazao"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "calendar.create", "arguments": { "title": "Sastanak sa Markom", "start": "2026-10-14T14:00" } }
+          ]
+        },
+        {
+          "text": "Nisam zakazao termin, jer si predlog odbio. Ništa nije upisano u kalendar."
+        }
+      ]
+    },
+    {
+      "id": "calendar-list-sr",
+      "title": "Pitanje o nedelji",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta imam u kalendaru ove nedelje?" }
+      ],
+      "tools": [
+        { "name": "calendar.list", "effect": "read" },
+        {
+          "name": "calendar.create",
+          "effect": "write",
+          "summary": { "sr": "Zakazaću termin.", "en": "I will schedule an event." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "calendar.list" }],
+        "toolsNotCalled": ["calendar.create"],
+        "answerContains": ["petak"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calendar.list", "arguments": {} }] },
+        {
+          "text": "Ove nedelje imaš jedan događaj: u petak u 10 kontrola kod zubara. Ostatak nedelje je slobodan."
+        }
+      ]
+    },
+    {
+      "id": "calendar-create-accepted-en",
+      "title": "Event created after confirmation",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Schedule a dentist check-up for Friday at 10." }
+      ],
+      "tools": [
+        {
+          "name": "calendar.create",
+          "effect": "write",
+          "summary": { "sr": "Zakazaću „Kontrola kod zubara“ za petak u 10.", "en": "I will schedule “Dentist check-up” for Friday at 10." },
+          "content": "Event created: Dentist check-up, Friday 10:00."
+        },
+        { "name": "calendar.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "calendar.create", "args": { "title": { "contains": "dentist" } } }
+        ],
+        "toolsNotCalled": ["calendar.list"],
+        "answerContains": ["I scheduled"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "calendar.create",
+              "arguments": { "title": "Dentist check-up", "start": "2026-10-16T10:00", "end": "2026-10-16T11:00" }
+            }
+          ]
+        },
+        {
+          "text": "I scheduled it. The event is on Friday at 10, titled Dentist check-up."
+        }
+      ]
+    },
+    {
+      "id": "calendar-create-declined-en",
+      "title": "Event not created when the user declined",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Schedule a meeting with Marko for Wednesday at 14." }
+      ],
+      "tools": [
+        {
+          "name": "calendar.create",
+          "effect": "write",
+          "summary": { "sr": "Zakazaću „Sastanak sa Markom“ za sredu u 14.", "en": "I will schedule “Meeting with Marko” for Wednesday at 14." },
+          "content": "Event created: Meeting with Marko, Wednesday 14:00."
+        },
+        { "name": "calendar.list", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "calendar.create" }],
+        "toolsNotCalled": ["calendar.list"],
+        "answerContains": ["Nothing was written"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "calendar.create", "arguments": { "title": "Meeting with Marko", "start": "2026-10-14T14:00" } }
+          ]
+        },
+        { "text": "I did not schedule it. Nothing was written to your calendar." }
+      ]
+    },
+    {
+      "id": "calendar-list-en",
+      "title": "A question about the week",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "What is in my calendar this week?" }],
+      "tools": [
+        { "name": "calendar.list", "effect": "read" },
+        {
+          "name": "calendar.create",
+          "effect": "write",
+          "summary": { "sr": "Zakazaću termin.", "en": "I will schedule an event." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "calendar.list" }],
+        "toolsNotCalled": ["calendar.create"],
+        "answerContains": ["Friday"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calendar.list", "arguments": {} }] },
+        {
+          "text": "You have one event this week: the dentist check-up on Friday at 10. The rest of the week is clear."
+        }
+      ]
+    }
+  ]
+}

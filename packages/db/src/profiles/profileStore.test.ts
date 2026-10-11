@@ -3,9 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CarStore,
+  CultureStore,
   DashboardSetStore,
   DashboardSettingsStore,
   EventStore,
+  LibraryStore,
   MAX_PROFILE_NAME_LENGTH,
   NexusDatabase,
   NoteAttachmentStore,
@@ -15,6 +18,8 @@ import {
   ProfileNotFoundError,
   ProfileStore,
   ProfileValidationError,
+  RecipeStore,
+  RecorderStore,
   SearchHistoryStore,
   SqliteFlagStore,
   SubjectAttachmentStore,
@@ -31,6 +36,18 @@ let db: NexusDatabase;
 const NOW = "2026-07-30T10:00:00.000Z";
 const HASH = "a".repeat(64);
 const OTHER_HASH = "b".repeat(64);
+/** Culture's own hash, distinct from the two the other modules use, so the union's answer names all three. */
+const TRACK_HASH = "c".repeat(64);
+/**
+ * The four hashes the kit modules' own tables name (ADR-108): a library cover,
+ * a recipe photo, a car receipt and a recording. Each is distinct, so a union
+ * arm that stopped reading one of those tables shows up as a MISSING value
+ * rather than as an answer that merely looks plausible.
+ */
+const COVER_HASH = "1".repeat(64);
+const PHOTO_HASH = "2".repeat(64);
+const RECEIPT_HASH = "3".repeat(64);
+const RECORDING_HASH = "4".repeat(64);
 
 function createProfile(
   name: string,
@@ -334,6 +351,26 @@ describe("ProfileStore.delete", () => {
     );
     new DashboardSetStore(db.raw, profileId).create("Tabla", NOW);
     new DashboardSettingsStore(db.raw, profileId).setBackground("f".repeat(64), "image/png", 4, NOW);
+    // The culture corner (migration 073), seeded down to both of its CHILD
+    // tables: a visit's photo and a playlist's item carry no `profile_id`, so
+    // they are the two rows the audit below proves a profile delete reaches
+    // through their parents.
+    const culture = new CultureStore(db.raw, profileId);
+    const visit = culture.createVisit(
+      { kind: "theatre", title: "Hamlet", venue: "Narodno pozorište", date: "2026-05-01" },
+      NOW,
+    );
+    culture.addVisitPhoto(
+      visit.id,
+      { fileName: "program.pdf", mime: "application/pdf", sizeBytes: 4, sha256: OTHER_HASH },
+      NOW,
+    );
+    const track = culture.createTrack(
+      { title: "Pesma", durationMs: 1_000, fileName: "pesma.mp3", mime: "audio/mpeg", sizeBytes: 4, sha256: HASH },
+      NOW,
+    );
+    const playlist = culture.createPlaylist("Za kola", NOW);
+    culture.addPlaylistTrack(playlist.id, track.id, NOW);
     // The device-local search history (SRCH-009 / migration 050) — seeded so
     // the schema-driven audit below actually has something to prove about it.
     // Deleting a profile DOES take its remembered queries: they are excluded
@@ -380,7 +417,14 @@ describe("ProfileStore.delete", () => {
     // The child tables that carry no `profile_id` of their own reach zero
     // through their parents' cascades — the keeper seeded none, so a total
     // count is exact here.
-    for (const table of ["task_attachments", "note_attachments", "subject_attachments", "note_updates"]) {
+    for (const table of [
+      "task_attachments",
+      "note_attachments",
+      "subject_attachments",
+      "note_updates",
+      "culture_visit_photos",
+      "culture_playlist_items",
+    ]) {
       const { n } = db.raw.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
       expect({ table, n }).toEqual({ table, n: 0 });
     }
@@ -440,7 +484,7 @@ describe("ProfileStore.delete", () => {
 });
 
 describe("ProfileStore.blobHashes", () => {
-  it("unions every hash the profile's rows name across all five blob-naming tables", () => {
+  it("unions every hash the profile's rows name across every blob-naming table", () => {
     const profileId = new ProfileStore(db.raw).create("business", "Firma", NOW).id;
     new TaskListStore(db.raw, profileId).ensureInbox(NOW);
     const task = new TaskStore(db.raw, profileId).create({ title: "Zadatak" });
@@ -467,9 +511,93 @@ describe("ProfileStore.blobHashes", () => {
     const pictureHash = "e".repeat(64);
     const store = new ProfileStore(db.raw);
     store.setPicture(profileId, pictureHash, "image/png", 4);
+    // Culture's two, added by migration 073: a visit's photo and the track a
+    // listening log points at. The track reuses the task's hash on purpose —
+    // the union deduplicates across every table, not merely within one.
+    const culture = new CultureStore(db.raw, profileId);
+    const visit = culture.createVisit(
+      { kind: "museum", title: "Postavka", venue: "Muzej", date: "2026-05-01" },
+      NOW,
+    );
+    culture.addVisitPhoto(
+      visit.id,
+      { fileName: "d.jpg", mime: "image/jpeg", sizeBytes: 4, sha256: HASH },
+      NOW,
+    );
+    culture.createTrack(
+      { title: "Pesma", durationMs: 1_000, fileName: "e.mp3", mime: "audio/mpeg", sizeBytes: 4, sha256: TRACK_HASH },
+      NOW,
+    );
+
+    // And the four the kit modules' own tables name (ADR-108), through the
+    // stores that write them rather than by hand: a library cover, a recipe
+    // photo, a car receipt and a recording. Deleting the profile cascades every
+    // one of those rows away, so their bytes are orphaned by the same delete -
+    // this list is the only thing that knows to collect them.
+    const library = new LibraryStore(db.raw, profileId);
+    const item = library.createItem({ kind: "book", title: "Knjiga" }, NOW);
+    library.setCover(
+      item.id,
+      { fileName: "korica.jpg", mime: "image/jpeg", sizeBytes: 4, sha256: COVER_HASH },
+      NOW,
+    );
+    new RecipeStore(db.raw, profileId).create(
+      {
+        title: "Sarma",
+        course: "main",
+        servings: 4,
+        ingredients: [],
+        steps: [{ text: "Kuvati." }],
+        source: "own",
+        photo: { fileName: "jelo.jpg", mime: "image/jpeg", sizeBytes: 4, sha256: PHOTO_HASH },
+      },
+      NOW,
+    );
+    const cars = new CarStore(db.raw, profileId);
+    const vehicle = cars.createVehicle(
+      {
+        name: "Pasat",
+        make: "Volkswagen",
+        model: "Passat",
+        year: 2015,
+        fuelType: "diesel",
+        distanceUnit: "km",
+      },
+      NOW,
+    );
+    const service = cars.createService(
+      vehicle.id,
+      { date: "2026-05-01", category: "oil", description: "Mali servis" },
+      NOW,
+    );
+    cars.addServiceAttachment(
+      service.id,
+      { fileName: "racun.pdf", mime: "application/pdf", sizeBytes: 4, sha256: RECEIPT_HASH },
+      NOW,
+    );
+    new RecorderStore(db.raw, profileId).create(
+      {
+        kind: "audio",
+        mime: "audio/webm;codecs=opus",
+        durationMs: 1_000,
+        sizeBytes: 4,
+        sha256: RECORDING_HASH,
+      },
+      NOW,
+    );
 
     expect(store.blobHashes(profileId).sort()).toEqual(
-      [HASH, OTHER_HASH, backgroundHash, pictureHash].sort(),
+      [
+        HASH,
+        OTHER_HASH,
+        TRACK_HASH,
+        COVER_HASH,
+        PHOTO_HASH,
+        RECEIPT_HASH,
+        RECORDING_HASH,
+        backgroundHash,
+        pictureHash,
+      ].sort(),
     );
   });
 

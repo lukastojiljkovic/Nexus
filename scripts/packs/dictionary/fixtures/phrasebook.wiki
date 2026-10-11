@@ -1,0 +1,115 @@
+{{pagebanner|Belgrade banner 1.jpg|ftt=yes}}
+
+'''Serbian''' (српски / ''srpski'') is the official and main language of [[Serbia]] and [[Montenegro]]. It is also an official language of [[Bosnia]] and [[Kosovo]]. Barring a few vocabulary differences, it is almost identical to the [[Bosnian phrasebook|Bosnian]], [[Croatian|Croatian phrasebook]] and [[Montenegrin phrasebook|Montenegrin]] languages. You can use any of the phrasebooks mentioned and get along with it in either Bosnia, Croatia, Serbia or Montenegro (during the period of common state of Yugoslavia these languages were known as Serbo-Croatian). Serbian is written mostly in Cyrillic in Serbia, Bosnia (Serb Rep.) and Kosovo. However in Montenegro the Latin alphabet is almost always used. Sometimes both versions are used. There are also Serbian minority speakers in portions of southern and eastern [[Croatia]]. Germany and Austria also have large Serbian minority populations in major cities.
+
+Like all other Balto-Slavic languages (except Bulgarian-Macedonian), pronouns, adjectives and nouns in Serbian are declined through cases (kuća, kuće, kući, etc. mean house, of the house, to the house, etc). However, tenses are more simple than in English - there is no difference between "I go" and "I'm going" or "I saw" and "I have seen". While an English speaker will express himself correctly only by saying, "I was drinking when you came", both verbs of this sentence could be translated by any of Serbian past tenses and still be correct. Note the difference between the polite "you" pronoun, "vi" ("vous" in French, "Sie" in German) and informal "ti" ("tu" in French, "Du" in German). Serbian has no articles and the difference between "a house" and "the house" is understood from the context and noun declensions.
+
+The most common word order is SVO (subject-verb-object).
+
+==Pronunciation guide==
+[[File:E-75 in Serbia.JPG|thumb|300px|European route E75 in Serbia, towards [[Novi Sad]]. Here the place names are written in both the Latin and Cyrillic alphabets]]
+Serbian uses both Latin and Cyrillic alphabets, the only Slavic language to do so. Everyday use is the Roman alphabet, but the Cyrillic alphabet is the official script and used in more formal situations including government publications. Pronunciation is usually very simple, as almost every word is written exactly as it is pronounced. Both the Roman alphabet and the Cyrillic version, the azbuka, will be shown here.
+
+Serbian Cyrillic Alphabet:
+
+; Аа Бб Вв Гг Дд Ђђ Ее Жж Зз Ии Јј Кк Лл Љљ Мм Нн Њњ Оо Пп Рр Сс Тт Ћћ Уу Фф Хх Цц Чч Џџ Шш :
+
+Serbian Latin Alphabet:
+
+; Aa Bc Cc Čč Ćć Dd Dždž Đđ Ee Ff Gg Hh Ii Jj Kk Ll Ljlj Mm Nn Njnj Oo Pp Rr Ss Šš Tt Uu Vv Zz Žž :
+
+===Stress===
+
+Generally, in complex words, the emphasis is on the first syllable (e.g.: kako [KAH-koh]). In some cases, such as in words with a prefix (e.g.: ''autobus'' [ow-TOH-boos]) the stress is on the middle syllable. The last syllable is never stressed.
+
+===Vowels===
+
+There are five vowels in Serbo-Croatian language. They can be long or short.
+
+; a : the 'a' in "article"
+; e : the 'e' in "end"
+; i : the 'ee' in "week"
+; o : the 'o' in "obey"
+; u : the 'oo' in "moon"
+
+===Consonants===
+
+Many of the consonants are pronounced as in English, except for a few variations.
+
+; b : the 'b' in "abuse"
+; c : always as 'ts' in "bits"
+; č : the 'ch' in "chair"
+; ć : the 'ch' in "church"
+; d : the 'd' in "dog"
+; đ : the 'd(u)' in "endure"; rarely used at the beginning of a word; this letter is sometimes written as '''dj'''; [the Cyrillic equivalent of this letter is "ђ"]
+; dž : the 'dge' in "edge", but harder [the Cyrillic equivalent of this letter is "џ"]; seldom used
+; f : the 'f' in "face"
+; g : the 'g' in "gone" [always hard 'g']
+; h : the 'h' in "ham" [quite weak, unlike other Slavonic languages and often dropped, eg "''hoću''" (I will or I wish) becomes '''''<nowiki/>'oću''''' in speech]
+; j : the 'y' in "yes"
+; k : the 'k' in "kick"
+; l : the 'l' in "like"
+; lj : the 'li' in "million" [the Cyrillic equivalent of this letter is "љ"]
+; m : the 'm' in "monkey"
+; n : the 'n' in "noise"
+; nj : the 'ny' in "canyon" [Spanish ñ nasal sound, the Cyrillic equivalent of this letter is "њ"]
+; p : the 'p' in "post"
+; r : the 'r' in "barco" [trilled 'r' like in Spanish language]
+; s : the 's' in "sun"
+; š : the 'sh' in "shower"
+; t : the 't' in "talk"
+; v : the 'v' in "vase"
+; z : the 'z' in "zone"
+; ž : the 'su' in "pleasure"
+
+'''q w x''' and '''y''' are not part of the Serbian alphabet, and they can occur only in foreign words. Hence, "text" in Serbian is written as "tekst", "expert" as "ekspert", "wagon" as "vagon", "quota" as "kvota" and "myth" as "mit".
+
+===Common diphthongs===
+[[File:Pljeskavica (6883073017).jpg|thumb|300px|Pljeskavica, a Serbian grilled patty, can also be served in a bun. Done like this, it becomes a sort of a hamburger]]
+; ija : the 'ia' in "Lydia"
+; ije : the 'ie' in "miedo"
+; aj : the 'ie' in "pie" (ia sound)
+; oj : the 'oy' in "boy"
+; oa : the 'oa' in "boa"
+; ao : similar to the 'ou' in "out"
+; eo : the 'eo' in "video" ('e' as in 'there')
+; io : the 'io' in "radio"
+
+Note that the diphthong '''ia''' is usually written as '''ija'''; eg, '''policija''' (police) is pronounced exactly as Italian '''polizia'''; name '''Lydia''' is written as '''Lidija'''; '''Serbia''' is, as you have well guessed, spelled '''Srbija'''.
+
+==Phrase list==
+
+===Basics===
+{{infobox|Common signs
+|; OPEN : отворено otvoreno (''oht-voh-REH-noh'')
+; CLOSED : затворено zatvoreno (''zaht-voh-REH-noh'')
+; ENTRANCE : улаз ulaz (''OO-lahz'')
+; EXIT : излаз izlaz (''EEZ-lahz'')
+; PUSH : гурај guraj (''GOO-rai'')
+; PULL : вуци vuci (''VOO-tsee'')
+; TOILET : тоалет toalet (''TWAH-leht'') WC (''VEHT TSEH'')
+; MEN : мушкарци muškarci (''moosh-KAHR-tsee'')
+; WOMEN : жене žene (''ZHEH-neh'')
+; FORBIDDEN : забрањено zabranjeno (''ZAH-brah-nyeh-noh'')}}
+
+; Hello. : Здраво. Zdravo. (''ZDRAH-voh'')
+; How are you? : Како сте? Kako ste? (''KAH-koh steh?'')
+; Well, thanks. : Добро, хвала. Dobro, hvala. (''DOH-broh, HVAH-lah'')
+; What is your name? : Како се зовете? Kako se zovete? (''KAH-koh seh ZOH-veh-teh'')
+; My name is ______ . : Зовем се_____. Zovem se_____. (''ZOH-vehm seh_____.'')
+; Pleased to meet you. : Драго ми је. Drago mi je. (''DRAH-goh mee yeh'')
+; Please. : Молим. Molim. (''MOH-leem'')
+; Thank you. : Хвала. Hvala. (''HVAH-lah'')
+; You're welcome. : Молим. Molim. (''MOH-leem'')
+; Yes. : Да. Da. (''DAH'')
+; No. :  Не. Ne. (''NEH'')
+; Excuse me. (''getting attention'') : Извините. Izvinite. (''eez-VEE-nee-teh'')
+; Excuse me. (''begging pardon'') : Извините. Izvinite. (''eez-VEE-nee-teh'')
+; I'm sorry. (if it isn't speaker's fault, e.g. if you hear bad news) :  Жао ми је. Žao mi je. (''ZHOW mee yeh'')
+; I'm sorry. (if it's speaker's fault, e.g. if you bump into someone):  Извините. Izvinite. (''eez-VEE-nee-teh'')
+; Goodbye : Довиђења. Doviđenja.  (''doh vee-JEH-nyah'')
+; I can't speak Serbian. : Не говорим српски. Ne govorim srpski. (''neh GOH-voh-reem SR-ps-kee'')
+; Do you speak English? :  Говорите ли енглески? Govorite li engleski? (''GOH-voh-ree-teh lee ENH-glehs-kee?'')
+;  Is there someone here who speaks English? : Има ли неког ко говори енглески? Ima li nekog ko govori engleski? (''EE-mah lee NEH-kohg koh GOH-voh-ree EHN-glehs-kee ?'')
+; Help! : Упомоћ!  Upomoć! (''OO-poh-mohtch!'')
+; Look out! :  Пази! Pazi! (''PAH-zee!'')

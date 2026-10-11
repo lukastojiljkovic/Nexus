@@ -226,11 +226,13 @@ jobs:
             echo
             echo "- **Windows** — x64. NSIS installer."
             echo "- **Linux** — x64 with glibc. An AppImage, and a tarball that the Gentoo ebuild installs."
+            echo "- **macOS** — Apple silicon (arm64). A dmg to drag into \`/Applications\`. There is no Intel build, and the reason is a dependency rather than an oversight: every native package here is per-architecture and a build installs only its own (see the \`mac\` block in \`apps/desktop/electron-builder.yml\`)."
             echo
             echo "### Before you install"
             echo
             echo "- The interface is in **Serbian and English**. On first run it follows the system language, and Settings switches it at any time."
             echo "- **Code signing is paused for now**, so Windows SmartScreen warns on first run (More info, then Run anyway). Nexus is open source: anyone who wants to make sure the code does what it says can read all of it in this repository, and every file below was built by CI from the tagged commit, with an attestation that proves which commit and workflow produced it."
+            echo "- **macOS is unsigned and un-notarised too**, and Gatekeeper asks more of the reader than SmartScreen does: the first launch needs a right-click on the app and **Open**, or an allow in System Settings → Privacy & Security. Same reason as the Windows line above, same repository to read."
             echo "- Nexus is **offline by default**. On first start you choose **Offline only**, which makes no network call at all, or **Offline + update checks**, the only mode in which Nexus contacts GitHub, and only to check for and download a new version of itself. Your notes and data never leave the computer in either mode."
             echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in."
             echo "- Each installer is covered by \`SHA256SUMS.txt\` and its detached Ed25519 signature \`SHA256SUMS.txt.sig\`. Before it runs an update, Nexus checks the signature against a key compiled into the app and the installer's hash against the signed list."
@@ -269,6 +271,80 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # macOS, the third platform. It is its own RUNNER and not a cross-build, for
+  # the reason the linux job states one job over: the packaged app carries
+  # platform-specific native modules (better-sqlite3, node-llama-cpp,
+  # onnxruntime-node, sharp), so the only tree that can be assembled correctly
+  # is the one whose own `pnpm install` fetched them. `macos-15` is Apple
+  # silicon, which is also the architecture the dmg target names — see the
+  # `mac` block in `electron-builder.yml` for why an Intel dmg needs one more
+  # step (the x64 half of every one of those packages) rather than one more
+  # line here.
+  #
+  # `macos-15` RATHER THAN `macos-14`, AND NOT AS A PREFERENCE. Measured on
+  # 2026-10-11 against `actions/runner-images`' own README: BOTH macOS 14 labels
+  # (`macos-14-large` and `macos-14`) carry a "deprecated" badge pointing at
+  # issue 13518, and 15 is the arm64 image named to replace them (`macos-15`, or
+  # `macos-15-xlarge`). That project's policy removes a deprecated label's tools
+  # six months after the announcement, so a job pinned to 14 is a job with a date
+  # on it. 15 is arm64 too, so the architecture the dmg target names is the same
+  # one — this changes the image, not the output.
+  #
+  # No notarisation and no certificate: the app ships unsigned on purpose, and
+  # the block that decides that is the `mac` one in `electron-builder.yml`.
+  macos:
+    name: macOS artefacts
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: The tag matches the application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          declared="v$(node -p 'require("./apps/desktop/package.json").version')"
+          if [ "$declared" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match apps/desktop/package.json (${declared})"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Build the dmg
+        run: pnpm --filter @nexus/desktop dist
+
+      - name: Check the artefact exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l apps/desktop/release/*.dmg
+
+      - id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos
+          # Only what a user downloads: electron-builder also writes
+          # `latest-mac.yml` and `.blockmap` files for electron-updater, and
+          # this build does not use them (ADR-089's updater reads the GitHub
+          # release API). The linux block gives the same reason.
+          path: |
+            apps/desktop/release/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
   # THE SIGNING JOB SIGNS ONLY WHAT THE BUILD JOBS PRODUCED.
   #
   # The signing key authorises an install on every existing copy, so nothing
@@ -287,7 +363,7 @@ jobs:
   # so no branch, pull request or other job can read it.
   sign:
     name: Sign the checksums
-    needs: [windows, linux]
+    needs: [windows, linux, macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
@@ -315,6 +391,11 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: ${{ needs.linux.outputs.artifact-id }}
+          path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.macos.outputs.artifact-id }}
           path: release-assets
 
       - name: Checksums over the installers
@@ -395,7 +476,7 @@ jobs:
   # can stand in for an installer or the checksum list.
   publish:
     name: Draft the release
-    needs: [windows, linux, sign]
+    needs: [windows, linux, macos, sign]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -414,6 +495,11 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: ${{ needs.linux.outputs.artifact-id }}
+          path: release-assets
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.macos.outputs.artifact-id }}
           path: release-assets
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

@@ -1,6 +1,7 @@
 /**
- * The external runner — slice E6 of ADR-085, and the ONLY file in the shipped
- * application that starts a process.
+ * The external runner — slice E6 of ADR-085, and the ONE file in the shipped
+ * application whose command line comes from a table rather than from beside the
+ * call that starts it.
  *
  * Until this slice the main process contained no `child_process` call at all:
  * the network was the app's one capability boundary, `main/net/offline.ts`
@@ -13,10 +14,12 @@
  *   exactly one value, the workspace path. Nothing here builds a command, and
  *   nothing a renderer sends can reach one — the IPC channels carry a circuit
  *   id. `scripts/check-runner.mjs` enforces both halves of that.
- * - **Neither `node:child_process` nor the toolchain's names appear outside
- *   this file** (and `runner.ts`), which is what makes „a second spawn site"
- *   something a static check can see rather than something a reviewer has to
- *   notice.
+ * - **The toolchain's names appear outside this file only in `runner.ts`**,
+ *   which is what makes „a second place that could build a command" something a
+ *   static check can see rather than something a reviewer has to notice.
+ *   `update/launch.ts` is the other file allowed to reach `node:child_process`,
+ *   and it names no tool either: the program it starts is the installer the
+ *   update service downloaded and verified.
  * - **This module knows nothing about circuits or stores.** It is handed a
  *   target and a workspace. That is DEV-007's first mitigation as a shape
  *   rather than as a promise: a module that could read a circuit is a module

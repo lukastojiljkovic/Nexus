@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "id": "recipes-preserving",
+  "version": "2026.10.10",
+  "kind": "dataset",
+  "title": {
+    "sr": "Recepti za konzervisanje",
+    "en": "Preserving recipes"
+  },
+  "description": {
+    "sr": "Pripreme iz Vodiča za konzervisanje USDA (2015), uključujući kiseli kupus — korak po korak, izvornim rečima vodiča.",
+    "en": "The procedures of the USDA Complete Guide to Home Canning (2015 revision), sauerkraut among them — step by step, in the guide's own words."
+  },
+  "licence": {
+    "spdx": "LicenseRef-Public-Domain-US-Government",
+    "attribution": "Complete Guide to Home Canning, Revised 2015 (Agriculture Information Bulletin No. 539), United States Department of Agriculture. Recipes reproduced unmodified.",
+    "url": "https://nchfp.uga.edu/papers/guide/"
+  },
+  "source": {
+    "name": "USDA Complete Guide to Home Canning, Guide 6 (Fermented Foods and Pickled Vegetables)",
+    "url": "https://nchfp.uga.edu/papers/guide/GUIDE06_HomeCan_rev0715.pdf"
+  },
+  "minAppVersion": "1.6.0"
+}
