@@ -80,7 +80,17 @@ const INLINE_ELEMENTS = new Set([
 function parseHtml(html) {
   const root = { name: "#root", children: [] };
   const stack = [root];
-  const withoutComments = untilStable(html, (text) => text.replace(/<!--[\s\S]*?-->/g, ""));
+  // Comments are taken out to a FIXED POINT HERE rather than through a helper:
+  // `<!--<!-- --> -->` loses the inner comment and keeps an outer one, and the
+  // loop that answers that has to assign back to the variable it read, in the
+  // body where the replacement is written — which is what CodeQL's
+  // `incomplete-multi-character-sanitization` reads (`recipes/convert.mjs` says
+  // the same thing at its own strip).
+  let withoutComments = html;
+  for (let previous = null; previous !== withoutComments; ) {
+    previous = withoutComments;
+    withoutComments = withoutComments.replace(/<!--[\s\S]*?-->/g, "");
+  }
   const tagPattern = /<\/?([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
   let cursor = 0;
   let match;
@@ -109,7 +119,16 @@ function parseHtml(html) {
 export function textOf(html) {
   return decodeEntities(
     untilStable(html, (text) => {
-      const opened = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<br\s*\/?>/gi, " ");
+      // The comment strip is its own loop in this body, for the reason the tag
+      // strip below gives: `incomplete-multi-character-sanitization` reads the
+      // loop that assigns back to the variable it READ, and the first `replace`
+      // of a chain is not that — its result flows into the next call's receiver.
+      let opened = text;
+      for (let previous = null; previous !== opened; ) {
+        previous = opened;
+        opened = opened.replace(/<!--[\s\S]*?-->/g, "");
+      }
+      opened = opened.replace(/<br\s*\/?>/gi, " ");
       // The tag strip runs to a FIXED POINT IN THIS FUNCTION, not only through
       // `untilStable` above it: removing one tag can join the halves of another
       // (`<scr<script>ipt>`), so a single pass is not a sanitizer. CodeQL's
@@ -195,8 +214,14 @@ export function regionText(regionHtml) {
   const blockTags = [...BLOCK_ELEMENTS].join("|");
   return decodeEntities(
     untilStable(regionHtml, (text) => {
-      const opened = text
-        .replace(/<!--[\s\S]*?-->/g, "")
+      // `textOf`'s reason, the same shape: the comment strip assigns back to what
+      // it read, in this body.
+      let opened = text;
+      for (let previous = null; previous !== opened; ) {
+        previous = opened;
+        opened = opened.replace(/<!--[\s\S]*?-->/g, "");
+      }
+      opened = opened
         .replace(/<br\s*\/?>/gi, " ")
         .replace(new RegExp(`</?(?:${blockTags})\\b[^>]*>`, "gi"), " ");
       // `textOf`'s reason, one function down: the tag strip is a loop in the

@@ -338,21 +338,24 @@ export function plainText(html) {
   let text = html;
   for (let previous = null; previous !== text; ) {
     previous = text;
-    text = text
-      // `\s*` before the `>` of the closing tag: a browser ends a script at
-      // `</script >` and at `</script foo="bar">` too, and a regex that insists
-      // on the bare form leaves the script's contents in the licence text.
-    // `</script` up to the next `>`, `evidence.mjs`'s reason: the HTML parser
-    // takes `</script foo="bar">` as the end of the element, and a filter that
-    // requires whitespace there leaves the rest of the script in the text.
-    .replace(/<script[\s\S]*?<\/script[^>]*>/gi, "")
-    .replace(/<style[\s\S]*?<\/style[^>]*>/gi, "")
-      // A line break where a block ENDS — not where one begins, and not both:
-      // `</h1><p>` is one break between two lines, and two would leave a blank
-      // line between every paragraph of the licence.
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(?:p|div|h[1-6]|li|tr|section|article|table|ul|ol|blockquote)\s*>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
+    // EACH STRIP ASSIGNS BACK TO `text` RATHER THAN CHAINING ONTO THE ONE BEFORE
+    // IT, and the two are not the same fix: `incomplete-multi-character-sanitization`
+    // reads the loop that assigns to the variable it READ, and the first strips of
+    // a chain send their result into the NEXT call's receiver instead, so a filter
+    // that can be re-formed (`<scr<script>ipt>`) goes unreported there. The chain
+    // read the same; only this shape is a fixed point.
+    //
+    // `\s*` before the `>` of the closing tag: a browser ends a script at
+    // `</script >` and at `</script foo="bar">` too, and a regex that insists on
+    // the bare form leaves the script's contents in the licence text.
+    text = text.replace(/<script[\s\S]*?<\/script[^>]*>/gi, "");
+    text = text.replace(/<style[\s\S]*?<\/style[^>]*>/gi, "");
+    // A line break where a block ENDS — not where one begins, and not both:
+    // `</h1><p>` is one break between two lines, and two would leave a blank line
+    // between every paragraph of the licence.
+    text = text.replace(/<br\s*\/?>/gi, "\n");
+    text = text.replace(/<\/(?:p|div|h[1-6]|li|tr|section|article|table|ul|ol|blockquote)\s*>/gi, "\n");
+    text = text.replace(/<[^>]+>/g, "");
   }
   return text
     .replace(/\n{3,}/g, "\n\n")

@@ -325,8 +325,14 @@ function countOccurrences(text, needle) {
 /** Wikitext reduced to the text it shows: comments, links, emphasis and inline templates gone. */
 function stripMarkup(text) {
   const stripped = untilStable(text, (value) => {
-    const opened = value
-      .replace(/<!--[\s\S]*?-->/g, "")
+    // The comment strip assigns back to what it read, in this body; the template
+    // strip below gives the same reason for its own loop.
+    let opened = value;
+    for (let previous = null; previous !== opened; ) {
+      previous = opened;
+      opened = opened.replace(/<!--[\s\S]*?-->/g, "");
+    }
+    opened = opened
       .replace(/\[\[([^[\]|]*)\|([^[\]]*)\]\]/g, "$2")
       .replace(/\[\[([^[\]]*)\]\]/g, "$1")
       .replace(/'''/g, "")

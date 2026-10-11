@@ -233,7 +233,17 @@ export function toPlain(wikitext, stats = {}) {
   }
 
   text = text.replace(/\[https?:\/\/\S+\s+([^\]]*)\]/g, "$1").replace(/\[https?:\/\/\S+\]/g, "");
-  text = untilStable(text, (value) => value.replace(/<[^>]+>/g, ""));
+  // A TAG STRIP RUNS TO A FIXED POINT IN THIS BODY. One pass of a regex that
+  // matches several characters can leave the thing it removed standing —
+  // `<scr<script>ipt>` loses the inner tag and keeps an outer one — and CodeQL's
+  // `incomplete-multi-character-sanitization` reads the LOOP THAT ASSIGNS BACK TO
+  // THE VARIABLE IT READ, in the body where the replacement is written; a helper
+  // that loops around the same expression (`untilStable`, which this file used)
+  // does not satisfy it, and the rule is right that the two are not the same fix.
+  for (let previous = null; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, "");
+  }
   return collapse(decodeEntities(text));
 }
 
