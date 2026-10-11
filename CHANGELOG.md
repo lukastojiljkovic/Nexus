@@ -8,17 +8,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Nexus is offline first, and this release is the one that makes that mean
 something: the app now ships with a way to hold public knowledge on the machine,
-and with twenty-five modules to read, use and work through it â€” all of them
+and with twenty-five modules to read, use and work through it — all of them
 working without a network, because the app has no other mode.
 
 ### Added
 
 - **Content packs, and the catalogue that lists them.** A pack is a folder of
-  public content â€” a dataset, a map, a set of articles, a model, a tool built
-  from someone else's open source release â€” signed with Nexus's own key. The
+  public content — a dataset, a map, a set of articles, a model, a tool built
+  from someone else's open source release — signed with Nexus's own key. The
   app accepts one only when the signature and every file's SHA-256 check out,
   whether it arrives from a folder on a USB stick or from the pack catalogue
-  under **Settings â†’ Content packs**. Every pack carries its own licence,
+  under **Settings → Content packs**. Every pack carries its own licence,
   source and attribution, which are shown in the app before anything is
   downloaded. Downloads need the third network mode, **Downloads**, which is a
   superset of update checks: it reaches a compiled-in list of hosts, one
@@ -30,7 +30,7 @@ working without a network, because the app has no other mode.
   bookmarks and printing), Maps, the offline Wikipedia (its own ZIM reader),
   the Translator, the Assistant, the astronomy corner, Library, Culture,
   Cookbook, Pantry, Car, Recorder, Emergency card, Calculator, Signals,
-  mini-apps, Timers, and the games â€” arcade, cards, boards, puzzles and chess.
+  mini-apps, Timers, and the games — arcade, cards, boards, puzzles and chess.
 - **A local assistant, with no cloud in it.** A model you choose (or import as
   a `.gguf`), running in the app, with a knowledge base built from your own data
   and packs, tools over your tasks and notes, a voice mode, and web search that
@@ -56,7 +56,7 @@ working without a network, because the app has no other mode.
 - **Every screen is photographed in both languages, at the size of a real
   window.** The screenshot harness now lands on every module the registry
   declares, in Serbian and in English, and at the display's own work area rather
-  than a fixed 1600 px â€” which is how the two defects it could not see were
+  than a fixed 1600 px — which is how the two defects it could not see were
   found: empty states whose text was capped at a quarter of the pane, and
   sub-views of the newer modules that no scene had ever opened.
 
