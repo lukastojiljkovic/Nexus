@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { basename, extname, join } from "node:path";
+import { join } from "node:path";
 
 /**
  * The libraries a machine has: which ZIM files this app knows about, and where
@@ -174,7 +174,17 @@ export function isValidLibraryId(value: string): boolean {
  * have.
  */
 export function libraryIdFromPath(path: string, taken: ReadonlySet<string>): string {
-  const stem = basename(path, extname(path));
+  // THE SEPARATOR IS NOT A PLATFORM FACT, WHICH IS WHY THIS DOES NOT USE
+  // `path.basename`. The path is one a person chose on their own machine — this
+  // module accepts a `.zim` from anywhere, a USB stick included — and the id is
+  // derived from the FILE'S NAME. On Linux `basename` does not split `\`, so the
+  // ordinary Windows path `C:\Downloads\Wikipedia SR mini 2026-09.zim` came out
+  // as one segment and produced `c-downloads-wikipedia-sr-mini-2026-09`; only a
+  // Windows build got the intended `wikipedia-sr-mini-2026-09`, which is the
+  // kind of difference nobody sees until the runner is a different OS.
+  const name = path.split(/[\\/]/u).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
   const base =
     stem
       .toLowerCase()
