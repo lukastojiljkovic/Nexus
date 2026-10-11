@@ -296,6 +296,18 @@ jobs:
     name: macOS artefacts
     runs-on: macos-15
     timeout-minutes: 60
+    # THE HEAP IS RAISED HERE AND NOWHERE ELSE, and the number is measured.
+    # The macOS runners have 3 vCPU and 7 GB where the Windows and Linux ones
+    # have 16, and this repository's renderer build needs more than Node's
+    # default old-space ceiling to finish: the first v2.0.0 release run died on
+    # this job with `FATAL ERROR: Reached heap limit Allocation failed -
+    # JavaScript heap out of memory` and exit 137 during `pnpm build`, before a
+    # single artefact existed. 5 GiB leaves the runner its own room for the
+    # Electron download and for tar; the two other platforms keep the default
+    # because their builds already fit, and raising it there would only hide the
+    # day one of them stops fitting.
+    env:
+      NODE_OPTIONS: --max-old-space-size=5120
     permissions:
       contents: read
     outputs:
