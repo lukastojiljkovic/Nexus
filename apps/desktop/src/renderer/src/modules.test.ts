@@ -149,6 +149,8 @@ describe("createModuleRegistry", () => {
       "puzzles",
       // `order: 340`: a board game, the `play` group's last member after Puzzles.
       "boards",
+      // `order: 350` — tied with Chess, ordered before it by id.
+      "cards",
       // `order: 350`, the last discovered module this build registers.
       "chess",
       // `order: 400`, the astronomy corner: the module that assembles the four
@@ -234,12 +236,12 @@ describe("createModuleRegistry", () => {
       // own PRD entry, and the UTIL sharing above is one section implemented
       // five times rather than a bin for anything tool-shaped.
       ELEC: ["electronics"],
-      // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and chess
-      // joins it: one PRD section implemented as separate surfaces with separate
-      // toggles, exactly as UTIL is. Each one adds its id to this line, and the
-      // other game modules of this wave take prefixes of their own instead
-      // (BOARD for boards, PUZ for puzzles), each its own subject.
-      FUN: ["arcade", "chess"],
+      // PRD 31 (Entertainment & Boosters) is the arcade's own entry, and chess and
+      // the card table join it: one PRD section implemented as separate surfaces
+      // with separate toggles, exactly as UTIL is. Each one adds its id to this
+      // line, and the other game modules of this wave take prefixes of their own
+      // instead (BOARD for boards, PUZ for puzzles), each its own subject.
+      FUN: ["arcade", "cards", "chess"],
       PRO: ["pro"],
       // PRD 27, and the module that finally puts a member in the `culture`
       // group: `LIB` is its own PRD entry, so it is shared with nobody.
@@ -434,7 +436,9 @@ describe("createModuleRegistry", () => {
       // Puzzles and the board games follow the arcade by their own `order`.
       "puzzles",
       "boards",
-      // `order: 350`, the last of the four.
+      // `order: 350` — tied with Chess, ordered before it by id.
+      "cards",
+      // `order: 350`, the last of the five.
       "chess",
     ]);
     // The shell group is the two rows nothing may switch off, and the sidebar is
@@ -540,6 +544,8 @@ describe("createModuleRegistry", () => {
       "puzzles",
       // A board game writes nothing until somebody plays one.
       "boards",
+      // ...and the card table, on the same terms: no deal exists until one is made.
+      "cards",
       // ...and the same for a board: no game exists until somebody starts one.
       "chess",
       // The astronomy corner is ON by the same test every module but PRIV and

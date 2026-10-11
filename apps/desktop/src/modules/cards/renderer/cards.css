@@ -1,0 +1,310 @@
+/* KARTE (ADR-090). Tokens exclusively — raw colour values are forbidden outside
+   @nexus/tokens, and this stylesheet is checked by the same gates the shell's own
+   are (`check:colours`, `check:tokens`, `check:layers`, `check:tiers`, `check:rows`).
+ *
+ * THIS FILE IS IMPORTED BY THE MODULE'S PAGE, not by `app.css`, and that is the
+ * point of the kit stated in CSS: the shell's stylesheet is part of the startup
+ * chunk, so a rule for a page nobody has opened would be paid for on every launch.
+ *
+ * Class prefix `cards__`, for the reason the shell's split states: a rule belongs to
+ * the module whose prefix it carries.
+ *
+ * **The table fits 900 × 600.** Every row wraps, every pile is capped at a width the
+ * page has, and a card never grows taller than it is wide (`aspect-ratio: 3 / 4`); a
+ * board that overflowed would be a scrollbar rather than a game.
+ *
+ * **No animation anywhere.** The page shows a position the engines produced and no
+ * motion is load-bearing, so nothing here needs a `prefers-reduced-motion` escape
+ * hatch: there is no motion to reduce.
+ */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+}
+
+.cards__error {
+  color: var(--nx-danger);
+}
+
+.cards__card,
+.cards__deal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.cards__game {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+.cards__meta,
+.cards__status,
+.cards__actions,
+.cards__fields,
+.cards__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: center;
+}
+
+/* A form row of mixed shapes lines its CONTROLS up, which `end` is what does: a
+   stacked field beside a bare control otherwise centres a tall box against a short
+   one (`check:rows`). */
+.cards__fields {
+  align-items: flex-end;
+}
+
+.cards__status-turn {
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.cards__thinking {
+  color: var(--nx-text-muted);
+}
+
+.cards__shelf {
+  display: flex;
+  flex-direction: column;
+}
+
+.cards__shelf-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.cards__row-name {
+  margin-inline-end: var(--nx-space-2);
+  font-weight: var(--nx-font-weight-medium);
+}
+
+.cards__row-about {
+  color: var(--nx-text-muted);
+}
+
+.cards__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.cards__moves,
+.cards__widget {
+  display: flex;
+  flex-direction: column;
+}
+
+.cards__move-number {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cards__move-text {
+  font-family: var(--nx-font-family-mono);
+}
+
+/* --- The table ------------------------------------------------------------- */
+
+.cards__table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+
+.cards__row--columns {
+  align-items: flex-start;
+}
+
+.cards__row--hand,
+.cards__row--bids {
+  gap: var(--nx-space-1);
+}
+
+/* A pile: the cards lie on one another, so the slot's height is its own. */
+.cards__slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-1);
+  min-width: 3rem;
+  padding: var(--nx-space-1);
+  border: 1px dashed var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: transparent;
+}
+
+.cards__slot--stack {
+  gap: 0;
+}
+
+.cards__slot--stack .cards__card {
+  margin-block-start: calc(-3.2rem + 0.6rem);
+}
+
+.cards__slot--stack .cards__card:first-child {
+  margin-block-start: 0;
+}
+
+.cards__slot--target {
+  border: 1px solid var(--nx-accent);
+  background: var(--nx-accent-soft);
+  cursor: pointer;
+}
+
+.cards__slot--last {
+  border-color: var(--nx-accent);
+}
+
+/* A card. Rank above suit, three to four, capped so a column never widens the page. */
+.cards__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3.4rem;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-tight);
+  flex: none;
+}
+
+.cards__card--down {
+  background: var(--nx-surface-sunken);
+  border-color: var(--nx-border-strong);
+}
+
+.cards__back {
+  width: 60%;
+  height: 68%;
+  border: 1px solid var(--nx-border-strong);
+  border-radius: var(--nx-radius-xs);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--nx-surface-alt),
+    var(--nx-surface-alt) 2px,
+    var(--nx-surface-sunken) 2px,
+    var(--nx-surface-sunken) 4px
+  );
+}
+
+/* The suit's colour: the semantic red/ink pair, never a raw hue. The suit's own
+   glyph is drawn beside it, so colour is a second channel rather than the only one. */
+.cards__card[data-colour="red"] {
+  color: var(--nx-danger);
+}
+
+.cards__card[data-colour="black"] {
+  color: var(--nx-text);
+}
+
+.cards__card--selected {
+  outline: 2px solid var(--nx-text);
+  outline-offset: -2px;
+}
+
+.cards__card--last {
+  background: var(--nx-accent-soft);
+}
+
+.cards__rank {
+  font-weight: var(--nx-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.cards__suit {
+  font-size: var(--nx-font-size-body);
+}
+
+.cards__empty {
+  display: block;
+  width: 3.4rem;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface-sunken);
+}
+
+/* --- The pyramid and the peaks --------------------------------------------- */
+
+.cards__pyramid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+.cards__pyramid-row,
+.cards__peaks {
+  display: flex;
+  justify-content: center;
+  gap: var(--nx-space-1);
+}
+
+.cards__peaks + .cards__peaks {
+  margin-block-start: calc(-2.4rem);
+}
+
+/* --- The games against the computer ---------------------------------------- */
+
+.cards__trick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.cards__seat {
+  color: var(--nx-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cards__table-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nx-space-1);
+}
+
+.cards__hint {
+  color: var(--nx-text-muted);
+}
+
+/* --- The record ------------------------------------------------------------ */
+
+.cards__stats {
+  display: flex;
+  flex-direction: column;
+}
+
+.cards__stats-head,
+.cards__stats-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, 3.5rem);
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.cards__stats-name {
+  min-width: 0;
+}
+
+.cards__stats-number {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.cards__result-text {
+  display: flex;
+  gap: var(--nx-space-2);
+  align-items: center;
+  font-size: var(--nx-font-size-title);
+}

@@ -883,6 +883,31 @@ function validateNow(value: unknown): string {
  * move list — and only then hands back what may be written. Nothing here touches
  * the database, which is what makes „refuses before writing anything" literal.
  */
+export function readCardGameArchive(value: unknown): CardGameData {
+  const parsed = parseCardGameData(value);
+  return {
+    version: CARD_GAME_ARCHIVE_VERSION,
+    stats: parsed.stats,
+    saves: parsed.saves.map((row) => ({
+      game: row.game,
+      variant: row.variant,
+      seed: row.seed,
+      moves: JSON.parse(row.text) as readonly unknown[],
+      elapsedSeconds: row.elapsedSeconds,
+    })),
+  };
+}
+
+/**
+ * Validates a whole exported value: the version first, then every stat and every
+ * save through the SAME resolvers the live methods use — including replaying each
+ * move list — and only then hands back what may be written. Nothing here touches
+ * the database, which is what makes „refuses before writing anything" literal.
+ *
+ * Exported through {@link readCardGameArchive} rather than directly, so a caller
+ * outside this file (the module's `imex.ts`) reads a whole `CardGameData` and never
+ * the private row shape the import writes.
+ */
 function parseCardGameData(value: unknown): {
   stats: readonly CardGameStats[];
   saves: readonly {
