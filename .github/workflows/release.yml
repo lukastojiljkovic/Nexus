@@ -226,11 +226,13 @@ jobs:
             echo
             echo "- **Windows** — x64. NSIS installer."
             echo "- **Linux** — x64 with glibc. An AppImage, and a tarball that the Gentoo ebuild installs."
+            echo "- **macOS** — Apple silicon (arm64). A dmg to drag into \`/Applications\`. There is no Intel build, and the reason is a dependency rather than an oversight: every native package here is per-architecture and a build installs only its own (see the \`mac\` block in \`apps/desktop/electron-builder.yml\`)."
             echo
             echo "### Before you install"
             echo
             echo "- The interface is in **Serbian and English**. On first run it follows the system language, and Settings switches it at any time."
             echo "- **Code signing is paused for now**, so Windows SmartScreen warns on first run (More info, then Run anyway). Nexus is open source: anyone who wants to make sure the code does what it says can read all of it in this repository, and every file below was built by CI from the tagged commit, with an attestation that proves which commit and workflow produced it."
+            echo "- **macOS is unsigned and un-notarised too**, and Gatekeeper asks more of the reader than SmartScreen does: the first launch needs a right-click on the app and **Open**, or an allow in System Settings → Privacy & Security. Same reason as the Windows line above, same repository to read."
             echo "- Nexus is **offline by default**. On first start you choose **Offline only**, which makes no network call at all, or **Offline + update checks**, the only mode in which Nexus contacts GitHub, and only to check for and download a new version of itself. Your notes and data never leave the computer in either mode."
             echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in."
             echo "- Each installer is covered by \`SHA256SUMS.txt\` and its detached Ed25519 signature \`SHA256SUMS.txt.sig\`. Before it runs an update, Nexus checks the signature against a key compiled into the app and the installer's hash against the signed list."
