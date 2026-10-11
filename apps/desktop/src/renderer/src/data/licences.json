@@ -820,13 +820,13 @@
       "source": "LICENSE"
     },
     {
-      "id": "npm:@simple-git/argv-parser@1.1.1",
+      "id": "npm:@simple-git/argv-parser@2.0.1",
       "name": "@simple-git/argv-parser",
-      "version": "1.1.1",
+      "version": "2.0.1",
       "licence": "MIT",
-      "notice": "",
-      "status": "declared-only",
-      "source": "package.json (\"license\": \"MIT\") — the package ships no licence file"
+      "notice": "The MIT License (MIT)\n\nCopyright (c) 2025 Steve King\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software is furnished to do so,\nsubject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS\nFOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR\nCOPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\nIN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\nCONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+      "status": "file",
+      "source": "LICENSE"
     },
     {
       "id": "npm:@tinyhttp/content-disposition@2.2.4",
@@ -3763,13 +3763,13 @@
       "source": "LICENSE.txt"
     },
     {
-      "id": "npm:simple-git@3.36.0",
+      "id": "npm:simple-git@4.0.2",
       "name": "simple-git",
-      "version": "3.36.0",
+      "version": "4.0.2",
       "licence": "MIT",
-      "notice": "",
-      "status": "declared-only",
-      "source": "package.json (\"license\": \"MIT\") — the package ships no licence file"
+      "notice": "The MIT License (MIT)\n\nCopyright (c) 2025 Steve King\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software is furnished to do so,\nsubject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS\nFOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR\nCOPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\nIN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\nCONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+      "status": "file",
+      "source": "LICENSE"
     },
     {
       "id": "npm:sleep-promise@9.1.0",
