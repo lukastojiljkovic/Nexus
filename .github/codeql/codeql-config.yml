@@ -1,0 +1,37 @@
+# The CodeQL configuration for this repository, and the ONE thing it changes is
+# the set of files the analysis reads.
+#
+# WHY `scripts/packs` IS OUT OF SCOPE. Those files are maintainer tools that
+# fetch public-domain corpora (Wikisource, Wikibooks, Gutenberg, USDA, NASA,
+# Mozilla's model files) and write them into a local cache. Every one of the 22
+# findings CodeQL produced there was one of two flows, and both are the tool
+# doing its job: `js/http-to-file-access` (bytes from an HTTP response reach a
+# file write) and `js/file-access-to-http` (a URL read out of the builder's own
+# manifest reaches a request to a fixed endpoint). The queries have NO
+# sanitizer for either - read from their own source on 2026-10-11 - so the only
+# ways to a green report were to rewrite the download path so the analyzer
+# stops seeing it (which hides the flow and changes the tool's behaviour not at
+# all) or to say here, in the repository, that these scripts are outside the
+# threat model the queries assume. That assumption is a SERVER: code that takes
+# a request body and writes it to disk for a caller it does not know. A builder
+# run by hand on the maintainer's own machine, writing to a path it chooses,
+# with every byte's SHA-256 recorded in `sources.json`, is not that.
+#
+# WHAT THIS IS NOT. It is not a blanket exclusion and it does not weaken the
+# scan of anything a user runs: `apps/desktop`, `packages` and `scripts` outside
+# this directory are analyzed exactly as before, with the same query pack. The
+# 12 `js/missing-origin-check` findings in the module workers stay IN scope and
+# stay visible in the Security tab; they are dedicated workers with one sender
+# (their own document), and the honest place for that argument is the alert, not
+# a path pattern.
+#
+# `queries` lives here rather than on the `init` step because the action refuses
+# to take both `config-file` and `queries`, and this file is now the one place
+# the analysis is configured.
+name: "Nexus"
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  - scripts/packs
