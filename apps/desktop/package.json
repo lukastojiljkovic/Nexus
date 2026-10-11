@@ -1,6 +1,6 @@
 {
   "name": "@nexus/desktop",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Nexus desktop shell â€” Electron main/preload/renderer with the real SQLite database in the main process behind a typed, allowlisted IPC bridge (ADR-001, SEC-EL).",
   "main": "./out/main/index.js",
