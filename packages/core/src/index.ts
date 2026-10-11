@@ -2805,7 +2805,7 @@ export { dayNightAt, TERMINATOR_ANGULAR_RADIUS_DEG, TWILIGHT_ANGULAR_RADII_DEG }
 
 export { cityCount, cities, cityLabel, searchCities, DEFAULT_CITY_LIMIT } from "./sky/cities.js";
 export type { City } from "./sky/cities.js";
-export { computerObserver, computerZone, zoneCount, zonePoint } from "./sky/zoneLocation.js";
+export { computerObserver, computerZone, observerForZone, zoneCount, zonePoint } from "./sky/zoneLocation.js";
 export type { ZoneObserver } from "./sky/zoneLocation.js";
 
 // --- SKY: the star map (the astronomy corner, part 4) ------------------------

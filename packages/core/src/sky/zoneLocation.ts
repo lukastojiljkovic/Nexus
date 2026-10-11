@@ -73,6 +73,22 @@ export function zonePoint(zone: string): LatLon | null {
 }
 
 /**
+ * A named zone with the coordinates of its principal city, or `null` when the
+ * table carries no point for it.
+ *
+ * This is the pairing, given a zone name rather than read off this machine, so a
+ * caller that already holds a name — from a preference, a URL, or
+ * `computerZone()` — asks the same question through the same code. `null` keeps
+ * the two halves together the way `computerObserver` answers them: the caller
+ * gets a zone it can draw a pin for, or nothing at all.
+ */
+export function observerForZone(zone: string | null): ZoneObserver | null {
+  if (zone === null) return null;
+  const point = zonePoint(zone);
+  return point === null ? null : { zone, point };
+}
+
+/**
  * The zone this computer keeps time in, as `Intl` names it, or `null` when the
  * runtime offers none.
  *
@@ -100,8 +116,5 @@ export function computerZone(): string | null {
  * pin cannot be drawn.
  */
 export function computerObserver(): ZoneObserver | null {
-  const zone = computerZone();
-  if (zone === null) return null;
-  const point = zonePoint(zone);
-  return point === null ? null : { zone, point };
+  return observerForZone(computerZone());
 }

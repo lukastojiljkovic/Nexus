@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZONE_TABLE } from "./tzTable.js";
-import { computerObserver, computerZone, zoneCount, zonePoint } from "./zoneLocation.js";
+import { computerObserver, computerZone, observerForZone, zoneCount, zonePoint } from "./zoneLocation.js";
 
 /**
  * The zone table is data, so what a test can check is that the lookup reads it
@@ -81,13 +81,32 @@ describe("zonePoint", () => {
 
 describe("the computer's own zone", () => {
   it("answers a zone and its point together, or neither", () => {
+    // The table carries 312 zones and `Intl` names 418, so "this machine's zone
+    // has no row" is a real case and not a broken machine: every GitHub runner
+    // keeps `UTC`, which the database spells in `etcetera` rather than in a row,
+    // and an `Asia/Calcutta` reader is in the same position. The pair is then
+    // answered AS NEITHER. Asserting `observer.zone === zone` here — which this
+    // test did until 2026-10-11, and which passed on a Belgrade laptop and failed
+    // on the runner — asserts the opposite: that the module invents a point for a
+    // zone it has none for.
     const zone = computerZone();
+    const point = zone === null ? null : zonePoint(zone);
     const observer = computerObserver();
-    if (zone === null) {
+    if (zone === null || point === null) {
       expect(observer).toBeNull();
       return;
     }
-    expect(observer?.zone).toBe(zone);
-    expect(observer?.point ?? null).toEqual(zonePoint(zone));
+    expect(observer).toEqual({ zone, point });
+  });
+
+  // The branch above needs a machine whose zone the table carries, which CI does
+  // not have; this covers both branches deterministically by naming the zone.
+  it("pairs a named zone with its point, and answers neither for a zone it has none for", () => {
+    expect(observerForZone("Europe/Belgrade")).toEqual({
+      zone: "Europe/Belgrade",
+      point: { latDeg: 44.833, lonDeg: 20.5 },
+    });
+    expect(observerForZone("UTC")).toBeNull();
+    expect(observerForZone(null)).toBeNull();
   });
 });

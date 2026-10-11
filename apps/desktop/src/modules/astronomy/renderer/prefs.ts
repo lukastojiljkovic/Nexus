@@ -1,4 +1,4 @@
-import { zonePoint, type LatLon } from "@nexus/core";
+import { observerForZone, type LatLon } from "@nexus/core";
 
 /**
  * ASTRONOMY's one preference — the place — as a DEVICE value in `localStorage`.
@@ -108,7 +108,7 @@ export function clearStoredAstronomyPreferences(profileId: string): void {
  * The place the views actually draw, from the stored preference and the zone.
  *
  * A picked place wins outright; with none, the zone's own principal city is the
- * answer (`zonePoint`), and a zone the shipped table does not carry answers
+ * answer (`observerForZone`), and a zone the shipped table does not carry answers
  * `null` rather than a neighbour's coordinates (`zoneLocation.ts` explains why
  * that is the honest answer). This is the whole of the module's place
  * resolution, which is what makes a first open already right and a second one
@@ -116,5 +116,5 @@ export function clearStoredAstronomyPreferences(profileId: string): void {
  */
 export function resolveObserver(place: LatLon | null, zone: string | null): LatLon | null {
   if (place !== null) return place;
-  return zone === null ? null : zonePoint(zone);
+  return observerForZone(zone)?.point ?? null;
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { searchCities, zonePoint, type City, type LatLon } from "@nexus/core";
+import { observerForZone, searchCities, type City, type LatLon } from "@nexus/core";
 import { Button, Card, TextField } from "@nexus/ui";
 import { decimalSeparators, numberFormat } from "../../../../renderer/src/intl.js";
 import { copy } from "./copy.js";
@@ -61,7 +61,7 @@ export function PlacePicker({ observer, zone, onChange, framed = true }: PlacePi
   const matches = useMemo(() => searchCities(query, RESULT_LIMIT), [query]);
   const numbers = numberFormat({ maximumFractionDigits: 3 });
   const separators = decimalSeparators();
-  const defaultPoint = zone === null ? null : zonePoint(zone);
+  const defaultPoint = observerForZone(zone)?.point ?? null;
 
   const coordinateText = (point: LatLon): string =>
     `${latitudeText(point.latDeg, copy.panel.coordinates, (value) => numbers.format(value))}, ` +
