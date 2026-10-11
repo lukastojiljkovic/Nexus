@@ -4,6 +4,62 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-11
+
+Nexus is offline first, and this release is the one that makes that mean
+something: the app now ships with a way to hold public knowledge on the machine,
+and with twenty-five modules to read, use and work through it â€” all of them
+working without a network, because the app has no other mode.
+
+### Added
+
+- **Content packs, and the catalogue that lists them.** A pack is a folder of
+  public content â€” a dataset, a map, a set of articles, a model, a tool built
+  from someone else's open source release â€” signed with Nexus's own key. The
+  app accepts one only when the signature and every file's SHA-256 check out,
+  whether it arrives from a folder on a USB stick or from the pack catalogue
+  under **Settings â†’ Content packs**. Every pack carries its own licence,
+  source and attribution, which are shown in the app before anything is
+  downloaded. Downloads need the third network mode, **Downloads**, which is a
+  superset of update checks: it reaches a compiled-in list of hosts, one
+  request at a time, and every file is pinned by a signed manifest. Offline
+  mode is unchanged and still makes no network call at all.
+- **Twenty-five modules, each one a folder.** The module kit turns a module
+  into a self-contained folder the shell discovers, which is what made it
+  possible to add, in one release: the Reader (article packs with search,
+  bookmarks and printing), Maps, the offline Wikipedia (its own ZIM reader),
+  the Translator, the Assistant, the astronomy corner, Library, Culture,
+  Cookbook, Pantry, Car, Recorder, Emergency card, Calculator, Signals,
+  mini-apps, Timers, and the games â€” arcade, cards, boards, puzzles and chess.
+- **A local assistant, with no cloud in it.** A model you choose (or import as
+  a `.gguf`), running in the app, with a knowledge base built from your own data
+  and packs, tools over your tasks and notes, a voice mode, and web search that
+  is off until you turn it on.
+- **macOS, as a third platform.** Nexus now builds a `.dmg` beside the Windows
+  installer and the Linux AppImage. The macOS build is unsigned and Apple
+  silicon only; the release notes say what that means for the first launch and
+  `electron-builder.yml` records why.
+
+### Changed
+
+- **Settings is organised by category**, with a search over the whole page, and
+  a card for each module that has a preference.
+- **The navigation rail groups modules** (Plan, Knowledge, Life, Culture, Make,
+  Play), and a module can be hidden without being removed: one setting for the
+  whole app, not per profile.
+- **Everything public says offline**: the README, the site, the privacy policy
+  and the security policy describe the app that exists, with sync and the web
+  app on hold permanently.
+
+### Fixed
+
+- **Every screen is photographed in both languages, at the size of a real
+  window.** The screenshot harness now lands on every module the registry
+  declares, in Serbian and in English, and at the display's own work area rather
+  than a fixed 1600 px â€” which is how the two defects it could not see were
+  found: empty states whose text was capped at a quarter of the pane, and
+  sub-views of the newer modules that no scene had ever opened.
+
 ## [1.5.0] - 2026-10-08
 
 ### Added
