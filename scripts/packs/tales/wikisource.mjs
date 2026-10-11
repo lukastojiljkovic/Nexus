@@ -21,6 +21,7 @@
 // that is left after those three cuts is the article, verbatim.
 
 import { decodeEntities, escapeText } from "./markdown.mjs";
+import { untilStable } from "../lib/untilStable.mjs";
 
 /**
  * The headings that start the wiki's apparatus rather than the tale.
@@ -79,7 +80,7 @@ const INLINE_ELEMENTS = new Set([
 function parseHtml(html) {
   const root = { name: "#root", children: [] };
   const stack = [root];
-  const withoutComments = html.replace(/<!--[\s\S]*?-->/g, "");
+  const withoutComments = untilStable(html, (text) => text.replace(/<!--[\s\S]*?-->/g, ""));
   const tagPattern = /<\/?([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
   let cursor = 0;
   let match;
@@ -107,10 +108,12 @@ function parseHtml(html) {
 /** The page's visible text with every tag removed; whitespace as a space. */
 export function textOf(html) {
   return decodeEntities(
-    html
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/<br\s*\/?>/gi, " ")
-      .replace(/<[^>]+>/g, ""),
+    untilStable(html, (text) =>
+      text
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(/<[^>]+>/g, ""),
+    ),
   ).replace(/\s+/gu, " ").trim();
 }
 
@@ -182,11 +185,13 @@ export function licenceNotice(html) {
 export function regionText(regionHtml) {
   const blockTags = [...BLOCK_ELEMENTS].join("|");
   return decodeEntities(
-    regionHtml
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/<br\s*\/?>/gi, " ")
-      .replace(new RegExp(`</?(?:${blockTags})\\b[^>]*>`, "gi"), " ")
-      .replace(/<[^>]+>/g, ""),
+    untilStable(regionHtml, (text) =>
+      text
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(new RegExp(`</?(?:${blockTags})\\b[^>]*>`, "gi"), " ")
+        .replace(/<[^>]+>/g, ""),
+    ),
   );
 }
 

@@ -451,9 +451,20 @@ async function main(argv) {
   await fetchToCache(EXTRACT_URL, extractPath, extractRecord.bytes);
   await fetchToCache(PHRASEBOOK_URL, phrasebookPath, phrasebookRecord.bytes);
 
+  // ONE READ OF THE PHRASEBOOK for its size, its digest, its parse and the
+  // fixture copy below. A `statSync` followed by a `readFileSync` asks the file
+  // system about a NAME twice, which is CodeQL's `file-system-race`; hashing it
+  // through `sha256File` was a third look, so the digest a `sources.json` records
+  // could have described a different file from the one that was parsed. The
+  // extract is 3 GB and is still streamed; the phrasebook is small enough to hold.
+  const phrasebookBytes = readFileSync(phrasebookPath);
   const hashes = [
     { url: EXTRACT_URL, sha256: await sha256File(extractPath), bytes: statSync(extractPath).size },
-    { url: PHRASEBOOK_URL, sha256: await sha256File(phrasebookPath), bytes: statSync(phrasebookPath).size },
+    {
+      url: PHRASEBOOK_URL,
+      sha256: createHash("sha256").update(phrasebookBytes).digest("hex"),
+      bytes: phrasebookBytes.byteLength,
+    },
   ];
   const updating = Object.hasOwn(args, "update-sources");
   if (updating) {
@@ -484,7 +495,7 @@ async function main(argv) {
       `(${String(filtered.counts.en)} en, ${String(filtered.counts.sr)} sr), ${megabytes(filtered.bytes)} decompressed`,
   );
 
-  const phrases = parsePhrasebook(readFileSync(phrasebookPath, "utf8"));
+  const phrases = parsePhrasebook(phrasebookBytes.toString("utf8"));
   log(`phrasebook ${String(phrases.length)} topics`);
 
   const builtAt = new Date().toISOString();
@@ -505,7 +516,7 @@ async function main(argv) {
     const dir = resolve(fixtureDir);
     writeFile(join(dir, "en.jsonl"), Buffer.from(`${samples.en.join("\n")}\n`, "utf8"));
     writeFile(join(dir, "sh.jsonl"), Buffer.from(`${samples.sr.join("\n")}\n`, "utf8"));
-    writeFile(join(dir, "phrasebook.wiki"), readFileSync(phrasebookPath));
+    writeFile(join(dir, "phrasebook.wiki"), phrasebookBytes);
     log(`fixtures   ${dir} (${String(samples.en.length)} en, ${String(samples.sr.length)} sh, one phrasebook)`);
   }
 

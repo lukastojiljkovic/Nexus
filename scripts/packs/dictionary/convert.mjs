@@ -25,6 +25,7 @@
 import { Buffer } from "node:buffer";
 
 import { compareDictionaryKeys, dictionaryKey } from "./fold.mjs";
+import { untilStable } from "../lib/untilStable.mjs";
 
 /** The pack content's own format number. A reader that does not know it refuses the pack rather than guessing. */
 export const CONTENT_FORMAT = 1;
@@ -323,15 +324,16 @@ function countOccurrences(text, needle) {
 
 /** Wikitext reduced to the text it shows: comments, links, emphasis and inline templates gone. */
 function stripMarkup(text) {
-  return text
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/\{\{[^{}]*\}\}/g, "")
-    .replace(/\[\[([^[\]|]*)\|([^[\]]*)\]\]/g, "$2")
-    .replace(/\[\[([^[\]]*)\]\]/g, "$1")
-    .replace(/'''/g, "")
-    .replace(/''/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const stripped = untilStable(text, (value) =>
+    value
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/\{\{[^{}]*\}\}/g, "")
+      .replace(/\[\[([^[\]|]*)\|([^[\]]*)\]\]/g, "$2")
+      .replace(/\[\[([^[\]]*)\]\]/g, "$1")
+      .replace(/'''/g, "")
+      .replace(/''/g, ""),
+  );
+  return stripped.replace(/\s+/g, " ").trim();
 }
 
 /** A kebab-case id for a topic, unique in the pack — the same rule a pack's own file ids follow. */

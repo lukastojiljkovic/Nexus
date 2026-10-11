@@ -42,6 +42,9 @@ import {
 } from "./pack.mjs";
 import { EVIDENCE_PAGES, buildSources, quoteAppears, readEvidence } from "./sources.mjs";
 import { convertPage, sourceSection, textOf } from "./wikisource.mjs";
+// The cache write below goes through the shared writer: its header says why a
+// plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
 
 /** The app version a content pack may ask for: this wave's manifest floor. */
 const MIN_APP_VERSION = "1.5.0";
@@ -283,7 +286,8 @@ export class WikisourceClient {
       if (parsed.error !== undefined) {
         throw new Error(`tales: the Wikisource API refused: ${String(parsed.error.info ?? parsed.error.code)}`);
       }
-      writeFileSync(dest, text);
+      mkdirSync(this.cacheDir, { recursive: true });
+      writeCacheFile(dest, text);
       return parsed;
     }
   }

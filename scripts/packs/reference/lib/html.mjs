@@ -20,6 +20,10 @@
 // that pipeline which reads them, so it is exercised by `convert.test.mjs` on
 // fixtures cut from the three real sources rather than only by a full build.
 
+// The strip below loops, so it imports the shared loop; its header gives the
+// reason a single `replace` is not a sanitizer.
+import { untilStable } from "../../lib/untilStable.mjs";
+
 /** Elements that never have children and therefore never open a stack frame. */
 const VOID_ELEMENTS = new Set([
   "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
@@ -134,10 +138,12 @@ const TAG_PATTERN = /<(\/?)([a-zA-Z][-a-zA-Z0-9:_]*)((?:"[^"]*"|'[^']*'|[^>"'])*
  */
 function stripPunctuation(value) {
   if (!value.includes("<!" ) && !value.includes("<?")) return value;
-  return value
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<\?[\s\S]*?\?>/g, "")
-    .replace(/<![^>]*>/g, "");
+  return untilStable(value, (text) =>
+    text
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<\?[\s\S]*?\?>/g, "")
+      .replace(/<![^>]*>/g, ""),
+  );
 }
 
 /**

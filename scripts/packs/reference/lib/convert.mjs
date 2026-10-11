@@ -230,11 +230,6 @@ export function escapeText(value) {
     .replace(/^(\s*)(\d+)\./, (_whole, indent, digits) => `${indent}${digits}\\.`);
 }
 
-/** Escapes a table cell: pipes separate cells, and a cell's own pipe is text. */
-function escapeCell(value) {
-  return escapeText(value).replace(/\|/g, "\\|");
-}
-
 /**
  * Blocks as CommonMark: the only writer in this builder.
  *
@@ -284,7 +279,11 @@ export function toMarkdown(blocks) {
       const lines = block.rows.map((row) => {
         const cells = [...row];
         while (cells.length < width) cells.push("");
-        return `| ${cells.map(escapeCell).join(" | ")} |`;
+        // `escapeText` already escapes the pipe, because it is in
+        // `MARKDOWN_SPECIAL`: escaping it a second time here turned a cell whose
+        // text carried one into `\\|`, a literal backslash beside a pipe, which is
+        // the double escape `js/incomplete-sanitization` reports.
+        return `| ${cells.map(escapeText).join(" | ")} |`;
       });
       lines.splice(1, 0, `| ${Array.from({ length: width }, () => "---").join(" | ")} |`);
       parts.push(lines.join("\n"));

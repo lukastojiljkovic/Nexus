@@ -51,6 +51,9 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
+// The cache write below goes through the shared writer: its header says why a
+// plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -236,7 +239,7 @@ export async function fetchSource(source, options) {
   }
   if (fetched) {
     mkdirSync(options.cacheDir, { recursive: true });
-    writeFileSync(file, bytes);
+    writeCacheFile(file, bytes);
   }
   return { bytes, fetched };
 }

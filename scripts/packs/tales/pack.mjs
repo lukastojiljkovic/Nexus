@@ -10,6 +10,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { basename, join } from "node:path";
 
 import { uniqueId } from "./markdown.mjs";
+// The cache write below goes through the shared writer: its header says why a
+// plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
 
 /** The one User-Agent every request goes out with, Wikimedia's policy included. */
 export const USER_AGENT =
@@ -59,7 +62,7 @@ export async function fetchSource({ packId, cacheRoot, file, url, offline = fals
     throw new Error(`tales: ${url} answered ${String(response.status)}.`);
   }
   const bytes = Buffer.from(await response.arrayBuffer());
-  writeFileSync(dest, bytes);
+  writeCacheFile(dest, bytes);
   await new Promise((done) => setTimeout(done, delayMs));
   return { bytes, path: dest, cached: false, sha256: sha256(bytes) };
 }

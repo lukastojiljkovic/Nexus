@@ -27,6 +27,10 @@
 // be inventing content; the build prints how many that was so the loss is
 // visible rather than quiet.
 
+// `untilStable` is the loop every markup strip in this file goes through; its own
+// header says why a single `replace` is not a sanitizer.
+import { untilStable } from "../lib/untilStable.mjs";
+
 /** The only layout this converter writes. A change here is a deliberate one. */
 export const LAYOUT = 1;
 
@@ -172,7 +176,7 @@ function linkText(body) {
  * `files` for an embedded image.
  */
 export function toPlain(wikitext, stats = {}) {
-  let text = wikitext.replace(/<!--[\s\S]*?-->/g, "");
+  let text = untilStable(wikitext, (value) => value.replace(/<!--[\s\S]*?-->/g, ""));
   text = text.replace(/<ref\b[^>]*\/>/g, "").replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/g, "");
 
   // Media and category links carry no readable text, and their captions may
@@ -216,7 +220,7 @@ export function toPlain(wikitext, stats = {}) {
   }
 
   text = text.replace(/\[https?:\/\/\S+\s+([^\]]*)\]/g, "$1").replace(/\[https?:\/\/\S+\]/g, "");
-  text = text.replace(/<[^>]+>/g, "");
+  text = untilStable(text, (value) => value.replace(/<[^>]+>/g, ""));
   return collapse(decodeEntities(text));
 }
 

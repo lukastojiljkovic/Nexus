@@ -31,6 +31,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { createSource, packsDir, printFetchLog, sha256 } from "../lib/source.mjs";
+// The cache write below goes through the shared writer: its header says why a
+// plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
 import {
   GUTENBERG_BOOKS,
   PUBLIC_DOMAIN_LICENCE,
@@ -147,7 +150,7 @@ async function cached(source, name, describe, produce) {
   }
   const value = await produce();
   const bytes = Buffer.from(JSON.stringify(value), "utf8");
-  writeFileSync(path, bytes);
+  writeCacheFile(path, bytes);
   source.log.push({ url: describe, name, bytes: bytes.byteLength, sha256: sha256(bytes), fromCache: false, ms: Date.now() - started });
   return value;
 }
