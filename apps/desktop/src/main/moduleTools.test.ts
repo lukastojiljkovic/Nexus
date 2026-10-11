@@ -238,6 +238,14 @@ describe("starting a session", () => {
       protocol: "stdio",
       args: [fixtureScript("fake-tool.mts")],
     });
+    // UNLINKED FIRST. The entry is a hard link to the fixture executable
+    // (`tools/fixtures.ts` links it), which is the Node binary running this test,
+    // and Linux refuses to open a file for writing while it is being executed —
+    // ETXTBSY — so opening it in place passed on Windows and failed on every
+    // Linux runner. Removing one of a binary's links is allowed, and what lands
+    // afterwards is a NEW file at that path, which is the entry this case is
+    // about.
+    rmSync(installed.entryPath, { force: true });
     writeFileSync(installed.entryPath, "not this node");
     const session = await toolsFor({ userData: root, publicKeyPem: key.publicKeyPem }).session(
       "stockfish",
