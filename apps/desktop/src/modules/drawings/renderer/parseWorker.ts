@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { DxfViewer } from "dxf-viewer";
 import { readBytesMessage } from "./workerProtocol.js";
 
@@ -62,6 +63,7 @@ DxfViewer.SetupWorker();
 const libraryHandler = self.onmessage;
 
 self.onmessage = (event: MessageEvent): void => {
+  if (!isOwnOrigin(event.origin, self.location.origin)) return;
   const envelope = readBytesMessage(event.data);
   if (envelope !== null) {
     pending.set(envelope.url, envelope.bytes);

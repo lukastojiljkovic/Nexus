@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../../shared/workerOrigin.js";
 import { ImageRefusal, processImage, readImageInfo } from "./operations.js";
 import type { ImageJob, ImageReply } from "./protocol.js";
 
@@ -15,6 +16,7 @@ import type { ImageJob, ImageReply } from "./protocol.js";
 interface ImageWorkerScope {
   postMessage(message: ImageReply): void;
   onmessage: ((event: MessageEvent<ImageJob>) => void) | null;
+  readonly location: { readonly origin: string };
 }
 
 const scope = self as unknown as ImageWorkerScope;
@@ -50,5 +52,6 @@ async function handle(job: ImageJob): Promise<void> {
 }
 
 scope.onmessage = (event) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   void handle(event.data);
 };

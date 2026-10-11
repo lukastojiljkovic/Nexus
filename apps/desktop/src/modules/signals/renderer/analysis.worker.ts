@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { AnalysisEngine, type AnalysisJob, type AnalysisReply } from "./analysis.js";
 
 /**
@@ -20,10 +21,12 @@ import { AnalysisEngine, type AnalysisJob, type AnalysisReply } from "./analysis
 const worker = self as unknown as {
   onmessage: ((event: MessageEvent<AnalysisJob>) => void) | null;
   postMessage(message: AnalysisReply): void;
+  readonly location: { readonly origin: string };
 };
 
 const engine = new AnalysisEngine();
 
 worker.onmessage = (event) => {
+  if (!isOwnOrigin(event.origin, worker.location.origin)) return;
   worker.postMessage(engine.run(event.data));
 };

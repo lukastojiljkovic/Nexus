@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { GcodeParseError, StlParseError, parseGcode, parseStl, stlIsClosed } from "@nexus/core";
 import { transferablesOf, type ParseRequest, type ParseResponse } from "./parseProtocol.js";
 
@@ -20,6 +21,7 @@ import { transferablesOf, type ParseRequest, type ParseResponse } from "./parseP
  * answer with a code.
  */
 self.onmessage = (event: MessageEvent<ParseRequest>) => {
+  if (!isOwnOrigin(event.origin, self.location.origin)) return;
   const { id, kind, bytes } = event.data;
   try {
     if (kind === "model") {

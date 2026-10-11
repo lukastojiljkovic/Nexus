@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { foldPlaces, parsePlacesFile, rankPlaces, type FoldedPlace, type PlaceHit } from "@nexus/core";
 import { MAP_PACK_PLACES } from "../shared/packs.js";
 import { readPackJson } from "./packFile.js";
@@ -52,7 +53,8 @@ export type SearchResponse =
  */
 interface WorkerScope {
   postMessage(message: SearchResponse): void;
-  onmessage: ((event: { readonly data: SearchRequest }) => void) | null;
+  onmessage: ((event: { readonly data: SearchRequest; readonly origin: string }) => void) | null;
+  readonly location: { readonly origin: string };
 }
 
 const scope = self as unknown as WorkerScope;
@@ -72,7 +74,8 @@ function answer(request: SearchRequest): SearchResponse {
   };
 }
 
-scope.onmessage = (event: { readonly data: SearchRequest }) => {
+scope.onmessage = (event: { readonly data: SearchRequest; readonly origin: string }) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   const request = event.data;
   if (request.type !== "search") return;
   if (index !== null) {

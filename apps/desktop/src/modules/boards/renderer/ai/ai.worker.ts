@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../../shared/workerOrigin.js";
 import { answerMoveRequest } from "./protocol.js";
 
 /**
@@ -15,12 +16,14 @@ import { answerMoveRequest } from "./protocol.js";
  * is the whole of what a dedicated worker's global scope is used for.
  */
 interface WorkerScope {
-  onmessage: ((event: { readonly data: unknown }) => void) | null;
+  onmessage: ((event: { readonly data: unknown; readonly origin: string }) => void) | null;
   postMessage(message: unknown): void;
+  readonly location: { readonly origin: string };
 }
 
 const scope = self as unknown as WorkerScope;
 
 scope.onmessage = (event) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   scope.postMessage(answerMoveRequest(event.data));
 };
