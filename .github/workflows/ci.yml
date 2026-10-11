@@ -419,34 +419,54 @@ jobs:
       # slower job that tests the real shape beats a faster one that tests a
       # shape no deployment has.
       #
-      # AND THE RETRY BELOW IS FOR ONE FAILURE ONLY. `supabase start` binds a
-      # fixed set of host ports, and when one is already taken it stops before a
-      # single migration runs: on 2026-10-11 this job went red with "failed to
-      # bind host port for 0.0.0.0:54322 ... address already in use", on a commit
-      # whose SQL was fine and had passed this same job on every earlier run.
-      # Nothing in this repository holds 54322, so the container that does is a
-      # leftover on the runner, and clearing it is the whole fix. Any OTHER
+      # AND THE RETRY BELOW IS FOR TWO FAILURES, BOTH OF THEM THE RUNNER'S.
+      #
+      # `supabase start` binds a fixed set of host ports, and when one is
+      # already taken it stops before a single migration runs: on 2026-10-11
+      # this job went red with "failed to bind host port for 0.0.0.0:54322 ...
+      # address already in use", on a commit whose SQL was fine and had passed
+      # this same job on every earlier run. Nothing in this repository holds
+      # 54322, so the container that does is a leftover on the runner, and
+      # clearing it is the whole fix.
+      #
+      # THE OTHER ONE ARRIVED FIRST, out of the same log in the same minute:
+      # nine lines of "Error response from daemon: toomanyrequests: Rate
+      # exceeded" while the stack's images were pulled. That is Docker Hub's
+      # anonymous pull limit, which on a GitHub-hosted runner is shared per
+      # egress IP across every customer behind that address -- transient by
+      # construction, and no statement at all about this repository. The first
+      # version of this step matched the port message alone, so it classified
+      # the limit as unfixable and failed on the first attempt, which is the
+      # opposite of what it exists for. Any OTHER
       # failure is printed and fails the step at once — a broken migration must
       # never be absorbed by a second attempt.
       - name: Start the local stack
         run: |
           set -euo pipefail
-          for attempt in 1 2 3; do
+          # The two, and only two, failures a later attempt can clear.
+          retryable='address already in use|toomanyrequests|Rate exceeded'
+          # Four attempts and a growing pause, because a rate limit is metered
+          # over a window rather than cleared in seconds, so the last pause is
+          # the useful one. Worst case is three minutes on top of a job that
+          # already takes ten, which is the right price for not failing a pull
+          # request over somebody else's traffic.
+          attempts=4
+          for attempt in $(seq 1 "$attempts"); do
             if output="$(supabase start 2>&1)"; then
               printf '%s\n' "$output"
               exit 0
             fi
             printf '%s\n' "$output"
-            if ! printf '%s' "$output" | grep -q "address already in use"; then
+            if ! printf '%s' "$output" | grep -qE "$retryable"; then
               echo "::error::supabase start failed for a reason no retry can fix"
               exit 1
             fi
-            echo "::warning::a host port was taken; clearing leftover containers and retrying"
+            echo "::warning::a pull was refused or a host port was taken; clearing leftovers and retrying (attempt ${attempt}/${attempts})"
             supabase stop --no-backup 2>/dev/null || true
             docker ps -aq --filter "name=supabase_" | xargs -r docker rm -f >/dev/null 2>&1 || true
-            sleep $((attempt * 15))
+            sleep $((attempt * 30))
           done
-          echo "::error::supabase start still cannot bind its host ports after three attempts"
+          echo "::error::supabase start could not bring the stack up in ${attempts} attempts"
           exit 1
 
       # From scratch, so a migration that only works against an
