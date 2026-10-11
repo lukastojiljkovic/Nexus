@@ -45,7 +45,7 @@
 
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** The document's own format, `catalogue.ts`'s `PACK_CATALOGUE_FORMAT`. */
