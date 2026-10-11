@@ -108,12 +108,21 @@ function parseHtml(html) {
 /** The page's visible text with every tag removed; whitespace as a space. */
 export function textOf(html) {
   return decodeEntities(
-    untilStable(html, (text) =>
-      text
-        .replace(/<!--[\s\S]*?-->/g, "")
-        .replace(/<br\s*\/?>/gi, " ")
-        .replace(/<[^>]+>/g, ""),
-    ),
+    untilStable(html, (text) => {
+      const opened = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<br\s*\/?>/gi, " ");
+      // The tag strip runs to a FIXED POINT IN THIS FUNCTION, not only through
+      // `untilStable` above it: removing one tag can join the halves of another
+      // (`<scr<script>ipt>`), so a single pass is not a sanitizer. CodeQL's
+      // `incomplete-multi-character-sanitization` reads the loop in the same
+      // body as the replacement and nothing else, and the removal of a second
+      // pass here would be a real weakening of the text the packs ship.
+      let out = opened;
+      for (let previous = null; previous !== out; ) {
+        previous = out;
+        out = out.replace(/<[^>]+>/g, "");
+      }
+      return out;
+    }),
   ).replace(/\s+/gu, " ").trim();
 }
 
@@ -185,13 +194,21 @@ export function licenceNotice(html) {
 export function regionText(regionHtml) {
   const blockTags = [...BLOCK_ELEMENTS].join("|");
   return decodeEntities(
-    untilStable(regionHtml, (text) =>
-      text
+    untilStable(regionHtml, (text) => {
+      const opened = text
         .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/<br\s*\/?>/gi, " ")
-        .replace(new RegExp(`</?(?:${blockTags})\\b[^>]*>`, "gi"), " ")
-        .replace(/<[^>]+>/g, ""),
-    ),
+        .replace(new RegExp(`</?(?:${blockTags})\\b[^>]*>`, "gi"), " ");
+      // `textOf`'s reason, one function down: the tag strip is a loop in the
+      // body that does the replacing, because a tag can be re-formed by the
+      // removal of the tag before it.
+      let out = opened;
+      for (let previous = null; previous !== out; ) {
+        previous = out;
+        out = out.replace(/<[^>]+>/g, "");
+      }
+      return out;
+    }),
   );
 }
 

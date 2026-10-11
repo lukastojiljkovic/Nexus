@@ -22,8 +22,13 @@ export function htmlToText(html) {
     // regex that demands the bare form leaves the tag's contents in the text,
     // which is CodeQL's `bad-tag-filter` and, here, a licence quote "found" in a
     // script the reader never sees.
-    .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
+  // `</script` then anything up to `>`: the HTML parser ends a script element
+  // at ANY end-tag-shaped `</script...>`, so a filter that insists on whitespace
+  // (the `\s*` this replaced) leaves `</script foo="bar">` in the text, which is
+  // CodeQL's `bad-tag-filter` and a real way for a page to keep a chunk of its
+  // own markup in an evidence quotation.
+  .replace(/<script[\s\S]*?<\/script[^>]*>/gi, " ")
+  .replace(/<style[\s\S]*?<\/style[^>]*>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     // THE `&amp;` DECODE COMES LAST, and `&nbsp;` moved above it for the same
     // reason: a replacement that produces an `&` must not be followed by one that

@@ -138,12 +138,21 @@ const TAG_PATTERN = /<(\/?)([a-zA-Z][-a-zA-Z0-9:_]*)((?:"[^"]*"|'[^']*'|[^>"'])*
  */
 function stripPunctuation(value) {
   if (!value.includes("<!" ) && !value.includes("<?")) return value;
-  return untilStable(value, (text) =>
-    text
+  return untilStable(value, (text) => {
+    const opened = text
       .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/<\?[\s\S]*?\?>/g, "")
-      .replace(/<![^>]*>/g, ""),
-  );
+      .replace(/<\?[\s\S]*?\?>/g, "");
+    // A declaration can be re-formed by the removal of the fragment before it
+    // (`<a<b!c>>`), so the `<![^>]*>` strip runs to a fixed point in the body
+    // that does the replacing. CodeQL's rule reads the loop here and not the
+    // `untilStable` around it, which is why the two are not the same fix.
+    let out = opened;
+    for (let previous = null; previous !== out; ) {
+      previous = out;
+      out = out.replace(/<![^>]*>/g, "");
+    }
+    return out;
+  });
 }
 
 /**

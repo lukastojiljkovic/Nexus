@@ -176,8 +176,21 @@ function linkText(body) {
  * `files` for an embedded image.
  */
 export function toPlain(wikitext, stats = {}) {
-  let text = untilStable(wikitext, (value) => value.replace(/<!--[\s\S]*?-->/g, ""));
-  text = text.replace(/<ref\b[^>]*\/>/g, "").replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/g, "");
+  let text = untilStable(wikitext, (value) => {
+    // The comment strip runs to a fixed point IN THIS BODY: `<!--<!-- --> -->`
+    // loses the inner comment and keeps an outer one, and CodeQL's
+    // `incomplete-multi-character-sanitization` reads the loop here rather than
+    // the `untilStable` around it.
+    let out = value;
+    for (let previous = null; previous !== out; ) {
+      previous = out;
+      out = out.replace(/<!--[\s\S]*?-->/g, "");
+    }
+    return out;
+  });
+  // `</ref` then anything up to `>`: a filter that insists on the bare end tag
+  // leaves `</ref foo>` in the recipe (`bad-tag-filter`).
+  text = text.replace(/<ref\b[^>]*\/>/g, "").replace(/<ref\b[^>]*>[\s\S]*?<\/ref[^>]*>/g, "");
 
   // Media and category links carry no readable text, and their captions may
   // nest one link deep, so they are removed before the general link pass. The

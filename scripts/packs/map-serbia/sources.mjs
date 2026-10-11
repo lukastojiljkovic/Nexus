@@ -257,7 +257,17 @@ function cliAsset() {
 export function unpack(archive, name, kind) {
   const dir = join(CACHE, `${name}-${kind}`);
   const marker = join(dir, ".unpacked");
-  if (existsSync(marker)) return dir;
+  // The marker is READ, not tested with `existsSync` first: that is a check and
+  // a use with a window between them (`file-system-race`), and the read answers
+  // the same question — a marker that is not there throws ENOENT, and one that
+  // is there ends the call. The exclusive create below is what makes the
+  // question safe when two builders unpack at once.
+  try {
+    readFileSync(marker);
+    return dir;
+  } catch {
+    // No marker: this is the run that unpacks.
+  }
   mkdirSync(dir, { recursive: true });
   try {
     execFileSync("tar", ["-xf", archive, "-C", dir], { stdio: "inherit" });
@@ -332,8 +342,11 @@ export function plainText(html) {
       // `\s*` before the `>` of the closing tag: a browser ends a script at
       // `</script >` and at `</script foo="bar">` too, and a regex that insists
       // on the bare form leaves the script's contents in the licence text.
-      .replace(/<script[\s\S]*?<\/script\s*>/gi, "")
-      .replace(/<style[\s\S]*?<\/style\s*>/gi, "")
+    // `</script` up to the next `>`, `evidence.mjs`'s reason: the HTML parser
+    // takes `</script foo="bar">` as the end of the element, and a filter that
+    // requires whitespace there leaves the rest of the script in the text.
+    .replace(/<script[\s\S]*?<\/script[^>]*>/gi, "")
+    .replace(/<style[\s\S]*?<\/style[^>]*>/gi, "")
       // A line break where a block ENDS — not where one begins, and not both:
       // `</h1><p>` is one break between two lines, and two would leave a blank
       // line between every paragraph of the licence.

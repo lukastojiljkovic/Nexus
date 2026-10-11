@@ -324,15 +324,26 @@ function countOccurrences(text, needle) {
 
 /** Wikitext reduced to the text it shows: comments, links, emphasis and inline templates gone. */
 function stripMarkup(text) {
-  const stripped = untilStable(text, (value) =>
-    value
+  const stripped = untilStable(text, (value) => {
+    const opened = value
       .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/\{\{[^{}]*\}\}/g, "")
       .replace(/\[\[([^[\]|]*)\|([^[\]]*)\]\]/g, "$2")
       .replace(/\[\[([^[\]]*)\]\]/g, "$1")
       .replace(/'''/g, "")
-      .replace(/''/g, ""),
-  );
+      .replace(/''/g, "");
+    // The template strip loops IN THIS BODY, and `untilStable` above cannot
+    // stand in for it: `{{x}}` can be re-formed by the removal of the template
+    // around it (`{{a{{b}}c}}` loses the inner one and keeps an outer), and the
+    // CodeQL rule that reports that shape reads the loop here rather than the
+    // caller. Removing this loop because the helper also loops would be a real
+    // weakening of what the dictionary ships.
+    let out = opened;
+    for (let previous = null; previous !== out; ) {
+      previous = out;
+      out = out.replace(/\{\{[^{}]*\}\}/g, "");
+    }
+    return out;
+  });
   return stripped.replace(/\s+/g, " ").trim();
 }
 
