@@ -418,7 +418,36 @@ jobs:
       # detail of the Postgres image that would silently change under us. A
       # slower job that tests the real shape beats a faster one that tests a
       # shape no deployment has.
-      - run: supabase start
+      #
+      # AND THE RETRY BELOW IS FOR ONE FAILURE ONLY. `supabase start` binds a
+      # fixed set of host ports, and when one is already taken it stops before a
+      # single migration runs: on 2026-10-11 this job went red with "failed to
+      # bind host port for 0.0.0.0:54322 ... address already in use", on a commit
+      # whose SQL was fine and had passed this same job on every earlier run.
+      # Nothing in this repository holds 54322, so the container that does is a
+      # leftover on the runner, and clearing it is the whole fix. Any OTHER
+      # failure is printed and fails the step at once — a broken migration must
+      # never be absorbed by a second attempt.
+      - name: Start the local stack
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if output="$(supabase start 2>&1)"; then
+              printf '%s\n' "$output"
+              exit 0
+            fi
+            printf '%s\n' "$output"
+            if ! printf '%s' "$output" | grep -q "address already in use"; then
+              echo "::error::supabase start failed for a reason no retry can fix"
+              exit 1
+            fi
+            echo "::warning::a host port was taken; clearing leftover containers and retrying"
+            supabase stop --no-backup 2>/dev/null || true
+            docker ps -aq --filter "name=supabase_" | xargs -r docker rm -f >/dev/null 2>&1 || true
+            sleep $((attempt * 15))
+          done
+          echo "::error::supabase start still cannot bind its host ports after three attempts"
+          exit 1
 
       # From scratch, so a migration that only works against an
       # already-migrated database fails here rather than on the day it is
