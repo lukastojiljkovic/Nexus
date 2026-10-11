@@ -311,6 +311,55 @@ appImage:
   # instead of starting unprotected, and build/gentoo/README.md says what to do.
   executableArgs: []
 
+mac:
+  # A dmg, for the linux block's reason one line over: it is
+  # what a person downloads and drags into /Applications with no package
+  # manager. ONE architecture, and the Intel half is a stated gap rather than a
+  # line somebody forgot: every native dependency here is per-architecture
+  # (`node-llama-cpp`'s `bins/`, `onnxruntime-node`'s
+  # `bin/napi-v6/<platform>/<arch>/`, `@img/sharp-${platform}-${arch}`), and a
+  # build installs only the optional packages of the platform it runs on. So
+  # the CI job on an Apple-silicon runner produces an arm64 dmg that carries
+  # real binaries, while an x64 dmg built the same way would carry arm64 bytes
+  # under x64 paths — an app that opens and then fails at the first database
+  # query, which is exactly the defect class the linux job's comment warns of.
+  # An Intel dmg therefore needs the x64 halves installed first (`pnpm install`
+  # with pnpm's `supportedArchitectures`, or a build on an Intel runner), and
+  # that is one more step rather than one more line here.
+  #
+  # Nothing else in this file needed a darwin line, and that is worth knowing
+  # before adding one: the `files` list above selects its platform packages
+  # with electron-builder's own `${platform}`/`${arch}` macros, which resolve to
+  # the TARGET, so the same two lists are already correct here.
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # electron-builder converts this 512×512 PNG into the app's `.icns`; a source
+  # with more pixels gives sharper Retina output and changes nothing else.
+  icon: build/icon.png
+  # Apple's own name for a tool the user runs directly and that is not a game.
+  category: public.app-category.productivity
+  artifactName: "Nexus-${version}-${arch}.dmg"
+  # UNSIGNED, deliberately, and the consequence written down rather than left
+  # to be discovered. `identity: null` stops electron-builder looking for a
+  # keychain certificate, which is this project's Windows position one platform
+  # over (the NSIS installer ships without an Authenticode certificate): no
+  # code-signing certificate is bought, and no notarisation is asked for.
+  #
+  # What that costs the person installing it is stated plainly, because it is
+  # worse than the Windows first run: macOS quarantines a downloaded app and
+  # refuses to open it until it is allowed once through System Settings →
+  # Privacy & Security → „Open Anyway". Buying an Apple Developer ID and
+  # notarising removes that step, and it is a yearly cost plus a secret in CI
+  # rather than a flag — so it is Luka's decision, and this comment is where
+  # whoever revisits it finds out that it was made.
+  identity: null
+  # No assessment to run: it exists to check a signature this build does not
+  # have, and leaving it on turns a deliberate decision into a build failure.
+  gatekeeperAssess: false
+  hardenedRuntime: false
+
 publish:
   provider: github
   owner: lukastojiljkovic
