@@ -48,10 +48,12 @@ jobs:
       - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           languages: javascript-typescript
-          # `security-extended` rather than the default pack: this codebase
-          # handles encryption keys and untrusted documents, where the extra
-          # queries are the point. It costs CI minutes, not correctness.
-          queries: security-extended
+          # The query pack and the one path exclusion live in that file, because
+          # the action refuses to take `config-file` and `queries` together and
+          # a configuration split across two places is one that drifts. Its
+          # header says why `scripts/packs` is out of scope and why nothing
+          # else is.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
