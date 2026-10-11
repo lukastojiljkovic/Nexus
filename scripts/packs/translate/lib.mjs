@@ -33,11 +33,12 @@
 // repository.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 
 import * as roots from "../lib/roots.mjs";
+import { readIfPresent } from "../lib/readIfPresent.mjs";
 
 /** Mozilla's registry: what each model is, where its objects live, and how it scored. */
 export const REGISTRY_URL =
@@ -185,14 +186,15 @@ function cacheName(url) {
 export async function readSource(url, { dir, log }) {
   mkdirSync(dir, { recursive: true });
   const indexPath = join(dir, "index.json");
-  const index = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : {};
+  const indexText = readIfPresent(indexPath, "utf8");
+  const index = indexText === null ? {} : JSON.parse(indexText);
   const known = index[url];
   const path = join(dir, known?.path ?? cacheName(url));
-  if (known !== undefined && existsSync(path)) {
-    const bytes = readFileSync(path);
-    if (sha256Hex(bytes) === known.sha256) {
-      log?.acquired?.(url, bytes.byteLength, true);
-      return { bytes, fetchedAt: known.fetchedAt, sha256: known.sha256 };
+  const cached = known === undefined ? null : readIfPresent(path);
+  if (cached !== null) {
+    if (sha256Hex(cached) === known.sha256) {
+      log?.acquired?.(url, cached.byteLength, true);
+      return { bytes: cached, fetchedAt: known.fetchedAt, sha256: known.sha256 };
     }
   }
   const response = await fetch(url, { redirect: "follow" });
