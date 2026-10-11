@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../../shared/workerOrigin.js";
 import {
   arrangePages,
   mergePdfs,
@@ -29,6 +30,7 @@ import type { PdfJob, PdfReply } from "./protocol.js";
 interface PdfWorkerScope {
   postMessage(message: PdfReply): void;
   onmessage: ((event: MessageEvent<PdfJob>) => void) | null;
+  readonly location: { readonly origin: string };
 }
 
 const scope = self as unknown as PdfWorkerScope;
@@ -86,5 +88,6 @@ async function handle(job: PdfJob): Promise<void> {
 }
 
 scope.onmessage = (event) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   void handle(event.data);
 };

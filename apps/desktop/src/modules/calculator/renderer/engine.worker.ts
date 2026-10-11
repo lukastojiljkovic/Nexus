@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { createCalculatorEngine, type CalculatorEngine, type CalculatorPrecision } from "@nexus/core";
 import type { EngineReply, EngineRequest } from "./engineClient.js";
 
@@ -39,6 +40,7 @@ function engineFor(precision: CalculatorPrecision): CalculatorEngine {
 const scope = self as unknown as Worker;
 
 scope.onmessage = (event: MessageEvent<EngineRequest>): void => {
+  if (!isOwnOrigin(event.origin, self.location.origin)) return;
   const request = event.data;
   const outcome = engineFor(request.precision).evaluate(request.expression, {
     session: request.session,

@@ -14,6 +14,7 @@
  * Vite bundles this file as its own chunk because the page reaches it through
  * `new Worker(new URL("./qr.worker.ts", import.meta.url), { type: "module" })`.
  */
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { decodeRgba } from "./qrDecode.js";
 
 export interface QrRequest {
@@ -37,11 +38,13 @@ export type QrResponse = string | null;
 interface WorkerScope {
   onmessage: ((event: MessageEvent<QrRequest>) => void) | null;
   postMessage(message: unknown): void;
+  readonly location: { readonly origin: string };
 }
 
 const scope = self as unknown as WorkerScope;
 
 scope.onmessage = (event: MessageEvent<QrRequest>): void => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   const { width, height, rgba } = event.data;
   let text: QrResponse = null;
   try {

@@ -38,6 +38,7 @@
  * while the app is offline. See the module report for the exact lines.
  */
 
+import { isOwnOrigin } from "../../../../shared/workerOrigin.js";
 import glueUrl from "@browsermt/bergamot-translator/worker/bergamot-translator-worker.js?url";
 import wasmUrl from "@browsermt/bergamot-translator/worker/bergamot-translator-worker.wasm?url";
 import { fetchableModelUrl } from "./models.js";
@@ -48,7 +49,7 @@ interface WorkerScope {
   postMessage(message: unknown): void;
   importScripts(...urls: string[]): void;
   fetch(input: string): Promise<Response>;
-  readonly location: { readonly href: string };
+  readonly location: { readonly href: string; readonly origin: string };
   addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
 }
 
@@ -348,6 +349,7 @@ function reply(message: WorkerReply): void {
 }
 
 scope.addEventListener("message", (event) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   const request = event.data as WorkerRequest;
   if (typeof request !== "object" || request === null || typeof request.id !== "number") return;
   void (async () => {

@@ -158,20 +158,25 @@ describe("the built-in engine, driven directly", () => {
   /** The worker's own code, with the two globals a worker has supplied by hand. */
   async function startWorker(): Promise<{
     readonly posted: EngineResponse[];
-    send: (request: EngineRequest) => void;
+    send: (request: EngineRequest, origin?: string) => void;
   }> {
     const posted: EngineResponse[] = [];
     vi.stubGlobal("postMessage", (message: EngineResponse) => posted.push(message));
     vi.stubGlobal("onmessage", null);
+    // The worker reads its own origin to compare against the one a message
+    // carries. The packaged app's page is `file://` and its messages arrive with
+    // the empty origin, which is what `send` below hands over unless a test is
+    // asking about the guard itself (see `shared/workerOrigin.ts`).
+    vi.stubGlobal("location", { origin: "file://" });
     await import("./engineWorker.js");
     const scope = globalThis as unknown as {
-      onmessage: ((event: { data: EngineRequest }) => void) | null;
+      onmessage: ((event: { data: EngineRequest; origin: string }) => void) | null;
     };
     return {
       posted,
-      send: (request) => {
+      send: (request, origin = "") => {
         if (scope.onmessage === null) throw new Error("the worker never took its message handler");
-        scope.onmessage({ data: request });
+        scope.onmessage({ data: request, origin });
       },
     };
   }
@@ -180,6 +185,12 @@ describe("the built-in engine, driven directly", () => {
     const worker = await startWorker();
     worker.send({ type: "probe" });
     expect(worker.posted).toEqual([{ type: "probe" }]);
+  });
+
+  it("ignores a message that did not come from the page that created it", async () => {
+    const worker = await startWorker();
+    worker.send({ type: "probe" }, "https://example.com");
+    expect(worker.posted).toEqual([]);
   });
 
   it("plays a legal move at a level, with an info line that measured its own search", async () => {

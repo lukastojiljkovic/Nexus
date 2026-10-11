@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { chooseEngineMove, createSeededRandom, searchPosition, START_FEN } from "@nexus/core";
 import type { SearchResult } from "@nexus/core";
 import type { EngineRequest, EngineResponse } from "./engine.js";
@@ -30,8 +31,9 @@ import type { EngineRequest, EngineResponse } from "./engine.js";
  */
 
 interface WorkerScope {
-  onmessage: ((event: { readonly data: EngineRequest }) => void) | null;
+  onmessage: ((event: { readonly data: EngineRequest; readonly origin: string }) => void) | null;
   postMessage(message: EngineResponse): void;
+  readonly location: { readonly origin: string };
 }
 
 const scope = globalThis as unknown as WorkerScope;
@@ -47,6 +49,7 @@ let fen = START_FEN;
 let seed = 0;
 
 scope.onmessage = (event) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   const request = event.data;
   if (request.type === "probe") {
     scope.postMessage({ type: "probe" });

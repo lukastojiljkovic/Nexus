@@ -1,3 +1,4 @@
+import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { runEngineRequest, stageOf, type EngineClientMessage } from "./engine.js";
 
 /**
@@ -19,13 +20,18 @@ import { runEngineRequest, stageOf, type EngineClientMessage } from "./engine.js
  */
 
 interface WorkerScope {
-  addEventListener(type: "message", listener: (event: { data: EngineClientMessage }) => void): void;
+  addEventListener(
+    type: "message",
+    listener: (event: { data: EngineClientMessage; readonly origin: string }) => void,
+  ): void;
   postMessage(message: unknown): void;
+  readonly location: { readonly origin: string };
 }
 
 const scope = globalThis as unknown as WorkerScope;
 
 scope.addEventListener("message", (event) => {
+  if (!isOwnOrigin(event.origin, scope.location.origin)) return;
   const message = event.data;
   if (message.type !== "request") return;
   try {
