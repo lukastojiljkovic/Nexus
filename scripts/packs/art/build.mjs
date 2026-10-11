@@ -31,7 +31,8 @@
 // Node's own modules, and the pack's own: no dependency beyond what the
 // repository already has and the one image library the brief allows.
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+
+import * as roots from "../lib/roots.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -467,8 +468,8 @@ async function shootWork(http, work, imagesDir, quality) {
  */
 async function run(options) {
   const started = Date.now();
-  const cacheDir = join(tmpdir(), "nexus-pack-cache", PACK_ID);
-  const outRoot = join(tmpdir(), "nexus-packs");
+  const cacheDir = roots.cacheDirFor(PACK_ID);
+  const outRoot = roots.outputRoot();
   const packDir = join(outRoot, PACK_ID);
   const imagesDir = join(packDir, "images");
   const http = new CachedHttp({ cacheDir, minIntervalMs: options.interval });

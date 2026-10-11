@@ -23,7 +23,8 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+
+import * as roots from "../lib/roots.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -52,12 +53,12 @@ export function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-/** Where the cache, the pack and the metadata live. All under `%TEMP%`. */
+/** Where the cache, the pack and the metadata live. `../lib/roots.mjs` owns the decision. */
 export function outputPaths() {
   return {
-    cacheDir: join(tmpdir(), "nexus-pack-cache", PACK_ID),
-    packDir: join(tmpdir(), "nexus-packs", PACK_ID),
-    metaPath: join(tmpdir(), "nexus-packs", `${PACK_ID}.meta.json`),
+    cacheDir: roots.cacheDirFor(PACK_ID),
+    packDir: roots.packDirFor(PACK_ID),
+    metaPath: roots.packMetaPathFor(PACK_ID),
   };
 }
 

@@ -7,11 +7,11 @@
 // brief fixes where each of those happens so that a re-run is cheap and the
 // repository stays clean:
 //
-//   * downloads land in `%TEMP%\nexus-pack-cache\<pack id>\` and are REUSED —
+//   * downloads land in `~/.nexus-pack-cache/<pack id>/` and are REUSED —
 //     re-running a builder must cost seconds, not another 4.5 MB of somebody
 //     else's bandwidth, and the file the second run converts has to be the same
 //     bytes the first run hashed or `sources.json` stops describing the pack;
-//   * the finished pack lands in `%TEMP%\nexus-packs\<pack id>\`, never in the
+//   * the finished pack lands in `~/.nexus-packs/<pack id>/`, never in the
 //     worktree, because a pack is signed later and no content may be committed;
 //   * every download is hashed and the hash, the byte count and the fetch date
 //     go into the pack's `sources.json`, so the pack is traceable to bytes.
@@ -23,8 +23,9 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { cacheDirFor, packDirFor } from "./roots.mjs";
 
 /**
  * What the builders call themselves. Wikimedia's API policy asks for a
@@ -33,12 +34,9 @@ import { join } from "node:path";
  */
 export const USER_AGENT = "NexusPackBuilder/1.0 (+https://github.com/lukastojiljkovic/Nexus)";
 
-/** `%TEMP%` as Node sees it. `TEMP` is Windows' own name for it and is set here. */
-const TEMP = process.env.TEMP ?? tmpdir();
-
 /** The two directories, named after the pack the brief fixes. */
-export const cacheDir = (packId) => join(TEMP, "nexus-pack-cache", packId);
-export const packsDir = (packId) => join(TEMP, "nexus-packs", packId);
+export const cacheDir = (packId) => cacheDirFor(packId);
+export const packsDir = (packId) => packDirFor(packId);
 
 /** The hash `pack.json` and `sources.json` are both written against. */
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");

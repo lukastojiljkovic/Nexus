@@ -40,7 +40,8 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+
+import * as roots from "../lib/roots.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -538,12 +539,12 @@ export function countRows(response, kind) {
 
 /** Where an unpacked, unsigned pack is written. Never inside the repository. */
 export function packOutputDir() {
-  return join(tmpdir(), "nexus-packs");
+  return roots.outputRoot();
 }
 
 /** Where the fetched responses are kept between builds. Never inside the repository. */
 export function packCacheDir() {
-  return join(tmpdir(), "nexus-pack-cache", PACK_ID);
+  return roots.cacheDirFor(PACK_ID);
 }
 
 /** The pack's own copy, and the app version the pack asks for. */

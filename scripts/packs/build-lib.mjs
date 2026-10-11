@@ -16,13 +16,14 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-/** `%TEMP%\nexus-pack-cache\<id>` on Windows, and the same shape under `/tmp` elsewhere. */
-export const CACHE_ROOT = join(tmpdir(), "nexus-pack-cache");
-/** `%TEMP%\nexus-packs\<id>`: the finished folder, and `<id>.meta.json` beside it. */
-export const PACKS_OUT_ROOT = join(tmpdir(), "nexus-packs");
+import { cacheRoot, outputRoot } from "./lib/roots.mjs";
+
+/** `<home>/.nexus-pack-cache/<id>`: `lib/roots.mjs` says why it is not `%TEMP%`. */
+export const CACHE_ROOT = cacheRoot();
+/** `<home>/.nexus-packs/<id>`: the finished folder, and `<id>.meta.json` beside it. */
+export const PACKS_OUT_ROOT = outputRoot();
 
 export function cacheDirFor(id) {
   return join(CACHE_ROOT, id);

@@ -24,20 +24,24 @@ import { Worker } from "node:worker_threads";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+
+import { cacheRoot, outputRoot } from "../lib/roots.mjs";
 
 // Resolved from the APP, not from this script: the engine is a dependency of
 // `@nexus/desktop`, and pnpm's layout deliberately does not let an unrelated
 // folder reach it.
 const appRequire = createRequire(new URL("../../../apps/desktop/package.json", import.meta.url));
-const packDir = process.argv[2] ?? join(tmpdir(), "nexus-packs", "translate-sr-en");
+const packDir = process.argv[2] ?? join(outputRoot(), "translate-sr-en");
 if (!existsSync(join(packDir, "model.bin"))) {
   console.error(`bench: no pack at ${packDir} — build one first, see docs/packs/.`);
   process.exit(1);
 }
 
 const packageWorker = join(appRequire.resolve("@browsermt/bergamot-translator"), "..", "worker");
-const scratch = join(tmpdir(), "nexus-bergamot-bench");
+// A fixed name under the cache root rather than under the OS temp directory:
+// `lib/roots.mjs` says why, and this harness rewrites the same three files every
+// run, so a directory the next run can reuse is the right shape here.
+const scratch = join(cacheRoot(), "bergamot-bench");
 mkdirSync(scratch, { recursive: true });
 
 /** Copies the package's worker into the scratch directory with the two-line path fix. */

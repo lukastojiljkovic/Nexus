@@ -49,7 +49,8 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+
+import * as roots from "../lib/roots.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -327,12 +328,12 @@ export function appVersion() {
   return manifest.version;
 }
 
-/** Where the pack and its metadata are written, both under `%TEMP%`. */
+/** Where the pack and its metadata are written. `../lib/roots.mjs` owns the decision. */
 export function outputPaths() {
   return {
-    cacheDir: join(tmpdir(), "nexus-pack-cache", PACK_ID),
-    packDir: join(tmpdir(), "nexus-packs", PACK_ID),
-    metaPath: join(tmpdir(), "nexus-packs", `${PACK_ID}.meta.json`),
+    cacheDir: roots.cacheDirFor(PACK_ID),
+    packDir: roots.packDirFor(PACK_ID),
+    metaPath: roots.packMetaPathFor(PACK_ID),
   };
 }
 

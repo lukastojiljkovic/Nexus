@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { checkMeta } from "../../pack-sign.mjs";
+import * as roots from "../lib/roots.mjs";
 import {
   BODY_ORDER,
   MAP_MAX_HEIGHT,
@@ -325,9 +326,21 @@ describe("metadata and paths", () => {
 
   it("writes the metadata BESIDE the pack folder, never inside it", () => {
     const paths = outputPaths();
-    expect(paths.packDir.startsWith(tmpdir())).toBe(true);
-    expect(paths.cacheDir.startsWith(tmpdir())).toBe(true);
-    expect(paths.metaPath.startsWith(tmpdir())).toBe(true);
+    // Under the builder's own roots, which are per-user directories outside this
+    // repository. These three lines asserted `startsWith(tmpdir())` until
+    // 2026-10-11 — that was "not inside the worktree" written as "inside the
+    // temp directory", and the two stopped agreeing when the roots moved for the
+    // reason `../lib/roots.mjs` gives: a predictable name in a shared temp
+    // directory is what `js/insecure-temporary-file` reports, and a pack is not a
+    // temporary file.
+    expect(paths.packDir.startsWith(roots.outputRoot() + sep)).toBe(true);
+    expect(paths.cacheDir.startsWith(roots.cacheRoot() + sep)).toBe(true);
+    expect(paths.metaPath.startsWith(roots.outputRoot() + sep)).toBe(true);
+    // And none of them inside the worktree: a pack is signed later and no content
+    // may be committed, which is the claim the temp-directory assertion was
+    // reaching for.
+    expect(paths.packDir.startsWith(process.cwd() + sep)).toBe(false);
+    expect(paths.cacheDir.startsWith(process.cwd() + sep)).toBe(false);
     // A metadata file inside the folder would be hashed into the manifest as
     // content by `pack-sign.mjs`, which is the failure this asserts against.
     expect(paths.metaPath.startsWith(paths.packDir + sep)).toBe(false);

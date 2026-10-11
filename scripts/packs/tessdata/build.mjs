@@ -37,7 +37,8 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+
+import * as roots from "../lib/roots.mjs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -73,19 +74,19 @@ export function gzipBytes(bytes) {
   return gzipSync(bytes, { level: 9 });
 }
 
-/** The download cache: one directory per pack id, under the system temp directory. */
+/** The download cache: one directory per pack id, under the per-user cache root. */
 export function cacheDirFor(id = PACK_ID) {
-  return join(tmpdir(), "nexus-pack-cache", id);
+  return roots.cacheDirFor(id);
 }
 
 /** The folder the pack is assembled in (and the folder `pack-sign.mjs` is pointed at). */
 export function outputDirFor(id = PACK_ID) {
-  return join(tmpdir(), "nexus-packs", id);
+  return roots.packDirFor(id);
 }
 
 /** The metadata file `pack-sign.mjs --meta` takes. It lives BESIDE the pack folder, never inside it. */
 export function metadataPathFor(id = PACK_ID) {
-  return join(tmpdir(), "nexus-packs", `${id}.meta.json`);
+  return roots.packMetaPathFor(id);
 }
 
 /**

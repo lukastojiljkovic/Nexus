@@ -15,17 +15,18 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import * as roots from "../../lib/roots.mjs";
 
 /** Where an unpacked, unsigned pack is written. Never inside the repository. */
 export function packOutputDir() {
-  return join(tmpdir(), "nexus-packs");
+  return roots.outputRoot();
 }
 
 /** Where a pack's fetched sources are kept between builds. */
 export function packCacheDir(packId) {
-  return join(tmpdir(), "nexus-pack-cache", packId);
+  return roots.cacheDirFor(packId);
 }
 
 /** The browser-shaped user agent Wikimedia requires and other hosts prefer. */

@@ -37,7 +37,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
-import { tmpdir } from "node:os";
+
+import * as roots from "../lib/roots.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { checkMeta } from "../../pack-sign.mjs";
@@ -208,11 +209,11 @@ export function sha256(bytes) {
 }
 
 /** Where one voice's downloaded files are cached, and where its pack folder goes. */
-export function cacheDirectory(id, root = join(tmpdir(), "nexus-pack-cache")) {
+export function cacheDirectory(id, root = roots.cacheRoot()) {
   return join(root, id);
 }
 
-export function packDirectory(id, root = join(tmpdir(), "nexus-packs")) {
+export function packDirectory(id, root = roots.outputRoot()) {
   return join(root, id);
 }
 
@@ -345,8 +346,8 @@ export async function main(argv) {
   // first build of all four packs left only the last one's file list in
   // `sources.json`, and the evidence file that exists to be checked was wrong.
   let sources = loadSources(sourcesFile);
-  const cacheRoot = args.cacheRoot ?? join(tmpdir(), "nexus-pack-cache");
-  const packsRoot = args.packsRoot ?? join(tmpdir(), "nexus-packs");
+  const cacheRoot = args.cacheRoot ?? roots.cacheRoot();
+  const packsRoot = args.packsRoot ?? roots.outputRoot();
   const ids = args.voices ?? sources.voices.map((voice) => voice.id);
   const harvestedAt = new Date().toISOString().slice(0, 10);
 

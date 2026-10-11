@@ -34,9 +34,10 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
+
+import * as roots from "../lib/roots.mjs";
 
 /** Mozilla's registry: what each model is, where its objects live, and how it scored. */
 export const REGISTRY_URL =
@@ -72,13 +73,19 @@ export const PACK_FILES = { model: "model.bin", shortlist: "shortlist.bin", voca
 export const PACK_KIND = "model";
 export const MIN_APP_VERSION = "1.5.0";
 
-/** Where the downloads are cached, and where the built packs go. Both under `%TEMP%`. */
+/**
+ * Where the downloads are cached, and where the built packs go.
+ *
+ * Both decisions are `../lib/roots.mjs`'s now — one per-user directory, not the
+ * OS temp directory, for the reason written there — and these two names stay
+ * because the rest of this file and its tests already ask through them.
+ */
 export function cacheRoot() {
-  return process.env["NEXUS_PACK_CACHE"] ?? join(tmpdir(), "nexus-pack-cache");
+  return roots.cacheRoot();
 }
 
 export function outputRoot() {
-  return process.env["NEXUS_PACK_OUT"] ?? join(tmpdir(), "nexus-packs");
+  return roots.outputRoot();
 }
 
 /** One SHA-256, lower-case hex, the way every manifest in the repository spells it. */
