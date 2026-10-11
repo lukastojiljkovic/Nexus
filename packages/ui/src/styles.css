@@ -224,7 +224,8 @@ samp {
    promotion and a different one. Two are neither: `.nx-disclosure` is a BUTTON
    that borrows the ink and the size on purpose — the quiet typographic
    disclosure idiom — and `.nx-empty--inline` belongs to a component with its
-   own measure (34ch, narrower on purpose because an empty state is centred).
+   own measure: an inline empty is one line standing where a row would be, so
+   the inline shape decides its own width rather than prose doing it.
 
    Adopted with the class, never by copying the block again: a surface that
    wants a variant adds a modifier of its own beside `.nx-hint`. */
@@ -1373,7 +1374,23 @@ samp {
 .nx-empty__desc {
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text-muted);
-  max-width: 34ch;
+  /* This was a literal 34ch, and the reason written beside it was „narrower on
+     purpose because an empty state is centred". The second half of that was
+     true and the first half was never measured against anything: at 13px, 34ch
+     is about 230px, which is four short lines, and a page-level empty state is
+     centred in the PANE. On the window this app is actually used in (1920 ×
+     1032, the width the screenshot sweep now takes as its `full` size) that is
+     a four-line trickle of text marooned in the middle of 1 700px of nothing â€”
+     which reads as a layout that failed rather than as a quiet surface. Every
+     module that shows an empty state until a content pack is installed looked
+     like that: the Reader, the Translator, Maps, the Cookbook, the Emergency
+     card, and the Files page beside them.
+
+     So the copy inside an empty state takes the app's ONE prose measure, the
+     same token `.nx-hint` and the form errors take. Prose is prose wherever it
+     is drawn, and „centred" is a property of the box, not a reason for a
+     second, narrower answer to how wide a line should be. */
+  max-width: var(--nx-layout-prose);
   line-height: var(--nx-font-leading-normal);
 }
 .nx-empty__action {
