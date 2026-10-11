@@ -4,6 +4,7 @@ import {
   availableDirections,
   DIRECTIONS,
   directionOfPackId,
+  fetchableModelUrl,
   missingPackId,
   MODEL_FILES,
   nxPackUrl,
@@ -65,6 +66,32 @@ describe("nxPackUrl", () => {
     expect(() => nxPackUrl("translate-sr-en", "a//b")).toThrow();
     expect(() => nxPackUrl("translate-sr-en", "model.bin?x=1")).toThrow();
     expect(() => nxPackUrl("translate-sr-en", "a\\b")).toThrow();
+  });
+});
+
+describe("fetchableModelUrl", () => {
+  it("answers one of the pack's own three files, and hands back the address it built", () => {
+    expect(fetchableModelUrl("nx-pack://translate-sr-en/model.bin", "sr-en")).toBe(
+      "nx-pack://translate-sr-en/model.bin",
+    );
+    expect(fetchableModelUrl("nx-pack://translate-en-bs/vocab.spm", "en-bs")).toBe(
+      "nx-pack://translate-en-bs/vocab.spm",
+    );
+  });
+
+  it("refuses every other thing a message could name", () => {
+    // The shapes that matter are the ones the worker's single input could carry:
+    // another pack's file (the direction and the URL disagreeing), a file this
+    // scheme never stores, a direction nothing ships, a path that reaches past
+    // the pack folder, and an address whose host merely LOOKS like the pack id.
+    expect(fetchableModelUrl("nx-pack://translate-sr-en/model.bin", "en-sr")).toBeNull();
+    expect(fetchableModelUrl("nx-pack://translate-sr-en/model.bin", "de-en")).toBeNull();
+    expect(fetchableModelUrl("nx-pack://translate-sr-en/notes.txt", "sr-en")).toBeNull();
+    expect(fetchableModelUrl("nx-pack://translate-sr-en/../model.bin", "sr-en")).toBeNull();
+    expect(fetchableModelUrl("nx-pack://translate-sr-en//model.bin", "sr-en")).toBeNull();
+    expect(fetchableModelUrl("nx-pack://evil.example/translate-sr-en/model.bin", "sr-en")).toBeNull();
+    expect(fetchableModelUrl("https://evil.example/model.bin", "sr-en")).toBeNull();
+    expect(fetchableModelUrl("", "sr-en")).toBeNull();
   });
 });
 

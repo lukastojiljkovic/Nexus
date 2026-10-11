@@ -82,6 +82,35 @@ export function nxPackUrl(packId: string, path: string): string {
   return `nx-pack://${packId}/${path}`;
 }
 
+/** The three file names as a list, for the membership test in `fetchableModelUrl`. */
+const MODEL_FILE_NAMES: readonly string[] = Object.values(MODEL_FILES);
+
+/**
+ * The one URL a worker may fetch for one file of one direction's model, or
+ * `null` for anything else.
+ *
+ * **THE WORKER IS WHY THIS REBUILDS THE URL RATHER THAN RETURNING IT.** A
+ * translation worker's only input is a message, so a worker that fetched
+ * whatever address arrived in one could be pointed at an arbitrary address — a
+ * bug in the page, or any script running in the renderer, would be enough
+ * (CodeQL's `js/client-side-request-forgery`, which is reported at that fetch).
+ * This answers the only question the worker may act on — "is this one of the
+ * three files of the direction I was told to load?" — and then returns the
+ * address built from THIS module's tables. What the worker fetches is therefore
+ * never the string from the message: a message can only ever select among the
+ * eighteen addresses the six directions' packs are read from.
+ */
+export function fetchableModelUrl(url: string, direction: string): string | null {
+  const known = DIRECTIONS.find((candidate) => candidate === direction);
+  if (known === undefined) return null;
+  const packId = packIdOf(known);
+  const prefix = `nx-pack://${packId}/`;
+  if (!url.startsWith(prefix)) return null;
+  const asked = url.slice(prefix.length);
+  const file = MODEL_FILE_NAMES.find((name) => name === asked);
+  return file === undefined ? null : nxPackUrl(packId, file);
+}
+
 /** What the page needs of an installed pack: its id and its kind. `InstalledPackView` satisfies this. */
 export interface PackRef {
   readonly id: string;

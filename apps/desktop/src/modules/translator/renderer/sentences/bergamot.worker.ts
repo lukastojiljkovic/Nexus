@@ -40,6 +40,7 @@
 
 import glueUrl from "@browsermt/bergamot-translator/worker/bergamot-translator-worker.js?url";
 import wasmUrl from "@browsermt/bergamot-translator/worker/bergamot-translator-worker.wasm?url";
+import { fetchableModelUrl } from "./models.js";
 import type { WorkerReply, WorkerRequest } from "./protocol.js";
 
 /** The worker global scope, as much of it as this file uses. `lib.dom` has no worker scope, so it is declared here. */
@@ -280,7 +281,11 @@ async function loadModel(
   const module = await loadEngine();
 
   const read = async (url: string, what: string): Promise<ArrayBuffer> => {
-    const response = await scope.fetch(url);
+    const target = fetchableModelUrl(url, direction);
+    if (target === null) {
+      throw new Error(`${what} is not a file of the "${direction}" pack; this worker fetches nothing else.`);
+    }
+    const response = await scope.fetch(target);
     if (!response.ok) throw new Error(`${what} could not be read from the pack (${response.status})`);
     return await response.arrayBuffer();
   };
