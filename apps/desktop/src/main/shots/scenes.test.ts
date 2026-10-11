@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { createModuleRegistry } from "../../shared/modules.js";
 import { SHOT_SCENES } from "./index.js";
 
 /**
@@ -72,5 +73,42 @@ describe("the pre-shell scenes", () => {
     // profile, and it must run after the choice has settled.
     const ids = shells.map((scene) => scene.id);
     expect(ids.indexOf("network")).toBeLessThan(ids.indexOf("onboarding"));
+  });
+});
+
+describe("the module pages", () => {
+  /**
+   * EVERY module the registry declares is landed on by some scene.
+   *
+   * This is the assertion the hand-written plan could not make and did not
+   * notice it was not making: twenty-five module-kit modules were reachable
+   * from the rail and named by no scene, so a sweep could run over the whole
+   * product, print a clean headline and never have photographed them. The
+   * generated list closes it today; this test is what keeps it closed, and it
+   * fails on the day a module is added whose page nothing visits.
+   *
+   * It compares against `SHOT_SCENES` rather than against the plan, because
+   * that is the list the sweep actually walks: a scene that is filtered out as
+   * HELD takes its module with it, and this test is the one place that would
+   * say so.
+   */
+  it("lands on every module the registry declares", () => {
+    const landed = new Set(
+      SHOT_SCENES.flatMap((scene) => (scene.kind === "shell" ? [] : [scene.module])),
+    );
+    const uncovered = createModuleRegistry()
+      .all()
+      .map((manifest) => manifest.id)
+      .filter((id) => !landed.has(id));
+    expect(uncovered).toEqual([]);
+  });
+
+  it("gives every scene its own id", () => {
+    // A generated id is `page-<module>`; a hand-written one is a name somebody
+    // chose. Two scenes sharing an id would make `NEXUS_SHOTS_SCENES=that-id`
+    // run both, and the second would overwrite the first's frames while the
+    // report counted two.
+    const ids = SHOT_SCENES.map((scene) => scene.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

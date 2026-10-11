@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { duplicateStems, missingCoverage, type ShotFrame, type ShotTheme } from "./index.js";
+import {
+  duplicateStems,
+  missingCoverage,
+  type ShotFrame,
+  type ShotLanguage,
+  type ShotTheme,
+} from "./index.js";
 
 /**
  * The reconciliation the sweep could not do for itself.
@@ -14,8 +20,28 @@ import { duplicateStems, missingCoverage, type ShotFrame, type ShotTheme } from 
  * what counts as one.
  */
 
-function frame(size: string, theme: ShotTheme, scene: string): ShotFrame {
-  return { file: `${size}/${theme}/${scene}.png`, scene, theme, size, findings: [] };
+/**
+ * One frame, in Serbian unless a test says otherwise.
+ *
+ * `language` is the default rather than a parameter, because the language pass
+ * is the EXCEPTION in this file: a case about it names it, and the other twenty
+ * read as they always have.
+ */
+function frame(
+  size: string,
+  theme: ShotTheme,
+  scene: string,
+  language: ShotLanguage = "sr",
+): ShotFrame {
+  const pass = language === "sr" ? theme : `${theme}-${language}`;
+  return {
+    file: `${size}/${pass}/${scene}.png`,
+    scene,
+    theme,
+    language,
+    size,
+    findings: [],
+  };
 }
 
 describe("duplicateStems", () => {
@@ -55,6 +81,35 @@ describe("duplicateStems", () => {
         frame("wide", "dan", "pro--iznos-slovima"),
       ]),
     ).toEqual(["wide/dan/pro--iznos-slovima"]);
+  });
+
+  /**
+   * THE ENGLISH PASS IS NOT A COLLISION, and this is the case that says so.
+   *
+   * The same scene is photographed once per language now, so `wide/noc/tools`
+   * exists twice on disk — in two different directories. Keyed on the stem and
+   * the theme alone, every scene in the product would report as a duplicate on
+   * the first two-language sweep, and a report that flags everything is the one
+   * that gets switched off (DC-15). The three keys that separate frames are
+   * size, pass and scene, and the pass is the theme AND the language.
+   */
+  it("does not mistake the same scene in the other language for a collision", () => {
+    expect(
+      duplicateStems([
+        frame("wide", "noc", "tools"),
+        frame("wide", "noc", "tools", "en"),
+        frame("wide", "dan", "tools", "en"),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("names a collision by the pass it happened in, languages kept apart", () => {
+    expect(
+      duplicateStems([
+        frame("wide", "noc", "tools", "en"),
+        frame("wide", "noc", "tools", "en"),
+      ]),
+    ).toEqual(["wide/noc-en/tools"]);
   });
 
   /**
