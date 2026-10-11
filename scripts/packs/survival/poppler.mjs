@@ -10,9 +10,13 @@
 // tool every time, and `docs/packs/survival.md` names the version and licence.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+
+// The cache write below goes through the shared writer: its header says why a
+// plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
 
 /** The pinned upstream build: `oschwartz10612/poppler-windows`, Release 26.09.0-0. */
 export const POPPLER = {
@@ -91,7 +95,7 @@ export async function ensurePoppler(options) {
       );
     }
     mkdirSync(options.cacheDir, { recursive: true });
-    writeFileSync(zipPath, bytes);
+    writeCacheFile(zipPath, bytes);
   }
   const root = join(options.cacheDir, `poppler-${POPPLER.version}`);
   // A half-unpacked tree from an interrupted build is removed before the retry,

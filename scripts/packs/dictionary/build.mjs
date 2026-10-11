@@ -56,10 +56,11 @@ import {
   parsePhrasebook,
   serbianEntry,
 } from "./convert.mjs";
+import * as roots from "../lib/roots.mjs";
 
-/** Where a source is cached, and where the pack is written. Both under `%TEMP%`, the one place a build may fill. */
-const CACHE_ROOT = join(process.env.TEMP ?? ".", "nexus-pack-cache");
-const PACKS_ROOT = join(process.env.TEMP ?? ".", "nexus-packs");
+/** Where a source is cached, and where the pack is written. `../lib/roots.mjs` owns the decision. */
+const CACHE_ROOT = roots.cacheRoot();
+const PACKS_ROOT = roots.outputRoot();
 
 /** The app version the pack needs. A pack that asked for a newer one would be refused by a build that cannot read it. */
 const MIN_APP_VERSION = "1.6.0";

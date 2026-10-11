@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { basename, join } from "node:path";
 
 import { uniqueId } from "./markdown.mjs";
+import * as roots from "../lib/roots.mjs";
 // The cache write below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
@@ -34,7 +35,7 @@ export function sha256(bytes) {
  * which other runs' builders share, so it holds one directory per pack and
  * never a file named after the pack.
  */
-export function cacheDirFor(packId, cacheRoot = join(process.env.TEMP ?? ".", "nexus-pack-cache")) {
+export function cacheDirFor(packId, cacheRoot = roots.cacheRoot()) {
   const dir = join(cacheRoot, packId);
   mkdirSync(dir, { recursive: true });
   return dir;

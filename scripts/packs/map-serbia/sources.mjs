@@ -21,6 +21,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
+import { cacheDirFor, packDirFor } from "../lib/roots.mjs";
 
 /** The pack's own id: the folder the app installs it into, and the authority in every URL it serves. */
 export const PACK_ID = "map-serbia";
@@ -33,10 +34,10 @@ export const MIN_APP_VERSION = "1.5.0";
 /** The pack's own version; a rebuild is a new MINOR and the maintainer bumps it. */
 export const PACK_VERSION = "2026.10.0";
 
-/** Where a run downloads, and the one place it may write besides its output. */
-export const CACHE = join(process.env.TEMP ?? "/tmp", "nexus-pack-cache", PACK_ID);
+/** Where a run downloads, and the one place it may write besides its output. `../lib/roots.mjs` owns the decision. */
+export const CACHE = cacheDirFor(PACK_ID);
 /** Where a run writes the pack folder. Never the repository: a pack is signed and uploaded, not committed. */
-export const OUT = join(process.env.TEMP ?? "/tmp", "nexus-packs", PACK_ID);
+export const OUT = packDirFor(PACK_ID);
 
 /**
  * The glyph ranges the labels can need: Latin, Latin-1, punctuation, Greek and

@@ -49,10 +49,16 @@ import { recipesFrom } from "./lib/recipes.mjs";
 import { CDC_NOTICE, FURTHER_READING, LICENCES, LINK_LICENCES, SOURCES } from "./lib/sources.mjs";
 import { normalise, stripMarkup, textToBlocks } from "./lib/text.mjs";
 import { parseHtml, selectMain, textContent, toMarkdown } from "./lib/html.mjs";
+// The cache index below goes through the shared writer: its header says why a
+// plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
+import { writeCacheFile } from "../lib/cacheWrite.mjs";
+
+import * as roots from "../lib/roots.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CACHE = join(process.env.TEMP ?? process.env.TMP ?? ".", "nexus-pack-cache", "survival-food");
-const OUT = join(process.env.TEMP ?? process.env.TMP ?? ".", "nexus-packs");
+/** Where a source is cached, and where the pack is written. `../lib/roots.mjs` owns the decision. */
+const CACHE = roots.cacheDirFor("survival-food");
+const OUT = roots.outputRoot();
 const CACHE_INDEX = join(CACHE, "index.json");
 /**
  * The application version a pack needs.
@@ -479,7 +485,7 @@ async function build() {
     // The index is written as each source lands rather than once at the end, so
     // a run stopped by one unreachable host does not throw away the work of the
     // twenty that answered.
-    writeFileSync(CACHE_INDEX, `${JSON.stringify(index, null, 2)}\n`, "utf8");
+    writeCacheFile(CACHE_INDEX, `${JSON.stringify(index, null, 2)}\n`);
     console.log(
       `  ${cache.cached ? "cached" : "fetched"} ${id} ${String(cache.bytes.length)} bytes ${cache.sha256.slice(0, 12)}…`,
     );
@@ -508,7 +514,7 @@ async function build() {
     evidencePages.set(key, cache);
     record(`licence:${key}`, cache, {});
   }
-  writeFileSync(CACHE_INDEX, `${JSON.stringify(index, null, 2)}\n`, "utf8");
+  writeCacheFile(CACHE_INDEX, `${JSON.stringify(index, null, 2)}\n`);
 
   // 1. Every licence claim is on the page it cites, verbatim.
   const evidenceProblems = [];

@@ -45,6 +45,7 @@ import { convertPage, sourceSection, textOf } from "./wikisource.mjs";
 // The cache write below goes through the shared writer: its header says why a
 // plain `writeFileSync` after an `existsSync` is the pair CodeQL reports.
 import { writeCacheFile } from "../lib/cacheWrite.mjs";
+import * as roots from "../lib/roots.mjs";
 
 /** The app version a content pack may ask for: this wave's manifest floor. */
 const MIN_APP_VERSION = "1.5.0";
@@ -632,8 +633,8 @@ async function writeProvenance(options, results, cacheDirs) {
 export function parseArgs(argv) {
   const packs = [];
   const options = {
-    cache: join(process.env.TEMP ?? ".", "nexus-pack-cache"),
-    out: join(process.env.TEMP ?? ".", "nexus-packs"),
+    cache: roots.cacheRoot(),
+    out: roots.outputRoot(),
     offline: false,
     writeSources: false,
   };

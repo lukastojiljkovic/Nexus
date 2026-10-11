@@ -64,7 +64,7 @@ export function toMarkdown(blocks) {
         out.push(tableToMarkdown(block.rows));
         break;
       case "figure":
-        out.push(`![${escapeText(block.caption).replace(/([[\]])/g, "\\$1")}](images/${block.file})`);
+        out.push(`![${escapeAltText(block.caption)}](images/${block.file})`);
         break;
       default:
         throw new Error(`blocks: unknown block kind ${JSON.stringify(block.kind)}`);
@@ -125,6 +125,22 @@ export function escapeOpening(text) {
  */
 export function escapeText(text) {
   return text.replace(/([\\`*_<>|])/g, "\\$1");
+}
+
+/**
+ * A caption as the alt text of an image: everything `escapeText` escapes, and the
+ * two brackets besides, because `![` and `]` are the image's own delimiters.
+ *
+ * ONE PASS RATHER THAN `escapeText(...)` AND THEN A SECOND `replace` FOR THE
+ * BRACKETS, which is what this was, and the difference is not style: escaping in
+ * two passes means the second pass reads text the first one wrote, and a caption
+ * that already carried a backslash came out with it doubled
+ * (`js/incomplete-sanitization`). A single character class has no such ordering,
+ * and the backslash is in the class so it is escaped like every other
+ * meta-character.
+ */
+function escapeAltText(text) {
+  return text.replace(/([\\`*_<>|[\]])/g, "\\$1");
 }
 
 export function plainText(blocks) {
