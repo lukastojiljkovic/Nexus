@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { PackManifest } from "../../../main/packs/manifest.js";
@@ -143,11 +143,27 @@ export function readArticleText(pack: ContentPack, path: string): string {
     throw new Error(`"${path}" is not listed by pack "${pack.id}".`);
   }
   const file = join(pack.dir, ...path.split("/"));
-  const size = statSync(file).size;
-  if (size > MAX_READER_ARTICLE_BYTES) {
-    throw new Error(`"${path}" is over the ${String(MAX_READER_ARTICLE_BYTES)}-byte article cap.`);
+  // ONE HANDLE FOR THE SIZE AND THE BYTES, the way `main/boundedRead.ts` does it
+  // for the file a user picked: `statSync` and then `readFileSync` ask the file
+  // system about a NAME twice, and the size the cap was checked against is then
+  // not necessarily the size of the text that lands here (CodeQL's
+  // `file-system-race`). A pack is reinstalled by replacing its directory, so the
+  // window is real rather than theoretical. It stays synchronous because every
+  // caller of this function is.
+  let handle: number;
+  try {
+    handle = openSync(file, "r");
+  } catch {
+    throw new Error(`"${path}" could not be opened in pack "${pack.id}".`);
   }
-  return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(file));
+  try {
+    if (fstatSync(handle).size > MAX_READER_ARTICLE_BYTES) {
+      throw new Error(`"${path}" is over the ${String(MAX_READER_ARTICLE_BYTES)}-byte article cap.`);
+    }
+    return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(handle));
+  } finally {
+    closeSync(handle);
+  }
 }
 
 function isNewer(candidate: InstalledPack, current: InstalledPack): boolean {

@@ -28,7 +28,7 @@
  * or the `READ ERROR 0x…` from `dwg2dxf` is.
  */
 
-import { readFile, rm, stat } from "node:fs/promises";
+import { open, rm, type FileHandle } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { ToolError, stageInput, type ToolSession } from "./run.js";
@@ -197,9 +197,14 @@ export async function convertDwgToDxf(input: DwgConversionInput): Promise<DwgCon
     );
   }
 
-  let size: number;
+  // ONE HANDLE FOR THE SIZE AND THE BYTES. A `stat` and then a `readFile` are two
+  // lookups of the same NAME, so the size this cap was checked against would not
+  // have to be the size that is read (CodeQL's `file-system-race`);
+  // `main/boundedRead.ts` states the same rule for the file a user picked, and
+  // this is the file the converter just wrote into the session's own directory.
+  let handle: FileHandle;
   try {
-    size = (await stat(outputPath)).size;
+    handle = await open(outputPath, "r");
   } catch {
     // Exit zero with no drawing is the one failure mode a converter can have
     // that looks like success; the message says what the tool said about it.
@@ -209,19 +214,25 @@ export async function convertDwgToDxf(input: DwgConversionInput): Promise<DwgCon
       { exitCode: result.code, reason },
     );
   }
-  if (size > DWG_LIMITS.outputBytes) {
-    throw new DwgError(
-      "output-too-large",
-      `The converted drawing is ${String(size)} bytes; this reader accepts at most ${String(DWG_LIMITS.outputBytes)}.`,
-      { exitCode: result.code, reason },
-    );
-  }
-
   let dxf: Buffer;
   try {
-    dxf = await readFile(outputPath);
+    const size = (await handle.stat()).size;
+    if (size > DWG_LIMITS.outputBytes) {
+      throw new DwgError(
+        "output-too-large",
+        `The converted drawing is ${String(size)} bytes; this reader accepts at most ${String(DWG_LIMITS.outputBytes)}.`,
+        { exitCode: result.code, reason },
+      );
+    }
+    dxf = await handle.readFile();
   } catch (error) {
+    if (error instanceof DwgError) throw error;
     throw new DwgError("io", `The converted drawing could not be read: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    // A close that fails is not an answer the caller can act on; throwing here
+    // would replace a result with an exception at a call site that has only ever
+    // handled results (`main/boundedRead.ts` makes the same call).
+    await handle.close().catch(() => undefined);
   }
   return { dxf, log };
 }

@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PackManifest } from "../../../main/packs/manifest.js";
 import { isSafePackPath } from "../../../main/packs/paths.js";
@@ -218,13 +218,23 @@ export function readArtDatasets(userData: string, publicKeyPem: string): ArtRead
       if (declared === undefined) throw new ArtRefusal(`the pack carries no ${ART_DATASET_FILE}.`);
       if (declared.size > MAX_ART_DATASET_BYTES) throw new ArtRefusal(`${ART_DATASET_FILE} is too large.`);
       const path = join(packsRoot(userData), manifest.id, manifest.version, ART_DATASET_FILE);
-      // A `stat` before the read, so a file that grew since it was installed
-      // is refused rather than pulled into memory: the manifest's size is the
-      // one the copy verified, and this is the read that trusts it.
-      if (statSync(path).size > MAX_ART_DATASET_BYTES) {
-        throw new ArtRefusal(`${ART_DATASET_FILE} is larger than the manifest declares.`);
+      // A SIZE CHECK BEFORE THE READ, so a file that grew since it was installed
+      // is refused rather than pulled into memory: the manifest's size is the one
+      // the copy verified, and this is the read that trusts it. The check and the
+      // read go through ONE HANDLE rather than two lookups of the same name, so
+      // the size that was checked is the size that is read (CodeQL's
+      // `file-system-race`); `main/boundedRead.ts` states the same rule for the
+      // file a user picked.
+      const handle = openSync(path, "r");
+      let text: string;
+      try {
+        if (fstatSync(handle).size > MAX_ART_DATASET_BYTES) {
+          throw new ArtRefusal(`${ART_DATASET_FILE} is larger than the manifest declares.`);
+        }
+        text = new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(handle));
+      } finally {
+        closeSync(handle);
       }
-      const text = new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(path));
       const read = parseArtDataset(JSON.parse(text), {
         id: manifest.id,
         version: manifest.version,

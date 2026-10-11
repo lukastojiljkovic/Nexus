@@ -48,7 +48,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, open, rm, writeFile, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -288,23 +288,32 @@ export async function stageInput(
   options: { readonly suffix: string; readonly maxBytes?: number },
 ): Promise<string> {
   const maxBytes = options.maxBytes ?? TOOL_LIMITS.inputBytes;
-  let size: number;
+  const staged = join(session.workDir, `${randomBytes(8).toString("hex")}${options.suffix}`);
+  // ONE HANDLE FOR THE SIZE AND THE COPY. `stat` and then `readFile` ask the file
+  // system about a NAME twice, so the size the cap refused on need not be the size
+  // of the bytes that land in the session (CodeQL's `file-system-race`), and the
+  // file here is one the user chose elsewhere on the machine and can be changing
+  // while a tool run starts.
+  let handle: FileHandle;
   try {
-    size = (await stat(source)).size;
+    handle = await open(source, "r");
   } catch (error) {
     throw new ToolError("io", `"${source}" could not be read: ${messageOf(error)}`);
   }
-  if (size > maxBytes) {
-    throw new ToolError(
-      "input-too-large",
-      `"${source}" is ${String(size)} bytes; a tool input may be at most ${String(maxBytes)}.`,
-    );
-  }
-  const staged = join(session.workDir, `${randomBytes(8).toString("hex")}${options.suffix}`);
   try {
-    await writeFile(staged, await readFile(source));
+    const size = (await handle.stat()).size;
+    if (size > maxBytes) {
+      throw new ToolError(
+        "input-too-large",
+        `"${source}" is ${String(size)} bytes; a tool input may be at most ${String(maxBytes)}.`,
+      );
+    }
+    await writeFile(staged, await handle.readFile());
   } catch (error) {
+    if (error instanceof ToolError) throw error;
     throw new ToolError("io", `"${source}" could not be staged: ${messageOf(error)}`);
+  } finally {
+    await handle.close().catch(() => undefined);
   }
   return staged;
 }

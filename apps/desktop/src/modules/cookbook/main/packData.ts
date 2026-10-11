@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type FoodMacros, foldSearchText, isRecipeLicenceId, parseFoodRef } from "@nexus/core";
 import { packVersionDir, readInstalled } from "../../../main/packs/registry.js";
@@ -214,19 +214,34 @@ export function readDatasetJson(dir: string, relPath: string, packId: string): u
     throw new Error(`Pack "${packId}" names a file this build will not open (${problem}).`);
   }
   const path = join(dir, ...relPath.split("/"));
-  let size: number;
-  let stamp: number;
+  // ONE HANDLE FOR THE STAT AND THE READ, the way `main/boundedRead.ts` reads the
+  // file a user picked: `statSync` followed by `readFileSync` asks the file system
+  // about a NAME twice, so the size the cap was checked against is not necessarily
+  // the size of the text that lands here, and a pack reinstalled under the same
+  // path is exactly the swap that makes that matter (CodeQL's
+  // `file-system-race`). It stays synchronous because every caller of this
+  // function is.
+  let handle: number;
   try {
-    const stats = statSync(path);
-    size = stats.size;
-    stamp = stats.mtimeMs;
+    handle = openSync(path, "r");
   } catch {
     throw new Error(`Pack "${packId}" does not carry ${relPath} any more; reinstall the pack.`);
   }
-  if (size > MAX_DATASET_BYTES) {
-    throw new Error(
-      `Pack "${packId}": ${relPath} is ${String(size)} bytes, over this build's ${String(MAX_DATASET_BYTES)}-byte limit.`,
-    );
+  let size: number;
+  let stamp: number;
+  let text: string;
+  try {
+    const stats = fstatSync(handle);
+    size = stats.size;
+    stamp = stats.mtimeMs;
+    if (size > MAX_DATASET_BYTES) {
+      throw new Error(
+        `Pack "${packId}": ${relPath} is ${String(size)} bytes, over this build's ${String(MAX_DATASET_BYTES)}-byte limit.`,
+      );
+    }
+    text = readFileSync(handle, "utf8");
+  } finally {
+    closeSync(handle);
   }
   // Parsed documents are memoised by path and by size+mtime, and the stamp is
   // what makes that safe: a pack reinstalled under the same path is a different
@@ -236,12 +251,6 @@ export function readDatasetJson(dir: string, relPath: string, packId: string): u
   const cacheKey = `${String(size)}:${String(stamp)}`;
   const cached = JSON_CACHE.get(path);
   if (cached !== undefined && cached.key === cacheKey) return cached.value;
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    throw new Error(`Pack "${packId}": ${relPath} could not be read.`);
-  }
   try {
     const parsed = JSON.parse(text) as unknown;
     JSON_CACHE.set(path, { key: cacheKey, value: parsed });
