@@ -608,6 +608,11 @@ describe("the caps", () => {
     expect(await freeSpaceBytes(userData)).toBeGreaterThan(0);
   });
 
+  it("measures a folder that is not there yet through the volume it will be on", async () => {
+    // A fresh profile has no `models/` or `zim/` when the first download checks.
+    expect(await freeSpaceBytes(join(userData, "not", "created", "yet"))).toBeGreaterThan(0);
+  });
+
   it("runs two downloads and refuses the third", async () => {
     // A server that never finishes: both downloads stay in flight, which is the
     // only state in which the cap is what refuses the third.

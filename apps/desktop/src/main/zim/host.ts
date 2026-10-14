@@ -1,5 +1,5 @@
-import { existsSync, renameSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { basename, dirname } from "node:path";
 
 import {
   downloadStagingPath,
@@ -379,6 +379,8 @@ export function createZimHost(deps: ZimHostDeps): ZimHost {
    */
   function installDownloaded(job: DownloadJob, stagedPath: string): boolean {
     try {
+      // The first download on a profile is also what creates `zim/`.
+      mkdirSync(dirname(job.targetPath), { recursive: true });
       renameSync(stagedPath, job.targetPath);
     } catch {
       return false;

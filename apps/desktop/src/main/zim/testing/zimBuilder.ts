@@ -63,6 +63,11 @@ export interface ZimBuildInput {
   readonly layoutPage?: number;
   /** Whether to add the format-6 `X/listing/titleOrdered/v1` entry, in a cluster of its own. */
   readonly titleListing?: boolean;
+  /**
+   * `false` leaves the header's title pointer list out and writes the format's
+   * all-ones "none" in its place, which is what current writers do (format 6.3).
+   */
+  readonly headerTitleList?: boolean;
   /** `"wrong"` writes sixteen bytes that are not the MD5 of the file. */
   readonly checksum?: "correct" | "wrong";
 }
@@ -140,8 +145,9 @@ export function buildZim(input: ZimBuildInput): Buffer {
 
   const mimeListPos = ZIM_HEADER_BYTES;
   const urlPtrPos = mimeListPos + mimeBytes.length;
+  const headerTitleList = input.headerTitleList !== false;
   const titlePtrPos = urlPtrPos + urlOrder.length * 8;
-  const direntsPos = titlePtrPos + urlOrder.length * 4;
+  const direntsPos = titlePtrPos + (headerTitleList ? urlOrder.length * 4 : 0);
 
   const direntBuffers: Buffer[] = [];
   const direntOffsets = new Map<number, number>();
@@ -198,7 +204,7 @@ export function buildZim(input: ZimBuildInput): Buffer {
   header.writeUInt32LE(urlOrder.length, 24);
   header.writeUInt32LE(clusters.length, 28);
   header.writeBigUInt64LE(BigInt(urlPtrPos), 32);
-  header.writeBigUInt64LE(BigInt(titlePtrPos), 40);
+  header.writeBigUInt64LE(headerTitleList ? BigInt(titlePtrPos) : 0xffffffffffffffffn, 40);
   header.writeBigUInt64LE(BigInt(clusterPtrPos), 48);
   header.writeBigUInt64LE(BigInt(mimeListPos), 56);
   header.writeUInt32LE(
@@ -215,12 +221,12 @@ export function buildZim(input: ZimBuildInput): Buffer {
   urlOrder.forEach((inputIndex, position) => {
     urlPointers.writeBigUInt64LE(BigInt(direntOffsets.get(inputIndex) ?? 0), position * 8);
   });
-  const titlePointers = Buffer.alloc(entries.length * 4);
+  const titlePointers = Buffer.alloc(headerTitleList ? entries.length * 4 : 0);
   entries
     .map((entry, index) => ({ index, title: entry.title ?? entry.path }))
     .sort((left, right) => compareKeys(text(left.title), text(right.title)))
     .forEach((row, position) => {
-      titlePointers.writeUInt32LE(urlIndex.get(row.index) ?? 0, position * 4);
+      if (headerTitleList) titlePointers.writeUInt32LE(urlIndex.get(row.index) ?? 0, position * 4);
     });
 
   const body = Buffer.concat([

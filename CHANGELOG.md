@@ -8,6 +8,23 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Downloads work.** No content pack, Wikipedia library or model ever finished
+  downloading. Every file Nexus fetches answers its first request with a
+  redirect, and Electron's `fetch` refuses to hand a redirect back to the caller
+  that checks each hop against the allowlist. Downloads now go through
+  `net.request`, which does.
+- **The pack catalogue lists every pack again.** One pack's attribution had line
+  breaks, which the manifest check refuses, and the catalogue is read
+  all-or-nothing. The dictionary pack is republished as `2026.10.1` with a
+  one-line attribution, and the catalogue is re-signed.
+- **Model downloads from Hugging Face are allowed.** `huggingface.co` and its
+  download CDN, `us.aws.cdn.hf.co`, are on the downloads allowlist.
+- **The first Wikipedia or model download on a profile starts.** The space
+  check measured a folder that did not exist yet and read the error as a full
+  disk.
+- **Current Kiwix files open.** Format 6.3 files keep their title index in an
+  entry rather than in the header. The reader refused them at open; it now
+  reads that entry, so title search works too.
 - **The card table has its width.** Every panel of the Cards page shared its class
   name with the playing card and so was a playing card's 3.4rem wide, which
   squeezed the shelf, the table and the record into one narrow strip.
