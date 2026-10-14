@@ -25,6 +25,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   closure is unpacked now and `pnpm check:unpack` keeps it complete, the test is
   skipped there, and a GPU build that does not load falls back to the CPU one.
 
+- **Accounts from 1.x are back, and nothing made in 2.x is lost.** From 2.0.0
+  Nexus kept its data in `%APPDATA%\@nexus\desktop` instead of `%APPDATA%\Nexus`
+  (and in `@nexus/desktop` on Linux and macOS), because one module asked
+  Electron for the folder before the app had its name, and Electron keeps the
+  first answer. So an upgrade from 1.x opened with none of its accounts. The
+  folder is `Nexus` again, and the first launch moves into it what 2.x made: its
+  accounts with their names, the packs, libraries and models it downloaded, and
+  its settings. Nothing is deleted, and an account that exists in both folders is
+  never written over. On Windows, a computer with accounts from both versions can
+  keep only one of the two keys that guard their passcodes. Nexus keeps the 2.x
+  one, so the accounts in use unlock as before, and each 1.x account asks once
+  for its Recovery Kit.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that

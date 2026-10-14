@@ -462,6 +462,59 @@ export function absorbLegacyFlatData(userData: string, accountId: string): void 
   moveDatabaseInto(userData, accountId);
 }
 
+/** The finished accounts under another data folder `from` whose ids this one does not hold. */
+export function accountsToAbsorb(userData: string, from: string): string[] {
+  const here = new Set(accountDirNames(userData));
+  return accountDirNames(from).filter((id) => !here.has(id) && holdsKeychain(accountDir(from, id)));
+}
+
+/**
+ * Moves every finished account under another data folder `from` into this one,
+ * keeping its label, and returns the ids it moved (`strayUserData.ts` says why
+ * there is another folder at all).
+ *
+ * An id this folder already holds is left where it is: the two directories are
+ * two accounts' worth of encrypted data, and neither may be written over. Each
+ * directory moves BEFORE its entry is written, so a crash between the two leaves
+ * an account `loadRegistry` adopts rather than an entry naming nothing. One that
+ * cannot move (a file still open) is reported to `onError` and stays where it is
+ * for the next launch. `from`'s registry is read for labels and never written.
+ */
+export function absorbAccountsFrom(
+  userData: string,
+  from: string,
+  onError: (accountId: string, error: unknown) => void,
+): string[] {
+  const incoming = accountsToAbsorb(userData, from);
+  if (incoming.length === 0) return [];
+
+  mkdirSync(accountsRoot(userData), { recursive: true });
+  const moved = incoming.filter((id) => {
+    try {
+      renameSync(accountDir(from, id), accountDir(userData, id));
+      return true;
+    } catch (error) {
+      onError(id, error);
+      return false;
+    }
+  });
+  if (moved.length === 0) return moved;
+
+  const theirs = readRegistry(from);
+  const ours = readRegistry(userData);
+  const labelled = new Map(theirs.accounts.map((entry) => [entry.id, entry]));
+  writeRegistry(userData, {
+    version: 1,
+    accounts: [
+      ...ours.accounts.filter((entry) => !moved.includes(entry.id)),
+      ...moved.map((id) => labelled.get(id) ?? { id, label: defaultAccountLabel(), createdAt: new Date().toISOString() }),
+    ],
+    // The account used last was used in the other folder, which is the newer of the two.
+    lastActiveId: theirs.lastActiveId !== null && moved.includes(theirs.lastActiveId) ? theirs.lastActiveId : ours.lastActiveId,
+  });
+  return moved;
+}
+
 /**
  * Brings the on-disk layout up to ADR-044 and returns the reconciled registry.
  * Runs once at startup, before any IPC is answered, and is the ONLY writer of

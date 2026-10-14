@@ -1,13 +1,12 @@
 /**
  * `createModelHost` — the assistant's model runtime, as the module will call it.
  *
- * The factory takes its dependencies so that every part of it can be driven in a
- * test; called with no arguments it builds the app's own wiring, which is the one
- * thing here that imports Electron (`electron.ts`). The next wave's
- * `main/register.ts` therefore has two correct ways to use it:
+ * This builds the app's own wiring, which is the one thing here that imports
+ * Electron (`electron.ts`); a test builds `host.ts`'s factory with fake
+ * dependencies instead:
  *
- *   const host = createModelHost();                  // the app, with the real worker
- *   const host = createModelHost(testDeps);          // a test, with a fake one
+ *   const host = createModelHost(launchMode);        // the app, with the real worker
+ *   const host = build(testDeps);                     // a test, with a fake one
  *
  * WHAT IS NOT HERE, deliberately: nothing in this file, `host.ts`, `install.ts`,
  * `huggingface.ts`, `recommend.ts`, `catalogue.ts`, `gguf.ts` or `protocol.ts`
@@ -17,11 +16,14 @@
  */
 
 import type { ModelHost } from "@nexus/core";
+
+import type { NetworkMode } from "../../net/offline.js";
 import { createModelHostDeps } from "./electron.js";
 import { createModelHost as build, type ModelHostDeps, type WorkerPort } from "./host.js";
 
 export type { ModelHostDeps, WorkerPort };
 
-export function createModelHost(deps: ModelHostDeps = createModelHostDeps()): ModelHost {
-  return build(deps);
+/** The app's model host, for a launch that came up under `launchMode`. */
+export function createModelHost(launchMode: NetworkMode): ModelHost {
+  return build(createModelHostDeps(launchMode));
 }
