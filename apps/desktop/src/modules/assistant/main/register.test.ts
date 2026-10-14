@@ -217,6 +217,7 @@ function fakeHost(): ModelHost {
 function services(): AssistantServices {
   return {
     userData: () => dir,
+    appVersion: () => "0.0.0-test",
     releasePublicKeyPem: () => packKey.publicKeyPem,
     networkMode: () => "offline",
     createModelHost: fakeHost,

@@ -27,6 +27,9 @@ const PUBLIC: readonly ResolvedAddress[] = [{ address: "93.184.216.34", family: 
 
 const ON: WebConfig = { enabled: true, searxng: null };
 
+/** The running build's version, handed to the service the way `app.getVersion()` is. */
+const VERSION = "2.0.3";
+
 let userData: string;
 
 beforeEach(() => {
@@ -54,6 +57,8 @@ function reply(status: number, headers: Readonly<Record<string, string>>, body: 
 interface Harness {
   readonly service: WebService;
   readonly requests: string[];
+  /** The User-Agent of each request, in the same order as `requests`. */
+  readonly agents: string[];
   readonly confirms: ConfirmRequest[];
   tool(name: string): Tool;
   context(options?: { readonly locale?: AssistantLocale; readonly approve?: boolean }): ToolContext;
@@ -69,10 +74,12 @@ function harness(options: {
 }): Harness {
   writeWebConfig(userData, options.config ?? ON);
   const requests: string[] = [];
+  const agents: string[] = [];
   const confirms: ConfirmRequest[] = [];
   const http: WebHttp = {
-    request(target) {
+    request(target, init) {
       requests.push(target.url.toString());
+      agents.push(init.headers["user-agent"] ?? "");
       return Promise.resolve(options.handler(target));
     },
   };
@@ -93,6 +100,7 @@ function harness(options: {
       ));
   const service = createWebService({
     userData,
+    version: VERSION,
     mode: () => options.mode ?? "downloads",
     resolve,
     http,
@@ -106,6 +114,7 @@ function harness(options: {
   return {
     service,
     requests,
+    agents,
     confirms,
     tool(name) {
       const found = service.tools().find((entry) => entry.name === name);
@@ -213,6 +222,20 @@ describe("web.search", () => {
     const result = await world.tool("web.search").run({ query: "hydrogen", language: "en" }, world.context());
     expect(world.requests[0]).toContain("https://en.wikipedia.org/w/api.php?");
     expect(result.citations?.[0]?.id).toBe("https://en.wikipedia.org/?curid=402281");
+  });
+
+  it("names the running version on the search and on the page read alike", async () => {
+    // The version is the service's own dep (`app.getVersion()` in main), so every
+    // request this process makes says which release made it.
+    const world = harness({
+      handler: (target) =>
+        reply(200, {}, target.url.pathname === "/w/api.php" ? WIKIPEDIA_REPLY : PAGE),
+    });
+    await world.tool("web.search").run({ query: "vodonik" }, world.context());
+    await world.tool("web.read").run({ url: "https://example.org/page" }, world.context());
+    const expected = `Nexus/${VERSION} (https://github.com/lukastojiljkovic/Nexus; luka.d.stojiljkovic@gmail.com)`;
+    expect(world.requests).toHaveLength(2);
+    expect(world.agents).toEqual([expected, expected]);
   });
 
   it("refuses while the switch is off, without asking the user and without a request", async () => {

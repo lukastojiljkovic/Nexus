@@ -241,6 +241,20 @@ describe("planContext", () => {
     expect(result).toEqual({ ok: false, reason: "context-full", requiredTokens: 27, ceiling: 5 });
   });
 
+  it("counts the tokens the runtime adds outside the messages, and refuses when they no longer fit", () => {
+    // "S" and "cccc" are 21 tokens together (8 + two messages at 4 + 1 + 4). A
+    // tool spec of 10 tokens is part of the request, so the same plan that fits
+    // without it does not fit with it - and the refusal says by how much.
+    expect(plan({ ceiling: 21 }).ok).toBe(true);
+    expect(plan({ ceiling: 31, fixedTokens: 10 }).ok).toBe(true);
+    expect(plan({ ceiling: 21, fixedTokens: 10 })).toEqual({
+      ok: false,
+      reason: "context-full",
+      requiredTokens: 31,
+      ceiling: 21,
+    });
+  });
+
   it("leaves the caller's conversation untouched and answers the same way twice", () => {
     const history = [user("aaaa"), assistant("bb")];
     const pending = [user("cccc")];

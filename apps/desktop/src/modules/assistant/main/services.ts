@@ -35,6 +35,12 @@ import type { AssistantNetworkMode } from "../shared/ipc.js";
 export interface AssistantServices {
   /** `<userData>`: where the model files, `assistant-web.json` and the voice packs live. */
   userData(): string;
+  /**
+   * The running build's version, for the User-Agent the web tools send
+   * (`nexusUserAgent`). Electron's `app.getVersion()`, read in `index.ts` for the
+   * same reason every other Electron fact is: this module never imports it.
+   */
+  appVersion(): string;
   /** The pinned release key installed content packs are verified against (ADR-091, ADR-104). */
   releasePublicKeyPem(): string;
   /** The mode THIS launch may act on - never the stored file (`activeNetworkMode`). */

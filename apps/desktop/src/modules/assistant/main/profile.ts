@@ -163,6 +163,7 @@ export class AssistantProfile {
     const userData = this.services.userData();
     this.web = createWebService({
       userData,
+      version: this.services.appVersion(),
       mode: () => this.services.networkMode(),
       resolve: createDnsResolver(),
       http: createHttpsTransport(),

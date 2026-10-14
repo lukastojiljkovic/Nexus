@@ -170,6 +170,16 @@ describe("tasks.list", () => {
     expect(projectHits.content).toContain("Bez roka");
   });
 
+  it("reads „any“ as every list, the way status and due do", async () => {
+    seedTask({ title: "Bilo šta" });
+    const result = await toolOf("tasks.list").run(
+      { status: "any", due: "any", project: "any" },
+      contextFor("en", true).context,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.content).toMatch(/^Tasks \(1\):/);
+  });
+
   it("refuses a project nobody has, naming the ones the profile has", async () => {
     seedTask({ title: "Bilo šta" });
     const result = await toolOf("tasks.list").run(
