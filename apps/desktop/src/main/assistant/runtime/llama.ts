@@ -374,14 +374,23 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
       const response = await loaded.chat.generateResponse(history, {
         ...(functions === undefined ? {} : { functions, documentFunctionParams: true }),
         ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
-        ...(request.maxTokens === undefined ? {} : { maxTokens: request.maxTokens }),
+        // Half of the answer's tokens may go to reasoning. node-llama-cpp's own
+        // default is half the CONTEXT, so a reasoning model (Qwen3.5 opens with
+        // a `thought`) spent the whole answer thinking and stopped at `length`.
+        ...(request.maxTokens === undefined
+          ? {}
+          : { maxTokens: request.maxTokens, budgets: { thoughtTokens: Math.floor(request.maxTokens / 2) } }),
         signal: running.signal,
         stopOnAbortSignal: true,
         // `onResponseChunk` rather than `onTextChunk`: the latter carries only the
-        // main response, and a reasoning model's first segment IS a `thought`
-        // (Qwen3.5 opens with one), so text-chunk-only streaming shows a user
-        // nothing at all while the model thinks. See the note on `text` below.
+        // main response, so a user would see nothing while the model thinks. The
+        // reasoning streams to the page as it is written, but it never reaches
+        // the fence filter or the answer: see the note on `text` below.
         onResponseChunk: (chunk) => {
+          if (chunk.type === "segment") {
+            emit(chunk.text);
+            return;
+          }
           const text = filter === null ? chunk.text : filter.push(chunk.text);
           if (text !== "") emit(text);
         },
@@ -392,16 +401,12 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
         response.functionCalls !== undefined && response.functionCalls.length > 0
           ? toolCallsFrom(response.functionCalls)
           : (fallback?.calls ?? []);
-      // The contract has ONE text field and no place for a reasoning segment, so
-      // the whole of what the model generated is passed through in order: a model
-      // that thinks inside a segment shows its thinking, which is what a local
-      // model's transcript honestly is. The day the contract grows a `reasoning`
-      // field, this is the line that splits it — and nothing else changes.
-      const full = response.fullResponse
-        .map((part) => (typeof part === "string" ? part : part.text))
-        .join("");
+      // The answer is the main response only. The contract has one text field,
+      // and a reasoning segment stored in it is replayed to the model on every
+      // later turn as if it were something said to the user, in a window of 8 192
+      // tokens. The page shows the reasoning while the turn runs and keeps the answer.
       return {
-        text: fallback === null ? full : fallback.text,
+        text: fallback === null ? response.response : fallback.text,
         toolCalls: calls,
         stopReason: calls.length > 0 ? "tool-calls" : stopReasonFrom(response.metadata.stopReason),
         ...meterAfter(),

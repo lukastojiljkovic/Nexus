@@ -32,6 +32,7 @@ import { checkExpectations, type ExpectationResult, type SafetyNotice, type Turn
 import { createFakeTools, createKnowledgeBase } from "./fakes.js";
 import { parseScenarioFile, ScenarioError, type Scenario } from "./scenario.js";
 import type { ScriptedModel } from "./scripted.js";
+import { localDay } from "../tools/support.js";
 
 /** What one scenario scored. */
 export interface ScenarioResult {
@@ -265,6 +266,7 @@ export function createHarness(options: HarnessOptions): Harness {
           model,
           context,
           maxSteps: scenario.maxSteps,
+          today: localDay(Date.now()),
         },
         (event) => {
           events.push(event);

@@ -110,6 +110,7 @@ async function turn(parts: TurnParts): Promise<AgentEvent[]> {
         confirm: parts.confirm ?? (async () => true),
       },
       maxSteps: parts.maxSteps ?? DEFAULT_MAX_STEPS,
+      today: "2026-10-14",
     },
     (event) => {
       events.push(event);
@@ -645,6 +646,7 @@ describe("runAgentTurn", () => {
           confirm: async () => true,
         },
         maxSteps: DEFAULT_MAX_STEPS,
+        today: "2026-10-14",
       },
       (event) => {
         events.push(event);

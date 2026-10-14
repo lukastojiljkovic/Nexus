@@ -247,13 +247,13 @@ describe("createToolRegistry", () => {
     });
     const specTokens = offered.reduce((sum, tool) => sum + toolSpecTokens(tool), 0);
     const promptTokens = estimateTokens(
-      buildSystemPrompt({ locale: "sr", tools: offered, maxSteps: DEFAULT_MAX_STEPS }),
+      buildSystemPrompt({ locale: "sr", tools: offered, maxSteps: DEFAULT_MAX_STEPS, today: "2026-10-14" }),
       "sr",
     );
 
     // Measured 2026-10-14 with this registry (37 tools, web off) and the
-    // question above: 8 tools offered, 2 640 tokens of tool specs, 1 373 tokens
-    // of Serbian prompt - 4 013 of the 7 168-token ceiling, leaving 3 155 for
+    // question above: 8 tools offered, 2 640 tokens of tool specs, 1 431 tokens
+    // of Serbian prompt - 4 071 of the 7 168-token ceiling, leaving 3 097 for
     // the history, the knowledge passages and the question. Before the tools
     // were chosen per turn the specs alone were 22 271 characters, which is
     // more than this window holds.

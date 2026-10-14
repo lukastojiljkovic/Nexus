@@ -39,7 +39,7 @@ describe("SYSTEM_PROMPT_VERSION", () => {
 
 describe("buildSystemPrompt", () => {
   it("states the version, the fallback language for the current locale, and every rule", () => {
-    const prompt = buildSystemPrompt({ locale: "sr", tools: [TOOL, WRITE_TOOL], maxSteps: 5 });
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "sr", tools: [TOOL, WRITE_TOOL], maxSteps: 5 });
     expect(prompt).toContain(SYSTEM_PROMPT_VERSION);
     expect(prompt).toContain("answer in Serbian (Latin script), which is what the app is showing right now");
     expect(prompt).toContain("Answer in the language the user writes in");
@@ -51,22 +51,27 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Never invent a fact, a number");
   });
 
+  it("gives the model today's date with its weekday", () => {
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "sr", tools: [], maxSteps: 2 });
+    expect(prompt).toContain("Today is Wednesday, 2026-10-14.");
+  });
+
   it("names the offered tools, grouped by what they do to the app", () => {
-    const prompt = buildSystemPrompt({ locale: "en", tools: [TOOL, WRITE_TOOL], maxSteps: 3 });
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "en", tools: [TOOL, WRITE_TOOL], maxSteps: 3 });
     expect(prompt).toContain("You reach the app only through the tools offered with this message.");
     expect(prompt).toContain("- Tools that ask the user first: tasks.create");
     expect(prompt).toContain("- Tools that only read: tasks.list");
   });
 
   it("does not repeat a tool's description, which the runtime documents itself", () => {
-    const prompt = buildSystemPrompt({ locale: "sr", tools: [TOOL, WRITE_TOOL], maxSteps: 3 });
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "sr", tools: [TOOL, WRITE_TOOL], maxSteps: 3 });
     expect(prompt).not.toContain("Lists the tasks.");
     expect(prompt).not.toContain("Lista zadataka.");
     expect(prompt).not.toContain("Pravi zadatak.");
   });
 
   it("leaves out a group with no tools in it", () => {
-    const prompt = buildSystemPrompt({ locale: "en", tools: [WRITE_TOOL], maxSteps: 3 });
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "en", tools: [WRITE_TOOL], maxSteps: 3 });
     expect(prompt).toContain("- Tools that ask the user first: tasks.create");
     expect(prompt).not.toContain("- Tools that only read");
     expect(prompt).not.toContain("- Tools that move the app's view");
@@ -85,13 +90,13 @@ describe("buildSystemPrompt", () => {
       parameters: { type: "object" },
       effect: "network",
     };
-    const prompt = buildSystemPrompt({ locale: "en", tools: [navigate, network], maxSteps: 3 });
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "en", tools: [navigate, network], maxSteps: 3 });
     expect(prompt).toContain("- Tools that ask the user first: web.search");
     expect(prompt).toContain("- Tools that move the app's view: app.open");
   });
 
   it("says so when the turn carries no tools", () => {
-    expect(buildSystemPrompt({ locale: "en", tools: [], maxSteps: 2 })).toContain(
+    expect(buildSystemPrompt({ today: "2026-10-14", locale: "en", tools: [], maxSteps: 2 })).toContain(
       "No tools are available this turn",
     );
   });

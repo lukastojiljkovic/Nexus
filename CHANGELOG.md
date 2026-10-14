@@ -48,6 +48,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   app's log. Two built-in workflows named tools that do not exist; they name
   real ones now.
 
+- **The assistant's answers end with the answer.** A model that reasons before
+  it answers, as Qwen3.5 does, spent the whole reply on its reasoning and
+  stopped mid-sentence. Reasoning may now take half of the reply, it shows only
+  while the model is writing, and the conversation keeps the answer. The
+  assistant is also told today's date, so a task for „tomorrow" gets a real day.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that

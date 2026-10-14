@@ -300,6 +300,8 @@ export interface AgentTurnInput {
   readonly context: ToolContext;
   /** The most model calls one turn may make before it stops with `step-limit`. */
   readonly maxSteps: number;
+  /** The user's local day, `YYYY-MM-DD`: what „today" and „tomorrow" mean this turn. */
+  readonly today: string;
 }
 
 /** The agent loop's signature (`packages/core/src/assistant/loop.ts` implements it). */

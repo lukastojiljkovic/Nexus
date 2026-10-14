@@ -24,6 +24,7 @@ import {
   type AssistantMessageInput,
 } from "@nexus/db";
 import { noRecommendation } from "../../../main/assistant/runtime/recommend.js";
+import { localDay } from "../../../main/assistant/tools/support.js";
 import { VOICE_SAMPLE_RATE, resamplePcm } from "../../../main/assistant/voice/resample.js";
 import { MAX_SPEECH_CHARS } from "../../../main/assistant/voice/sentences.js";
 import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
@@ -483,6 +484,7 @@ export function register(host: ModuleHostSurface): void {
         confirm: (request) => park(turn, request),
       },
       maxSteps: DEFAULT_MAX_STEPS,
+      today: localDay(services().now()),
     };
 
     // Unawaited: the page polls. The failure of a whole turn is caught here and

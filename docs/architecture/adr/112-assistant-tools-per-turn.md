@@ -140,8 +140,8 @@ which is also what a well-scored turn starts from.
 
 Counted with the module's own estimates against the real registry (37 tools, web
 off, 8192-token context, the question „Dodaj zadatak za sutra"): 8 tools offered,
-2 640 tokens of specs, 1 373 tokens of Serbian prompt - 4 013 of the 7 168-token
-ceiling, leaving 3 155 for the history, the knowledge passages and the question.
+2 640 tokens of specs, 1 431 tokens of Serbian prompt - 4 071 of the 7 168-token
+ceiling, leaving 3 097 for the history, the knowledge passages and the question.
 By the same estimate the 37 specs alone were about 11 200 tokens, more than the
 whole ceiling. These are estimates, not a tokeniser's counts; the loop replaces
 them with the model's own count after the first request.

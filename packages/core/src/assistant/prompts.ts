@@ -58,6 +58,16 @@ export interface SystemPromptOptions {
   readonly tools: readonly ToolSpec[];
   /** How many model calls the loop will make before it stops with `step-limit`. */
   readonly maxSteps: number;
+  /** The user's local day, `YYYY-MM-DD`. A model has no clock, and a task due „tomorrow" needs one. */
+  readonly today: string;
+}
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+/** „Wednesday, 2026-10-14": the day with its weekday, read in UTC so the machine's zone cannot move it. */
+function dayWithWeekday(day: string): string {
+  const weekday = WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()];
+  return weekday === undefined ? day : `${weekday}, ${day}`;
 }
 
 /** The system prompt for one turn: fixed text, plus the tools this turn carries. */
@@ -65,6 +75,10 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   const fallback = options.locale === "sr" ? "Serbian (Latin script)" : "English";
   const blocks: string[] = [
     `You are the assistant built into the Nexus desktop app. You run on the user's own machine: offline unless the user turned web search on, and with no account elsewhere. Prompt version ${SYSTEM_PROMPT_VERSION}.`,
+    [
+      `# Today`,
+      `Today is ${dayWithWeekday(options.today)}. Work out a relative day ("tomorrow", "next Monday") from it, and give a tool a day as YYYY-MM-DD.`,
+    ].join("\n"),
     [
       `# Language`,
       `Answer in the language the user writes in: Serbian (Latin script, with its full set of diacritics) or English. If the user's language is not clear from their message, answer in ${fallback}, which is what the app is showing right now. Fixed strings you must quote (a notice, a label) are given to you in both languages; quote the half that matches the answer.`,
