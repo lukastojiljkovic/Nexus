@@ -21,19 +21,17 @@ with the real registry (37 tools, web off), are why:
 | `buildSystemPrompt`, offered the whole registry | 11 164 characters (en) / 10 958 (sr) |
 | the same prompt, with `tools: []` | 3 145 characters |
 
-`buildSystemPrompt` listed every offered tool with its description, so the
-registry's copy of them - descriptions, schemas and names together, 22 271
-characters as this run measured it - was written into the prompt a SECOND time
-besides the runtime's own copy, and only 3 145 characters of that prompt are the
-instructions themselves. And the runtime renders all of it a THIRD time on its
-own: `functionsFrom` hands node-llama-cpp every tool as a `functions`
-entry with `documentFunctionParams: true` (name, English description, schema), or
-`fallbackToolsBlock` writes the same three lines into a system block for a chat
-template that cannot call functions.
+`buildSystemPrompt` listed every offered tool with its description, which was
+about 8 000 of its 11 164 characters: only 3 145 are the instructions
+themselves. The runtime then described every tool a second time on its own:
+`functionsFrom` hands node-llama-cpp every tool as a `functions` entry with
+`documentFunctionParams: true` (name, English description and schema, 22 271
+characters for the registry), or `fallbackToolsBlock` writes the same three
+things into a system block for a chat template that cannot call functions.
 
 Nothing counted any of that. `planContext` measured the MESSAGES, approved a
-request it believed was well inside the window, and llama.cpp then threw; the
-loop caught it with `catch {}` and emitted a bare `model-failed`, which is the
+request it believed was well inside the window, and the model call failed; the
+loop caught the error with `catch {}` and emitted a bare `model-failed`, which is the
 sentence a user saw and the whole of what a maintainer had to go on.
 
 ## 2. The prompt stops repeating the tool descriptions
@@ -71,7 +69,8 @@ the sense `CHAT_MESSAGE_OVERHEAD_TOKENS` states one: the marker and separator
 characters a chat template spends on one function. It is not a measurement.
 
 **The two limits.** `MAX_TOOLS_PER_TURN = 8` and `TOOL_BUDGET_SHARE = 0.4` of the
-request ceiling (7168 - 1024 at the shipped context, so 2 867 tokens). Both are
+request ceiling (8192 - 1024 = 7168 tokens at the shipped context, so 2 867
+tokens). Both are
 POLICY numbers, stated as such in the module: the cap covers the recipes the app
 ships with, and the share is deliberately under half so the prompt, the history,
 the knowledge passages and the question all have room. The budget is what
@@ -137,15 +136,15 @@ model can still find what the user recorded and still go there, and a question
 whose tool was not offered gets an answer from the conversation and the knowledge
 block rather than a failure. The score is lexical, so a question whose words do
 not appear in any description falls back on the recent calls and the core tools -
-which is also what a well-scored turn starts from. Prompt caching improves for a
-side reason: the tool list is stable and registry-ordered, and the same turn
-twice builds the same prefix.
+which is also what a well-scored turn starts from.
 
-Measured against the real registry after the change (37 tools, web off, 8192-token
-context, the question „Dodaj zadatak za sutra"): 8 tools offered, 2 640 tokens of
-specs, 1 373 tokens of Serbian prompt - 4 013 of the 7 168-token ceiling, leaving
-3 155 for the history, the knowledge passages and the question. Before the change
-the 37 specs alone were 22 271 characters, which is more than that window holds.
+Counted with the module's own estimates against the real registry (37 tools, web
+off, 8192-token context, the question „Dodaj zadatak za sutra"): 8 tools offered,
+2 640 tokens of specs, 1 373 tokens of Serbian prompt - 4 013 of the 7 168-token
+ceiling, leaving 3 155 for the history, the knowledge passages and the question.
+By the same estimate the 37 specs alone were about 11 200 tokens, more than the
+whole ceiling. These are estimates, not a tokeniser's counts; the loop replaces
+them with the model's own count after the first request.
 
 ## 7. Alternatives rejected
 
@@ -153,17 +152,18 @@ the 37 specs alone were 22 271 characters, which is more than that window holds.
 machine: the KV cache grows with the window, so a bigger context means more RAM
 on hardware the app already recommends a model for, and a longer prompt for every
 turn on a CPU. It also does not fix the ordering problem - 37 near-identical
-schemas still make a worse menu than four relevant ones.
+schemas would still all be handed to a small model to choose from.
 
 **A two-step "find a tool" meta-tool.** One extra model call per turn to select
 tools, before the call that answers. On a laptop CPU each call costs seconds, and
 the app's whole promise is that the assistant is usable offline on the machine in
 front of the user. The selection here is arithmetic over words the turn already
-holds, and it costs microseconds.
+holds, and makes no model call.
 
 **A stemmer or an embedding model for the score.** A real Serbian stemmer is
-another dependency to ship and maintain, and an embedding model is hundreds of
-megabytes and a second of compute per turn - more than the tools it would save.
+another dependency to ship and maintain, and an embedding model is optional in
+this app (ADR-104): most machines have none, so the choice cannot depend on one.
 The prefix rule above is wrong in ways that can be named (`zadatak` and `zadatke`
-match; `radi` and `radionica` do not), and naming them is better than hiding them
-behind a model that answers with a number.
+match, as they should; so do `radi` and `radionica`, which should not), and
+naming them is better than hiding them behind a model that answers with a
+number.
