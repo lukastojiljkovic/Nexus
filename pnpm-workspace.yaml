@@ -305,8 +305,17 @@ overrides:
 # them, which is thirteen places to forget. The key carries the exact version on
 # purpose — a bump that has fixed this upstream will fail to apply the patch,
 # and being told to come and look is the whole point of that failure.
+#
+# And a five-line one in node-llama-cpp's binary test, which loads a llama.cpp
+# build in a throwaway process before the real load. From an Electron utility
+# process neither of its forks can run: `utilityProcess` is a main-process API,
+# and a packaged executable cannot run as Node because the RunAsNode fuse is
+# off. So every build failed its test and the packaged assistant never loaded
+# one. The patch skips the test there, and `llama.ts` falls back to the CPU
+# build when a GPU build does not load. Exact-version key, for the same reason.
 patchedDependencies:
   better-sqlite3-multiple-ciphers@13.0.3: patches/better-sqlite3-multiple-ciphers@13.0.3.patch
+  node-llama-cpp@3.22.1: patches/node-llama-cpp@3.22.1.patch
 
 # `auditConfig.ignoreGhsas` remains FORBIDDEN here — the overrides above are
 # allowed to grow precisely because they are the opposite of it. An override

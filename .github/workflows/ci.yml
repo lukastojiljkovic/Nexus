@@ -244,6 +244,12 @@ jobs:
       # deterministic on the same node_modules and normalises path separators.
       - run: pnpm check:licences
 
+      # The packaged assistant loads node-llama-cpp from app.asar.unpacked, so
+      # everything it imports has to be unpacked too. 2.0.0 to 2.0.2 shipped
+      # without that and could not load a model; no dev run or test could see
+      # it, because outside the asar nothing is missing.
+      - run: pnpm check:unpack
+
       # The style half of the cloud-off boundary. The ASSERTION is
       # `apps/desktop/src/main/net/offline.ts` and its unit tests; this catches
       # a new egress construct before it ever has to be caught at runtime.

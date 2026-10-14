@@ -18,8 +18,10 @@
  *   2. **The backend is the one that LOADS.** `getLlamaGpuTypes("supported")`
  *      answers what this machine can actually run — measured on the maintainer's
  *      laptop as Vulkan, with the CUDA binaries installed and failing their own
- *      load test — and that answer, not the presence of a driver, decides. A
- *      machine whose CUDA binaries do not load falls back rather than refusing.
+ *      load test — and that answer, not the presence of a driver, decides. That
+ *      test cannot run in the packaged worker (the patch in `patches/` says why),
+ *      so there a GPU build that does not load falls back to the CPU build
+ *      rather than refusing.
  *   3. **One chat model and one embedder, at most.** A second chat model cannot
  *      be useful at once and would double the memory the chooser just spent its
  *      arithmetic on. The embedder is allowed to sit BESIDE a chat model because
@@ -546,7 +548,9 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
  *
  * `build: "never"` and `skipDownload: true` are the two options that keep a
  * failed binary from becoming a network request or a compiler invocation; see
- * the module header.
+ * the module header. A GPU build that does not load is followed by the CPU build:
+ * node-llama-cpp's own pre-load test cannot run in this process (the patch in
+ * `patches/` says why), so a load error is the only verdict there is.
  */
 async function createLlama(sink: EngineSink): Promise<Llama> {
   const { getLlama, getLlamaGpuTypes, LlamaLogLevel } = await llamaCpp();
@@ -557,13 +561,15 @@ async function createLlama(sink: EngineSink): Promise<Llama> {
   } catch (error) {
     sink.log?.(`assistant runtime: no GPU backend could be tested, using the CPU: ${String(error)}`);
   }
-  return await getLlama({
-    gpu,
-    build: "never",
-    skipDownload: true,
-    usePrebuiltBinaries: true,
-    logLevel: LlamaLogLevel.warn,
-  });
+  const load = (backend: typeof gpu) =>
+    getLlama({ gpu: backend, build: "never", skipDownload: true, usePrebuiltBinaries: true, logLevel: LlamaLogLevel.warn });
+  if (gpu === false) return await load(false);
+  try {
+    return await load(gpu);
+  } catch (error) {
+    sink.log?.(`assistant runtime: the ${gpu} build did not load, using the CPU: ${String(error)}`);
+    return await load(false);
+  }
 }
 
 /**
