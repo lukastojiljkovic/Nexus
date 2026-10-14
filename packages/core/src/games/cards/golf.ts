@@ -7,11 +7,15 @@
  * The rules are the article's
  * (https://en.wikipedia.org/wiki/Golf_(patience) § Rules and § Play): cards rank
  * Ace to King, there is no wrapping in the strict form (so a King can only be
- * followed by a Queen and an Ace only by a Two), a turn of the stock happens only
- * when nothing on the tableau can be played, there is no redeal, and the game
+ * followed by a Queen and an Ace only by a Two), there is no redeal, and the game
  * ends when the stock is exhausted and nothing is playable. `classic` is that
  * game and `wrap` is the article's named „Putt Putt" variation, in which a King
  * goes on an Ace and an Ace on a King.
+ *
+ * **The turn is this app's own rule.** The article turns the stock only while
+ * nothing on the tableau can be played; here a turn is legal whenever the stock is
+ * not empty, whether or not a column's exposed card can be played, because
+ * choosing to hold a card back to extend a run is the game's main decision.
  *
  * **The score is the article's own**: one point for each card left in the tableau
  * when the game ends, so FEWER is better and a cleared tableau is zero — which is
@@ -70,7 +74,7 @@ export interface GolfBoard {
 export type GolfMove =
   /** Play the exposed card of a column onto the foundation. */
   | { readonly kind: "play"; readonly column: number }
-  /** Turn the stock's next card onto the foundation. Legal only when nothing on the tableau can be played. */
+  /** Turn the stock's next card onto the foundation. Legal whenever the stock is not empty, played or not. */
   | { readonly kind: "turn" };
 
 export interface GolfState {
@@ -158,10 +162,9 @@ export function isGolfEntry(value: unknown): value is GameLogEntry<GolfMove> {
 
 /**
  * Every move the position allows. A play is offered for each column whose exposed
- * card touches the foundation's rank, and a TURN is offered only when no column
- * does — the article's „whenever there are no possible plays", which is a rule
- * about the move rather than a hint, so a turn beside an available play is
- * illegal and not merely unwise.
+ * card touches the foundation's rank, and a TURN whenever the stock is not empty
+ * — beside the plays, not only in their absence. The header says why this app
+ * departs from the article's „whenever there are no possible plays" here.
  *
  * An empty tableau has NO moves, not a turn: the article scores „a negative point
  * for every card left in the stock" once the tableau is cleared, so a cleared
@@ -215,6 +218,11 @@ export function hasGolfMoves(state: GolfState): boolean {
  * „Winnable from here?" for one position, by the shared bounded search — see
  * `solver.ts` for the bound and for why the memo is a proof. Both Golf and
  * Pyramid answer this question with it.
+ *
+ * The search walks the position's own move list, turn included — and a turn is now
+ * legal beside a play, so nearly every position has one. The graph is therefore
+ * much wider than it was, and a deal with many lines runs out of the budget and
+ * answers `unknown`, which is an honest answer rather than a loss.
  */
 export function golfSolve(state: GolfState, bound: number = SOLVER_NODE_BOUND): SolverAnswer<GolfMove> {
   return solveSolitaire(GOLF_SOLVER, state, bound);
@@ -312,8 +320,9 @@ function movesOnBoard(variant: GolfVariant, board: GolfBoard): GolfMove[] {
     const top = pile[pile.length - 1];
     if (top !== undefined && touches(board, top, variant)) plays.push({ kind: "play", column });
   });
-  if (plays.length > 0) return plays;
-  return board.stock.length > 0 ? [{ kind: "turn" }] : [];
+  // The turn rides BESIDE the plays rather than instead of them, and comes last
+  // so „the first offered move" stays a play wherever one exists.
+  return board.stock.length > 0 ? [...plays, { kind: "turn" }] : plays;
 }
 
 /**

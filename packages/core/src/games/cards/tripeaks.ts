@@ -10,9 +10,13 @@
  * lies face up across the bottom and overlaps the row of nine above it, each
  * row overlapping the one above in turn, so every card but the ten is covered by
  * the two cards of the row below and the game climbs from the ten towards the
- * three peaks. Cards are turned from the stock one at a time and only while nothing on
- * the tableau can be played, and the game is won when all twenty-eight tableau
- * cards are gone.
+ * three peaks. Cards are turned from the stock one at a time, and the game is
+ * won when all twenty-eight tableau cards are gone.
+ *
+ * **The turn is this app's own rule.** The article turns the stock only while
+ * nothing on the tableau can be played; here a turn is legal whenever the stock
+ * is not empty, whether or not a tableau card can be played, because choosing to
+ * hold a card back to extend a run is the game's main decision.
  *
  * `classic` is that game and `wrap` is the optional turning of the corner, King
  * on Ace and Ace on King, which the article lists as a variation.
@@ -89,7 +93,7 @@ export interface TriPeaksBoard {
 export type TriPeaksMove =
   /** Play an exposed tableau card onto the waste. */
   | { readonly kind: "play"; readonly slot: number }
-  /** Turn the stock's next card onto the waste. Legal only when nothing on the tableau can be played. */
+  /** Turn the stock's next card onto the waste. Legal whenever the stock is not empty, played or not. */
   | { readonly kind: "turn" };
 
 export interface TriPeaksState {
@@ -186,9 +190,9 @@ export function isTriPeaksEntry(value: unknown): value is GameLogEntry<TriPeaksM
 
 /**
  * Every move the position allows: a play for each exposed card that touches the
- * waste, and a TURN only when no such card exists — the article's „as long as it
- * does not begin a new sequence", which makes a turn beside an available play
- * illegal rather than merely unwise.
+ * waste, and a TURN whenever the stock is not empty — beside the plays, not only
+ * in their absence. The header says why this app departs from the article's
+ * „as long as it does not begin a new sequence" on this one point.
  *
  * A cleared tableau has NO moves, not a turn: the article says the game „is won
  * if all three peaks are cleared before or after the last card from the stock is
@@ -338,8 +342,9 @@ function movesOnBoard(variant: TriPeaksVariant, board: TriPeaksBoard): TriPeaksM
       if (touches(top, held, variant)) plays.push({ kind: "play", slot });
     });
   }
-  if (plays.length > 0) return plays;
-  return board.stock.length > 0 ? [{ kind: "turn" }] : [];
+  // The turn rides BESIDE the plays rather than instead of them, and comes last
+  // so „the first offered move" stays a play wherever one exists.
+  return board.stock.length > 0 ? [...plays, { kind: "turn" }] : plays;
 }
 
 function stepBoard(board: TriPeaksBoard, move: TriPeaksMove): TriPeaksBoard {

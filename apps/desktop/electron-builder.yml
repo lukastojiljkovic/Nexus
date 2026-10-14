@@ -339,8 +339,10 @@ nsis:
   createStartMenuShortcut: true
   artifactName: "Nexus-Setup-${version}.exe"
   # Uninstaller: build/installer.nsh's customUnInstall offers optional removal
-  # of the user's local data ($APPDATA\Nexus + updater cache), default keep;
-  # skipped entirely when the uninstall runs as part of an auto-update.
+  # of the user's local data ($APPDATA\Nexus + the updater cache + the
+  # $APPDATA\@nexus\desktop folder Nexus 2.0.0 to 2.0.2 wrote by mistake),
+  # default keep; skipped entirely when the uninstall runs as part of an
+  # auto-update.
   include: build/installer.nsh
 
 linux:

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { nexusUserAgent } from "../userAgent.js";
 import type { WebConfig } from "./gate.js";
 import { WEB_LIMITS } from "./limits.js";
 import {
@@ -13,7 +14,6 @@ import {
   requestHost,
   searxngSearchRequest,
   WEB_PROVIDER_IDS,
-  WEB_USER_AGENT,
   wikipediaSearchRequest,
 } from "./providers.js";
 
@@ -27,6 +27,9 @@ import {
  */
 
 const ON: WebConfig = { enabled: true, searxng: null };
+
+/** The running build's version, as the service hands it in: the User-Agent must name it. */
+const VERSION = "2.0.3";
 
 /** A Wikipedia `action=query&list=search` reply in `formatversion=2`, trimmed to two rows. */
 const WIKIPEDIA_REPLY = JSON.stringify({
@@ -53,13 +56,13 @@ const WIKIPEDIA_REPLY = JSON.stringify({
 
 describe("the Wikipedia provider", () => {
   it("builds the documented search call, with the wiki from the locale", () => {
-    expect(wikipediaSearchRequest("vodonik peroksid", "sr").url).toBe(
+    expect(wikipediaSearchRequest("vodonik peroksid", "sr", VERSION).url).toBe(
       "https://sr.wikipedia.org/w/api.php?action=query&list=search&srsearch=vodonik+peroksid&srlimit=8&format=json&formatversion=2",
     );
-    expect(wikipediaSearchRequest("hydrogen", "en").url).toContain("https://en.wikipedia.org/w/api.php?");
+    expect(wikipediaSearchRequest("hydrogen", "en", VERSION).url).toContain("https://en.wikipedia.org/w/api.php?");
     // `formatversion=2` is pinned rather than left to the API's default: the
     // parser below reads exactly one of the two shapes.
-    expect(wikipediaSearchRequest("x", "sr").url).toContain("formatversion=2");
+    expect(wikipediaSearchRequest("x", "sr", VERSION).url).toContain("formatversion=2");
   });
 
   it("sends the User-Agent Wikimedia's policy asks for, on this and every other request", () => {
@@ -67,10 +70,21 @@ describe("the Wikipedia provider", () => {
     // information, or they may be blocked without notice."
     // (https://foundation.wikimedia.org/wiki/Policy:User-Agent_policy)
     const policy = /^[^/]+\/[^\s]+ \(https:\/\/[^;]+; [^)]+\)$/;
-    expect(WEB_USER_AGENT).toMatch(policy);
-    expect(wikipediaSearchRequest("x", "sr").headers["user-agent"]).toBe(WEB_USER_AGENT);
-    expect(searxngSearchRequest("x", "https://searx.example.org").headers["user-agent"]).toBe(WEB_USER_AGENT);
-    expect(braveSearchRequest("x", "KEY", "en").headers["user-agent"]).toBe(WEB_USER_AGENT);
+    expect(nexusUserAgent(VERSION)).toMatch(policy);
+    expect(wikipediaSearchRequest("x", "sr", VERSION).headers["user-agent"]).toBe(nexusUserAgent(VERSION));
+    expect(searxngSearchRequest("x", "https://searx.example.org", VERSION).headers["user-agent"]).toBe(
+      nexusUserAgent(VERSION),
+    );
+    expect(braveSearchRequest("x", "KEY", "en", VERSION).headers["user-agent"]).toBe(nexusUserAgent(VERSION));
+  });
+
+  it("names the version it is handed, so the header follows the running build", () => {
+    // The version is `app.getVersion()`'s, handed in at the Electron seam - never
+    // written into this module, where it would go stale the day the app ships.
+    expect(nexusUserAgent("2.0.3")).toBe(
+      "Nexus/2.0.3 (https://github.com/lukastojiljkovic/Nexus; luka.d.stojiljkovic@gmail.com)",
+    );
+    expect(wikipediaSearchRequest("x", "sr", "9.9.9").headers["user-agent"]).toContain("Nexus/9.9.9 ");
   });
 
   it("reads the reply, strips the search-match spans and skips rows without an id or a title", () => {
@@ -105,10 +119,10 @@ describe("the Wikipedia provider", () => {
 
 describe("the SearXNG provider", () => {
   it("asks the configured instance for JSON", () => {
-    expect(searxngSearchRequest("vodonik", "https://searx.example.org").url).toBe(
+    expect(searxngSearchRequest("vodonik", "https://searx.example.org", VERSION).url).toBe(
       "https://searx.example.org/search?q=vodonik&format=json",
     );
-    expect(searxngSearchRequest("vodonik", "https://searx.example.org:8443").url).toBe(
+    expect(searxngSearchRequest("vodonik", "https://searx.example.org:8443", VERSION).url).toBe(
       "https://searx.example.org:8443/search?q=vodonik&format=json",
     );
   });
@@ -144,7 +158,7 @@ describe("the SearXNG provider", () => {
 
 describe("the Brave provider", () => {
   it("puts the key in the documented header and NEVER in the URL", () => {
-    const request = braveSearchRequest("vodonik", "BSA-key-123456", "sr");
+    const request = braveSearchRequest("vodonik", "BSA-key-123456", "sr", VERSION);
     expect(request.url).toBe(
       "https://api.search.brave.com/res/v1/web/search?q=vodonik&count=8&search_lang=sr",
     );
@@ -187,27 +201,34 @@ describe("the plan behind a web.search call", () => {
   });
 
   it("defaults to Wikipedia and needs neither an instance nor a key", () => {
-    const plan = buildSearchPlan("wikipedia", "vodonik", "sr", ON, null);
+    const plan = buildSearchPlan("wikipedia", "vodonik", "sr", ON, null, VERSION);
     expect(plan.ok).toBe(true);
     if (plan.ok) expect(plan.request.url).toContain("https://sr.wikipedia.org/w/api.php");
   });
 
   it("refuses searxng with no instance and brave with no key, without asking the user anything", () => {
-    expect(buildSearchPlan("searxng", "x", "sr", ON, null)).toEqual({ ok: false, problem: "not-configured" });
-    expect(buildSearchPlan("brave", "x", "sr", ON, null)).toEqual({ ok: false, problem: "no-key" });
+    expect(buildSearchPlan("searxng", "x", "sr", ON, null, VERSION)).toEqual({ ok: false, problem: "not-configured" });
+    expect(buildSearchPlan("brave", "x", "sr", ON, null, VERSION)).toEqual({ ok: false, problem: "no-key" });
 
-    const searxng = buildSearchPlan("searxng", "x", "sr", { enabled: true, searxng: "https://s.example.org" }, null);
+    const searxng = buildSearchPlan(
+      "searxng",
+      "x",
+      "sr",
+      { enabled: true, searxng: "https://s.example.org" },
+      null,
+      VERSION,
+    );
     expect(searxng.ok).toBe(true);
     if (searxng.ok) expect(searxng.request.url).toBe("https://s.example.org/search?q=x&format=json");
 
-    const brave = buildSearchPlan("brave", "x", "en", ON, "KEY");
+    const brave = buildSearchPlan("brave", "x", "en", ON, "KEY", VERSION);
     expect(brave.ok).toBe(true);
     if (brave.ok) expect(brave.request.headers["x-subscription-token"]).toBe("KEY");
   });
 
   it("refuses a query before it builds anything", () => {
-    expect(buildSearchPlan("wikipedia", "", "sr", ON, null)).toEqual({ ok: false, problem: "query" });
-    expect(buildSearchPlan("wikipedia", 7, "sr", ON, null)).toEqual({ ok: false, problem: "query" });
+    expect(buildSearchPlan("wikipedia", "", "sr", ON, null, VERSION)).toEqual({ ok: false, problem: "query" });
+    expect(buildSearchPlan("wikipedia", 7, "sr", ON, null, VERSION)).toEqual({ ok: false, problem: "query" });
   });
 
   it("names the host a confirm line will show", () => {

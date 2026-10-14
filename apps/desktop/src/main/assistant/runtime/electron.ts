@@ -21,6 +21,7 @@
 import { app, session, utilityProcess } from "electron";
 import { dirname, join } from "node:path";
 
+import { nexusUserAgent } from "../userAgent.js";
 import { createDownloadHttp } from "../../download/electron.js";
 import {
   createDownloadService,
@@ -87,7 +88,7 @@ function createDownloads(userData: string, mode: () => NetworkMode): {
  */
 async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
   const response = await createDownloadHttp(dedicatedSession()).request(url, {
-    headers: { accept: "application/json", "user-agent": "Nexus/2.0 (+https://github.com/lukastojiljkovic/Nexus)" },
+    headers: { accept: "application/json", "user-agent": nexusUserAgent(app.getVersion()) },
     signal,
   });
   if (response.status !== 200) throw new Error(`HTTP ${String(response.status)}`);

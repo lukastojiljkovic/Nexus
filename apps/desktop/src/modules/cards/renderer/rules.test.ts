@@ -300,6 +300,19 @@ describe("the boards' boxes", () => {
     expect(directMove("freecell", freecell, column!)).toBeNull();
   });
 
+  it("keeps the stock a control while a play is on the board, in TriPeaks and Golf alike", () => {
+    // A turn is legal whenever the stock is not empty, so the pile stays clickable
+    // beside the plays rather than only once the board is blocked — which is the
+    // app's own rule, not the cited article's (see the engines' headers).
+    for (const game of ["tripeaks", "golf"] as const) {
+      const session = startGame(game, "classic", 617);
+      const moves = legalMoves(session);
+      expect(moves.some((move) => (move as { kind: string }).kind === "play"), game).toBe(true);
+      expect(highlights(game, moves, null).pickable.has("stock"), game).toBe(true);
+      expect((directMove(game, moves, { kind: "stock" }) as { kind: string }).kind, game).toBe("turn");
+    }
+  });
+
   it("reads both boxes of every move between piles, so a column can be picked up and built on", () => {
     // Klondike calls a column „tableau" and FreeCell „column"; unread, no Klondike
     // column was ever a source or a destination.
