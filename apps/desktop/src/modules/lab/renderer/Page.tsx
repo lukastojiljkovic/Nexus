@@ -81,7 +81,7 @@ export default function LabPage({ profileId }: ModulePageProps) {
   }, [profileId]);
 
   return (
-    <div className="lab">
+    <div className="lab nx-measure">
       {/* The page's own name is the word the module DECLARED, read in the
           language being spoken, rather than a second copy of it (ADR-090's copy
           split). */}

@@ -17,11 +17,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-5);
-  /* THE MEASURE — the same reasoning, and the same token, as `.study`: past
-     ~1180px a row's label and its figure stop being one row. The token existed
-     and had never been adopted; it belongs on the page shell rather than on each
-     page (reported — `shell.css` is not this agent's file). */
-  max-width: var(--nx-layout-measure);
+  /* The measure is the shared `.nx-measure`, on the same element. */
 }
 .fit__section {
   display: flex;

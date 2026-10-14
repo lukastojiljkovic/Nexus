@@ -56,7 +56,7 @@ export function FitnessPage({ profileId }: FitnessPageProps) {
   const [section, setSection] = useState<FitSection>("body");
 
   return (
-    <div className="fit">
+    <div className="fit nx-measure">
       <PageHeader
         title={moduleName("fitness")}
         sigil="fitness"

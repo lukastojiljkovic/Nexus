@@ -53,7 +53,7 @@ export default function SignalsPage({ profileId }: ModulePageProps) {
   }
 
   return (
-    <div className="signals">
+    <div className="signals nx-measure">
       <PageHeader
         title={declaredText(manifest.copy?.name)}
         subtitle={copy.page.subtitle}

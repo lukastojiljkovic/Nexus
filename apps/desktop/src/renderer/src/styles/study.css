@@ -3,14 +3,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-5);
-  /* THE MEASURE. At a 1600px window the main column is ~1350px wide, and a row
-     whose label sits at the far left and whose figure sits at the far right
-     becomes two unrelated objects: the eye cannot carry one across the other.
-     `--nx-layout-measure` is the token that already existed for this and had
-     never been adopted anywhere — it is adopted here and in `.fit`, and it
-     belongs on the page shell so every module inherits it rather than each one
-     remembering (reported, `shell.css` is not this agent's file). */
-  max-width: var(--nx-layout-measure);
+  /* The measure is the shared `.nx-measure`, on the same element. */
 }
 /* The hub's opening block: the figures band, then the signature graphic. Both
    are the page's ANSWER, so they sit above the first list rather than under the

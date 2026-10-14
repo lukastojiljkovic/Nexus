@@ -280,10 +280,14 @@ samp {
    divides its width into seven columns, and the canvas is a viewport onto an
    infinite board — and capping those would be a defect rather than a
    refinement. So a page that reads as ROWS asks for this, and a page that reads
-   as a FIELD does not. */
+   as a FIELD does not.
+
+   Centred, because a capped page held to the left leaves the whole surplus as
+   one empty band down the right of a maximised window. */
 .nx-measure {
   width: 100%;
   max-width: var(--nx-layout-measure);
+  margin-inline: auto;
 }
 
 /* --- Segmented option -------------------------------------------------- */

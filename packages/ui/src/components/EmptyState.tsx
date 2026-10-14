@@ -62,7 +62,7 @@ export function EmptyState({
             <Icon name={sigil} size={14} />
           </span>
         )}
-        {description == null ? title : `${title} ${description}`}
+        {description == null ? title : `${asSentence(title)} ${description}`}
       </p>
     );
   }
@@ -78,4 +78,13 @@ export function EmptyState({
       {action != null && <div className="nx-empty__action">{action}</div>}
     </div>
   );
+}
+
+/**
+ * A title folded in front of its description is the line's first sentence, and a
+ * title is written without a full stop: joined bare, „The library is empty
+ * Everything you read…" ran the two together.
+ */
+function asSentence(title: string): string {
+  return /[.!?…:]$/u.test(title) ? title : `${title}.`;
 }

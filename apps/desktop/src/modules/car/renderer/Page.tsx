@@ -254,7 +254,7 @@ export default function CarPage({ profileId }: ModulePageProps) {
   const open = detail?.vehicle ?? null;
 
   return (
-    <div className="car">
+    <div className="car nx-measure">
       <PageHeader
         title={declaredText(manifest.copy?.name)}
         subtitle={copy.page.subtitle}

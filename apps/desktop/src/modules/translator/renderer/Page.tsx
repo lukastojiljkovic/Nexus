@@ -158,7 +158,7 @@ export default function TranslatorPage({ profileId }: ModulePageProps) {
   const installed = status?.installed === true;
 
   return (
-    <div className="translator">
+    <div className="translator nx-measure">
       {/* The page's name is the word the module DECLARED, read in the language
           being spoken, rather than a second copy of it (ADR-090's copy split). */}
       <PageHeader

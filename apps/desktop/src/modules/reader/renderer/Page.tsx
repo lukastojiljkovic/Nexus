@@ -319,7 +319,7 @@ export default function ReaderPage({ profileId }: ModulePageProps) {
   }, []);
 
   return (
-    <div className="reader" data-size={textSize}>
+    <div className="reader nx-measure" data-size={textSize}>
       <PageHeader
         title={declaredText(manifest.copy?.name)}
         subtitle={copy.page.subtitle}
