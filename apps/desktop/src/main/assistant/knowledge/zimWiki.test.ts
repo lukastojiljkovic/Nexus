@@ -171,13 +171,43 @@ describe("zimWikiSource.searchTitles", () => {
     expect(calls.map((call) => call.prefix)).toContain("Nikola Tesla");
   });
 
-  it("does not transliterate for a library that is not Serbian", async () => {
+  it("finds the nominative title of a declined word in a Serbian library", async () => {
+    const { host, calls } = fakeHost({
+      libraries: [{ id: "wikipedia-sr-mini", language: "srp" }],
+      titles: {
+        "wikipedia-sr-mini\u0000Београд": [
+          { zimPath: "A/Београд", title: "Београд" },
+          { zimPath: "A/Београдска_арена", title: "Београдска арена" },
+        ],
+        "wikipedia-sr-mini\u0000Француск": [
+          { zimPath: "A/Француска", title: "Француска" },
+          { zimPath: "A/Француски_језик", title: "Француски језик" },
+        ],
+        "wikipedia-sr-mini\u0000Град": [{ zimPath: "A/Градац", title: "Градац" }],
+      },
+    });
+    const wiki = zimWikiSource(host);
+
+    // "Beogradu" less its ending is the title itself, which ranks as exact.
+    const located = await wiki.searchTitles("Šta znaš o Beogradu?", 5, NEVER);
+    expect(located.map((title) => title.title)).toEqual(["Београд", "Београдска арена"]);
+
+    // A stem's prefix matches come before the next word's.
+    const declined = await wiki.searchTitles("Koji je glavni grad Francuske?", 5, NEVER);
+    expect(declined.map((title) => title.title)).toEqual(["Француска", "Француски језик", "Градац"]);
+
+    // Never cut below four letters: "grad" is asked as itself only.
+    expect(calls.map((call) => call.prefix)).not.toContain("gra");
+  });
+
+  it("does not transliterate or cut words for a library that is not Serbian", async () => {
     const { host, calls } = fakeHost({
       libraries: [{ id: "wiki-en", language: "eng" }],
       titles: {},
     });
     await zimWikiSource(host).searchTitles("Nikola Tesla", 5, NEVER);
     expect(calls.every((call) => /^[\x20-\x7f]*$/.test(call.prefix))).toBe(true);
+    expect(calls.map((call) => call.prefix)).not.toContain("Tesl");
   });
 
   it("answers nothing, and asks nothing, when there is no library or the signal is already aborted", async () => {

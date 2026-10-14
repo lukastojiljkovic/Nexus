@@ -39,7 +39,9 @@ import type { WikiSource, WikiTitle } from "./types.js";
  * the Serbian Latin alphabet onto the Cyrillic one, digraphs included - rather
  * than a second copy of the same thirty pairs. The digraphs it reports as
  * ambiguous (`nadživeti` is not *nađiveti*) cost a key that finds nothing, which
- * is the whole of the harm here: the other keys are still asked.
+ * is the whole of the harm here: the other keys are still asked. A word is
+ * also asked without its case ending (`stems`), because a question declines
+ * the noun its title names.
  *
  * **An article is read as the plain text `leadSection` expects.** A ZIM stores
  * the HTML whoever built the pack wrote, full of scripts, infoboxes, tables,
@@ -237,6 +239,23 @@ function cyrillicSpelling(key: string): string {
   return translated.ok ? translated.text : "";
 }
 
+/**
+ * The shorter spellings a word is also asked under in a Serbian library: the
+ * word less its last letter, and less its last two.
+ *
+ * Serbian declines its nouns ("o Beogradu", "glavni grad Francuske") while a
+ * title is the nominative ("Београд", "Француска"), and a prefix walk cannot
+ * see past an ending. A case ending is one or two letters, so the cut word is
+ * the title itself (which then ranks as exact) or a prefix of it. A wrong cut
+ * costs a search that finds nothing, or prefix matches that rank after every
+ * exact title. Only single words are cut, and never below four letters.
+ */
+function stems(key: string): readonly string[] {
+  if (key.includes(" ")) return [];
+  const chars = [...key];
+  return [1, 2].filter((cut) => chars.length - cut >= 4).map((cut) => chars.slice(0, -cut).join(""));
+}
+
 /** `<library id>/<entry path>`, and back. The id has no slash in it, so the first one is the boundary. */
 function titlePath(libraryId: string, zimPath: string): string {
   return `${libraryId}/${zimPath}`;
@@ -283,10 +302,16 @@ export function zimWikiSource(host: ZimWikiHost): WikiSource {
         if (signal.aborted) return answer();
         for (const library of libraries) {
           if (signal.aborted) return answer();
-          ask(library, key);
-          if (SERBIAN_TAG.test((library.language ?? "").trim().toLowerCase())) {
-            const cyrillic = cyrillicSpelling(key);
-            if (cyrillic !== key) ask(library, cyrillic);
+          if (!SERBIAN_TAG.test((library.language ?? "").trim().toLowerCase())) {
+            ask(library, key);
+            continue;
+          }
+          // The stems right after their word, so that their prefix matches rank
+          // before the next, less likely word's.
+          for (const spelling of [key, ...stems(key)]) {
+            ask(library, spelling);
+            const cyrillic = cyrillicSpelling(spelling);
+            if (cyrillic !== spelling) ask(library, cyrillic);
           }
         }
         // An exact title is the answer, and the keys after this one are guesses

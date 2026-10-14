@@ -95,9 +95,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The assistant reads the Wikipedia you downloaded.** Its knowledge base was
   built to read the Wiki module's libraries, but nothing connected the two, so
   a downloaded library never reached an answer. For each question it now looks
-  up the titles the question names in every library on the computer, in
-  Cyrillic too for a Serbian one, and cites the opening section of the few
-  articles that match.
+  up the titles the question names in every library on the computer (for a
+  Serbian one also in Cyrillic and without the case ending, so "o Beogradu"
+  finds Београд), and cites the opening section of the few articles that
+  match.
 
 ## [2.0.2] - 2026-10-14
 
