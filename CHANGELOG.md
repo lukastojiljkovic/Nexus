@@ -6,6 +6,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A model you found or imported can answer.** A model downloaded through the
+  Hugging Face search, or imported from a `.gguf` file, served none of the three
+  tiers, so the assistant could never use it. Its row under Models now has "Use
+  for answers". The choice belongs to the account, choosing a tier again goes
+  back to the tier's pick, and a backup does not carry it, because the model file
+  stays on this computer.
+
 ### Changed
 
 - **The privacy policy describes the app that ships.** Since 2.0.0 it still

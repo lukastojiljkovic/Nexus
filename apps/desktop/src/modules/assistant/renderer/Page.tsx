@@ -290,7 +290,12 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
     [profileId],
   );
 
-  const modelReady = setup !== null && setup.installed.some((entry) => entry.servesTiers.length > 0);
+  // A model is ready when one can answer: the tier's own pick, or the model the
+  // user chose by hand - which serves no tier at all, and is exactly the case
+  // this page has to be able to open a conversation for.
+  const modelReady =
+    setup !== null &&
+    setup.installed.some((entry) => entry.chosen || entry.servesTiers.length > 0);
   const conversation = thread?.conversation ?? null;
 
   return (

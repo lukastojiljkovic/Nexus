@@ -235,11 +235,23 @@ export function register(host: ModuleHostSurface): void {
       reason: pick.reason,
       installed: installedIds.has(pick.model.id),
     }));
+    // The choice the profile's page may draw, and the EFFECTIVE one: a stored id
+    // that names a model this machine no longer has (or that is not a chat
+    // model) marks nothing, so the page reads the tier as what answers - the
+    // same fallback `chatModelEntry` makes.
+    const stored = profile.settings().chatModelId;
+    const chosenId =
+      stored === null
+        ? null
+        : (available.find(
+            (entry) => entry.id === stored && entry.capabilities.includes("chat"),
+          )?.id ?? null);
     const installedView: AssistantInstalledView[] = available.map((entry) => ({
       model: entry,
       servesTiers: recommendations
         .filter((pick) => pick.model.id === entry.id)
         .map((pick) => pick.tier),
+      chosen: entry.id === chosenId,
     }));
     // Every entry main produced is remembered, so `downloadModel` can only name
     // one this process offered.
@@ -252,6 +264,7 @@ export function register(host: ModuleHostSurface): void {
       search: profile.searchResults(),
       download: profile.downloadView(),
       defaultTier: profile.settings().defaultTier,
+      chatModelId: chosenId,
       downloadsAllowed: profile.downloadsAllowed(),
       networkMode: services().networkMode(),
     };
@@ -639,6 +652,30 @@ export function register(host: ModuleHostSurface): void {
     const profileId = call.as.asId(payload.profileId, "profileId");
     const profile = profileFor(call, profileId);
     profile.setDefaultTier(tierOf(call, payload.tier));
+    return await setupView(profile);
+  });
+
+  ctx.handle("setChatModel", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const modelId = call.as.asNullableString(payload.modelId, "modelId");
+    const id = modelId === null ? null : call.as.asId(modelId, "modelId");
+    const profile = profileFor(call, profileId);
+    if (id === null) {
+      profile.setChatModel(null);
+    } else {
+      // The choice is checked against the models ON THIS DISK rather than against
+      // the entries this process offered: choosing a model to answer with must
+      // name one that is already here, and an id nothing installed can answer is
+      // refused by name instead of being stored to fall back from on every turn.
+      const entry = (await profile.installedEntries()).find((candidate) => candidate.id === id);
+      if (entry === undefined) {
+        throw new Error(`No model "${id}" is installed, so it cannot answer this profile.`);
+      }
+      if (!entry.capabilities.includes("chat")) {
+        throw new Error(`The model "${id}" has no "chat" capability, so it cannot answer.`);
+      }
+      profile.setChatModel(id);
+    }
     return await setupView(profile);
   });
 

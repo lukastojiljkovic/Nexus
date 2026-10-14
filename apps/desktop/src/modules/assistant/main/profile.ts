@@ -250,15 +250,43 @@ export class AssistantProfile {
   }
 
   /**
+   * The model that answers a new turn: the profile's own CHOICE when it names an
+   * installed chat model, and the tier's pick otherwise.
+   *
+   * **A choice that is gone is not a substitution.** A model the user deleted (or
+   * that a restore replaced) leaves them with the tier they still have, and that
+   * is the tier answering - not a model silently swapped for the one they asked
+   * for. The setup screen shows the same reading: `chatModelId` is null and no
+   * installed row is marked `chosen`, so what answers and what the page says
+   * answers are the same statement.
+   *
+   * A chosen id that names a model without the `chat` capability is treated the
+   * same way, and for the same reason: the choice was refused at the wire
+   * (`register.ts` checks the capability), so an id that no longer qualifies can
+   * only have arrived from outside this module's own writes.
+   */
+  async chatModelEntry(tier: ModelTier): Promise<ModelEntry | null> {
+    const chosen = this.settings().chatModelId;
+    if (chosen !== null) {
+      const entry = (await this.modelHost().installed()).find(
+        (candidate) => candidate.id === chosen && candidate.capabilities.includes("chat"),
+      );
+      if (entry !== undefined) return entry;
+    }
+    return await this.installedModelFor(tier);
+  }
+
+  /**
    * Loads the model one turn runs on.
    *
-   * A tier with nothing installed is refused by NAME (`AssistantModelMissingError`)
-   * rather than answered with another tier's model: the tier is the user's own
-   * choice, and quietly loading a different model than the one they picked is the
-   * kind of substitution nobody can see.
+   * The profile's chosen model answers when it has one (`chatModelEntry`); with
+   * no choice the tier decides. A tier with nothing installed is refused by NAME
+   * (`AssistantModelMissingError`) rather than answered with another tier's
+   * model: the tier is the user's own choice, and quietly loading a different
+   * model than the one they picked is the kind of substitution nobody can see.
    */
   async loadChat(tier: ModelTier, signal: AbortSignal): Promise<ChatModel> {
-    const entry = await this.installedModelFor(tier);
+    const entry = await this.chatModelEntry(tier);
     if (entry === null) throw new AssistantModelMissingError(tier);
     return await this.modelHost().loadChat(entry.id, signal);
   }
@@ -361,6 +389,11 @@ export class AssistantProfile {
 
   setDefaultTier(tier: ModelTier): AssistantSettings {
     return this.store.setDefaultTier(tier, this.instant());
+  }
+
+  /** Chooses the model this profile answers with, or clears the choice with `null` (the tier decides again). */
+  setChatModel(id: string | null): AssistantSettings {
+    return this.store.setChatModel(id, this.instant());
   }
 
   /**

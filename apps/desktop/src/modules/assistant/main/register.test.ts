@@ -69,6 +69,43 @@ const ENTRY: ModelEntry = {
   licence: { name: "Apache-2.0", url: "https://www.apache.org/licenses/LICENSE-2.0" },
 };
 
+/**
+ * A model the user downloaded or imported: installed, able to chat, and the pick
+ * for NO tier - the state this whole feature exists for.
+ */
+const DOWNLOADED: ModelEntry = {
+  id: "downloaded-model-q4_k_m",
+  origin: "huggingface",
+  title: "Downloaded model",
+  family: "qwen2.5",
+  repo: "test/downloaded",
+  file: "downloaded-model-q4_k_m.gguf",
+  sha256: "1".repeat(64),
+  sizeBytes: 2_000_000_000,
+  quantization: "Q4_K_M",
+  contextTokens: 8192,
+  capabilities: ["chat"],
+  languages: ["sr", "en"],
+  licence: { name: "MIT", url: "https://opensource.org/license/mit" },
+};
+
+/** An embedding model: installed, and unable to answer, so it may never be chosen. */
+const EMBEDDING: ModelEntry = {
+  id: "embed-model",
+  origin: "huggingface",
+  title: "Embedding model",
+  family: "bge-m3",
+  repo: "test/embed",
+  file: "embed-model-f16.gguf",
+  sha256: "2".repeat(64),
+  sizeBytes: 500_000_000,
+  quantization: "F16",
+  contextTokens: 8192,
+  capabilities: ["embedding"],
+  languages: ["sr", "en"],
+  licence: { name: "MIT", url: "https://opensource.org/license/mit" },
+};
+
 const HARDWARE: HardwareProfile = {
   totalRamBytes: 16 * 1024 ** 3,
   freeRamBytes: 8 * 1024 ** 3,
@@ -81,6 +118,10 @@ let db: NexusDatabase;
 let profileId: string;
 let unloads = 0;
 let loadError: Error | null = null;
+/** The models on this machine, written by the tests that add or remove one. */
+let installedEntries: ModelEntry[] = [];
+/** Every model id `loadChat` was asked for, in order. */
+let loaded: string[] = [];
 /** The voice worker, as this module sees it: one canned reply per request kind. */
 let voiceRequests: VoiceRequest[] = [];
 let voiceDisposals = 0;
@@ -138,14 +179,17 @@ function fakeHost(): ModelHost {
       return [];
     },
     async installed(): Promise<readonly ModelEntry[]> {
-      return [ENTRY];
+      return [...installedEntries];
     },
     async download(): Promise<void> {},
     async importFile(): Promise<ModelEntry> {
       return ENTRY;
     },
-    async remove(): Promise<void> {},
-    async loadChat() {
+    async remove(id: string): Promise<void> {
+      installedEntries = installedEntries.filter((candidate) => candidate.id !== id);
+    },
+    async loadChat(id: string) {
+      loaded.push(id);
       if (loadError !== null) throw loadError;
       // The window the app itself loads: a chat model is asked for
       // `CHAT_CONTEXT_TOKENS` (8_192). The fake's own default is 4_096, and the
@@ -154,10 +198,11 @@ function fakeHost(): ModelHost {
       // Serbian, for the 37 tools it declares - so at 4_096 (ceiling 3_072)
       // every turn ended `context-full` before the model was asked anything,
       // and the tests below passed or failed for a reason none of them named.
+      const entry = installedEntries.find((candidate) => candidate.id === id);
       return createScriptedModel(script, {
-        id: ENTRY.id,
-        title: ENTRY.title,
-        contextTokens: ENTRY.contextTokens,
+        id,
+        title: entry?.title ?? id,
+        contextTokens: entry?.contextTokens ?? ENTRY.contextTokens,
       });
     },
     async loadEmbedder() {
@@ -222,6 +267,8 @@ beforeEach(() => {
   new TaskListStore(db.raw, profileId).ensureInbox(new Date(NOW).toISOString());
   unloads = 0;
   loadError = null;
+  installedEntries = [ENTRY];
+  loaded = [];
   voiceRequests = [];
   voiceDisposals = 0;
   voiceTranscript = "Zdravo iz mikrofona.";
@@ -800,4 +847,94 @@ describe("the assistant module through the kit", () => {
     })) as { messages: unknown[] };
     expect(thread.messages).toEqual([]);
   });
+
+  it("reports the chosen model on the setup view, and that a tier clears the choice", async () => {
+    const host = harness();
+    installedEntries = [ENTRY, DOWNLOADED];
+    const before = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      chatModelId: string | null;
+      installed: { model: { id: string }; chosen: boolean }[];
+    };
+    expect(before.chatModelId).toBeNull();
+    expect(before.installed.some((row) => row.chosen)).toBe(false);
+
+    const chosen = (await host.dispatch("assistant:setChatModel", TRUSTED, {
+      profileId,
+      modelId: DOWNLOADED.id,
+    })) as { chatModelId: string | null; installed: { model: { id: string }; chosen: boolean }[] };
+    expect(chosen.chatModelId).toBe(DOWNLOADED.id);
+    // The choice marks the one row that answers, and the tier's own pick is not
+    // marked: `chosen` is the hand-picked model, not the tier.
+    expect(chosen.installed.map((row) => [row.model.id, row.chosen])).toEqual([
+      [ENTRY.id, false],
+      [DOWNLOADED.id, true],
+    ]);
+
+    const tiered = (await host.dispatch("assistant:setDefaultTier", TRUSTED, {
+      profileId,
+      tier: "speed",
+    })) as { chatModelId: string | null; installed: { chosen: boolean }[] };
+    expect(tiered.chatModelId).toBeNull();
+    expect(tiered.installed.some((row) => row.chosen)).toBe(false);
+  });
+
+  it("refuses a chosen model that is not installed, and one that cannot chat", async () => {
+    const host = harness();
+    installedEntries = [ENTRY, EMBEDDING];
+    await expect(
+      host.dispatch("assistant:setChatModel", TRUSTED, { profileId, modelId: "invented" }),
+    ).rejects.toThrow(/installed/);
+    await expect(
+      host.dispatch("assistant:setChatModel", TRUSTED, { profileId, modelId: EMBEDDING.id }),
+    ).rejects.toThrow(/chat/);
+    // Neither refusal is a half-write: the profile is left with no choice at all.
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      chatModelId: string | null;
+    };
+    expect(view.chatModelId).toBeNull();
+  });
+
+  it("answers with the chosen model, and falls back to the tier's pick once it is removed", async () => {
+    const host = harness();
+    installedEntries = [ENTRY, DOWNLOADED];
+    script = [{ text: "Odgovor." }];
+    const created = (await host.dispatch("assistant:createConversation", TRUSTED, {
+      profileId,
+      title: "Izbor",
+    })) as { conversations: { id: string }[] };
+    const conversationId = created.conversations[0]?.id ?? "";
+    const send = async (text: string): Promise<void> => {
+      const started = (await host.dispatch("assistant:send", TRUSTED, {
+        profileId,
+        conversationId,
+        text,
+        workflowId: null,
+      })) as { turnId: string };
+      await pollUntil(host, started.turnId, (events) =>
+        events.some((entry) => entry.event.type === "done"),
+      );
+    };
+
+    // No choice: the balance pick answers, even though a second chat model that
+    // serves no tier is installed beside it.
+    await send("zdravo");
+    expect(loaded).toEqual([ENTRY.id]);
+
+    // Chosen: the downloaded model answers instead of the tier's pick.
+    await host.dispatch("assistant:setChatModel", TRUSTED, { profileId, modelId: DOWNLOADED.id });
+    await send("i sada ti");
+    expect(loaded).toEqual([ENTRY.id, DOWNLOADED.id]);
+
+    // Removed: the choice no longer names anything, so the tier answers again and
+    // the setup view stops marking a chosen row.
+    await host.dispatch("assistant:removeModel", TRUSTED, { profileId, modelId: DOWNLOADED.id });
+    await send("a sada");
+    expect(loaded).toEqual([ENTRY.id, DOWNLOADED.id, ENTRY.id]);
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      chatModelId: string | null;
+      installed: { chosen: boolean }[];
+    };
+    expect(view.chatModelId).toBeNull();
+    expect(view.installed.some((row) => row.chosen)).toBe(false);
+  }, 30_000);
 });
