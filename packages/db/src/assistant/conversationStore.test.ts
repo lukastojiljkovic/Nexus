@@ -238,9 +238,59 @@ describe("ConversationStore", () => {
 
   it("answers the shipped tier where no preference is stored, and keeps a chosen one", () => {
     const store = new ConversationStore(db.raw, createProfile());
-    expect(store.settings()).toEqual({ defaultTier: "balance" });
-    expect(store.setDefaultTier("speed", NOW)).toEqual({ defaultTier: "speed" });
-    expect(store.settings()).toEqual({ defaultTier: "speed" });
+    expect(store.settings()).toEqual({ defaultTier: "balance", chatModelId: null });
+    expect(store.setDefaultTier("speed", NOW)).toEqual({
+      defaultTier: "speed",
+      chatModelId: null,
+    });
+    expect(store.settings()).toEqual({ defaultTier: "speed", chatModelId: null });
+  });
+
+  it("keeps a chosen chat model, clears it with a tier, and holds it on a row the migration gave a column", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    // The column migration 92 adds, on the settings row migration 91 created: the
+    // store's own reads and writes below are its only proof of shape.
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(assistant_settings)").all() as {
+        name: string;
+        type: string;
+        notnull: number;
+      }[]
+    )
+      .map((column) => ({ name: column.name, type: column.type, notnull: column.notnull }))
+      .filter((column) => column.name === "chat_model_id");
+    expect(columns).toEqual([{ name: "chat_model_id", type: "TEXT", notnull: 0 }]);
+
+    expect(store.setChatModel("qwen2.5-3b-instruct-q4_k_m", NOW)).toEqual({
+      defaultTier: "balance",
+      chatModelId: "qwen2.5-3b-instruct-q4_k_m",
+    });
+    expect(store.settings()).toEqual({
+      defaultTier: "balance",
+      chatModelId: "qwen2.5-3b-instruct-q4_k_m",
+    });
+    // Choosing a tier again is choosing the tier's own pick: the choice goes.
+    expect(store.setDefaultTier("speed", LATER)).toEqual({
+      defaultTier: "speed",
+      chatModelId: null,
+    });
+    expect(store.settings()).toEqual({ defaultTier: "speed", chatModelId: null });
+    // And clearing by hand is the same state as never having chosen.
+    store.setChatModel("qwen2.5-3b-instruct-q4_k_m", LATER);
+    expect(store.setChatModel(null, LATER)).toEqual({ defaultTier: "speed", chatModelId: null });
+  });
+
+  it("refuses a blank chosen-model id, and writes no row for one", () => {
+    const profileId = createProfile();
+    const store = new ConversationStore(db.raw, profileId);
+    expect(() => store.setChatModel("", NOW)).toThrow(AssistantValidationError);
+    // An id is bounded at 200 characters, the same as every other id the wire and
+    // the archive readers bound.
+    expect(() => store.setChatModel("x".repeat(201), NOW)).toThrow(AssistantValidationError);
+    const rows = db.raw
+      .prepare("SELECT count(*) AS n FROM assistant_settings WHERE profile_id = ?")
+      .get(profileId) as { n: number };
+    expect(rows.n).toBe(0);
   });
 
   it("round-trips through export and import into a fresh database", () => {
@@ -261,16 +311,20 @@ describe("ConversationStore", () => {
       LATER,
     );
     store.setDefaultTier("intelligence", LATER);
+    // A chosen model is DEVICE data - a file on this machine - so the section
+    // carries the tier and says nothing about the choice.
+    store.setChatModel("downloaded-model-q4_k_m", LATER);
     const section = store.exportData();
 
     // The section is a plain, versioned value: it survives JSON, which is what an
     // archive does to it.
     const parsed = parseAssistantExport(JSON.parse(JSON.stringify(section)) as unknown);
     expect(parsed.version).toBe(ASSISTANT_EXPORT_VERSION);
+    expect("chatModelId" in section).toBe(false);
 
     const restored = new ConversationStore(other.raw, createProfile(other));
     restored.importData(parsed, NOW);
-    expect(restored.settings()).toEqual({ defaultTier: "intelligence" });
+    expect(restored.settings()).toEqual({ defaultTier: "intelligence", chatModelId: null });
     const [thread] = restored.listConversations();
     expect(thread?.title).toBe("Putovanje");
     expect(thread?.modelId).toBe("llama-3.2-3b-instruct-q4_k_m");
@@ -290,9 +344,12 @@ describe("ConversationStore", () => {
     const conversation = store.createConversation("Staro", NOW);
     store.appendTurn(conversation.id, [{ role: "user", text: "zdravo" }], null, NOW);
     store.setDefaultTier("speed", NOW);
+    store.setChatModel("downloaded-model-q4_k_m", NOW);
     store.importData(undefined, LATER);
     expect(store.listConversations()).toEqual([]);
-    expect(store.settings()).toEqual({ defaultTier: "balance" });
+    // The row goes, so the choice goes with it: the column is a column of the
+    // settings row, not a second table a reset could forget.
+    expect(store.settings()).toEqual({ defaultTier: "balance", chatModelId: null });
     // An import into a profile that never had one is the same answer, and the
     // whole write is one transaction: the counters below it are what a partial
     // import would have left behind.

@@ -6,6 +6,8 @@ keywords: [assistant, model, chat, offline, gguf, llama]
 ---
 The assistant is a conversation with a model that runs on this computer. The model is picked for the hardware (intelligence, balance or speed), downloaded once, and then works with no internet.
 
+A model you found through the search or imported yourself serves no tier: open "Models" and press "Use for answers" on its row, and it answers from then on. "Use the recommended model" gives the answer back to the tier.
+
 How to use it:
 
 1. "Models": see the pick for this machine, then download a model (only in the Downloads network mode), import a `.gguf` file, or search Hugging Face. Every file is verified against its SHA-256.
