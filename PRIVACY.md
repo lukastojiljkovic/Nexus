@@ -158,7 +158,9 @@ boundary, not an inconvenience to be removed later.
   own page handling, not a feature of Nexus: the application does not maintain a
   server-side copy of anything, because there is no server.
 - **Uninstalling** the application does not delete your data folder. The
-  uninstaller offers to remove it and keeps it by default.
+  uninstaller offers to remove it — with the update cache and the folder Nexus
+  2.0.0 to 2.0.2 wrote under `%APPDATA%\@nexus\desktop` by mistake — and keeps
+  them by default.
 
 ## Your rights, and the law
 

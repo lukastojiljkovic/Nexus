@@ -48,6 +48,9 @@ function stateOf(
 
 const play = (slot: number): TriPeaksMove => ({ kind: "play", slot });
 const turn: TriPeaksMove = { kind: "turn" };
+/** The slots the position offers a play for; the turn names no slot. */
+const playsOf = (state: TriPeaksState): number[] =>
+  triPeaksMoves(state).flatMap((move) => (move.kind === "play" ? [move.slot] : []));
 
 describe("the TriPeaks deal", () => {
   it("lays out twenty-eight cards, turns the first stock card onto the waste, and keeps twenty-three", () => {
@@ -85,15 +88,14 @@ describe("the TriPeaks rules", () => {
       waste: "5H",
       stock: "2C",
     });
-    expect(triPeaksMoves(state).map((move) => (move.kind === "play" ? move.slot : -1))).toEqual([0, 1]);
+    expect(playsOf(state)).toEqual([0, 1]);
     expect(isTriPeaksMoveLegal(state, play(2))).toBe(false);
   });
 
   it("opens on the row of ten, and hides a card until BOTH cards covering it are gone", () => {
     // Slots 0 and 1 are in the row of ten, which nothing covers; slot 10, in the
     // row of nine, is covered by both of them.
-    const slots = (state: TriPeaksState): number[] =>
-      triPeaksMoves(state).map((move) => (move.kind === "play" ? move.slot : -1));
+    const slots = playsOf;
     const state = stateOf({ at: { 0: "5H", 1: "4D", 10: "3C" }, waste: "6D", stock: "9S" });
     // 5H is one below the waste; 4D is two away, and the 3C is still covered.
     expect(slots(state)).toEqual([0]);
@@ -118,18 +120,34 @@ describe("the TriPeaks rules", () => {
     expect(offered).toEqual(Array.from({ length: 10 }, (_, slot) => slot).filter(near));
   });
 
-  it("turns the stock only when nothing on the tableau can be played", () => {
-    const stuck = stateOf({ at: { 0: "8C" }, waste: "5H", stock: "2C 3C" });
-    expect(triPeaksMoves(stuck)).toEqual([turn]);
-    const playable = stateOf({ at: { 0: "4C" }, waste: "5H", stock: "2C" });
-    expect(triPeaksMoves(playable)).toEqual([play(0)]);
-    expect(isTriPeaksMoveLegal(playable, turn)).toBe(false);
+  it("offers a turn whenever the stock is not empty, beside the plays on the board", () => {
+    // A turn beside an available play is a legal move in both variants: holding a
+    // card back to extend a run is the game's main decision, not a mistake.
+    const playable = { at: { 0: "4C" }, waste: "5H", stock: "2C" };
+    expect(triPeaksMoves(stateOf(playable, "classic"))).toEqual([play(0), turn]);
+    expect(triPeaksMoves(stateOf(playable, "wrap"))).toEqual([play(0), turn]);
+    expect(isTriPeaksMoveLegal(stateOf(playable, "classic"), turn)).toBe(true);
+    // Nothing on the tableau plays and the stock is not empty: the turn is all there is.
+    expect(triPeaksMoves(stateOf({ at: { 0: "8C" }, waste: "5H", stock: "2C 3C" }))).toEqual([turn]);
+    // The stock is empty and nothing plays: the position is stuck, with no move at all.
+    expect(triPeaksMoves(stateOf({ at: { 0: "8C" }, waste: "5H" }))).toEqual([]);
   });
 
   it("turns a corner only in the wrap variant", () => {
     const position = { at: { 0: "AD" }, waste: "KS", stock: "2C" };
     expect(triPeaksMoves(stateOf(position, "classic"))).toEqual([turn]);
-    expect(triPeaksMoves(stateOf(position, "wrap"))).toEqual([play(0)]);
+    expect(triPeaksMoves(stateOf(position, "wrap"))).toEqual([play(0), turn]);
+  });
+
+  it("still plays onto the waste a turn just made, when the turn was taken beside a play", () => {
+    // The waste is 5H and the 4C plays on it; the stock's 3C plays on the 4C, so
+    // turning first leaves the 4C on the table and lets it be played after.
+    const state = stateOf({ at: { 0: "4C" }, waste: "5H", stock: "3C" });
+    expect(triPeaksMoves(state)).toEqual([play(0), turn]);
+    const turned = applyTriPeaks(state, turn);
+    expect(turned.board.waste).toEqual([card("5H"), card("3C")]);
+    expect(isTriPeaksMoveLegal(turned, play(0))).toBe(true);
+    expect(applyTriPeaks(turned, play(0)).board.waste).toEqual([card("5H"), card("3C"), card("4C")]);
   });
 
   it("scores a run 1, 2, 3 and starts again after a turn of the stock", () => {

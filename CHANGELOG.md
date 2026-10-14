@@ -15,6 +15,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   where packs, libraries and models are stored. The README, the website and
   `llms.txt` name macOS, the three network modes and the modules 2.0 added.
 
+- **TriPeaks and Golf let you turn the stock at any time.** They allowed it
+  only when no card on the table could be played, as the Wikipedia articles they
+  follow describe. Holding a card back to build a longer run is the main
+  decision in both games, so the stock is now open while it has cards. The Golf
+  solver answers "unknown" more often as a result: the same search bound now
+  covers many more lines.
+
 ### Fixed
 
 - **The installed app loads a local model.** Since 2.0.0 the assistant worked
@@ -37,6 +44,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keep only one of the two keys that guard their passcodes. Nexus keeps the 2.x
   one, so the accounts in use unlock as before, and each 1.x account asks once
   for its Recovery Kit.
+
+- **The uninstaller asks in English, and removes the 2.x data folder too.** Its
+  question about deleting local data was only in Serbian. If you choose to
+  delete, it now also removes `%APPDATA%\@nexus\desktop`, where 2.0.0 to 2.0.2
+  kept their data.
+
+- **Web search names the version that is running.** Its requests said
+  `Nexus/1.5.0`, and the model search's said `Nexus/2.0`. Both now send the
+  running version with the project's address and a contact, as Wikimedia's
+  User-Agent policy asks.
 
 - **The assistant answers.** Every turn on the installed app ended in an error:
   the descriptions and schemas of all 37 tools, written into the request twice,

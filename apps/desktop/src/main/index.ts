@@ -1705,6 +1705,9 @@ configureCookbook({
  */
 configureAssistant({
   userData: () => userDataDir(),
+  // `app.getVersion()`: the release running now, which the web tools' User-Agent
+  // names (the module never imports Electron, so this is handed over like the rest).
+  appVersion: () => app.getVersion(),
   releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
   networkMode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
   // The default parameter builds the app's own wiring (the utility process and

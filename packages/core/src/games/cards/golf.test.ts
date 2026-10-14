@@ -103,19 +103,34 @@ describe("the Golf rules", () => {
     // Strict: a King is twelve ranks from an Ace, so nothing on the tableau plays
     // and the only thing left is to turn the stock.
     expect(golfMoves(stateOf(position, "classic"))).toEqual([turn]);
-    // Putt Putt: the King turns the corner onto the Ace. (The Nine is then eight
-    // ranks from the King, so the corner is the only move and the turn is refused.)
-    expect(golfMoves(stateOf(position, "wrap")).sort(byColumn)).toEqual([play(0)].sort(byColumn));
+    // Putt Putt: the King turns the corner onto the Ace, and the turn stays on
+    // offer beside it. (The Nine is then eight ranks from the King, so the corner
+    // is the only PLAY.)
+    expect(golfMoves(stateOf(position, "wrap"))).toEqual([play(0), turn]);
   });
 
-  it("allows a turn only when nothing on the tableau can be played", () => {
-    const stuck = stateOf({ columns: ["5C"], foundation: "AD", stock: "7H 8H" });
-    expect(golfMoves(stuck)).toEqual([turn]);
-    // One playable column is enough to refuse the turn, which is the article's
-    // „whenever there are no possible plays, turn cards up one at a time".
-    const playable = stateOf({ columns: ["5C", "2S"], foundation: "AD", stock: "7H" });
-    expect(golfMoves(playable).every((move) => move.kind === "play")).toBe(true);
-    expect(isGolfMoveLegal(playable, turn)).toBe(false);
+  it("offers a turn whenever the stock is not empty, beside the plays on the board", () => {
+    // A turn beside an available play is a legal move in both variants: holding a
+    // card back to extend a run is the game's main decision, not a mistake.
+    const playable = { columns: ["5C", "2S"], foundation: "AD", stock: "7H" };
+    expect(golfMoves(stateOf(playable, "classic"))).toEqual([play(1), turn]);
+    expect(golfMoves(stateOf(playable, "wrap"))).toEqual([play(1), turn]);
+    expect(isGolfMoveLegal(stateOf(playable, "classic"), turn)).toBe(true);
+    // Nothing on the tableau plays and the stock is not empty: the turn is all there is.
+    expect(golfMoves(stateOf({ columns: ["5C"], foundation: "AD", stock: "7H 8H" }))).toEqual([turn]);
+    // The stock is empty and nothing plays: the position is stuck, with no move at all.
+    expect(golfMoves(stateOf({ columns: ["5C"], foundation: "AD", stock: "" }))).toEqual([]);
+  });
+
+  it("still plays onto the foundation a turn just made, when the turn was taken beside a play", () => {
+    // The foundation is 5H and the 4C plays on it; the stock's 3S plays on the 4C,
+    // so turning first leaves the 4C on the column and lets it be played after.
+    const state = stateOf({ columns: ["4C"], foundation: "5H", stock: "3S" });
+    expect(golfMoves(state)).toEqual([play(0), turn]);
+    const turned = applyGolf(state, turn);
+    expect(turned.board.foundation).toEqual([card("5H"), card("3S")]);
+    expect(isGolfMoveLegal(turned, play(0))).toBe(true);
+    expect(applyGolf(turned, play(0)).board.foundation).toEqual([card("5H"), card("3S"), card("4C")]);
   });
 
   it("takes the exposed card off the column, turns the stock over in order, and scores the cards left", () => {
@@ -145,6 +160,8 @@ describe("the Golf rules", () => {
     expect(isGolfWon(stuck)).toBe(false);
     expect(hasGolfMoves(stuck)).toBe(false);
     expect(stuck.score).toBe(2);
+    // Stock left is not itself the end: a card the foundation still takes is a move.
+    expect(hasGolfMoves(stateOf({ columns: ["5C"], foundation: "AD", stock: "7H" }))).toBe(true);
   });
 
   it("takes an undo back to the board and the score it was played from", () => {
@@ -204,12 +221,12 @@ describe("replaying a Golf log", () => {
 
 describe("the Golf solver", () => {
   it("proves a deal winnable, and the line it returns clears the tableau", () => {
-    // Deal 2 is one the solver WINS, and the winning line is checked twice here:
+    // Deal 48 is one the solver WINS, and the winning line is checked twice here:
     // replayed to the end, where the tableau must be empty. The position is not
     // hand-counted card by card — thirty-five cards and sixteen turns is past what
     // a comment can carry — so it is checked by the rules instead: every move in
     // the line is one the engine offers, and the tableau it ends on is empty.
-    const state = dealGolf("classic", 2);
+    const state = dealGolf("classic", 48);
     const answer = golfSolve(state);
     expect(answer.verdict).toBe("winnable");
     let walked = state;
@@ -221,11 +238,11 @@ describe("the Golf solver", () => {
   });
 
   it("proves a deal unwinnable rather than giving up on it", () => {
-    // Deal 0 is refuted: the search exhausted every line inside the node bound, so
-    // this is a proof and not a timeout — `nodes` is reported to make the
-    // difference visible, and the same call on a bigger deal comes back `unknown`
+    // Deal 50 is refuted: the search exhausted every line inside the node bound, so
+    // this is a proof and not a timeout — `nodes` is reported to make the difference
+    // visible, and a call whose budget is too small for the deal comes back `unknown`
     // (below), which is the verdict that must never be read as a loss.
-    const state = dealGolf("classic", 0);
+    const state = dealGolf("classic", 50);
     const answer = golfSolve(state);
     expect(answer.verdict).toBe("unwinnable");
     expect(answer.nodes).toBeLessThanOrEqual(answer.bound);
