@@ -113,7 +113,7 @@ export default function PantryPage({ profileId }: ModulePageProps) {
   }, [refresh]);
 
   return (
-    <div className="pantry">
+    <div className="pantry nx-measure">
       {/* The page's own name is the word the module DECLARED, read in the
           language being spoken, rather than a second copy of it: the rail, the
           settings gallery and this header then cannot disagree about what the

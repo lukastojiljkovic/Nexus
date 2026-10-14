@@ -32,10 +32,18 @@ body,
    remember at every new `<td>` — the sketch dialog's „Komponenta" column found
    it by being the first cell in months with no class of its own — so it is
    settled here, where inheritance already had to be settled once. */
+/* And the canvas TYPE, for the same argument again: `.nx-app` is the only element
+   that names the UI face, so until 2026-10-14 every portalled dialog — the module
+   launcher among them — was set in Chromium's default, Times New Roman. */
 body {
   margin: 0;
   background: var(--nx-bg);
   color: var(--nx-text);
+  font-family: var(--nx-font-family-ui);
+  font-size: var(--nx-font-size-body);
+  line-height: var(--nx-font-leading-snug);
+  letter-spacing: var(--nx-font-tracking-body);
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Global "you found it" mark for a global-search reveal (021-e), applied by

@@ -91,7 +91,11 @@ export function ModelPanel({
             setup.recommendations.map((pick) => (
               <ListRow
                 key={pick.tier}
-                leading={<Chip>{tierLabel(pick.tier)}</Chip>}
+                leading={
+                  <span className="asst__tier">
+                    <Chip>{tierLabel(pick.tier)}</Chip>
+                  </span>
+                }
                 trailing={
                   pick.installed ? (
                     <Chip variant="data">{copy.setup.installed}</Chip>
@@ -114,18 +118,20 @@ export function ModelPanel({
                   )
                 }
               >
-                <span className="asst__pick-name">{pick.model.title}</span>
-                <span className="nx-hint">
-                  {`${copy.setup.size}: ${formatBytes(pick.model.sizeBytes)} · ${copy.setup.licence}: `}
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    onClick={() => void openWebAddress(pick.model.licence.url)}
-                  >
-                    {pick.model.licence.name}
-                  </Button>
+                <span className="asst__pick">
+                  <span className="asst__pick-name">{pick.model.title}</span>
+                  <span className="nx-hint">
+                    {`${copy.setup.size}: ${formatBytes(pick.model.sizeBytes)} · ${copy.setup.licence}: `}
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      onClick={() => void openWebAddress(pick.model.licence.url)}
+                    >
+                      {pick.model.licence.name}
+                    </Button>
+                  </span>
+                  <span className="nx-hint">{pick.reason[activeLocale()]}</span>
                 </span>
-                <span className="nx-hint">{pick.reason[activeLocale()]}</span>
               </ListRow>
             ))
           )}

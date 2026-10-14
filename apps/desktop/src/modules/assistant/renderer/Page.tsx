@@ -294,7 +294,7 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
   const conversation = thread?.conversation ?? null;
 
   return (
-    <div className="asst">
+    <div className="asst nx-measure">
       {/* The page's own name is the word the manifest DECLARED, so the rail, the
           settings gallery and this header cannot disagree about it. */}
       <PageHeader

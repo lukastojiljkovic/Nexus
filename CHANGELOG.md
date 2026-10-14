@@ -46,6 +46,21 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in Hearts and Spades and the Tablić table lie in a row, the three computer seats
   are named west, north and east, and Tablić's stock is drawn while it holds
   cards. The Spades bids and the Tablić captures are the app's own buttons.
+- **Pages that read as rows keep to one width, centred.** Habits, Focus, Files,
+  Study, Fitness, Recorder and Library held their 1180px measure against the left
+  edge and left the rest of a wide window as an empty band; they now sit in the
+  middle. Reference, Car, Pantry, Timers, Calculator, Signals, The Lab, Reader,
+  Translator, Emergency card and Assistant take the same measure instead of
+  stretching a row's name and its buttons a thousand pixels apart. Calendar, the
+  boards, maps, games and viewers keep the whole width.
+- **The Assistant's models are readable before a model is installed.** With no
+  conversation list beside it, the models panel was squeezed into that list's
+  260px column and broke its text a word per line.
+- **Dialogs are set in the app's typeface.** Every dialog drawn over the page,
+  All modules among them, fell back to Times New Roman.
+- **An empty list's line reads as two sentences**, where its title ran straight
+  into its description, and Library's „Create a collection" keeps a button's
+  width rather than stretching across a third of the page.
 
 ## [2.0.1] - 2026-10-12
 

@@ -2448,7 +2448,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
 
     return (
-      <div className="study">
+      <div className="study nx-measure">
         <div className="study__deck-view-header">
           <Button size="sm" className="study__back" onClick={() => setRoute({ kind: "hub" })}>
             {strings.study.cardsBack}
@@ -3082,7 +3082,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
   // --- Hub route (subjects, exams, decks) -------------------------------------
   return (
-    <div className="study">
+    <div className="study nx-measure">
       <PageHeader
         title={moduleName("study")}
         sigil="study"

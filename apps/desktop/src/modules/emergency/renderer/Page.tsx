@@ -129,7 +129,7 @@ export default function EmergencyPage({ profileId }: ModulePageProps) {
   }
 
   return (
-    <div className="emergency">
+    <div className="emergency nx-measure">
       {/* The page's own name is the word the module DECLARED, read in the
           language being spoken, rather than a second copy of it (ADR-090's copy
           split). */}

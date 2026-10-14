@@ -28,6 +28,12 @@
   align-items: start;
 }
 
+/* With no model there is no rail, and the model panel takes the whole row
+   rather than the rail's column. */
+.asst__main:only-child {
+  grid-column: 1 / -1;
+}
+
 .asst__rail {
   display: flex;
   flex-direction: column;
@@ -136,6 +142,18 @@
 }
 
 .asst__picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+/* The tier's chip in a column of its own width, so the three picks' names line up. */
+.asst__tier {
+  min-width: 7rem;
+}
+
+/* A pick's name, its size and licence, and why it was picked, one under another. */
+.asst__pick {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-1);

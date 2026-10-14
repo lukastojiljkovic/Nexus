@@ -90,7 +90,9 @@
   gap: var(--nx-space-3);
 }
 
-.lib__form-row > * {
+/* The fields share the row; a button keeps its own width rather than stretching
+   into a field-wide bar. */
+.lib__form-row > :not(button) {
   min-width: var(--nx-layout-field-min);
   flex: 1 1 var(--nx-layout-field-min);
 }
