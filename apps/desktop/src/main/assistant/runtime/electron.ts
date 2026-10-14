@@ -10,9 +10,9 @@
  * (`vitest.config.ts` says so in as many words), so every line here is a line
  * nobody can prove — which is the reason there are so few of them.
  *
- * THE MODE IS THE ONE THIS PROCESS CAME UP UNDER, read once, at import, exactly
- * as `main/index.ts` reads it for the resolver block and the update session
- * (`runningNetworkMode`). `activeNetworkMode(launch, stored)` is the honest
+ * THE MODE IS THE ONE THIS PROCESS CAME UP UNDER: `main/index.ts` reads it once
+ * for the resolver block and the update session (`runningNetworkMode`) and hands
+ * the same value in here. `activeNetworkMode(launch, stored)` is the honest
  * answer while the two disagree — between a mode saved and the restart that
  * applies it, no download or search may run, and the answer that can never be
  * too wide is `"offline"`.
@@ -40,9 +40,6 @@ const SERVICE_NAME = "Nexus assistant model host";
 /** How much of a JSON reply this runtime will read: the Hub's listings are kilobytes. */
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
 
-/** The mode this launch came up under. Read once, like every other rule built at launch. */
-const launchMode: NetworkMode = readNetworkMode(app.getPath("userData"));
-
 /**
  * The dedicated session (ADR-089, ADR-092), by the name main gave its partition.
  *
@@ -56,12 +53,11 @@ function dedicatedSession(): Electron.Session {
 }
 
 /** The one download service of this launch, with each job's progress routed to its own caller. */
-function createDownloads(userData: string): {
+function createDownloads(userData: string, mode: () => NetworkMode): {
   readonly forJob: (jobId: string, onProgress: (progress: ServiceProgress) => void) => DownloadService;
 } {
   const routes = new Map<string, (progress: ServiceProgress) => void>();
   let service: DownloadService | null = null;
-  const mode = (): NetworkMode => activeNetworkMode(launchMode, readNetworkMode(userData));
   return {
     forJob(jobId, onProgress) {
       routes.set(jobId, onProgress);
@@ -141,11 +137,19 @@ function spawnWorker(): WorkerPort {
   };
 }
 
-/** Everything `createModelHost` needs, from Electron. */
-export function createModelHostDeps(): ModelHostDeps {
+/**
+ * Everything `createModelHost` needs, from Electron.
+ *
+ * `launchMode` is main's: the mode this launch came up under, read once userData
+ * is final. This module read it for itself at import until 2.0.3, which ran
+ * before `index.ts` named the app and before a portable launch moved userData,
+ * and Electron keeps the first answer `getPath("userData")` gives - so every 2.x
+ * install wrote its data to `%APPDATA%\@nexus\desktop` instead of `Nexus`.
+ */
+export function createModelHostDeps(launchMode: NetworkMode): ModelHostDeps {
   const userData = app.getPath("userData");
-  const downloads = createDownloads(userData);
   const mode = (): NetworkMode => activeNetworkMode(launchMode, readNetworkMode(userData));
+  const downloads = createDownloads(userData, mode);
   return {
     userData,
     mode,

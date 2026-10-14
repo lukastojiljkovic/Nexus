@@ -56,6 +56,7 @@ import {
   writeNetworkMode,
 } from "./net/offline.js";
 import { applyPortableMode, PORTABLE_MARKER_FILE } from "./portable.js";
+import { absorbStrayUserData, strayUserDataDir } from "./strayUserData.js";
 import { createUpdateHttp, openReleasePage } from "./update/electron.js";
 import { openExternalUrl } from "./external.js";
 import { createPackCatalogueIpc, type PackCatalogueIpc } from "./packs/catalogueIpc.js";
@@ -999,8 +1000,10 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 // Stable product name so userData resolves to a clean, branded directory
-// (%APPDATA%\Nexus) rather than the scoped package name. Set before any
-// getPath("userData") call.
+// (%APPDATA%\Nexus) rather than the scoped package name. `productName` in
+// package.json says the same before any code runs, which is what holds when a
+// module reads userData at import, before this line: Electron keeps the first
+// answer, and from 2.0.0 to 2.0.2 that answer was `@nexus\desktop`.
 app.setName("Nexus");
 
 // ADR-102: the portable build — a stick that keeps everything in `NexusData`
@@ -1122,6 +1125,16 @@ if (HARNESS_SANDBOX !== null) {
 // `EXCLUDE` per host that mode's allowlist holds (ADR-089's three GitHub hosts,
 // and ADR-092's download list on top of them), so the dedicated session alone
 // can resolve those names.
+// Before anything below reads the network choice or the accounts: what 2.0.0
+// to 2.0.2 kept in the wrong folder comes home (`strayUserData.ts`). Not for a
+// portable stick, which never used it, nor for a harness run, whose sandbox is
+// not the user's folder.
+if (!portable.portable && !isAutomatedRun) {
+  const stray = absorbStrayUserData(app.getPath("userData"), strayUserDataDir(app.getPath("appData")));
+  if (stray.moved.length > 0) process.stdout.write(`Nexus: moved from the 2.x folder: ${stray.moved.join(", ")}\n`);
+  for (const line of stray.failed) process.stderr.write(`Nexus: ${line}\n`);
+}
+
 const resolverRuleForLaunch = resolverRules(app.getPath("userData"));
 if (resolverRuleForLaunch !== null) {
   app.commandLine.appendSwitch("host-resolver-rules", resolverRuleForLaunch);
@@ -1697,7 +1710,7 @@ configureAssistant({
   // The default parameter builds the app's own wiring (the utility process and
   // the dedicated session) - which imports Electron, and is therefore handed in
   // rather than imported by the module.
-  createModelHost: () => createModelHost(),
+  createModelHost: () => createModelHost(runningNetworkMode),
   // The voice worker (ADR-105 section 4), on the same terms: `utilityProcess`
   // is Electron's, so the factory is handed over and the module never imports
   // it. Nothing is forked until the first request.
