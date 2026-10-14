@@ -41,8 +41,18 @@ export interface TrickProps {
   readonly onPassSelection: (cards: readonly Card[]) => void;
 }
 
-const seatName = (seat: number): string =>
-  seat === 0 ? copy.play.you : copy.play.computer;
+/**
+ * A seat's name. At a table of four the person sits south and play goes to their
+ * left, so the computer's three seats are west, north and east: one name each, where
+ * "the computer" three times could not say who played which card. At a table of
+ * two the other seat is simply the computer.
+ */
+const seatName = (seat: number, seats = 4): string =>
+  seat === 0
+    ? copy.play.you
+    : seats === 2
+      ? copy.play.computer
+      : ([copy.play.west, copy.play.north, copy.play.east][seat - 1] ?? copy.play.computer);
 
 function sameCard(left: Card, right: Card): boolean {
   return left.suit === right.suit && left.rank === right.rank;
@@ -168,14 +178,9 @@ export function SpadesBoard(props: TrickProps) {
       {bidding && (
         <div className="cards__row cards__row--bids">
           {bids.map((move) => (
-            <button
-              key={move.bid}
-              type="button"
-              className="nx-segmented__option"
-              onClick={() => props.onMove(move)}
-            >
+            <Button key={move.bid} size="sm" onClick={() => props.onMove(move)}>
               {move.bid === 0 ? copy.moves.bidNil : copy.moves.bid.replace("{value}", String(move.bid))}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -222,7 +227,7 @@ export function TablicBoard(props: TrickProps) {
           )}
         </CardSlot>
         <CardSlot title={`${copy.play.stock}: ${board.deck.length}`}>
-          <EmptySlot />
+          {board.deck.length === 0 ? <EmptySlot /> : <CardFace card={board.deck[0]!} faceUp={false} />}
         </CardSlot>
       </div>
       <div className="cards__row cards__row--hand">
@@ -242,21 +247,16 @@ export function TablicBoard(props: TrickProps) {
       {myTurn && (
         <div className="cards__row cards__row--bids">
           {captureChoices(plays).map((choice) => (
-            <button
-              key={choice.key}
-              type="button"
-              className="nx-segmented__option"
-              onClick={() => props.onMove(choice.move)}
-            >
+            <Button key={choice.key} size="sm" onClick={() => props.onMove(choice.move)}>
               {choice.label}
-            </button>
+            </Button>
           ))}
         </div>
       )}
       <div className="cards__row">
         {SEATS.slice(0, seats).map((seat) => (
           <span key={seat} className="cards__seat">
-            {seatName(seat)}: {board.scores[seat % 2] ?? 0}
+            {seatName(seat, seats)}: {board.scores[seat % 2] ?? 0}
           </span>
         ))}
       </div>

@@ -124,6 +124,7 @@ function colourAttribute(suit: Suit): "red" | "black" {
  * stack of cards.
  *
  * `target` is the slot's own control, drawn when the whole slot is a destination.
+ * `accepts` draws a destination whose own cards take the click, so it stays a group.
  * `ariaLabel` names a slot that is not itself a control („Tref: prazno").
  */
 export interface CardSlotProps {
@@ -132,12 +133,18 @@ export interface CardSlotProps {
   readonly stack?: boolean;
   readonly marked?: boolean;
   readonly target?: { readonly onClick: () => void } | undefined;
+  readonly accepts?: boolean;
   readonly label?: string | undefined;
   readonly children: ReactNode;
 }
 
-export function CardSlot({ title, stack = false, marked = false, target, label, children }: CardSlotProps) {
-  const className = ["cards__slot", marked ? "cards__slot--last" : undefined, stack ? "cards__slot--stack" : undefined]
+export function CardSlot({ title, stack = false, marked = false, target, accepts = false, label, children }: CardSlotProps) {
+  const className = [
+    "cards__slot",
+    marked ? "cards__slot--last" : undefined,
+    stack ? "cards__slot--stack" : undefined,
+    accepts ? "cards__slot--target" : undefined,
+  ]
     .filter((entry): entry is string => entry !== undefined)
     .join(" ");
   if (target !== undefined) {
