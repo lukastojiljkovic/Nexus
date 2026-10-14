@@ -24,6 +24,7 @@ import {
   type AssistantMessageInput,
 } from "@nexus/db";
 import { noRecommendation } from "../../../main/assistant/runtime/recommend.js";
+import { localDay } from "../../../main/assistant/tools/support.js";
 import { VOICE_SAMPLE_RATE, resamplePcm } from "../../../main/assistant/voice/resample.js";
 import { MAX_SPEECH_CHARS } from "../../../main/assistant/voice/sentences.js";
 import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
@@ -235,11 +236,23 @@ export function register(host: ModuleHostSurface): void {
       reason: pick.reason,
       installed: installedIds.has(pick.model.id),
     }));
+    // The choice the profile's page may draw, and the EFFECTIVE one: a stored id
+    // that names a model this machine no longer has (or that is not a chat
+    // model) marks nothing, so the page reads the tier as what answers - the
+    // same fallback `chatModelEntry` makes.
+    const stored = profile.settings().chatModelId;
+    const chosenId =
+      stored === null
+        ? null
+        : (available.find(
+            (entry) => entry.id === stored && entry.capabilities.includes("chat"),
+          )?.id ?? null);
     const installedView: AssistantInstalledView[] = available.map((entry) => ({
       model: entry,
       servesTiers: recommendations
         .filter((pick) => pick.model.id === entry.id)
         .map((pick) => pick.tier),
+      chosen: entry.id === chosenId,
     }));
     // Every entry main produced is remembered, so `downloadModel` can only name
     // one this process offered.
@@ -252,6 +265,7 @@ export function register(host: ModuleHostSurface): void {
       search: profile.searchResults(),
       download: profile.downloadView(),
       defaultTier: profile.settings().defaultTier,
+      chatModelId: chosenId,
       downloadsAllowed: profile.downloadsAllowed(),
       networkMode: services().networkMode(),
     };
@@ -483,6 +497,7 @@ export function register(host: ModuleHostSurface): void {
         confirm: (request) => park(turn, request),
       },
       maxSteps: DEFAULT_MAX_STEPS,
+      today: localDay(services().now()),
     };
 
     // Unawaited: the page polls. The failure of a whole turn is caught here and
@@ -490,6 +505,13 @@ export function register(host: ModuleHostSurface): void {
     void runAgentTurn(input, (event) => {
       const entry = turn.log.emit(event);
       collect(turn, event);
+      // The model's own reason for a failed turn goes to the app's log: the
+      // page draws the error code, and the sentence that says WHICH failure it
+      // was - a schema llama.cpp refused, a model that ran out of memory -
+      // would otherwise be lost between the runtime and the user.
+      if (event.type === "error" && event.code === "model-failed" && event.detail !== undefined) {
+        console.error("Nexus: the assistant model failed:", event.detail);
+      }
       if (entry === null) {
         // The buffer is full: the model is talking without stopping, and the
         // honest answer is to stop it rather than to keep counting.
@@ -639,6 +661,30 @@ export function register(host: ModuleHostSurface): void {
     const profileId = call.as.asId(payload.profileId, "profileId");
     const profile = profileFor(call, profileId);
     profile.setDefaultTier(tierOf(call, payload.tier));
+    return await setupView(profile);
+  });
+
+  ctx.handle("setChatModel", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const modelId = call.as.asNullableString(payload.modelId, "modelId");
+    const id = modelId === null ? null : call.as.asId(modelId, "modelId");
+    const profile = profileFor(call, profileId);
+    if (id === null) {
+      profile.setChatModel(null);
+    } else {
+      // The choice is checked against the models ON THIS DISK rather than against
+      // the entries this process offered: choosing a model to answer with must
+      // name one that is already here, and an id nothing installed can answer is
+      // refused by name instead of being stored to fall back from on every turn.
+      const entry = (await profile.installedEntries()).find((candidate) => candidate.id === id);
+      if (entry === undefined) {
+        throw new Error(`No model "${id}" is installed, so it cannot answer this profile.`);
+      }
+      if (!entry.capabilities.includes("chat")) {
+        throw new Error(`The model "${id}" has no "chat" capability, so it cannot answer.`);
+      }
+      profile.setChatModel(id);
+    }
     return await setupView(profile);
   });
 

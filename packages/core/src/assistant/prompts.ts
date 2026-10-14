@@ -25,6 +25,7 @@ import type {
   AssistantText,
   Citation,
   KnowledgeHit,
+  ToolEffect,
   ToolSpec,
 } from "./contract.js";
 import { fenceUntrusted } from "./fence.js";
@@ -33,7 +34,7 @@ import { fenceUntrusted } from "./fence.js";
  * The prompt's name, bumped whenever the text below changes in a way a score
  * could notice. `assistant-<date>.<serial>`, so two runs of one day sort.
  */
-export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-10.1";
+export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-14.1";
 
 /**
  * The sentence an answer must carry when it draws on a pack whose
@@ -48,10 +49,25 @@ export const SAFETY_NOTICE: AssistantText = {
 export interface SystemPromptOptions {
   /** The language the app is showing; the fallback for an ambiguous user message. */
   readonly locale: AssistantLocale;
-  /** The tools this turn may use, exactly the ones the model is offered. */
+  /**
+   * The tools this turn may use, exactly the ones the model is offered. Only
+   * their NAMES are named here: the runtime documents each tool itself
+   * (`assistant/runtime/messages.ts`), and a second copy of every description
+   * in this prompt is context the request cannot spare.
+   */
   readonly tools: readonly ToolSpec[];
   /** How many model calls the loop will make before it stops with `step-limit`. */
   readonly maxSteps: number;
+  /** The user's local day, `YYYY-MM-DD`. A model has no clock, and a task due „tomorrow" needs one. */
+  readonly today: string;
+}
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+/** „Wednesday, 2026-10-14": the day with its weekday, read in UTC so the machine's zone cannot move it. */
+function dayWithWeekday(day: string): string {
+  const weekday = WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()];
+  return weekday === undefined ? day : `${weekday}, ${day}`;
 }
 
 /** The system prompt for one turn: fixed text, plus the tools this turn carries. */
@@ -60,25 +76,19 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   const blocks: string[] = [
     `You are the assistant built into the Nexus desktop app. You run on the user's own machine: offline unless the user turned web search on, and with no account elsewhere. Prompt version ${SYSTEM_PROMPT_VERSION}.`,
     [
+      `# Today`,
+      `Today is ${dayWithWeekday(options.today)}. Work out a relative day ("tomorrow", "next Monday") from it, and give a tool a day as YYYY-MM-DD.`,
+    ].join("\n"),
+    [
       `# Language`,
       `Answer in the language the user writes in: Serbian (Latin script, with its full set of diacritics) or English. If the user's language is not clear from their message, answer in ${fallback}, which is what the app is showing right now. Fixed strings you must quote (a notice, a label) are given to you in both languages; quote the half that matches the answer.`,
     ].join("\n"),
     [
       `# What you can do`,
-      `You reach the app only through the tools below.`,
+      `You reach the app only through the tools offered with this message.`,
       options.tools.length === 0
         ? `No tools are available this turn; answer from the conversation and the knowledge block.`
-        : options.tools
-            .map((tool) => {
-              const asks =
-                tool.effect === "read"
-                  ? ""
-                  : tool.effect === "navigate"
-                    ? " (moves the app's view)"
-                    : ` (asks the user first)`;
-              return `- ${tool.name}${asks}: ${tool.description[options.locale]}`;
-            })
-            .join("\n"),
+        : toolGroups(options.tools).join("\n"),
     ].join("\n"),
     [
       `# How to use them`,
@@ -105,6 +115,34 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     ].join("\n"),
   ];
   return blocks.join("\n\n");
+}
+
+/**
+ * The offered tools as a few lines of names, grouped by what each does.
+ *
+ * A name is all the model needs here: the runtime gives it the description and
+ * the schema beside this prompt, and the group is the one thing the runtime
+ * does not say - whether a tool will ask the user before it acts. Saying that
+ * much costs a handful of characters instead of the ~8000 a second copy of the
+ * descriptions took.
+ *
+ * `network` stands with `write` because both change something outside the app
+ * and both ask first (`contract.ts`); `navigate` moves the page, which the
+ * model should announce but which asks nobody. A group with no tools is left
+ * out rather than printed empty.
+ */
+function toolGroups(tools: readonly ToolSpec[]): readonly string[] {
+  const groups: readonly { readonly label: string; readonly effects: readonly ToolEffect[] }[] = [
+    { label: "Tools that ask the user first", effects: ["write", "network"] },
+    { label: "Tools that move the app's view", effects: ["navigate"] },
+    { label: "Tools that only read", effects: ["read"] },
+  ];
+  return groups
+    .map((group) => {
+      const names = tools.filter((tool) => group.effects.includes(tool.effect)).map((tool) => tool.name);
+      return names.length === 0 ? null : `- ${group.label}: ${names.join(", ")}`;
+    })
+    .filter((line): line is string => line !== null);
 }
 
 /**

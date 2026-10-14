@@ -3126,6 +3126,16 @@ export {
 } from "./assistant/prompts.js";
 export type { SystemPromptOptions } from "./assistant/prompts.js";
 export {
+  CORE_TOOLS,
+  MAX_TOOLS_PER_TURN,
+  TOOL_BUDGET_SHARE,
+  TOOL_SPEC_OVERHEAD_TOKENS,
+  chooseTools,
+  toolSpecCharacters,
+  toolSpecTokens,
+} from "./assistant/toolChoice.js";
+export type { ToolChoiceInput } from "./assistant/toolChoice.js";
+export {
   countBoundary,
   createFenceBoundary,
   fenceUntrusted,

@@ -209,7 +209,7 @@ export function taskTools(deps: TaskToolDeps): readonly Tool[] {
           type: "string",
           minLength: 1,
           maxLength: MAX_TASK_LIST_NAME_LENGTH,
-          description: "A task list's name or id. Defaults to every list.",
+          description: "A task list's name or id, or \"any\" for every list. Defaults to any.",
         },
         limit: {
           type: "integer",
@@ -228,10 +228,12 @@ export function taskTools(deps: TaskToolDeps): readonly Tool[] {
         const args = asArgs(rawArgs);
         const status = asOptionalEnum(args.status, "status", STATUS_FILTERS) ?? "any";
         const due = asOptionalEnum(args.due, "due", DUE_FILTERS) ?? "any";
-        const project =
+        const named =
           args.project === undefined
             ? undefined
             : asText(args.project, "project", MAX_TASK_LIST_NAME_LENGTH);
+        // „any" is how status and due say „no filter", and a model sends it here too.
+        const project = named?.trim().toLowerCase() === "any" ? undefined : named;
         const limit = asOptionalCount(args.limit, "limit", 1, MAX_LIST_LIMIT) ?? DEFAULT_LIST_LIMIT;
 
         const { tasks, lists } = stores(context.profileId);

@@ -144,6 +144,12 @@ export interface AssistantMessageInput {
 export interface AssistantSettings {
   /** Which of the three recommendations a new turn takes its model from. */
   readonly defaultTier: ModelTier;
+  /**
+   * The installed chat model this profile answers with by hand, or `null` when
+   * the tier decides. `setDefaultTier` clears it, and it is device data that
+   * never travels in an archive - the model file lives on this machine.
+   */
+  readonly chatModelId: string | null;
 }
 
 /** One conversation as an archive carries it: its rows, without this database's keys. */
@@ -640,32 +646,82 @@ export class ConversationStore {
 
   // --- Settings --------------------------------------------------------------
 
-  /** A profile with no row answers the shipped tier, which is the only place it is written down. */
+  /**
+   * A profile with no row answers the shipped tier and no chosen model, which is
+   * the only place either is written down.
+   */
   settings(): AssistantSettings {
     const row = this.db
-      .prepare("SELECT default_tier FROM assistant_settings WHERE profile_id = ?")
-      .get(this.profileId) as { default_tier: string } | undefined;
-    if (row === undefined) return { defaultTier: "balance" };
-    return { defaultTier: asTier(row.default_tier, "default_tier") };
+      .prepare("SELECT default_tier, chat_model_id FROM assistant_settings WHERE profile_id = ?")
+      .get(this.profileId) as
+      | { default_tier: string; chat_model_id: string | null }
+      | undefined;
+    if (row === undefined) return { defaultTier: "balance", chatModelId: null };
+    return {
+      defaultTier: asTier(row.default_tier, "default_tier"),
+      chatModelId: asModelId(row.chat_model_id, "chat_model_id"),
+    };
   }
 
+  /**
+   * Writes the tier a new turn starts from, and CLEARS any chosen model with it.
+   *
+   * Choosing a tier is choosing the tier's own pick again: a profile that kept
+   * both would have a choice the tier could never reach, so the two are one
+   * write rather than two states that can disagree.
+   */
   setDefaultTier(tier: ModelTier, now: string): AssistantSettings {
     const stamp = this.validInstant(now);
     const value = asTier(tier, "defaultTier");
     this.db
       .prepare(
-        `INSERT INTO assistant_settings (profile_id, default_tier, updated_at)
-         VALUES (?, ?, ?)
+        `INSERT INTO assistant_settings (profile_id, default_tier, chat_model_id, updated_at)
+         VALUES (?, ?, NULL, ?)
          ON CONFLICT (profile_id) DO UPDATE SET default_tier = excluded.default_tier,
+                                                chat_model_id = NULL,
                                                 updated_at = excluded.updated_at`,
       )
       .run(this.profileId, value, stamp);
-    return { defaultTier: value };
+    return { defaultTier: value, chatModelId: null };
+  }
+
+  /**
+   * Writes the one installed model this profile answers with, or clears it with
+   * `null`.
+   *
+   * The id is written as it is and not against the installed list: which files
+   * are on this machine is main's question (`AssistantProfile.chatModelEntry`
+   * reads it, and the module's handler refuses an id that is not installed), and
+   * a store that consulted a runtime would be a store with a runtime in it.
+   */
+  setChatModel(id: string | null, now: string): AssistantSettings {
+    const stamp = this.validInstant(now);
+    const value = asModelId(id, "chatModelId");
+    this.db
+      .prepare(
+        `INSERT INTO assistant_settings (profile_id, default_tier, chat_model_id, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (profile_id) DO UPDATE SET chat_model_id = excluded.chat_model_id,
+                                                updated_at = excluded.updated_at`,
+      )
+      // The shipped tier, for the row this write may be the first to create: a
+      // profile that only ever chose a model still answers `balance` when the
+      // choice is cleared, which is what `settings()` answers with no row at all.
+      .run(this.profileId, "balance", value, stamp);
+    return this.settings();
   }
 
   // --- The archive -----------------------------------------------------------
 
-  /** The whole section: every thread with its messages, and the one preference. */
+  /**
+   * The whole section: every thread with its messages, and the tier.
+   *
+   * The chosen model is deliberately NOT here. It names a file on THIS machine
+   * (`chat_model_id` says why the column holds an id rather than a path), and an
+   * archive that carried it would restore a choice for a model the machine it is
+   * restored onto may not have - so `importData` leaves the choice NULL and the
+   * profile answers from its tier again.
+   */
   exportData(): AssistantExport {
     const conversations = this.listConversations().map((conversation) => ({
       title: conversation.title,
@@ -695,7 +751,9 @@ export class ConversationStore {
    * restore that replaces a profile whole means EMPTY: every row goes, and the
    * settings row with it, so the profile answers the shipped tier again. The
    * whole write is one transaction, so a section that fails halfway leaves
-   * nothing of itself behind.
+   * nothing of itself behind. The chosen model is not restored with the tier -
+   * the archive does not carry it, so the row arrives with the column NULL and
+   * the profile answers from its tier again.
    *
    * Ids are re-minted rather than restored: a conversation's id is this
    * database's own key, and an archive carries what the person wrote.

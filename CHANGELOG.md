@@ -6,6 +6,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A model you found or imported can answer.** A model downloaded through the
+  Hugging Face search, or imported from a `.gguf` file, served none of the three
+  tiers, so the assistant could never use it. Its row under Models now has "Use
+  for answers". The choice belongs to the account, choosing a tier again goes
+  back to the tier's pick, and a backup does not carry it, because the model file
+  stays on this computer.
+
 ### Changed
 
 - **The privacy policy describes the app that ships.** Since 2.0.0 it still
@@ -21,6 +30,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   decision in both games, so the stock is now open while it has cards. The Golf
   solver answers "unknown" more often as a result: the same search bound now
   covers many more lines.
+
+- **Gemma 4 E2B is the fast model.** The three recommended models were ranked by
+  file size, and Gemma's smaller models carry large lookup tables that make the
+  file big without making each word more work. The ranking now uses the
+  parameter count each model's card states, so on a laptop with an 8 GB graphics
+  card the picks are Gemma 4 E2B, Qwen3.5 4B and Gemma 4 E4B. Qwen3.5 2B and
+  Qwen3-VL 4B are no longer recommended; a copy you installed keeps working.
 
 ### Fixed
 
@@ -54,6 +70,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Nexus/1.5.0`, and the model search's said `Nexus/2.0`. Both now send the
   running version with the project's address and a contact, as Wikimedia's
   User-Agent policy asks.
+
+- **The assistant answers.** Every turn on the installed app ended in an error:
+  the descriptions and schemas of all 37 tools, written into the request twice,
+  did not fit the model's 8192-token window beside the conversation, and the
+  context budget never counted them. Each message now offers the model only the
+  tools it is about, at most eight and within a set share of the window. The
+  system prompt names them instead of repeating their descriptions, and the
+  budget counts what they cost. When the model does fail, its reason goes to the
+  app's log. Two built-in workflows named tools that do not exist; they name
+  real ones now.
+
+- **The assistant's answers end with the answer.** A model that reasons before
+  it answers, as Qwen3.5 does, spent the whole reply on its reasoning and
+  stopped mid-sentence. Reasoning may now take half of the reply, it shows only
+  while the model is writing, and the conversation keeps the answer. The
+  assistant is also told today's date, so a task for „tomorrow" gets a real day.
 
 ## [2.0.2] - 2026-10-14
 
