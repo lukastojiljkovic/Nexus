@@ -404,9 +404,10 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
       // The answer is the main response only. The contract has one text field,
       // and a reasoning segment stored in it is replayed to the model on every
       // later turn as if it were something said to the user, in a window of 8 192
-      // tokens. The page shows the reasoning while the turn runs and keeps the answer.
+      // tokens. The page shows the reasoning while the turn runs and keeps the answer,
+      // without the blank lines a template puts after the closed thought.
       return {
-        text: fallback === null ? response.response : fallback.text,
+        text: fallback === null ? response.response.replace(/^\s*\n/, "") : fallback.text,
         toolCalls: calls,
         stopReason: calls.length > 0 ? "tool-calls" : stopReasonFrom(response.metadata.stopReason),
         ...meterAfter(),
