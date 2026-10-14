@@ -80,6 +80,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while the model is writing, and the conversation keeps the answer. The
   assistant is also told today's date, so a task for „tomorrow" gets a real day.
 
+- **The assistant reads the Wikipedia you downloaded.** Its knowledge base was
+  built to read the Wiki module's libraries, but nothing connected the two, so
+  a downloaded library never reached an answer. For each question it now looks
+  up the titles the question names in every library on the computer, in
+  Cyrillic too for a Serbian one, and cites the opening section of the few
+  articles that match.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that
