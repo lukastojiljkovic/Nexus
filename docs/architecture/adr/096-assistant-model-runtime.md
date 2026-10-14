@@ -384,6 +384,13 @@ Node's `fetch` instead: a `resolve/main/<file>` request answers `206` with a
 `200` directly. If a later run finds a hop outside `huggingface.co`, the fix is
 one line in that array and one test.
 
+*Amended 2026-10-14.* A later run did. Node's `fetch` follows redirects on its
+own, so the `206` above came from the end of the chain and hid its first hop:
+`resolve/main/<file>` answers `302` to `us.aws.cdn.hf.co`, for every curated
+model and projector and for the searched repositories that were tried, so a model
+download could not finish. `huggingface.co` and `us.aws.cdn.hf.co` are now in
+`DOWNLOAD_HOSTS`, with the requests that checked them.
+
 ## 10. What this costs, and what it does not do
 
 - **623.2 MB of installer** (§7), most of it CUDA for a backend that requires a

@@ -412,10 +412,9 @@ export const UPDATE_HOSTS: readonly string[] = [
  *
  * A compiled-in constant, never fetched and never widened at runtime: the whole
  * point of the mode is that the set of reachable names is a fact about the
- * binary rather than about a manifest that arrived over the wire. For now it is
- * exactly the three update hosts — a download is the release asset's sibling
- * case, and the content hosts (Kiwix's, and whatever a later run researches and
- * pins) are appended here when they exist.
+ * binary rather than about a manifest that arrived over the wire. It is the
+ * three update hosts — a pack is the release asset's sibling case — followed by
+ * the content hosts, each pinned below with the request that checked it.
  *
  * ADDING A HOST IS ONE LINE BELOW, and the test beside this module holds the
  * two invariants that make that line safe: every entry is a bare host name —
@@ -457,6 +456,22 @@ export const DOWNLOAD_HOSTS: readonly string[] = [
   "opds.library.kiwix.org",
   "lb.download.kiwix.org",
   "mirror.download.kiwix.org",
+  // --- Hugging Face, for the assistant's models (ADR-096) -----------------
+  //
+  // Two hosts, checked with real requests on 2026-10-14:
+  //
+  //   - `huggingface.co`    the Hub's API (search, a repository's file tree and
+  //     card) and every model file's `/resolve/main/` address
+  //   - `us.aws.cdn.hf.co`  where that address 302-redirects: every curated
+  //     model and both projectors in `catalogue.json`, and three uncurated
+  //     repositories besides, answered with this host after one hop, and it
+  //     answered a `Range` request with 206, so a paused model resumes
+  //
+  // Without them the search was refused before its first request and every
+  // model download failed on the redirect. A file that redirects anywhere else
+  // fails with the service's `"url"` refusal, which names the host it refused.
+  "huggingface.co",
+  "us.aws.cdn.hf.co",
 ];
 
 /** The bare-host-name shape both lists are allowed to contain: labels, dots, no wildcard, no port, no scheme. */

@@ -394,6 +394,10 @@ export function aboutFile({ counts, sources, builtAt, bytes }) {
  * Written as one string because it is one notice. The Wikimedia Terms of Use
  * allow the hyperlink route for attribution and the pack takes it: every entry
  * carries its own Wiktionary URL, and this names the projects and the licence.
+ *
+ * ONE LINE, joined with spaces: the manifest's `licence.attribution` refuses
+ * control characters, and the catalogue is read all-or-nothing, so the
+ * line-broken 2026.10.0 notice kept every pack from being listed (2026-10-14).
  */
 export const ATTRIBUTION = [
   "Dictionary data derived from Wiktionary (en.wiktionary.org), created by Wiktionary",
@@ -403,4 +407,4 @@ export const ATTRIBUTION = [
   "Phrasebook text derived from Wikivoyage (en.wikivoyage.org), licensed CC BY-SA 4.0.",
   "Extracted with Wiktextract (MIT). This pack is licensed CC BY-SA 4.0; it is not part of,",
   "and does not change the licence of, the Nexus application.",
-].join("\n");
+].join(" ");

@@ -119,8 +119,28 @@ export interface ZimReaderStats {
   readonly cachedClusters: number;
 }
 
+/**
+ * Where the title-ordered list of entry indexes is: `count` uint32s starting at
+ * `start` — a file offset when `cluster` is `null` (the header's list), else an
+ * offset into that cluster's payload (the `X/listing/titleOrdered/v0` blob).
+ */
+interface TitleList {
+  readonly count: number;
+  readonly cluster: number | null;
+  readonly start: number;
+}
+
+/**
+ * The entries that hold a title list in format 6.1 and later, in the order they
+ * are tried. `v1` lists the front articles — the pages a title search is for —
+ * and is the only one current writers emit (measured: Kiwix's `gutenberg_sr`,
+ * format 6.3, has `v1` and no `v0`); `v0` lists every entry, like the header's.
+ */
+const TITLE_LISTING_PATHS: readonly string[] = ["X/listing/titleOrdered/v1", "X/listing/titleOrdered/v0"];
+
 export class ZimReader {
   private readonly fd: number;
+  private titleList: TitleList | null | undefined;
   private readonly cache: ByteLruCache<number, Uint8Array>;
   private readonly limits: ZimReaderLimits;
   private reads = 0;
@@ -222,9 +242,37 @@ export class ZimReader {
     return readUint64(this.readAt(this.header.urlPtrPos + index * 8, 8), 0);
   }
 
-  /** The title pointer list's entry `position`: an ENTRY INDEX, not an offset. */
-  private titlePointer(position: number): number {
-    const bytes = this.readAt(this.header.titlePtrPos + position * 4, 4);
+  /**
+   * The title list, found once: the header's when it has one, else the blob of
+   * a `TITLE_LISTING_PATHS` entry, which holds the same kind of array. A file
+   * with none has no title order, and title questions answer nothing.
+   */
+  private titles(): TitleList | null {
+    if (this.titleList !== undefined) return this.titleList;
+    this.titleList = null;
+    if (this.header.titlePtrPos !== null) {
+      this.titleList = { count: this.header.entryCount, cluster: null, start: this.header.titlePtrPos };
+      return this.titleList;
+    }
+    const listing = TITLE_LISTING_PATHS.map((path) => this.entryByPath(path)).find((entry) => entry !== null);
+    if (listing === undefined) return null;
+    const dirent = this.direntAt(this.urlPointer(listing.index));
+    if (dirent.kind !== "content") return null;
+    const view = this.clusterOf(dirent.cluster);
+    const range = blobRange(view.table, view.extended, dirent.blob, view.payloadBytes);
+    this.titleList = { count: Math.floor((range.end - range.start) / 4), cluster: dirent.cluster, start: range.start };
+    return this.titleList;
+  }
+
+  /** The title list's entry `position`: an ENTRY INDEX, not an offset. */
+  private titlePointer(list: TitleList, position: number): number {
+    const at = list.start + position * 4;
+    let bytes: Uint8Array;
+    if (list.cluster === null) bytes = this.readAt(at, 4);
+    else {
+      const view = this.clusterOf(list.cluster);
+      bytes = view.decoded !== null ? view.decoded.subarray(at, at + 4) : this.readAt(view.payloadStart + at, 4);
+    }
     return new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0, true);
   }
 
@@ -308,10 +356,10 @@ export class ZimReader {
    * only way to answer a title question without reading every entry.
    */
   entryByTitle(title: string): ZimEntry | null {
-    if (this.header.entryCount === 0) return null;
-    const at = this.lowerBoundByTitle(title);
-    for (let position = at; position < this.header.entryCount; position += 1) {
-      const index = this.titlePointer(position);
+    const list = this.titles();
+    if (list === null || list.count === 0) return null;
+    for (let position = this.lowerBoundByTitle(list, title); position < list.count; position += 1) {
+      const index = this.titlePointer(list, position);
       const dirent = this.direntAt(this.urlPointer(index));
       if (dirent.kind === "ignored") continue;
       const display = displayTitle(dirent);
@@ -334,10 +382,11 @@ export class ZimReader {
    */
   titlesFrom(prefix: string, limit: number): readonly ZimEntry[] {
     if (prefix === "" || !Number.isInteger(limit) || limit <= 0) return [];
-    if (this.header.entryCount === 0) return [];
+    const list = this.titles();
+    if (list === null || list.count === 0) return [];
     const results: ZimEntry[] = [];
-    for (let position = this.lowerBoundByTitle(prefix); position < this.header.entryCount; position += 1) {
-      const index = this.titlePointer(position);
+    for (let position = this.lowerBoundByTitle(list, prefix); position < list.count; position += 1) {
+      const index = this.titlePointer(list, position);
       const dirent = this.direntAt(this.urlPointer(index));
       if (dirent.kind === "ignored") continue;
       if (!displayTitle(dirent).startsWith(prefix)) break;
@@ -355,13 +404,13 @@ export class ZimReader {
   }
 
   /** The first position in the title list whose title is not before `title`. */
-  private lowerBoundByTitle(title: string): number {
+  private lowerBoundByTitle(list: TitleList, title: string): number {
     let low = 0;
-    let high = this.header.entryCount - 1;
-    let answer = this.header.entryCount;
+    let high = list.count - 1;
+    let answer = list.count;
     while (low <= high) {
       const middle = (low + high) >> 1;
-      const index = this.titlePointer(middle);
+      const index = this.titlePointer(list, middle);
       const dirent = this.direntAt(this.urlPointer(index));
       if (dirent.kind === "ignored") {
         high = middle - 1;

@@ -187,7 +187,9 @@ describe("ZimReader over files the builder wrote", () => {
   const article = new TextEncoder().encode("<html><body>Здраво</body></html>");
   const image = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 9, 9, 9, 9, 9]);
 
-  function built(options: { zstd?: boolean; extended?: boolean; listing?: boolean } = {}): Buffer {
+  function built(
+    options: { zstd?: boolean; extended?: boolean; listing?: boolean; headerTitles?: boolean } = {},
+  ): Buffer {
     return buildZim({
       entries: [
         { namespace: "C", path: "article.html", title: "Članak", mime: "text/html", cluster: 0, blob: 0 },
@@ -205,6 +207,7 @@ describe("ZimReader over files the builder wrote", () => {
       ],
       mainPage: 0,
       ...(options.listing === true ? { titleListing: true } : {}),
+      ...(options.headerTitles === false ? { headerTitleList: false } : {}),
     });
   }
 
@@ -312,6 +315,35 @@ describe("ZimReader over files the builder wrote", () => {
         expect(reader.entryByPath("X/listing/titleOrdered/v1")).not.toBeNull();
         expect(reader.hasFullTextIndex()).toBe(false);
         expect(reader.titlesFrom("Čl", 5).map((entry) => entry.title)).toEqual(["Članak"]);
+      } finally {
+        reader.close();
+      }
+    });
+  });
+
+  it("searches titles through the listing entry when the header has no title list", () => {
+    // Format 6.3 as Kiwix ships it: the header field is all ones, and the only
+    // title order is `X/listing/titleOrdered/v1`. Reading the field as an offset
+    // refused every such file at open (2026-10-14).
+    withTemp("no-header-titles.zim", built({ listing: true, headerTitles: false }), (path) => {
+      const reader = ZimReader.open(path);
+      try {
+        expect(reader.format.titlePtrPos).toBeNull();
+        expect(reader.titlesFrom("Čl", 5).map((entry) => entry.title)).toEqual(["Članak"]);
+        expect(reader.entryByTitle("Članak")?.zimPath).toBe("C/article.html");
+      } finally {
+        reader.close();
+      }
+    });
+  });
+
+  it("answers no titles, rather than failing, for a file with no title order at all", () => {
+    withTemp("no-titles.zim", built({ headerTitles: false }), (path) => {
+      const reader = ZimReader.open(path);
+      try {
+        expect(reader.titlesFrom("Čl", 5)).toEqual([]);
+        expect(reader.entryByTitle("Članak")).toBeNull();
+        expect(reader.entryByPath("C/article.html")?.title).toBe("Članak");
       } finally {
         reader.close();
       }
