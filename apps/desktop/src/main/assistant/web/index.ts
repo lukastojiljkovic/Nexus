@@ -8,6 +8,7 @@ import type {
 } from "@nexus/core";
 
 import type { NetworkMode } from "../../net/offline.js";
+import { nexusUserAgent } from "../userAgent.js";
 import { webCitation } from "./citation.js";
 import {
   BAD_ARGS,
@@ -37,7 +38,6 @@ import {
   isWebProviderId,
   requestHost,
   WEB_PROVIDER_IDS,
-  WEB_USER_AGENT,
   type WebProviderId,
   type WebSearchResult,
 } from "./providers.js";
@@ -92,6 +92,11 @@ import { fenceUntrusted } from "./untrusted.js";
 export interface WebServiceDeps {
   /** `userData`: where `assistant-web.json` and the key blob live. */
   readonly userData: string;
+  /**
+   * The running build's version (`app.getVersion()` in main): the User-Agent every
+   * request carries names it, so a request says which release made it.
+   */
+  readonly version: string;
   /** The mode this launch may ACT on - `activeNetworkMode` in main, never the stored file. */
   readonly mode: () => NetworkMode;
   /** `dns.lookup(…, { all: true })` in main; a table in tests. */
@@ -271,7 +276,7 @@ export function createWebService(deps: WebServiceDeps): WebService {
       const provider: WebProviderId = call.provider ?? "wikipedia";
       const locale: AssistantLocale = call.language ?? context.locale;
       const apiKey = provider === "brave" ? deps.secrets.apiKey("brave") : null;
-      const plan = buildSearchPlan(provider, call.query, locale, config, apiKey);
+      const plan = buildSearchPlan(provider, call.query, locale, config, apiKey, deps.version);
       if (!plan.ok) return refusal(problemText(plan.problem, context.locale, detailFor(provider, null)));
 
       // The shape check BEFORE the dialog: a request the gate refuses on its
@@ -334,7 +339,10 @@ export function createWebService(deps: WebServiceDeps): WebService {
       if (!approved) return refusal(text(context.locale, REFUSED));
 
       const fetched = await fetcher.fetchText(url, {
-        headers: { accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5", "user-agent": WEB_USER_AGENT },
+        headers: {
+          accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5",
+          "user-agent": nexusUserAgent(deps.version),
+        },
         signal: context.signal,
         bytes: WEB_LIMITS.readBytes,
         timeoutMs: WEB_LIMITS.readTimeoutMs,

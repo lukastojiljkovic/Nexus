@@ -1,5 +1,6 @@
 import type { AssistantLocale } from "@nexus/core";
 
+import { nexusUserAgent } from "../userAgent.js";
 import { inlineText } from "./extract.js";
 import type { WebConfig } from "./gate.js";
 import { WEB_LIMITS } from "./limits.js";
@@ -16,7 +17,7 @@ import { WEB_LIMITS } from "./limits.js";
  *   1. **Wikipedia** is the default, because it needs nothing from the user:
  *      no account, no key, no instance, no configuration. It is also the one
  *      source whose licence and method agree with an offline-first app.
- *      Wikimedia's User-Agent policy is quoted in {@link WEB_USER_AGENT} and
+ *      Wikimedia's User-Agent policy is quoted in {@link nexusUserAgent} and
  *      honoured by every request this module builds, not only Wikipedia's.
  *   2. **SearXNG** is whatever instance the user runs or trusts, and it is the
  *      answer for a user who wants general web results without an account
@@ -58,21 +59,6 @@ import { WEB_LIMITS } from "./limits.js";
 export const WEB_PROVIDER_IDS = ["wikipedia", "searxng", "brave"] as const;
 
 export type WebProviderId = (typeof WEB_PROVIDER_IDS)[number];
-
-/**
- * The User-Agent every request carries, and the policy it answers.
- *
- * Wikimedia's policy (https://foundation.wikimedia.org/wiki/Policy:User-Agent_policy)
- * is one sentence long in the part that matters here: „Scripts should use an
- * informative User-Agent string with contact information, or they may be
- * blocked without notice." The generic format it asks for is „<client
- * name>/<version> (<contact information>)", so this string names the client,
- * the release it ships in, the project and a way to make contact. It is sent on
- * every request and not only Wikipedia's, because a request from this process
- * should be identifiable wherever it lands.
- */
-export const WEB_USER_AGENT =
-  "Nexus/1.5.0 (https://github.com/lukastojiljkovic/Nexus; luka.d.stojiljkovic@gmail.com)";
 
 /** One search result, as every parser below produces it and the tools format it. */
 export interface WebSearchResult {
@@ -150,7 +136,7 @@ function wikipediaHost(locale: AssistantLocale): string {
  * with, it resolves on both scripts of the same wiki, and it does not depend on
  * the title's punctuation surviving a round trip.
  */
-export function wikipediaSearchRequest(query: string, locale: AssistantLocale): WebSearchRequest {
+export function wikipediaSearchRequest(query: string, locale: AssistantLocale, version: string): WebSearchRequest {
   const url = new URL(`https://${wikipediaHost(locale)}/w/api.php`);
   url.searchParams.set("action", "query");
   url.searchParams.set("list", "search");
@@ -160,7 +146,7 @@ export function wikipediaSearchRequest(query: string, locale: AssistantLocale): 
   url.searchParams.set("formatversion", "2");
   return {
     url: url.toString(),
-    headers: { accept: "application/json", "user-agent": WEB_USER_AGENT },
+    headers: { accept: "application/json", "user-agent": nexusUserAgent(version) },
   };
 }
 
@@ -210,13 +196,13 @@ export function parseWikipediaSearch(body: string, locale: AssistantLocale): rea
  * disabled." A `403` is therefore reported as its own sentence (see
  * `copy.ts`) rather than as a generic failure.
  */
-export function searxngSearchRequest(query: string, origin: string): WebSearchRequest {
+export function searxngSearchRequest(query: string, origin: string, version: string): WebSearchRequest {
   const url = new URL("/search", origin);
   url.searchParams.set("q", query);
   url.searchParams.set("format", "json");
   return {
     url: url.toString(),
-    headers: { accept: "application/json", "user-agent": WEB_USER_AGENT },
+    headers: { accept: "application/json", "user-agent": nexusUserAgent(version) },
   };
 }
 
@@ -251,7 +237,12 @@ export function parseSearxngSearch(body: string): readonly WebSearchResult[] {
  * log, every error message and every citation built from the request. `count`
  * is the result cap, which the same page bounds at 20.
  */
-export function braveSearchRequest(query: string, apiKey: string, locale: AssistantLocale): WebSearchRequest {
+export function braveSearchRequest(
+  query: string,
+  apiKey: string,
+  locale: AssistantLocale,
+  version: string,
+): WebSearchRequest {
   const url = new URL("https://api.search.brave.com/res/v1/web/search");
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(WEB_LIMITS.searchResults));
@@ -261,7 +252,7 @@ export function braveSearchRequest(query: string, apiKey: string, locale: Assist
     url: url.toString(),
     headers: {
       accept: "application/json",
-      "user-agent": WEB_USER_AGENT,
+      "user-agent": nexusUserAgent(version),
       "x-subscription-token": apiKey,
     },
   };
@@ -305,22 +296,31 @@ export function buildSearchPlan(
   locale: AssistantLocale,
   config: WebConfig,
   apiKey: string | null,
+  version: string,
 ): ProviderOutcome {
   const normalized = normalizeQuery(query);
   if (normalized === null) return { ok: false, problem: "query" };
   if (provider === "wikipedia") {
     return {
       ok: true,
-      request: wikipediaSearchRequest(normalized, locale),
+      request: wikipediaSearchRequest(normalized, locale, version),
       parse: (body) => parseWikipediaSearch(body, locale),
     };
   }
   if (provider === "searxng") {
     if (config.searxng === null) return { ok: false, problem: "not-configured" };
-    return { ok: true, request: searxngSearchRequest(normalized, config.searxng), parse: parseSearxngSearch };
+    return {
+      ok: true,
+      request: searxngSearchRequest(normalized, config.searxng, version),
+      parse: parseSearxngSearch,
+    };
   }
   if (apiKey === null) return { ok: false, problem: "no-key" };
-  return { ok: true, request: braveSearchRequest(normalized, apiKey, locale), parse: parseBraveSearch };
+  return {
+    ok: true,
+    request: braveSearchRequest(normalized, apiKey, locale, version),
+    parse: parseBraveSearch,
+  };
 }
 
 /**
