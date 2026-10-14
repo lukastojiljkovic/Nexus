@@ -1,20 +1,20 @@
 # Nexus
 
-> Nexus is a free, open-source (Apache-2.0), offline-first desktop app by Luka Stojiljković that combines tasks, calendar, notes, studying, finance, habits, fitness, files, tools and a canvas in one workspace. Everything is stored in an encrypted database on the user's own computer, and every feature works with the network off. It runs on Windows 10 and 11 and on Linux, and its interface is in Serbian.
+> Nexus is a free, open-source (Apache-2.0), offline-first desktop app by Luka Stojiljković that combines tasks, calendar, notes, studying, finance, habits, fitness, files, tools and a canvas in one workspace, beside offline Wikipedia, signed content packs and local language models. Everything is stored in an encrypted database on the user's own computer, and everything the user writes works with the network off. It runs on Windows 10 and 11, Linux and macOS, and its interface is in Serbian and English.
 
 Key facts:
 
-- 16 modules, switched on per profile: Kontrolna tabla (dashboard), Zadaci (tasks), Kalendar (calendar with a document-expiry tracker), Beleške (notes), Privatno (encrypted private notes), Datoteke (file previews), Učenje (study), Finansije (finance), Navike (habits), Fitnes (food and training), Fokus (Pomodoro timer), Alatke (calculators), Stručne alatke (eighteen professional toolkits), Tabla (infinite canvas), Elektronika (electronics workbench that generates Arduino sketches and ROS 2 packages) and Podešavanja (settings).
+- 40 modules in six groups, beside the dashboard and settings, each switched on per profile. Plan: tasks, calendar, habits, focus and timers. Knowledge: notes, documents, study, an offline Wikipedia reader for Kiwix ZIM files, a reader, a translator, maps, astronomy, a recorder and a local assistant. Life: finance, fitness, an encrypted private vault, pantry, cookbook, car and an emergency card. Culture: a library and a culture guide. Make: an electronics workbench that generates Arduino sketches and ROS 2 packages, a canvas, CAD and 3D-print file viewers, a scanner, a calculator, signals, a lab, mini apps, tools and professional toolkits. Play: cards, chess, board games, puzzles and arcade games.
 - Study: exam countdowns, spaced-repetition flashcards, cloze and step-by-step cards, typeset maths, Anki deck import, and an exam planner that schedules study blocks and re-plans when the user falls behind.
 - Storage: one SQLite database encrypted at rest that opens only with the user's passcode (argon2id) or a Recovery Kit code. Attachments are AES-256-GCM encrypted. Private notes have their own Recovery Kit.
-- Network: offline by default. On first start the user picks **Offline only** (no network call of any kind, enforced by a CI check) or **Offline + update checks** (Nexus contacts GitHub only to check for and download a new version of itself). Notes and data never leave the computer; in update-check mode GitHub sees the user's IP address, as any server does. It collects no data, has no online account and has no server: there is no cloud and no sync. Data moves to another computer as an exported archive, optionally password-protected.
+- Network: offline by default. On first start the user picks **Offline only** (no network call of any kind, enforced by a CI check), **Offline + update checks** (Nexus contacts GitHub only to check for and download a new version of itself) or **Downloads** (also the content packs, Kiwix libraries and Hugging Face models the user chooses, from a compiled-in list of hosts). Notes and data never leave the computer. It collects no data, has no online account and has no server: there is no cloud and no sync. Data moves to another computer as an exported archive, optionally password-protected.
 - Data portability: a full export into one sealed archive that can be restored or merged, plus scheduled encrypted backups.
-- Platforms: Windows 10 and 11 (per-user installer) and Linux (AppImage, tarball and a Gentoo ebuild), x64. No macOS build. The Windows installer isn't code-signed yet.
+- Platforms: Windows 10 and 11 (per-user installer) and Linux (AppImage, tarball and a Gentoo ebuild) on x64, and macOS on Apple silicon (an unsigned dmg). The Windows installer isn't code-signed yet.
 - Built with Electron, React 19 and TypeScript in a pnpm and Turborepo monorepo.
 
 ## Download
 
-- [Latest release](https://github.com/lukastojiljkovic/Nexus/releases/latest): Windows installer and Linux AppImage
+- [Latest release](https://github.com/lukastojiljkovic/Nexus/releases/latest): Windows installer, Linux AppImage and macOS dmg
 
 ## Documentation
 

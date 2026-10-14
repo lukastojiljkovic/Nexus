@@ -6,6 +6,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The privacy policy describes the app that ships.** Since 2.0.0 it still
+  said the update check was the only connection Nexus could make. It now covers
+  the Downloads mode and the hosts it reaches, what a model search sends, the
+  assistant's web search (a separate consent, confirmed request by request) and
+  where packs, libraries and models are stored. The README, the website and
+  `llms.txt` name macOS, the three network modes and the modules 2.0 added.
+
 ### Fixed
 
 - **The installed app loads a local model.** Since 2.0.0 the assistant worked
