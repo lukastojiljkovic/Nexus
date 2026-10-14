@@ -36,11 +36,12 @@
 //   fit.*                      node-llama-cpp's own estimator (see `fitFor`), at
 //                              the context the runtime loads (`FIT_CONTEXT_TOKENS`).
 //
-// The HUMAN fields — id, title, family, repo, file, projectorFile, capabilities
-// and licence — are never written by this tool. It reads them, verifies what it
-// can (the named file is in the tree, the architecture is supported by the
-// installed llama.cpp, the template's tool support agrees with `capabilities`)
-// and leaves them exactly as they are found.
+// The HUMAN fields — id, title, family, activeParameters, repo, file,
+// projectorFile, capabilities and licence — are never written by this tool. It
+// reads them, verifies what it can (the named file is in the tree, the
+// architecture is supported by the installed llama.cpp, the template's tool
+// support agrees with `capabilities`, `activeParameters` is a count a model card
+// states) and leaves them exactly as they are found.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -252,6 +253,7 @@ export async function refresh(catalogue, options) {
   const { fit, check, fetchJson, llamaCpp } = options;
   const models = [];
   for (const entry of catalogue.models) {
+    const activeParameters = activeParametersOf(entry);
     const tree = await fetchJson(treeUrl(entry.repo));
     const card = await fetchJson(modelUrl(entry.repo));
     const measured = measuredFromTree(entry, tree);
@@ -288,10 +290,35 @@ export async function refresh(catalogue, options) {
     console.log(
       `catalogue: ${entry.id} — ${String(next.sizeBytes)} bytes, sha256 ${next.sha256.slice(0, 12)}…` +
         (next.projector ? `, projector ${String(next.projector.sizeBytes)} bytes` : "") +
-        `, languages [${languages.join(", ")}], licence ${licences.name}`,
+        `, languages [${languages.join(", ")}], licence ${licences.name}` +
+        `, ${String(activeParameters)} active parameters`,
     );
   }
   return { ...catalogue, checked: new Date().toISOString().slice(0, 10), models };
+}
+
+/**
+ * The parameters one token's forward pass runs through, refused when the entry
+ * states none.
+ *
+ * A HUMAN field: which count belongs here is the model card's claim rather than
+ * this tool's arithmetic — a dense model's whole count, a mixture-of-experts
+ * model's active count, a Gemma E-model's effective count — and the app's chooser
+ * orders the tiers by it, so an entry without one has nothing to be ranked by.
+ * Refused at the top of a refresh, so a list with a gap in it fails before a
+ * request is spent — `catalogueLicence`'s rule, applied to the field the chooser
+ * ranks by.
+ */
+export function activeParametersOf(entry) {
+  const value = entry.activeParameters;
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(
+      `${entry.id}: no active parameter count. Write the count the model card states ` +
+        "(a dense model's whole count, a mixture-of-experts model's active count, " +
+        "a Gemma E-model's effective count).",
+    );
+  }
+  return value;
 }
 
 /**

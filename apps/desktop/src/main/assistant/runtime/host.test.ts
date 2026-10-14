@@ -1,10 +1,11 @@
 import type { ChatModel, ModelEntry } from "@nexus/core";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DownloadService } from "../../download/service.js";
+import { bundledCatalogue } from "./catalogue.js";
 import { parseHostRequest, PROTOCOL_VERSION, type HostEvent } from "./protocol.js";
 import { createModelHost, type ModelHostDeps, type WorkerPort } from "./host.js";
 import { modelFilePath, upsertInstalled } from "./install.js";
@@ -19,7 +20,15 @@ afterEach(() => {
   rmSync(userData, { recursive: true, force: true });
 });
 
-/** Writes a model into the registry with a file on disk, so the host's existence check passes. */
+/**
+ * Writes a model into the registry with a file on disk, so the host's existence
+ * check passes.
+ *
+ * The id is one the catalogue no longer carries (Qwen3.5 2B, withdrawn by
+ * ADR-113), which is what most of these tests want: an installed model the
+ * chooser cannot offer, because the registry — not the catalogue — is what the
+ * host reads for the installed list, a load and a removal.
+ */
 function installFixture(id: string, overrides: Partial<ModelEntry> = {}): ModelEntry {
   const entry: ModelEntry = {
     id,
@@ -404,8 +413,24 @@ describe("the model host on a fake worker", () => {
     const { host } = makeHost();
     expect(await host.installed()).toEqual([]);
     const catalogue = await host.catalogue();
-    expect(catalogue).toHaveLength(9);
+    expect(catalogue).toHaveLength(8);
     expect(host.recommend(await host.hardware(), catalogue)).toHaveLength(3);
+  });
+
+  it("keeps a model whose entry left the catalogue: listed, loadable and removable", async () => {
+    // People who installed a model that a later run withdrew keep the file, and
+    // the registry is what the installed list is read from (`readInstalled` in
+    // `install.ts`), never the catalogue: the chooser is the only reader of that,
+    // through `recommend`. So withdrawal costs a user nothing but the pick.
+    const entry = installFixture("qwen3.5-2b-q4-k-m");
+    expect(bundledCatalogue().map((candidate) => candidate.id)).not.toContain(entry.id);
+    const { host } = makeHost();
+    expect((await host.installed()).map((candidate) => candidate.id)).toEqual([entry.id]);
+    const model = await host.loadChat(entry.id, new AbortController().signal);
+    expect(model.info.id).toBe(entry.id);
+    await host.remove(entry.id);
+    expect(await host.installed()).toEqual([]);
+    expect(existsSync(modelFilePath(userData, entry.id, entry.file))).toBe(false);
   });
 
   it("refuses every pending request when the worker dies, and forks a new one next time", async () => {
