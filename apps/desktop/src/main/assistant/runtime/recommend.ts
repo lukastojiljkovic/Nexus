@@ -28,12 +28,21 @@
  *      on the CPU is an order of magnitude slower per token, so "the biggest
  *      model that fits somewhere" would hand the user the slowest assistant on
  *      the machine that could have run a faster one.
- *   2. **Within the pool, size orders the tiers.** Every chat entry is a
- *      four-bit quantisation, so file size IS capacity: `speed` is the smallest
- *      that fits, `intelligence` the largest, `balance` the middle of what is
- *      left. No family is favoured — the rule is the machine's, not a
- *      maintainer's taste — and when only one model fits, all three tiers name
- *      it with the reason each tier means.
+ *   2. **Within the pool, the active parameters order the tiers.** What a token
+ *      costs is the work its forward pass runs through, not what the file
+ *      weighs: `speed` is the entry with the fewest parameters that fits,
+ *      `intelligence` the one with the most, `balance` the middle of what is
+ *      left, and each count is the one the model's own card states
+ *      (`activeParameters` in `catalogue.json`, ADR-113). File size used to stand
+ *      in for it, and the reason it cannot is Gemma 4's E-models: their files
+ *      carry per-layer embedding tables, which are lookups rather than matrix
+ *      work, so E2B's file is BIGGER than Qwen3.5 4B's while its card states the
+ *      smaller count — and a size-ordered list named the one with more work per
+ *      token `speed`. No family is favoured — the rule is the machine's and the
+ *      cards', not a maintainer's taste — and when only one model fits, all three
+ *      tiers name it with the reason each tier means. Entries that claim the same
+ *      count fall back to the smaller file and then to the id, so the order is
+ *      total.
  *
  * NO PICK IS AN ANSWER TOO. When nothing fits, this returns an empty list and
  * `noRecommendation` carries the sentence that says so — "there is not enough
@@ -44,7 +53,7 @@
  */
 
 import type { AssistantText, HardwareProfile, ModelEntry, ModelRecommendation, ModelTier } from "@nexus/core";
-import { fitOf } from "./catalogue.js";
+import { activeParametersOf, fitOf } from "./catalogue.js";
 
 /** The context every stored estimate is made at, and the context the runtime loads. */
 export const CHAT_CONTEXT_TOKENS = 8192;
@@ -62,9 +71,9 @@ const GIB = 1024 * 1024 * 1024;
  * One pick per tier, most capable first, or an empty list when nothing fits.
  *
  * The signature is the contract's (`readonly ModelEntry[]`), so an entry whose
- * fit is unknown — a search result, an imported file — is skipped rather than
- * assumed to fit: `catalogue.ts` is the only place that knows the shape of the
- * stored estimates, and it answers `null` for anything else.
+ * fit or whose active-parameter count is unknown — a search result, an imported
+ * file — is skipped rather than assumed: `catalogue.ts` is the only place that
+ * knows the shape of both stored fields, and it answers `null` for anything else.
  */
 export function recommend(
   hardware: HardwareProfile,
@@ -72,11 +81,12 @@ export function recommend(
 ): readonly ModelRecommendation[] {
   const candidates = catalogue.flatMap((entry) => {
     const fit = fitOf(entry);
-    if (fit === null || !entry.capabilities.includes("chat")) return [];
+    const activeParameters = activeParametersOf(entry);
+    if (fit === null || activeParameters === null || !entry.capabilities.includes("chat")) return [];
     const gpu = fitsOnCard(hardware, fit);
     const cpu = fitsInMemory(hardware, fit);
     if (!gpu && !cpu) return [];
-    return [{ entry, fit, onCard: gpu }];
+    return [{ entry, fit, activeParameters, onCard: gpu }];
   });
   if (candidates.length === 0) return [];
 
@@ -84,9 +94,13 @@ export function recommend(
     ? candidates.filter((candidate) => candidate.onCard)
     : candidates;
   const ordered = [...pool].sort((left, right) => {
+    if (left.activeParameters !== right.activeParameters) {
+      return left.activeParameters - right.activeParameters;
+    }
     if (left.entry.sizeBytes !== right.entry.sizeBytes) return left.entry.sizeBytes - right.entry.sizeBytes;
-    // A stable tie-break, so two entries of the same size always order the same
-    // way and a user does not see the picks swap between two openings.
+    // A stable tie-break, so two entries that claim the same count and the same
+    // size always order the same way and a user does not see the picks swap
+    // between two openings.
     return left.entry.id < right.entry.id ? -1 : 1;
   });
 
@@ -118,7 +132,11 @@ export function noRecommendation(
 
   const sized = catalogue.flatMap((entry) => {
     const fit = fitOf(entry);
-    return fit === null || !entry.capabilities.includes("chat") ? [] : [{ entry, fit }];
+    // The same two fields the chooser itself needs, so the two functions can
+    // never disagree about which entries this build could have offered.
+    return fit === null || activeParametersOf(entry) === null || !entry.capabilities.includes("chat")
+      ? []
+      : [{ entry, fit }];
   });
   if (sized.length === 0) {
     return {
@@ -150,6 +168,7 @@ export function noRecommendation(
 interface Candidate {
   readonly entry: ModelEntry;
   readonly fit: { readonly vramBytes: number; readonly hostRamBytes: number; readonly cpuRamBytes: number };
+  readonly activeParameters: number;
   readonly onCard: boolean;
 }
 

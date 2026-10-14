@@ -51,7 +51,7 @@ Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 The repository holds the full working record, and a reader can follow it end to end:
 
 - **Specification and PRDs** — [docs/SPECIFICATION.md](docs/SPECIFICATION.md) and [docs/prd/](docs/prd/): 37 numbered requirements documents plus a glossary; `prd/00-overview.md` is the module registry.
-- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 112 decisions and their status](docs/architecture/adr/README.md).
+- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 113 decisions and their status](docs/architecture/adr/README.md).
 - **The engineering journal** — [docs/log/README.md](docs/log/README.md): four months of entries, kept by month, recording why each decision was made.
 - **The defect ledger and the gates** — [docs/defect-classes.md](docs/defect-classes.md): 149 recurring failure shapes, and the 30 `check:` scripts that enforce the ones a static check can answer.
 - **The security baseline** — [docs/security/baseline.md](docs/security/baseline.md): the binding `SEC-*` rules.

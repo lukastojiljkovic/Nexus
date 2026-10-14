@@ -11,7 +11,7 @@ import { createLlamaEngine } from "./llama.js";
  * through the real engine — llama.cpp, the chat template, a real generation — and
  * it runs only when the maintainer points `NEXUS_LLM_SMOKE` at a file:
  *
- *   $env:NEXUS_LLM_SMOKE = "C:\path\to\Qwen3.5-2B-Q4_K_M.gguf"
+ *   $env:NEXUS_LLM_SMOKE = "C:\path\to\gemma-4-E2B_q4_0-it.gguf"
  *   node node_modules/vitest/vitest.mjs run --configLoader runner src/main/assistant/runtime/smoke.test.ts
  *
  * What it proves that nothing else can: that `getLlama` finds a backend on THIS
@@ -21,10 +21,12 @@ import { createLlamaEngine } from "./llama.js";
  * one exception: the VRAM `used` figure after the unload must not exceed the
  * figure while the model was loaded, which is what "unloadAll frees memory" means.
  *
- * MEASURED, maintainer's laptop, 2026-10-10, with the catalogue's smallest entry
- * (`Qwen3.5-2B-Q4_K_M`, 1 280 835 840 bytes): the whole test takes 11.2 s, of
- * which 5.3 s is the 256-token generation. Its budget is 120 s — ten times the
- * measurement, which is the same margin the other slow suites here use.
+ * MEASURED, maintainer's laptop, 2026-10-10, with the entry that was then the
+ * catalogue's smallest (`Qwen3.5-2B-Q4_K_M`, 1 280 835 840 bytes, withdrawn
+ * 2026-10-15 by ADR-113 — the figures are that file's, not the speed pick's): the
+ * whole test takes 11.2 s, of which 5.3 s is the 256-token generation. Its budget
+ * is 120 s — ten times the measurement, which is the same margin the other slow
+ * suites here use.
  */
 const smokePath = process.env["NEXUS_LLM_SMOKE"];
 const smoke = smokePath === undefined || smokePath === "" ? it.skip : it;
