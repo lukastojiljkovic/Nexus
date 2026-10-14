@@ -61,11 +61,11 @@ export function pyramidExposed(cards: readonly (Card | null)[], index: number): 
 }
 
 /**
- * TriPeaks' three peaks, as the deal's own geometry: the row of nine covers the
- * base's twenty-eight, and each peak's upper cards cover the pair below them
- * (`TRIPEAKS_COVERS` in `tripeaks.ts`, slot for slot).
+ * TriPeaks' three peaks, as the deal's own geometry: for each slot, the two
+ * slots of the row below that cover it, and nothing for the row of ten
+ * (`TRIPEAKS_COVERED_BY` in `tripeaks.ts`, slot for slot).
  */
-export const TRIPEAKS_COVERS: readonly (readonly number[])[] = [
+export const TRIPEAKS_COVERED_BY: readonly (readonly number[])[] = [
   [], [], [], [], [], [], [], [], [], [],
   [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9],
   [10, 11], [11, 12],
@@ -76,19 +76,19 @@ export const TRIPEAKS_COVERS: readonly (readonly number[])[] = [
 
 /** Whether a TriPeaks card is exposed: every card covering it is already played off. */
 export function triPeaksExposed(tableau: readonly (Card | null)[], slot: number): boolean {
-  for (let above = 0; above < TRIPEAKS_COVERS.length; above += 1) {
-    const below = TRIPEAKS_COVERS[above] ?? [];
-    if (below.includes(slot) && tableau[above] !== null) return false;
-  }
-  return true;
+  return (TRIPEAKS_COVERED_BY[slot] ?? []).every((below) => tableau[below] === null);
 }
 
 /**
- * The three rows of TriPeaks, as slot ranges, so the layout can draw the deal's
- * own shape rather than a flat list: the base's ten, the row of nine that covers
- * them, and the row of six above that — the two rows offset half a card, which is
- * the geometry `TRIPEAKS_COVERS` is written from.
+ * The four rows of TriPeaks, caps first, as the layout draws them: `null` is a
+ * card's width of space — one between the pyramids in the row of six, two
+ * between the caps — so each centred row lands every card half a card from the
+ * two that cover it, the geometry `TRIPEAKS_COVERED_BY` is written from. Drawn
+ * top first, so each row lies over the one above it, as the deal does.
  */
-export const TRIPEAKS_BASE: readonly number[] = Array.from({ length: 10 }, (_, index) => index);
-export const TRIPEAKS_MIDDLE: readonly number[] = Array.from({ length: 9 }, (_, index) => index + 10);
-export const TRIPEAKS_TOP: readonly number[] = Array.from({ length: 6 }, (_, index) => index + 19);
+export const TRIPEAKS_ROWS: readonly (readonly (number | null)[])[] = [
+  [25, null, null, 26, null, null, 27],
+  [19, 20, null, 21, 22, null, 23, 24],
+  Array.from({ length: 9 }, (_, index) => index + 10),
+  Array.from({ length: 10 }, (_, index) => index),
+];

@@ -28,7 +28,7 @@ import {
   variantsOf,
   type CardSession,
 } from "./rules.js";
-import { boxKey, highlights, moveTo, sourceBox, targetBox } from "./solitaire.js";
+import { boxKey, directMove, highlights, moveTo, picksRun, sourceBox, targetBox } from "./solitaire.js";
 import { describeMove } from "./moves.js";
 
 /**
@@ -270,6 +270,64 @@ describe("the boards' boxes", () => {
     // The boxes name the same move the engine offered, by its own fields.
     expect(boxKey(sourceBox("freecell", found!)!)).toBe(boxKey(from!));
     expect(boxKey(targetBox("freecell", found!)!)).toBe(boxKey(to!));
+  });
+
+  it("plays the move into the box that was clicked, not the first one from the source", () => {
+    // A card with two places to go must go to the one chosen: every legal move,
+    // looked up by its own two boxes, comes back as a move into that same box.
+    for (const game of ["klondike", "freecell", "spider", "golf"] as const) {
+      for (const seed of [3, 77, 617]) {
+        const moves = legalMoves(startGame(game, CARD_GAME_VARIANTS[game][0]!, seed));
+        for (const move of moves) {
+          const from = sourceBox(game, move);
+          const to = targetBox(game, move);
+          if (from === null || to === null) continue;
+          const found = moveTo(game, moves, from, to);
+          expect(boxKey(targetBox(game, found)!), `${game}/${seed}`).toBe(boxKey(to));
+        }
+      }
+    }
+  });
+
+  it("turns the stock with one click, and only where nothing from the box needs a destination", () => {
+    const klondike = startGame("klondike", "draw1", 3);
+    const draw = directMove("klondike", legalMoves(klondike), { kind: "stock" });
+    expect((draw as { kind: string }).kind).toBe("draw");
+    const spider = startGame("spider", CARD_GAME_VARIANTS.spider[0]!, 3);
+    expect((directMove("spider", legalMoves(spider), { kind: "stock" }) as { kind: string }).kind).toBe("deal");
+    const freecell = legalMoves(startGame("freecell", "classic", 617));
+    const column = sourceBox("freecell", freecell[0]);
+    expect(directMove("freecell", freecell, column!)).toBeNull();
+  });
+
+  it("reads both boxes of every move between piles, so a column can be picked up and built on", () => {
+    // Klondike calls a column „tableau" and FreeCell „column"; unread, no Klondike
+    // column was ever a source or a destination.
+    for (const game of ["klondike", "freecell", "spider"] as const) {
+      const between = [1, 2, 3, 4, 5].flatMap((seed) => {
+        const moves = legalMoves(startGame(game, CARD_GAME_VARIANTS[game][0]!, seed));
+        return moves
+          .filter((move) => (move as { kind: string }).kind === "move")
+          .map((move) => ({ moves, move }));
+      });
+      expect(between.length, game).toBeGreaterThan(0);
+      for (const { moves, move } of between) {
+        const from = sourceBox(game, move);
+        const to = targetBox(game, move);
+        expect(from, game).not.toBeNull();
+        expect(to, game).not.toBeNull();
+        expect(highlights(game, moves, from).targets.has(boxKey(to!)), game).toBe(true);
+        if (from!.kind === "column") {
+          expect(picksRun(game, moves, from!.column, (move as { count: number }).count), game).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("lets a click pick up a FreeCell column's top card, which a free cell always takes", () => {
+    const moves = legalMoves(startGame("freecell", "classic", 617));
+    for (let column = 0; column < 8; column++) expect(picksRun("freecell", moves, column, 1)).toBe(true);
+    expect(picksRun("freecell", moves, 0, 0)).toBe(false);
   });
 });
 

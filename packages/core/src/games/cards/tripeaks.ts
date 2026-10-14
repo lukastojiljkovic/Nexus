@@ -6,10 +6,11 @@
  * The layout and the rules are the article's
  * (https://en.wikipedia.org/wiki/Tri_Peaks_(game) § Gameplay): twenty-eight
  * tableau cards — a row of ten, then rows of nine, six and three — and
- * twenty-four stock cards of which the first starts the waste. A card covers the
- * one or two cards beneath it, so a pyramid's middle card is hidden by two
- * cards at once and its base card by two, which is the shape the three valleys
- * have. Cards are turned from the stock one at a time and only while nothing on
+ * twenty-four stock cards of which the first starts the waste. The row of ten
+ * lies face up across the bottom and overlaps the row of nine above it, each
+ * row overlapping the one above in turn, so every card but the ten is covered by
+ * the two cards of the row below and the game climbs from the ten towards the
+ * three peaks. Cards are turned from the stock one at a time and only while nothing on
  * the tableau can be played, and the game is won when all twenty-eight tableau
  * cards are gone.
  *
@@ -56,30 +57,24 @@ export const TRIPEAKS_TABLEAU = 28;
 export const TRIPEAKS_STOCK = 24;
 
 /**
- * Which slots each covering card hides, lower row first: the row of nine covers
- * the row of ten two cards at a time, the row of six covers three pyramids' base
- * rows, and the three caps cover the pairs beneath them. Read as the deal's own
- * geometry — each card is offset half a card from the row below it — and written
+ * For each slot, the slots that cover it — the cards that must be gone before it
+ * is exposed. Nothing covers the row of ten, which is exposed from the deal; each
+ * card of the row of nine is covered by the two cards of the ten beside its
+ * centre, each card of the row of six by two cards of its pyramid's three in the
+ * nine, and each cap by its pyramid's two in the six. Read as the deal's own
+ * geometry — each row is offset half a card from the row below it — and written
  * out because the covering relation is the whole of what „exposed" means.
+ *
+ * Until 2026-10-14 the engine read this table the other way round, as the cards
+ * each slot covers, which buried the row of ten under the peaks and opened the
+ * game on the three caps.
  */
-const TRIPEAKS_COVERS: readonly (readonly number[])[] = [
+const TRIPEAKS_COVERED_BY: readonly (readonly number[])[] = [
   [], [], [], [], [], [], [], [], [], [],
   [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9],
   [10, 11], [11, 12], [13, 14], [14, 15], [16, 17], [17, 18],
   [19, 20], [21, 22], [23, 24],
 ];
-
-/**
- * The inverse: for each slot, the slots that must be gone before it is exposed.
- * Derived from {@link TRIPEAKS_COVERS} so the two can never disagree — a hand-kept
- * second table is a second table that can be wrong.
- */
-const TRIPEAKS_COVERED_BY: readonly (readonly number[])[] = TRIPEAKS_COVERS.reduce<
-  number[][]
->((covered, covers, index) => {
-  for (const slot of covers) covered[slot]!.push(index);
-  return covered;
-}, Array.from({ length: TRIPEAKS_TABLEAU }, () => [] as number[]));
 
 /** One tableau slot, or the waste — where a card may be played from or onto. */
 export interface TriPeaksBoard {
