@@ -82,6 +82,15 @@ describe("parseHostRequest", () => {
     ).toMatchObject({ kind: "embed", texts: ["hi"] });
   });
 
+  it("accepts a load request whose context length is not known", () => {
+    // The host sends 0 for a model from the search or an import; the engine
+    // then loads it at its default. Refusing 0 killed the worker's whole
+    // request, so a chosen model never answered.
+    expect(parseHostRequest({ ...loadChat, contextTokens: 0 })).toMatchObject({ kind: "load-chat", contextTokens: 0 });
+    const loadEmbedder = { v: PROTOCOL_VERSION, kind: "load-embedder", seq: 9, id: "e5", modelPath: "e5.gguf", contextTokens: 0, threads: 4 };
+    expect(parseHostRequest(loadEmbedder)).toMatchObject({ kind: "load-embedder", contextTokens: 0 });
+  });
+
   it("refuses a message from another protocol version, and says which", () => {
     expect(() => parseHostRequest({ ...loadChat, v: 99 })).toThrow(ProtocolError);
     expect(() => parseHostRequest({ ...loadChat, v: 99 })).toThrow(/protocol 1/);
@@ -99,7 +108,8 @@ describe("parseHostRequest", () => {
       { ...loadChat, id: " padded " },
       { ...loadChat, modelPath: "" },
       { ...loadChat, modelPath: "a".repeat(PROTOCOL_LIMITS.pathChars + 1) },
-      { ...loadChat, contextTokens: 0 },
+      { ...loadChat, contextTokens: -1 },
+      { ...loadChat, contextTokens: 4096.5 },
       { ...loadChat, contextTokens: PROTOCOL_LIMITS.contextTokens + 1 },
       { ...loadChat, gpuLayers: "most" },
       { ...loadChat, threads: 0 },
