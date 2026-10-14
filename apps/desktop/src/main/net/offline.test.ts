@@ -455,11 +455,10 @@ describe("the dedicated session's host rule (ADR-089, ADR-092)", () => {
   });
 
   it("admits the wider list only in the wider mode", () => {
-    // Vacuously true today, because the download list IS the update list — and
-    // that is the point: the day a content host is appended (ADR-092 says
-    // Kiwix's will be), this test is what proves the one-line change admitted
-    // it in `"downloads"` without admitting it in `"updates"`.
+    // The content hosts appended after the update hosts — Kiwix's and Hugging
+    // Face's — are admitted in `"downloads"` and in no other mode.
     const addedByDownloads = DOWNLOAD_HOSTS.filter((host) => !UPDATE_HOSTS.includes(host));
+    expect(addedByDownloads.length).toBeGreaterThan(0);
     for (const host of addedByDownloads) {
       expect(isSessionRequestAllowed("downloads", `https://${host}/x`), host).toBe(true);
       expect(isSessionRequestAllowed("updates", `https://${host}/x`), host).toBe(false);
