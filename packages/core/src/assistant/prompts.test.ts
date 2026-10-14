@@ -41,7 +41,7 @@ describe("buildSystemPrompt", () => {
   it("states the version, the fallback language for the current locale, and every rule", () => {
     const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "sr", tools: [TOOL, WRITE_TOOL], maxSteps: 5 });
     expect(prompt).toContain(SYSTEM_PROMPT_VERSION);
-    expect(prompt).toContain("answer in Serbian (Latin script), which is what the app is showing right now");
+    expect(prompt).toContain("answer in Serbian (Latin script), the language the app shows right now");
     expect(prompt).toContain("Answer in the language the user writes in");
     expect(prompt).toContain("[1]");
     expect(prompt).toContain("BEGIN UNTRUSTED DATA");
@@ -49,6 +49,27 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain(SAFETY_NOTICE.en);
     expect(prompt).toContain("at most 5 rounds");
     expect(prompt).toContain("Never invent a fact, a number");
+  });
+
+  it("keeps a duty the old prompt carried: the refusal, the citation and the safety habits", () => {
+    const prompt = buildSystemPrompt({ today: "2026-10-14", locale: "en", tools: [TOOL], maxSteps: 5 });
+    expect(prompt).toContain("Never repeat a refused call");
+    expect(prompt).toContain("a refusal is a normal result, not an error");
+    expect(prompt).toContain("the tool asks the user for permission");
+    expect(prompt).toContain("Never invent a citation");
+    expect(prompt).toContain("the app shows the user every citation you send");
+    expect(prompt).toContain("the knowledge does not cover it, and stop there");
+    expect(prompt).toContain("do not add the notice");
+    expect(prompt).toContain("calling 112 is the first step");
+  });
+
+  it("keeps the fixed text small enough for the window it shares with the conversation", () => {
+    // A policy guard, not a measurement: the prompt is short, imperative prose
+    // for a 2-5B model, and this is the ceiling the size may not drift past
+    // unnoticed. The measured length on 2026-10-15 was 2522 characters with no
+    // tools; the number here is deliberately a little above it.
+    const prompt = buildSystemPrompt({ locale: "sr", tools: [], maxSteps: 6, today: "2026-10-15" });
+    expect(prompt.length).toBeLessThan(2700);
   });
 
   it("gives the model today's date with its weekday", () => {

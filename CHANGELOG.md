@@ -31,6 +31,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   solver answers "unknown" more often as a result: the same search bound now
   covers many more lines.
 
+- **The assistant's instructions are shorter.** The local models it runs have a
+  small window, and its standing instructions took a fifth of the room each
+  request has. They are now short rules, a quarter shorter, and no rule was
+  dropped.
+
 - **Gemma 4 E2B is the fast model.** The three recommended models were ranked by
   file size, and Gemma's smaller models carry large lookup tables that make the
   file big without making each word more work. The ranking now uses the
