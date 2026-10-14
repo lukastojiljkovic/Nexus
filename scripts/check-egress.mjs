@@ -286,6 +286,17 @@ export const ALLOWLIST = new Map([
     "apps/desktop/src/main/assistant/web/transport.ts",
     ["node-http", "node-dns"],
   ],
+  [
+    // The download service's port (ADR-092), on the DEDICATED session it is
+    // handed: `net.request({ session })` goes through that session's proxy,
+    // `onBeforeRequest` allowlist and the launch's `host-resolver-rules`, which
+    // is the same path `session.fetch` took. It is `net.request` because the
+    // port must hand each `3xx` back to `service.ts` unfollowed, and Electron's
+    // fetch rejects a manual redirect instead (2026-10-14). One file: the
+    // service that decides each hop stays under the gate.
+    "apps/desktop/src/main/download/electron.ts",
+    ["electron-net"],
+  ],
 ]);
 
 /**

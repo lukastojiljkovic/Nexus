@@ -7,7 +7,7 @@ import {
   pyramidMoves,
   triPeaksMoves,
 } from "@nexus/core";
-import { pyramidExposed, pyramidRow, triPeaksExposed, TRIPEAKS_COVERS } from "./cardParts.js";
+import { pyramidExposed, pyramidRow, triPeaksExposed, TRIPEAKS_COVERED_BY, TRIPEAKS_ROWS } from "./cardParts.js";
 import { cardLabel, suitGlyph } from "./table.js";
 import { boxKey, highlights, sourceBox } from "./solitaire.js";
 
@@ -60,11 +60,35 @@ describe("the pyramid's rows", () => {
 
 describe("the tri-peaks geometry", () => {
   it("covers the row below with exactly the slots the deal says", () => {
-    expect(TRIPEAKS_COVERS).toHaveLength(28);
-    expect([...TRIPEAKS_COVERS[10]!]).toEqual([0, 1]);
-    expect([...TRIPEAKS_COVERS[18]!]).toEqual([8, 9]);
-    expect([...TRIPEAKS_COVERS[19]!]).toEqual([10, 11]);
-    expect([...TRIPEAKS_COVERS[24]!]).toEqual([17, 18]);
+    expect(TRIPEAKS_COVERED_BY).toHaveLength(28);
+    expect([...TRIPEAKS_COVERED_BY[10]!]).toEqual([0, 1]);
+    expect([...TRIPEAKS_COVERED_BY[18]!]).toEqual([8, 9]);
+    expect([...TRIPEAKS_COVERED_BY[19]!]).toEqual([10, 11]);
+    expect([...TRIPEAKS_COVERED_BY[24]!]).toEqual([17, 18]);
+  });
+
+  it("draws every slot once, centred over the two cards that cover it", () => {
+    // Each row is centred, so a slot's position is its index in the row plus
+    // half the difference between the row's width and the widest row's.
+    const widest = Math.max(...TRIPEAKS_ROWS.map((row) => row.length));
+    const where = new Map<number, { row: number; x: number }>();
+    TRIPEAKS_ROWS.forEach((row, rowIndex) =>
+      row.forEach((slot, index) => {
+        if (slot !== null) where.set(slot, { row: rowIndex, x: index + (widest - row.length) / 2 });
+      }),
+    );
+    expect([...where.keys()].sort((a, b) => a - b)).toEqual(Array.from({ length: 28 }, (_, slot) => slot));
+    TRIPEAKS_COVERED_BY.forEach((covers, slot) => {
+      if (covers.length === 0) return;
+      const [left, right] = covers.map((cover) => where.get(cover)!);
+      expect(where.get(slot), `slot ${slot}`).toEqual({ row: left!.row - 1, x: (left!.x + right!.x) / 2 });
+    });
+  });
+
+  it("deals the row of ten face up and every card above it face down", () => {
+    const board = dealTriPeaks("classic", 42).board;
+    const exposed = Array.from({ length: 28 }, (_, slot) => slot).filter((slot) => triPeaksExposed(board.tableau, slot));
+    expect(exposed).toEqual(Array.from({ length: 10 }, (_, slot) => slot));
   });
 
   it("offers exactly the cards the engine will play", () => {

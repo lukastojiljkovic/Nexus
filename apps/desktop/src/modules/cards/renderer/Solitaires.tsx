@@ -1,10 +1,4 @@
-import {
-  isFreeCellMove,
-  isKlondikeMove,
-  isSpiderMove,
-  type Card,
-  type Suit,
-} from "@nexus/core";
+import type { Card, Suit } from "@nexus/core";
 import { copy } from "./copy.js";
 import { runFrom } from "./moves.js";
 import type { CardSelection } from "./moves.js";
@@ -12,12 +6,14 @@ import type { CardSession } from "./rules.js";
 import {
   FOUNDATIONS,
   boxKey,
+  directMove,
   highlights,
   moveTo,
+  picksRun,
   type Box,
 } from "./solitaire.js";
 import { CardButton, CardFace, CardSlot, EmptySlot } from "./table.js";
-import { TRIPEAKS_BASE, TRIPEAKS_MIDDLE, TRIPEAKS_TOP, triPeaksExposed } from "./cardParts.js";
+import { TRIPEAKS_ROWS, triPeaksExposed } from "./cardParts.js";
 
 /**
  * The six solitaires' tables (ADR-090 stage 2).
@@ -57,9 +53,30 @@ function boxClick(
     };
   }
   if (state.pickable.has(key)) {
+    const direct = directMove(props.session.game, props.moves, box);
+    if (direct !== null) {
+      return () => {
+        props.onSelect(null);
+        props.onMove(direct);
+      };
+    }
     return () => props.onSelect(props.selected !== null && boxKey(props.selected) === key ? null : box);
   }
   return undefined;
+}
+
+/**
+ * The click that puts the chosen cards on a column that already holds cards.
+ *
+ * Such a column cannot be a button itself, because its own cards are buttons, so
+ * while it is one of the places the choice may go, its face-up cards play the
+ * move instead. Without this only an EMPTY column was ever a destination, and no
+ * card could be built on another in Klondike, FreeCell or Spider.
+ */
+function dropOn(props: SolitaireProps, box: Box): (() => void) | undefined {
+  if (props.selected === null) return undefined;
+  const state = marks(props);
+  return state.targets.has(boxKey(box)) ? boxClick(props, box, state) : undefined;
 }
 
 function marks(props: SolitaireProps): ReturnType<typeof highlights> {
@@ -81,10 +98,8 @@ function isLastCard(props: SolitaireProps, card: Card): boolean {
 // --- Klondike ---------------------------------------------------------------
 
 export function KlondikeBoard(props: SolitaireProps) {
-  const { session, moves } = props;
-  const board = boardOf(session) as KlondikeTable;
+  const board = boardOf(props.session) as KlondikeTable;
   const state = marks(props);
-  const plays = moves.filter(isKlondikeMove);
   const wasteTop = board.waste[board.waste.length - 1];
 
   return (
@@ -133,19 +148,13 @@ export function KlondikeBoard(props: SolitaireProps) {
             title={`${copy.play.tableau} ${column + 1}`}
             stack
             target={pile.length === 0 ? control(props, { kind: "column", column }, state) : undefined}
+            accepts={pile.length > 0 && state.targets.has(boxKey({ kind: "column", column }))}
           >
             {pile.length === 0 ? (
               <EmptySlot />
             ) : (
               pile.map((held, index) => (
-                <TableauCard
-                  key={index}
-                  props={props}
-                  box={{ kind: "column", column }}
-                  held={held}
-                  index={index}
-                  plays={plays}
-                />
+                <TableauCard key={index} props={props} column={column} held={held} index={index} />
               ))
             )}
           </CardSlot>
@@ -156,43 +165,30 @@ export function KlondikeBoard(props: SolitaireProps) {
 }
 
 /**
- * One card in a tableau column.
+ * One card in a Klondike, FreeCell or Spider column.
  *
  * A card a click can pick up is a button; a buried or face-down one is a picture.
  * The pickable test is the engine's: a card is pickable when some legal move takes
- * exactly the cards from it to the foot of the column, which is what „a run" means
- * in Klondike and Spider.
+ * exactly the cards from it to the foot of the column. While the column is where
+ * the chosen cards may go, its face-up cards put them there instead.
  */
 function TableauCard({
   props,
-  box,
+  column,
   held,
   index,
-  plays,
 }: {
   readonly props: SolitaireProps;
-  readonly box: Box;
+  readonly column: number;
   readonly held: { readonly card: Card; readonly faceUp: boolean };
   readonly index: number;
-  readonly plays: readonly unknown[];
 }) {
-  const column = box.kind === "column" ? box.column : 0;
-  const pile = columnPile(props, column);
-  const run = runFrom(pile, index);
-  const inRun =
-    props.selected !== null && props.selected.kind === "column" && props.selected.column === column;
-  const pickable =
-    held.faceUp &&
-    run > 0 &&
-    plays.some(
-      (move) =>
-        isKlondikeMove(move) &&
-        move.kind === "move" &&
-        move.from.kind === "tableau" &&
-        move.from.column === column &&
-        move.count === run,
-    );
+  const drop = dropOn(props, { kind: "column", column });
+  if (drop !== undefined && held.faceUp) return <CardButton card={held.card} onClick={drop} />;
+  const run = runFrom(columnPile(props, column), index);
+  const pickable = held.faceUp && run > 0 && picksRun(props.session.game, props.moves, column, run);
   if (!pickable) return <CardFace card={held.card} faceUp={held.faceUp} state="plain" />;
+  const inRun = props.selected !== null && props.selected.kind === "column" && props.selected.column === column;
   return (
     <CardButton
       card={held.card}
@@ -240,19 +236,13 @@ export function FreeCellBoard(props: SolitaireProps) {
             title={`${copy.play.columns} ${column + 1}`}
             stack
             target={pile.length === 0 ? control(props, { kind: "column", column }, state) : undefined}
+            accepts={pile.length > 0 && state.targets.has(boxKey({ kind: "column", column }))}
           >
             {pile.length === 0 ? (
               <EmptySlot />
             ) : (
               pile.map((card, index) => (
-                <TableauCard
-                  key={index}
-                  props={props}
-                  box={{ kind: "column", column }}
-                  held={{ card, faceUp: true }}
-                  index={index}
-                  plays={props.moves.filter(isFreeCellMove)}
-                />
+                <TableauCard key={index} props={props} column={column} held={{ card, faceUp: true }} index={index} />
               ))
             )}
           </CardSlot>
@@ -267,7 +257,6 @@ export function FreeCellBoard(props: SolitaireProps) {
 export function SpiderBoard(props: SolitaireProps) {
   const board = boardOf(props.session) as SpiderTable;
   const state = marks(props);
-  const plays = props.moves.filter(isSpiderMove);
   return (
     <div className="cards__table">
       <div className="cards__row">
@@ -287,19 +276,13 @@ export function SpiderBoard(props: SolitaireProps) {
             title={`${copy.play.columns} ${column + 1}`}
             stack
             target={pile.length === 0 ? control(props, { kind: "column", column }, state) : undefined}
+            accepts={pile.length > 0 && state.targets.has(boxKey({ kind: "column", column }))}
           >
             {pile.length === 0 ? (
               <EmptySlot />
             ) : (
               pile.map((held, index) => (
-                <SpiderCard
-                  key={index}
-                  props={props}
-                  column={column}
-                  held={held}
-                  index={index}
-                  plays={plays}
-                />
+                <TableauCard key={index} props={props} column={column} held={held} index={index} />
               ))
             )}
           </CardSlot>
@@ -307,45 +290,6 @@ export function SpiderBoard(props: SolitaireProps) {
       </div>
     </div>
   );
-}
-
-function SpiderCard({
-  props,
-  column,
-  held,
-  index,
-  plays,
-}: {
-  readonly props: SolitaireProps;
-  readonly column: number;
-  readonly held: { readonly card: Card; readonly faceUp: boolean };
-  readonly index: number;
-  readonly plays: readonly unknown[];
-}) {
-  const pile = columnPile(props, column);
-  const run = runFrom(pile, index);
-  const pickable =
-    held.faceUp &&
-    run > 0 &&
-    plays.some(
-      (move) =>
-        isSpiderMove(move) &&
-        move.kind === "move" &&
-        move.from === column &&
-        move.count === run,
-    );
-  const selected =
-    props.selected !== null && props.selected.kind === "column" && props.selected.column === column;
-  if (pickable) {
-    return (
-      <CardButton
-        card={held.card}
-        state={selected ? "run" : "plain"}
-        onClick={() => props.onSelect(selected ? null : { kind: "column", column })}
-      />
-    );
-  }
-  return <CardFace card={held.card} faceUp={held.faceUp} state="plain" />;
 }
 
 // --- Pyramid ----------------------------------------------------------------
@@ -411,9 +355,16 @@ const PYRAMID_ROWS: readonly (readonly number[])[] = (() => {
 export function TriPeaksBoard(props: SolitaireProps) {
   const board = boardOf(props.session) as TriPeaksTable;
   const state = marks(props);
-  const layer = (slots: readonly number[], name: string) => (
-    <div className="cards__peaks" key={name}>
-      {slots.map((slot) => {
+  const layer = (slots: readonly (number | null)[], row: number, name: string) => (
+    <div className="cards__peaks-row" key={row}>
+      {slots.map((slot, index) => {
+        if (slot === null) {
+          return (
+            <span key={`gap-${index}`} className="cards__slot cards__slot--gap" aria-hidden="true">
+              <EmptySlot />
+            </span>
+          );
+        }
         const held = board.tableau[slot];
         const box: Box = { kind: "card", index: slot };
         const target = control(props, box, state);
@@ -443,10 +394,10 @@ export function TriPeaksBoard(props: SolitaireProps) {
           {board.waste.length === 0 ? <EmptySlot /> : <CardFace card={board.waste[board.waste.length - 1]!} faceUp />}
         </CardSlot>
       </div>
-      <div className="cards__row cards__row--columns">
-        {layer(TRIPEAKS_TOP, copy.play.peaks)}
-        {layer(TRIPEAKS_MIDDLE, copy.play.peaks)}
-        {layer(TRIPEAKS_BASE, copy.play.tableau)}
+      <div className="cards__peaks">
+        {TRIPEAKS_ROWS.map((slots, row) =>
+          layer(slots, row, row === TRIPEAKS_ROWS.length - 1 ? copy.play.tableau : copy.play.peaks),
+        )}
       </div>
     </div>
   );
@@ -483,7 +434,7 @@ export function GolfBoard(props: SolitaireProps) {
             {pile.length === 0 ? (
               <EmptySlot />
             ) : (
-              <CardFace card={pile[pile.length - 1]!} faceUp />
+              pile.map((held, index) => <CardFace key={index} card={held} faceUp />)
             )}
           </CardSlot>
         ))}

@@ -303,7 +303,7 @@ export default function CardsPage({ profileId }: ModulePageProps) {
       ) : (
         <section className="cards__game">
           <Card
-            className="cards__card"
+            className="cards__panel"
             title={copy.games[session.game].name}
           >
             <div className="cards__meta">
@@ -357,7 +357,7 @@ export default function CardsPage({ profileId }: ModulePageProps) {
             {verdict !== null && <p className="nx-hint">{copy.play.verdict[verdict]}</p>}
           </Card>
           {isFinished(session) && (
-            <Card className="cards__card" title={copy.result.title}>
+            <Card className="cards__panel" title={copy.result.title}>
               <p className="cards__result-text">
                 <Icon name={isWon(session) ? "success" : "info"} size={18} />{" "}
                 {isWon(session) ? copy.result.win : copy.result.loss}
@@ -518,7 +518,7 @@ function Shelf({
 
   return (
     <>
-      <Card className="cards__card" title={copy.lobby.title}>
+      <Card className="cards__panel" title={copy.lobby.title}>
         <div className="cards__shelf">
           {GAME_ORDER.map((game) => (
             <div className="cards__shelf-row" key={game}>
@@ -660,7 +660,7 @@ function DealPanel({
 function StatsCard({ view }: { readonly view: CardsView }) {
   const played = view.stats.reduce((total, row) => total + row.played, 0);
   return (
-    <Card className="cards__card" title={copy.stats.title}>
+    <Card className="cards__panel" title={copy.stats.title}>
       {played === 0 ? (
         <EmptyState
           variant="inline"
@@ -717,7 +717,7 @@ function timeText(ms: number): string {
 function MoveList({ session }: { readonly session: CardSession }) {
   const moves = session.log;
   return (
-    <Card className="cards__card" title={copy.play.movesTitle}>
+    <Card className="cards__panel" title={copy.play.movesTitle}>
       {moves.length === 0 ? (
         <p className="nx-hint">{copy.play.movesEmpty}</p>
       ) : (

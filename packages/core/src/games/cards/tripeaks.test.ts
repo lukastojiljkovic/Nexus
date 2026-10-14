@@ -89,20 +89,33 @@ describe("the TriPeaks rules", () => {
     expect(isTriPeaksMoveLegal(state, play(2))).toBe(false);
   });
 
-  it("hides a card until every card covering it is gone, and a pyramid's middle card until BOTH are", () => {
-    // Slot 0 is in the bottom row; slot 10 covers slots 0 and 1, and slot 11 covers
-    // slots 1 and 2 — so slot 0 is exposed by 10 alone, while slot 1 is covered by
-    // 10 and by 11 and needs both gone.
-    const state = stateOf({ at: { 0: "4C", 1: "3C", 10: "5H", 11: "2C" }, waste: "6D", stock: "9S" });
-    expect(triPeaksMoves(state).map((move) => (move.kind === "play" ? move.slot : -1))).toEqual([10]);
-    const afterTen = applyTriPeaks(state, play(10));
-    // 11 still covers slot 1, so only slot 0 came free; and the new waste is 5H,
-    // one rank from the 4C and two from the 2C.
-    expect(triPeaksMoves(afterTen).map((move) => (move.kind === "play" ? move.slot : -1))).toEqual([0]);
-    const afterZero = applyTriPeaks(afterTen, play(0));
-    // The waste is now 4C, one rank from the 3C under slot 1 — which is still
-    // covered by 11, so it is not on offer yet; the only thing left is the stock.
-    expect(triPeaksMoves(afterZero)).toEqual([turn]);
+  it("opens on the row of ten, and hides a card until BOTH cards covering it are gone", () => {
+    // Slots 0 and 1 are in the row of ten, which nothing covers; slot 10, in the
+    // row of nine, is covered by both of them.
+    const slots = (state: TriPeaksState): number[] =>
+      triPeaksMoves(state).map((move) => (move.kind === "play" ? move.slot : -1));
+    const state = stateOf({ at: { 0: "5H", 1: "4D", 10: "3C" }, waste: "6D", stock: "9S" });
+    // 5H is one below the waste; 4D is two away, and the 3C is still covered.
+    expect(slots(state)).toEqual([0]);
+    const afterZero = applyTriPeaks(state, play(0));
+    // One of its two covers is gone and the 4D still lies on the 3C, so only the
+    // 4D — one below the new waste, 5H — is on offer.
+    expect(slots(afterZero)).toEqual([1]);
+    const afterOne = applyTriPeaks(afterZero, play(1));
+    // Both are gone: the 3C is exposed, one below the 4D.
+    expect(slots(afterOne)).toEqual([10]);
+  });
+
+  it("deals the row of ten exposed and every card above it covered", () => {
+    const state = dealTriPeaks("classic", 11);
+    const waste = state.board.waste[state.board.waste.length - 1]!;
+    const near = (slot: number): boolean => {
+      const gap = Math.abs(state.board.tableau[slot]!.rank - waste.rank);
+      return gap === 1;
+    };
+    const offered = triPeaksMoves(state).flatMap((move) => (move.kind === "play" ? [move.slot] : []));
+    expect(offered.length).toBeGreaterThan(0);
+    expect(offered).toEqual(Array.from({ length: 10 }, (_, slot) => slot).filter(near));
   });
 
   it("turns the stock only when nothing on the tableau can be played", () => {
@@ -123,10 +136,10 @@ describe("the TriPeaks rules", () => {
     // Four cards, and the sequence the rule makes of them: 4C on 5H (+1), 3C on 4C
     // (+2), a turn onto 6S which starts a new run, then 7D on 6S (+1). One, three,
     // three, four — the streak score added up rather than asserted per step.
-    let state = stateOf({ at: { 0: "3C", 7: "7D", 10: "4C" }, waste: "5H", stock: "6S" });
-    state = applyTriPeaks(state, play(10));
-    expect({ score: state.score, streak: state.streak }).toEqual({ score: 1, streak: 1 });
+    let state = stateOf({ at: { 0: "4C", 7: "7D", 10: "3C" }, waste: "5H", stock: "6S" });
     state = applyTriPeaks(state, play(0));
+    expect({ score: state.score, streak: state.streak }).toEqual({ score: 1, streak: 1 });
+    state = applyTriPeaks(state, play(10));
     expect({ score: state.score, streak: state.streak }).toEqual({ score: 3, streak: 2 });
     state = applyTriPeaks(state, turn);
     expect({ score: state.score, streak: state.streak }).toEqual({ score: 3, streak: 0 });
@@ -136,8 +149,8 @@ describe("the TriPeaks rules", () => {
   });
 
   it("takes an undo back to the score and the streak the move was played from", () => {
-    const state = stateOf({ at: { 0: "4C", 10: "5H" }, waste: "6D", stock: "9S" });
-    const played = applyTriPeaks(state, play(10));
+    const state = stateOf({ at: { 0: "5H", 10: "4C" }, waste: "6D", stock: "9S" });
+    const played = applyTriPeaks(state, play(0));
     expect(played.score).toBe(1);
     expect(canUndoTriPeaks(played)).toBe(true);
     const undone = undoTriPeaks(played);

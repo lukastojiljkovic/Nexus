@@ -123,7 +123,8 @@ export function targetBox(game: CardGameId, move: unknown): CardSelection | null
 function pileBox(value: unknown): CardSelection | null {
   const record = asRecord(value);
   if (record.kind === "waste") return { kind: "waste" };
-  if (record.kind === "column" && typeof record.column === "number") {
+  // Klondike names its columns „tableau", FreeCell „column": both are a column box.
+  if ((record.kind === "column" || record.kind === "tableau") && typeof record.column === "number") {
     return { kind: "column", column: record.column };
   }
   if (record.kind === "cell" && typeof record.cell === "number") {
@@ -158,6 +159,18 @@ export function moveFrom(game: CardGameId, moves: readonly unknown[], box: CardS
   return null;
 }
 
+/**
+ * Whether a legal move takes exactly the `count` cards at the foot of `column`:
+ * the test for a card a click may pick up, since what it picks up is the run from
+ * that card down — „a run" in Klondike, FreeCell and Spider alike.
+ */
+export function picksRun(game: CardGameId, moves: readonly unknown[], column: number, count: number): boolean {
+  return moves.some((move) => {
+    const source = sourceBox(game, move);
+    return source?.kind === "column" && source.column === column && asRecord(move).count === count;
+  });
+}
+
 /** The move from `from` into `to`, or null when the position does not allow it. */
 export function moveTo(
   game: CardGameId,
@@ -171,9 +184,27 @@ export function moveTo(
     const source = sourceBox(game, move);
     const target = targetBox(game, move);
     if (source === null || target === null) continue;
-    if (boxKey(source) === fromKey && boxKey(to) === toKey) return move;
+    if (boxKey(source) === fromKey && boxKey(target) === toKey) return move;
   }
   return null;
+}
+
+/**
+ * The move a click on `box` makes by itself: one with no destination — turning
+ * or drawing from the stock, a Spider deal, a Pyramid King — offered only when
+ * no move from that box has a destination to choose. Without it the stock could
+ * be picked up and never played, because there was no box to put it in.
+ */
+export function directMove(game: CardGameId, moves: readonly unknown[], box: CardSelection): unknown | null {
+  const key = boxKey(box);
+  let direct: unknown | null = null;
+  for (const move of moves) {
+    const source = sourceBox(game, move);
+    if (source === null || boxKey(source) !== key) continue;
+    if (targetBox(game, move) !== null) return null;
+    direct ??= move;
+  }
+  return direct;
 }
 
 /** One box a click can pick up, and one it can put them down in. */

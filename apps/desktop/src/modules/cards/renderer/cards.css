@@ -29,7 +29,9 @@
   color: var(--nx-danger);
 }
 
-.cards__card,
+/* A panel of the page. Named apart from `.cards__card`, the playing card below:
+   sharing that name gave every panel a playing card's 3.4rem width. */
+.cards__panel,
 .cards__deal {
   display: flex;
   flex-direction: column;
@@ -179,6 +181,16 @@
   flex: none;
 }
 
+/* A card another lies over shows only its top band, so its rank and suit sit
+   side by side there rather than one above the other, where the suit was hidden. */
+.cards__slot--stack > .cards__card--up:not(:last-child),
+.cards__peaks-row:not(:last-child) .cards__card--up {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--nx-space-1);
+  padding-block-start: var(--nx-space-1);
+}
+
 .cards__card--down {
   background: var(--nx-surface-sunken);
   border-color: var(--nx-border-strong);
@@ -243,15 +255,28 @@
   gap: var(--nx-space-1);
 }
 
-.cards__pyramid-row,
 .cards__peaks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cards__pyramid-row,
+.cards__peaks-row {
   display: flex;
   justify-content: center;
   gap: var(--nx-space-1);
 }
 
-.cards__peaks + .cards__peaks {
-  margin-block-start: calc(-2.4rem);
+/* Each row lies over the lower half of the one above it, as the deal does. */
+.cards__peaks-row + .cards__peaks-row {
+  margin-block-start: -2.4rem;
+}
+
+/* A card's width of space between two peaks: a slot drawn and not shown, so the
+   gap is exactly a slot wide without a second number to keep in step. */
+.cards__slot--gap {
+  visibility: hidden;
 }
 
 /* --- The games against the computer ---------------------------------------- */
@@ -265,6 +290,14 @@
 .cards__seat {
   color: var(--nx-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* A trick and a Tablic table lie side by side, each card under its seat or number. */
+.cards__trick .cards__slot {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .cards__table-card {

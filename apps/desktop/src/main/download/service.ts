@@ -95,10 +95,22 @@ export function downloadStagingPath(userData: string, id: string): string {
  *
  * `bavail` rather than `bfree`: the blocks a privileged process may still take
  * are not blocks this download can have.
+ *
+ * A folder that does not exist YET is measured through its nearest existing
+ * parent, which is on the volume the folder will be created on. Callers check
+ * before they create — `models/` and `zim/` on a fresh profile — and `statfs`
+ * on the missing folder threw, which read as „no space" on a disk with 499 GB
+ * free and failed every first Wikipedia and model download (2026-10-14).
  */
 export async function freeSpaceBytes(dir: string): Promise<number> {
-  const stats = await statfs(dir);
-  return stats.bavail * stats.bsize;
+  for (let probe = dir; ; probe = dirname(probe)) {
+    try {
+      const stats = await statfs(probe);
+      return stats.bavail * stats.bsize;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dirname(probe) === probe) throw error;
+    }
+  }
 }
 
 /**
