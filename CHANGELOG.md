@@ -38,6 +38,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one, so the accounts in use unlock as before, and each 1.x account asks once
   for its Recovery Kit.
 
+- **The assistant answers.** Every turn on the installed app ended in an error:
+  the descriptions and schemas of all 37 tools, written into the request twice,
+  did not fit the model's 8192-token window beside the conversation, and the
+  context budget never counted them. Each message now offers the model only the
+  tools it is about, at most eight and within a set share of the window. The
+  system prompt names them instead of repeating their descriptions, and the
+  budget counts what they cost. When the model does fail, its reason goes to the
+  app's log. Two built-in workflows named tools that do not exist; they name
+  real ones now.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that
