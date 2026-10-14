@@ -31,6 +31,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   solver answers "unknown" more often as a result: the same search bound now
   covers many more lines.
 
+- **The assistant's instructions are shorter.** The local models it runs have a
+  small window, and its standing instructions took a fifth of the room each
+  request has. They are now short rules, a quarter shorter, and no rule was
+  dropped.
+
 ### Fixed
 
 - **The installed app loads a local model.** Since 2.0.0 the assistant worked
