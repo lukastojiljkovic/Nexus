@@ -55,6 +55,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   running version with the project's address and a contact, as Wikimedia's
   User-Agent policy asks.
 
+- **The assistant answers.** Every turn on the installed app ended in an error:
+  the descriptions and schemas of all 37 tools, written into the request twice,
+  did not fit the model's 8192-token window beside the conversation, and the
+  context budget never counted them. Each message now offers the model only the
+  tools it is about, at most eight and within a set share of the window. The
+  system prompt names them instead of repeating their descriptions, and the
+  budget counts what they cost. When the model does fail, its reason goes to the
+  app's log. Two built-in workflows named tools that do not exist; they name
+  real ones now.
+
+- **The assistant's answers end with the answer.** A model that reasons before
+  it answers, as Qwen3.5 does, spent the whole reply on its reasoning and
+  stopped mid-sentence. Reasoning may now take half of the reply, it shows only
+  while the model is writing, and the conversation keeps the answer. The
+  assistant is also told today's date, so a task for „tomorrow" gets a real day.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that

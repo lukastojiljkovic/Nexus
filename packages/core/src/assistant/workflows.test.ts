@@ -49,8 +49,8 @@ describe("the built-ins", () => {
     }
   });
 
-  it("keeps what-to-read to the knowledge tool alone", () => {
-    expect(findWorkflow("what-to-read")?.tools).toEqual(["knowledge.search"]);
+  it("keeps what-to-read to the app's own search alone: the knowledge block is the loop's, not a tool's", () => {
+    expect(findWorkflow("what-to-read")?.tools).toEqual(["app.search"]);
   });
 
   it("puts 112 and the safety notice into the stranded recipe, in both languages", () => {
@@ -62,7 +62,7 @@ describe("the built-ins", () => {
     expect(english).toContain("112");
     expect(serbian).toContain("obaveštenje o bezbednosti");
     expect(english).toContain("safety notice");
-    expect(stranded?.tools).toContain("knowledge.search");
+    expect(stranded?.tools).toContain("app.open");
   });
 
   it("finds a recipe by id and nothing by a name it does not have", () => {
@@ -75,8 +75,8 @@ describe("toolsForWorkflow", () => {
   const registry = [
     tool("tasks.list"),
     tool("tasks.create"),
-    tool("calendar.list"),
-    tool("knowledge.search"),
+    tool("calendar.events"),
+    tool("app.search"),
     tool("web.search"),
   ];
 
@@ -87,7 +87,7 @@ describe("toolsForWorkflow", () => {
     expect(toolsForWorkflow(planDay, registry).map((entry) => entry.name)).toEqual([
       "tasks.list",
       "tasks.create",
-      "calendar.list",
+      "calendar.events",
     ]);
   });
 
@@ -106,10 +106,10 @@ describe("renderWorkflowBrief", () => {
     const serbian = renderWorkflowBrief(planDay, "sr");
     expect(serbian).toContain(`Cilj: ${planDay.goal.sr}`);
     expect(serbian).toContain(`1. ${planDay.checklist[0]?.sr ?? ""}`);
-    expect(serbian).toContain("Dozvoljene alatke: tasks.list, calendar.list, tasks.create, app.open");
+    expect(serbian).toContain("Dozvoljene alatke: tasks.list, calendar.events, tasks.create, app.open");
     const english = renderWorkflowBrief(planDay, "en");
     expect(english).toContain(`Goal: ${planDay.goal.en}`);
     expect(english).toContain("Checklist:");
-    expect(english).toContain("Allowed tools: tasks.list, calendar.list, tasks.create, app.open");
+    expect(english).toContain("Allowed tools: tasks.list, calendar.events, tasks.create, app.open");
   });
 });

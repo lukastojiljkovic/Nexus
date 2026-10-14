@@ -24,6 +24,7 @@ import {
   type AssistantMessageInput,
 } from "@nexus/db";
 import { noRecommendation } from "../../../main/assistant/runtime/recommend.js";
+import { localDay } from "../../../main/assistant/tools/support.js";
 import { VOICE_SAMPLE_RATE, resamplePcm } from "../../../main/assistant/voice/resample.js";
 import { MAX_SPEECH_CHARS } from "../../../main/assistant/voice/sentences.js";
 import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
@@ -483,6 +484,7 @@ export function register(host: ModuleHostSurface): void {
         confirm: (request) => park(turn, request),
       },
       maxSteps: DEFAULT_MAX_STEPS,
+      today: localDay(services().now()),
     };
 
     // Unawaited: the page polls. The failure of a whole turn is caught here and
@@ -490,6 +492,13 @@ export function register(host: ModuleHostSurface): void {
     void runAgentTurn(input, (event) => {
       const entry = turn.log.emit(event);
       collect(turn, event);
+      // The model's own reason for a failed turn goes to the app's log: the
+      // page draws the error code, and the sentence that says WHICH failure it
+      // was - a schema llama.cpp refused, a model that ran out of memory -
+      // would otherwise be lost between the runtime and the user.
+      if (event.type === "error" && event.code === "model-failed" && event.detail !== undefined) {
+        console.error("Nexus: the assistant model failed:", event.detail);
+      }
       if (entry === null) {
         // The buffer is full: the model is talking without stopping, and the
         // honest answer is to stop it rather than to keep counting.
