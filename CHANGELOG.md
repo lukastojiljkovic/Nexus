@@ -6,6 +6,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-14
+
+The downloads that 2.0.0 introduced never finished, and the card table that
+2.0.1 added could not be played. Both work now, and the pages that read as
+rows keep to one width, centred in the window.
+
 ### Fixed
 
 - **Downloads work.** No content pack, Wikipedia library or model ever finished
