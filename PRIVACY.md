@@ -1,6 +1,6 @@
 # Privacy
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-14
 
 Nexus is a desktop application with no server. It is built so that the answer to
 "what does this app send?" is short, and so that the short answer can be checked
@@ -23,8 +23,11 @@ in the source rather than believed.
 - **No Nexus server exists to send anything to.** No hosted backend has ever
   run, and Nexus has no online service to sign into.
 - **Which parts of Nexus may touch the network is a mode of the whole device**,
-  not a per-feature setting: the only network exception this product has is the
-  update check described below.
+  not a per-feature setting. There are three: **Offline only**, **Offline +
+  update checks** and **Downloads**, each one allowing a short, compiled-in list
+  of hosts and nothing else. The assistant's web search is a separate switch on
+  top of a connected mode, off until you turn it on, and it asks before every
+  request.
 
 ## What Nexus stores, and where
 
@@ -43,6 +46,11 @@ started from.
 | The key chain: your data key wrapped under your passcode and under the Recovery Kit, with the salts and parameters the wrap needs | `accounts/<accountId>/keychain.json` | Wrapped; the copy of the wrap added to the OS keystore is encrypted by the OS |
 | The network mode, and whether you allowed the update check | `network.json` | No — it is a preference, not data |
 | When the last update check ran | `updates/last-check.json` | No — a timestamp |
+| Content packs you installed | `packs/` | No — public content, each pack signed and checked file by file |
+| Wikipedia and other Kiwix libraries you downloaded | `zim/` | No — public content |
+| Language models you downloaded or imported | `models/` | No — public files |
+| Whether the assistant may search the web, and the SearXNG instance you named | `assistant-web.json` | No — a preference |
+| A Brave Search key, if you gave one | `assistant-web-secrets.json` | **Yes** — encrypted by the operating system (DPAPI on Windows), never written to a log |
 | Device preferences: theme, accent, language, week start, calendar view, and the in-progress onboarding questionnaire | Chromium's own storage for the app (its profile data) | No — preferences only, never content |
 | A decrypted copy of a file you asked to open in another application | `accounts/<accountId>/tmp-open/` | No — it is the plaintext file the other application needs. It is deleted when Nexus locks and swept again at the next start |
 
@@ -79,11 +87,33 @@ other.** The automatic check runs at most once a day, and a check downloads the
 release description and nothing else — an installer is fetched only after you
 press Install.
 
-**In either mode there is no telemetry, no analytics, no crash reporting and no
+**Downloads.** Everything above, and the content you choose to download: the
+signed content packs and their catalogue, Wikipedia and other Kiwix libraries,
+and language models from Hugging Face. The connection is limited to these hosts,
+matched exactly, over `https`:
+
+- the three GitHub hosts above, which also serve the content packs from
+  `lukastojiljkovic/nexus-packs`;
+- `opds.library.kiwix.org`, `lb.download.kiwix.org` and
+  `mirror.download.kiwix.org` — the Kiwix library catalogue and its files;
+- `huggingface.co` and `us.aws.cdn.hf.co` — model search and the model files.
+
+Nothing is fetched until you ask for it. A search for a model sends the words you
+typed to Hugging Face; the catalogues and downloads send nothing about you beyond
+what any HTTP request carries — your IP address and the user agent.
+
+**Web search in the assistant** is not a mode. It needs Offline + update checks
+or Downloads, and your own consent in the assistant's settings, and it is off
+until both hold. Each search and each page the assistant opens is shown to you
+first, with the host it goes to, and nothing is sent unless you confirm it. A
+search sends the query to the provider you chose: Wikipedia (the default, in the
+app's language), a SearXNG instance you name, or Brave Search with your own key.
+
+**In every mode there is no telemetry, no analytics, no crash reporting and no
 update channel.** No dependency provides one, no code implements one, and the
 egress gate above would fail CI on the first network construct added to the app.
 
-## Update checks
+## Choosing a network mode
 
 Nexus asks the network question once, on the first start after 1.5.0, of a new
 installation and of a device upgrading from an older version alike, because no
@@ -95,6 +125,8 @@ answered the question, or whose answer is missing or unreadable, is in this
 mode — "I could not tell" and "it is off" are the same outcome.
 
 **Offline + update checks.** Only the update check described above.
+
+**Downloads.** The update check, and the downloads you start yourself.
 
 You can change the mode at any time in **Settings → Privacy → Network and
 updates**. The change takes effect after a restart, because the network boundary
@@ -130,11 +162,13 @@ boundary, not an inconvenience to be removed later.
 
 ## Your rights, and the law
 
-Everything you put into Nexus stays on your device. **No personal data reaches
-anybody**: there is no controller and no processor, because nothing is
-transmitted. If you are in the EU or in Serbia, that also means there is no
-transmission of your personal data to exercise a right about; the remedies you
-have are the ones your local law gives you over your own equipment.
+Everything you put into Nexus stays on your device. **Nothing you write in Nexus
+reaches anybody**, and there is no Nexus service that receives anything. In
+Offline only nothing is transmitted at all. In the connected modes, the hosts
+named above see your IP address, and a search you confirm sends its words to the
+provider you chose; those services handle that under their own privacy policies.
+If you are in the EU or in Serbia, the remedies you have over the data on your
+device are the ones your local law gives you over your own equipment.
 
 Nexus is not "in the cloud", and there is no Nexus service to sign into.
 Should Nexus ever offer an online service, this document will name the

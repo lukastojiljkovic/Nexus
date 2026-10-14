@@ -1,6 +1,6 @@
 # Nexus
 
-Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface ships in **Serbian and English** — on first run it follows the system language (Serbian when the system locale is `sr*`, English otherwise) and remembers the choice.
+Nexus is a desktop application that keeps your tasks, calendar, notes, documents, study, habits, fitness, finance, a canvas and an electronics workbench in one workspace on your own computer, beside the public knowledge to work with offline: Wikipedia and other Kiwix libraries, signed content packs and local language models. Everything is stored in a single encrypted SQLite database, the application works with the network off, and the interface ships in **Serbian and English** — on first run it follows the system language (Serbian when the system locale is `sr*`, English otherwise) and remembers the choice.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
@@ -9,43 +9,36 @@ Nexus is a desktop application that keeps your tasks, calendar, notes, documents
 
 ## Download
 
-[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) — the latest release is **1.5.0**:
+[**Releases**](https://github.com/lukastojiljkovic/Nexus/releases/latest) — every release carries:
 
 | File | Platform |
 | --- | --- |
-| `Nexus-Setup-1.5.0.exe` | Windows 10 or 11, x64 — per-user NSIS installer |
-| `Nexus-1.5.0-x86_64.AppImage` | Linux x64 with glibc — mark it executable and run it |
-| `nexus-1.5.0-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
+| `Nexus-Setup-<version>.exe` | Windows 10 or 11, x64 — per-user NSIS installer |
+| `Nexus-<version>-x86_64.AppImage` | Linux x64 with glibc — mark it executable and run it |
+| `nexus-<version>-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
+| `Nexus-<version>-arm64.dmg` | macOS on Apple silicon — unsigned, so open it the first time with right-click → Open |
 
-Every release also carries `SHA256SUMS.txt` with its Ed25519 signature `SHA256SUMS.txt.sig`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. macOS is not built: nothing here has produced or opened a macOS artefact.
+Every release also carries `SHA256SUMS.txt` with its Ed25519 signature `SHA256SUMS.txt.sig`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. The macOS build is unsigned and has no update path yet: a new version is installed by downloading the next `.dmg`.
 
 ## What it does
 
-Sixteen modules, switched on per profile.
+Forty modules in six groups, beside the **Dashboard** (today's agenda, upcoming tasks, expiring documents, exams and study time, from widgets you place yourself) and **Settings**. Each module is switched on per profile and can be hidden for the whole app.
 
-| Module | What it holds |
+| Group | Modules |
 | --- | --- |
-| Dashboard | The page you open first: today's agenda, upcoming tasks, expiring documents, exams and study time, composed from widgets you place yourself. |
-| Tasks | Lists, sections, subtasks, priorities, tags, recurrence and dependencies, shown as a list, a board, a calendar or a smart list, with per-task reminders. |
-| Calendar | Month, week, day and agenda views, events you drag and resize, recurrence and reminders, and the tracked documents whose expiry dates appear on it. |
-| Notes | Folders, tags, backlinks, templates, version history and inline flashcards. |
-| Private vault | Notes encrypted so only you can read them, with a Recovery Kit of their own. |
-| Documents | Attachments with in-app preview, and content search for the formats that need no dependency. |
-| Study | Exam countdowns, spaced-repetition decks with Anki import, cloze and problem cards, typeset maths, and a planner that books study time before each exam. |
-| Finance | Accounts, transactions, categories, budgets and subscriptions, each currency kept separate, with CSV statement import. |
-| Habits | Habits with forgiving streaks, completion history and dashboard widgets. |
-| Fitness | Exercise and training tracking, personal records, body measurements, and a food catalogue that names the source of every number. |
-| Focus | One Pomodoro timer, shared by the study session and the utilities drawer. |
-| Tools | A drawer of calculators and converters. |
-| Canvas | An infinite board with live notes, cards and connectors. |
-| Electronics | A wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit, and can run the plan on your own toolchain. |
-| Professional toolkits | Opt-in toolkits for a profession — law, construction, agriculture, photography, music, education and others. |
-| Settings | Profiles, themes, module settings and the licence screen. |
+| Plan | **Tasks** — lists, subtasks, recurrence and dependencies, as a list, a board, a calendar or a smart list, with reminders. **Calendar** — month, week, day and agenda views, recurring events, and the documents whose expiry dates belong on it. **Habits**, **Focus** (one Pomodoro timer) and **Timers**. |
+| Knowledge | **Notes** — folders, tags, backlinks, templates, version history and inline flashcards. **Documents** — attachments with preview and content search. **Study** — exam countdowns, spaced repetition with Anki import, typeset maths, and a planner that books study time before each exam. **Reference** — Wikipedia and other Kiwix libraries, read offline by the app's own ZIM reader. **Reader**, **Translator**, **Maps**, **Astronomy**, **Recorder**, and the **Assistant** — a local model you choose, running in the app. |
+| Life | **Finance** — accounts, budgets and subscriptions, each currency kept separate, with CSV import. **Fitness** — training, personal records and a food catalogue that names the source of every number. **Private vault** — notes encrypted with a Recovery Kit of their own. **Pantry**, **Cookbook**, **Car** and the **Emergency card**. |
+| Culture | **Library** — the books, films and series you read and watch. **Culture** — museums, theatre, concerts and cinema. |
+| Make | **Electronics** — a wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit. **Canvas**, **Drawings** (DXF), **Workshop** (STL, G-code and Gerber), **Scanner**, **Calculator**, **Signals**, **The Lab**, **Mini apps**, **Tools**, and the opt-in **Professional toolkits**. |
+| Play | **Cards** (nine games), **Chess**, **Board games**, **Puzzles** and **Arcade**. |
+
+Public content arrives as **content packs**: signed folders, each with its own licence and attribution, installed from the catalogue in **Settings → Content packs** or from a folder on a USB stick.
 
 ## Privacy and security, briefly
 
 - **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
-- **Offline is the default, and update checks are opt-in.** On first start Nexus asks whether it may use the network at all: **Offline only** makes no network call of any kind, and **Offline + update checks** contacts GitHub for one purpose — checking for and downloading a new version of Nexus itself. Your notes and data never leave the computer; in update-check mode GitHub sees your IP address, as any website does, and nothing else. Every download is verified against a key compiled into the app. Change it any time in **Settings → Privacy → Network and updates**.
+- **Offline is the default, and every connection is opt-in.** On first start Nexus asks whether it may use the network at all: **Offline only** makes no network call of any kind; **Offline + update checks** contacts GitHub for one purpose — checking for and downloading a new version of Nexus itself; **Downloads** adds the content you choose to fetch — content packs, Kiwix libraries and models from Hugging Face — each from a short, compiled-in list of hosts. Your notes and data never leave the computer. Updates and content packs are verified against a key compiled into the app. Change the mode any time in **Settings → Privacy → Network and updates**.
 - **No telemetry, no analytics, no crash reporting.**
 - **No account, no server, no cloud.** Nothing syncs; to move to another computer, export everything into one archive, protected with a password if you like, and import it there.
 
@@ -58,9 +51,9 @@ Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 The repository holds the full working record, and a reader can follow it end to end:
 
 - **Specification and PRDs** — [docs/SPECIFICATION.md](docs/SPECIFICATION.md) and [docs/prd/](docs/prd/): 37 numbered requirements documents plus a glossary; `prd/00-overview.md` is the module registry.
-- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 87 decisions and their status](docs/architecture/adr/README.md).
+- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 111 decisions and their status](docs/architecture/adr/README.md).
 - **The engineering journal** — [docs/log/README.md](docs/log/README.md): four months of entries, kept by month, recording why each decision was made.
-- **The defect ledger and the gates** — [docs/defect-classes.md](docs/defect-classes.md): 149 recurring failure shapes, and the 26 `check:` scripts that enforce the ones a static check can answer.
+- **The defect ledger and the gates** — [docs/defect-classes.md](docs/defect-classes.md): 149 recurring failure shapes, and the 30 `check:` scripts that enforce the ones a static check can answer.
 - **The security baseline** — [docs/security/baseline.md](docs/security/baseline.md): the binding `SEC-*` rules.
 - **Threat models and signed deviations** — [docs/security/threat-models/](docs/security/threat-models/) and [docs/deviations.md](docs/deviations.md).
 - **The design direction** — [docs/design/direction-brief.md](docs/design/direction-brief.md); the direction that won is now the token set in `packages/tokens`.

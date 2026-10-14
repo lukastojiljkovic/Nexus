@@ -41,7 +41,7 @@
                 "name": "Nexus",
                 "description": "Offline-first desktop app that combines tasks, calendar, notes, a private encrypted vault, studying with spaced-repetition flashcards, finance, habits, fitness, files, tools and a canvas in one workspace, stored in an encrypted database on the user's own computer.",
                 "applicationCategory": "LifestyleApplication",
-                "operatingSystem": "Windows 10, Windows 11, Linux",
+                "operatingSystem": "Windows 10, Windows 11, Linux, macOS",
                 "inLanguage": "sr-Latn",
                 "url": "https://lukastojiljkovic.github.io/Nexus/",
                 "downloadUrl": "https://github.com/lukastojiljkovic/Nexus/releases/latest",
@@ -56,7 +56,7 @@
                 "@type": "FAQPage",
                 "mainEntity": [
                     { "@type": "Question", "name": "Is Nexus free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Nexus is free and open source under the Apache License 2.0. It has no ads, no online account and no telemetry." } },
-                    { "@type": "Question", "name": "Does Nexus need the internet?", "acceptedAnswer": { "@type": "Answer", "text": "No. Every feature works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, and then Nexus contacts GitHub only to check for and download a new version of itself — your notes and data never leave the computer, and GitHub sees only your IP address, as any website does." } },
+                    { "@type": "Question", "name": "Does Nexus need the internet?", "acceptedAnswer": { "@type": "Answer", "text": "No. Everything you write works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, which contact GitHub only for a new version of Nexus, or to downloads, which also fetch the content packs, Wikipedia libraries and models you choose from a short list of hosts. Your notes and data never leave the computer." } },
                     { "@type": "Question", "name": "Is Nexus available in English?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English." } },
                     { "@type": "Question", "name": "Which platforms does Nexus run on?", "acceptedAnswer": { "@type": "Answer", "text": "Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64." } },
                     { "@type": "Question", "name": "How is my data protected?", "acceptedAnswer": { "@type": "Answer", "text": "Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them." } },
@@ -94,7 +94,7 @@
 
         <div class="get-it">
             <p class="free">Free and open source</p>
-            <p class="where">Apache-2.0. Windows 10 and 11, and Linux, x64. Interface in Serbian and English.</p>
+            <p class="where">Apache-2.0. Windows 10 and 11 and Linux on x64, and macOS on Apple silicon. Interface in Serbian and English.</p>
             <div class="band-actions">
                 <a class="btn btn-app" href="https://github.com/lukastojiljkovic/Nexus/releases/latest">Download Nexus</a>
                 <a class="btn btn-line" href="https://github.com/lukastojiljkovic/Nexus">View the source</a>
@@ -184,7 +184,7 @@
         <p class="section-lede">Your privacy in Nexus comes from how the code is built, not from a promise in a policy.</p>
         <ol class="steps">
             <li><div><h3>Your computer is the server</h3><p>Everything lives in one encrypted SQLite database on your computer that opens only with your passcode or your Recovery Kit. Attachments are encrypted with AES-256-GCM.</p></div></li>
-            <li><div><h3>Offline unless you say otherwise</h3><p>Nexus asks once, on first start, whether it may use the network at all. “Offline only” makes no network call of any kind, and CI enforces the boundary; “Offline + update checks” contacts GitHub only to check for and download a new version of Nexus itself. Your notes and data never leave the computer either way, and in update-check mode GitHub sees your IP address, as any website does. Sync between devices is being built end-to-end encrypted, and will stay off unless you turn it on.</p></div></li>
+            <li><div><h3>Offline unless you say otherwise</h3><p>Nexus asks once, on first start, whether it may use the network at all. “Offline only” makes no network call of any kind, and CI enforces the boundary; “Offline + update checks” contacts GitHub only to check for and download a new version of Nexus itself; “Downloads” also fetches the content packs, Wikipedia libraries and models you choose, each from a compiled-in list of hosts. Your notes and data never leave the computer in any mode.</p></div></li>
             <li><div><h3>Only what you need</h3><p>A short setup asks about your week and switches on the modules that fit. Personal and business profiles keep their data apart, and several accounts can share one computer.</p></div></li>
             <li><div><h3>A locked-down interface</h3><p>The interface runs sandboxed and never touches the database. It asks the main process through an allowlist of typed requests, each validated field by field, and every query binds its values.</p></div></li>
             <li><div><h3>Yours to take away</h3><p>Export everything into one sealed archive and restore it anywhere, or merge another archive into yours. Encrypted backups can run on a schedule.</p></div></li>
@@ -198,7 +198,7 @@
                 <h3>How it's verified</h3>
                 <ul>
                     <li><b>Vitest</b> in every package, with data and store logic written test-first.</li>
-                    <li><b>26 static checks</b> run in CI beside the build, type checks, lint and tests, along with a secret scan and a dependency audit.</li>
+                    <li><b>30 static checks</b> run in CI beside the build, type checks, lint and tests, along with a secret scan and a dependency audit.</li>
                     <li><b>A smoke test</b> launches the built app, opens every page under the production content security policy and exercises the real database.</li>
                 </ul>
             </div>
@@ -207,7 +207,7 @@
                 <ul>
                     <li><b>Other languages.</b> The interface is in Serbian and English; no other language ships yet.</li>
                     <li><b>Sync between computers.</b> Nexus has no server, so nothing syncs. To move to another computer, export everything into one archive, protected with a password if you like, and import it there.</li>
-                    <li><b>macOS.</b> Installers are built for Windows and Linux only, and code signing for the Windows installer is paused for now. The source is open, so anyone can check what it does.</li>
+                    <li><b>Signed installers.</b> Code signing for the Windows installer is paused for now, and the macOS build is unsigned, with no update path yet. The source is open, so anyone can check what it does.</li>
                 </ul>
             </div>
         </div>
@@ -217,7 +217,7 @@
         <h2 class="section-title">Questions</h2>
         <div class="faq">
             <details><summary>Is Nexus free?</summary><p>Yes. Nexus is free and open source under the <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">Apache License 2.0</a>. It has no ads, no online account and no telemetry.</p></details>
-            <details><summary>Does Nexus need the internet?</summary><p>No. Every feature works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, and then Nexus contacts GitHub only to check for and download a new version of itself — your notes and data never leave the computer, and GitHub sees only your IP address, as any website does.</p></details>
+            <details><summary>Does Nexus need the internet?</summary><p>No. Everything you write works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, which contact GitHub only for a new version of Nexus, or to downloads, which also fetch the content packs, Wikipedia libraries and models you choose from a short list of hosts. Your notes and data never leave the computer.</p></details>
             <details><summary>Is Nexus available in English?</summary><p>Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English.</p></details>
             <details><summary>Which platforms does Nexus run on?</summary><p>Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64.</p></details>
             <details><summary>How is my data protected?</summary><p>Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them.</p></details>
