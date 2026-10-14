@@ -15,6 +15,8 @@ Kako se koristi:
 
 Asistent poznaje beleške, zadatke, događaje, tekst priloga, priručnik aplikacije i instalirane pakete sadržaja. Privatne beleške su izuzete. Kada odgovor koristi bezbednosni paket, ispod odgovora stoji obaveštenje o bezbednosti i broj 112.
 
+Preuzete referentne biblioteke se takođe čitaju: za pitanje asistent pretražuje naslove u svakoj biblioteci na ovom računaru i uzima uvodni deo nekolicine članaka čiji se naslovi poklapaju sa pitanjem, pa ih navodi kao izvore.
+
 Alatke koje menjaju podatke ili idu na mrežu traže potvrdu pre svake radnje; odbijanje je uobičajen odgovor i ništa se ne menja. Pretraga weba je isključena dok je ne uključiš u Podešavanjima, u kartici „Asistent“, i radi samo u režimu mreže „Ažuriranja“ ili „Preuzimanja“.
 
 Povezano: settings-modules, network-and-updates, content-packs, search

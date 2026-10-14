@@ -1,5 +1,6 @@
 import type { ModelHost } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
+import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
 import type { ModuleLookup } from "../../../main/assistant/tools/app.js";
 import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
@@ -70,6 +71,20 @@ export interface AssistantServices {
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service, for the installed list. */
   readonly packs: PacksLookup;
+  /**
+   * The offline wiki, in the shape the knowledge base reads it
+   * (`main/assistant/knowledge/zimWiki.ts`), or `null` in a build with no ZIM
+   * service.
+   *
+   * The SERVICE rather than a list of libraries, because libraries arrive and
+   * leave while the application runs: the adapter re-reads `libraries()` on
+   * every call, so a pack downloaded while the assistant page is open is
+   * readable from the next question. `index.ts` answers this from `zimService()`
+   * - the one service the wiki module's own page and the `nx-zim://` handler
+   * read through - so the assistant and the page cannot disagree about which
+   * file `wikipedia-sr-mini` is.
+   */
+  zimWiki(): WikiSource | null;
   // No `timers` member, deliberately: the TIMERS host the tools are built
   // against is assembled by THIS module (`main/timers.ts`), because it needs the
   // kit's own `armUntil`/`notify` - capabilities index.ts does not hold and would

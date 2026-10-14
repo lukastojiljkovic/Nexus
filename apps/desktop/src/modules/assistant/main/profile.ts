@@ -125,12 +125,21 @@ export class AssistantProfile {
   knowledgeBase(): KnowledgeIndex {
     if (this.knowledge !== null) return this.knowledge;
     const userData = this.services.userData();
+    const wiki = this.services.zimWiki();
     this.knowledge = createKnowledgeService({
       profileId: this.profileId,
       db: this.db,
       userData,
       packPublicKeyPem: this.services.releasePublicKeyPem(),
       embedder: () => this.embedder(),
+      // The offline wiki is passed whenever this build has a ZIM service,
+      // whether or not a library is on disk at this moment: the adapter reads
+      // `libraries()` on every call, so a library downloaded while the app runs
+      // is read from the next question and one whose file is gone stops being
+      // read - where checking here would decide both for the whole session. A
+      // build with no service passes nothing, and the wiki kind then answers
+      // nothing at all.
+      ...(wiki === null ? {} : { wiki }),
       // The first pass is started HERE rather than by the service, so that a
       // profile switch or a lock stops it: the service checks this signal and
       // `isSessionLive` before every batch, and a pass that outlived its profile

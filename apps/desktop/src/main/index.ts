@@ -598,6 +598,10 @@ import {
   importDialogFilterName,
   importDialogTitle,
 } from "../modules/assistant/main/dialogCopy.js";
+// The window the assistant reads the offline wiki through: the ZIM service is
+// built in THIS file, so the adapter that speaks `WikiSource` over it is given
+// to the module in the same `configureAssistant` call as the rest.
+import { zimWikiSource } from "./assistant/knowledge/zimWiki.js";
 import { createModelHost } from "./assistant/runtime/index.js";
 import { createVoiceHost } from "./assistant/voice/host.js";
 import { VOICE_WORKER_ENTRY } from "./assistant/voice/workerEntry.js";
@@ -1734,6 +1738,13 @@ configureAssistant({
   now: () => Date.now(),
   search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
   packs: { list: () => packs().list() },
+  // The offline wiki, as the knowledge base reads it: the SAME service the wiki
+  // page and the `nx-zim://` handler read through (`zimService` above), so a
+  // citation and the page it points at can never mean two different files.
+  // Asked for lazily, and it builds the service if this is somehow the first
+  // ask - `installZimProtocol(zimService())` runs before the first window, so by
+  // the time a profile exists it always has been built.
+  zimWiki: () => zimWikiSource(zimService()),
   modules: moduleRegistry,
 });
 
