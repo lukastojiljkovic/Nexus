@@ -232,6 +232,9 @@ function services(): AssistantServices {
     now: () => NOW,
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [] },
+    // No ZIM service in this harness: the wiki kind answers nothing, which is
+    // the state `knowledge/index.ts` describes for a build without one.
+    zimWiki: () => null,
     modules: { all: () => [], get: () => undefined },
   };
 }

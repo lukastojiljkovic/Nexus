@@ -19,7 +19,8 @@ import { KnowledgeStore } from "./store.js";
  * **Offline, always.** Nothing here opens a socket. The one source that could
  * have (a download of pack content) reads packs that the application already
  * installed and verified, through `packs/registry.ts`'s own verification, and
- * the wiki reader is a seam this module consumes and never implements. There is
+ * the wiki reader is a port this module consumes: `zimWiki.ts` adapts the ZIM
+ * service to it and reads only the files that service already has open. There is
  * no fetch in this folder, which is what keeps `check:egress` green by
  * construction rather than by review.
  *

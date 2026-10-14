@@ -17,6 +17,8 @@ How to use it:
 
 The assistant knows your notes, tasks, events, attachment text, the app's own manual and the installed content packs. Private notes are excluded. When an answer draws on a safety pack, the safety notice and the number 112 sit under it.
 
+The reference libraries you downloaded are read as well: for a question the assistant searches the titles in every library on this computer and takes the opening section of the few articles whose titles match, then cites them.
+
 Tools that change data or go to the network ask for confirmation before acting; a refusal is an ordinary answer and nothing changes. Web search stays off until you turn it on in Settings, on the "Assistant" card, and it works only in the `updates` or `downloads` network mode.
 
 Related: settings-modules, network-and-updates, content-packs, search

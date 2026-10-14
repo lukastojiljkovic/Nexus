@@ -164,7 +164,10 @@ export interface KnowledgeDeps {
    * working through all of it.
    */
   readonly embedder: () => Promise<Embedder | null>;
-  /** The ZIM reader, once it exists. Absent means the wiki kind answers nothing. */
+  /**
+   * The offline wiki, as `zimWiki.ts` adapts the ZIM service to it. Absent means
+   * the wiki kind answers nothing at all - no reader, no titles.
+   */
   readonly wiki?: WikiSource;
   /** The manual's pages. Defaults to the Markdown bundled into this build. */
   readonly manualPages?: readonly ManualPage[];
