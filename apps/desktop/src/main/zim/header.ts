@@ -48,6 +48,16 @@ export const MAX_HEADER_READ_BYTES = 4096;
 export const NO_PAGE = 0xffffffff;
 
 /**
+ * The format's "this file has no title pointer list in the header" (all ones).
+ *
+ * From minor version 1 of format 6 the title-ordered list is also the content of
+ * the entry `X/listing/titleOrdered/v0`, and current writers leave the header
+ * field at this value (measured: Kiwix's `gutenberg_sr`, format 6.3,
+ * 2026-10-14). `ZimReader` reads the entry when the header has no list.
+ */
+const NO_TITLE_LIST = 0xffffffffffffffffn;
+
+/**
  * The major versions this reader implements.
  *
  * 6 is what every current Kiwix file is (measured: the Serbian and English
@@ -67,7 +77,8 @@ export interface ZimHeader {
   readonly entryCount: number;
   readonly clusterCount: number;
   readonly urlPtrPos: number;
-  readonly titlePtrPos: number;
+  /** `null` when the header carries no title list; see `NO_TITLE_LIST`. */
+  readonly titlePtrPos: number | null;
   readonly clusterPtrPos: number;
   /** Where the zero-terminated MIME list begins. */
   readonly mimeListPos: number;
@@ -123,7 +134,8 @@ export function parseZimHeader(bytes: Uint8Array, fileSize: number): ZimHeader {
   const entryCount = view.getUint32(24, true);
   const clusterCount = view.getUint32(28, true);
   const urlPtrPos = readOffset(bytes, 32, "The URL pointer list");
-  const titlePtrPos = readOffset(bytes, 40, "The title pointer list");
+  const titlePtrPos =
+    view.getBigUint64(40, true) === NO_TITLE_LIST ? null : readOffset(bytes, 40, "The title pointer list");
   const clusterPtrPos = readOffset(bytes, 48, "The cluster pointer list");
   const mimeListPos = readOffset(bytes, 56, "The MIME list");
   const mainPage = view.getUint32(64, true);
@@ -138,7 +150,7 @@ export function parseZimHeader(bytes: Uint8Array, fileSize: number): ZimHeader {
   // held to the region before the checksum so a later read can never land in the
   // trailer.
   requireRegion(urlPtrPos, entryCount * 8, checksumPos, "The URL pointer list");
-  requireRegion(titlePtrPos, entryCount * 4, checksumPos, "The title pointer list");
+  if (titlePtrPos !== null) requireRegion(titlePtrPos, entryCount * 4, checksumPos, "The title pointer list");
   requireRegion(clusterPtrPos, clusterCount * 8, checksumPos, "The cluster pointer list");
   requireRegion(mimeListPos, 2, checksumPos, "The MIME list");
 
