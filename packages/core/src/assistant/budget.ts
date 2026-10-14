@@ -49,6 +49,12 @@
  * system prompt and the current user message are never dropped, and a request
  * that cannot hold even those is refused rather than trimmed.
  *
+ * A request also carries what the loop attaches OUTSIDE the messages - the
+ * offered tools' specs, one per function the template renders - and those are
+ * counted too (`fixedTokens`). They do not give way here: a spec has no head to
+ * keep and no tail to cut, so the loop is what keeps them small, by offering
+ * fewer tools in the first place (`toolChoice.ts`).
+ *
  * A trimmed tool result keeps its closing fence marker. Cutting a fenced block's
  * end would leave an unterminated region of untrusted text in the prompt, which
  * is worse than a shorter result: the model can no longer tell where the data
@@ -184,6 +190,15 @@ export interface ContextPlanInput {
   readonly pending: readonly ChatMessage[];
   /** Tokens available to the request, the answer's room already subtracted. */
   readonly ceiling: number;
+  /**
+   * Tokens the runtime adds to every request OUTSIDE the messages: the offered
+   * tools' own specs, which the chat template renders beside the conversation
+   * (`toolChoice.ts` counts them). They are as much a part of the request as a
+   * message is, so they are added to every estimate this plan compares against
+   * the ceiling, and to `requiredTokens` in a refusal. Defaults to 0, which is
+   * what a caller offering no tools means.
+   */
+  readonly fixedTokens?: number;
   /** The fence boundary this turn drew, for the knowledge block. */
   readonly boundary: string;
   /** Token estimator for this turn ({@link createEstimator}). */
@@ -246,10 +261,11 @@ export function planContext(input: ContextPlanInput): ContextPlan {
     return messages;
   };
   const estimateTool = input.estimateTool ?? input.estimate;
+  const fixed = input.fixedTokens ?? 0;
 
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
     const messages = assemble();
-    const estimate = requestTokens(messages, input.estimate, estimateTool);
+    const estimate = requestTokens(messages, input.estimate, estimateTool) + fixed;
     if (estimate <= input.ceiling) {
       return {
         ok: true,
@@ -288,7 +304,7 @@ export function planContext(input: ContextPlanInput): ContextPlan {
       ceiling: input.ceiling,
     };
   }
-  const required = requestTokens(assemble(), input.estimate, estimateTool);
+  const required = requestTokens(assemble(), input.estimate, estimateTool) + fixed;
   return { ok: false, reason: "context-full", requiredTokens: required, ceiling: input.ceiling };
 }
 

@@ -15,6 +15,13 @@
  *   5. the results, fenced as data, back to the model; repeat until it answers,
  *      or until `maxSteps`.
  *
+ * **A turn offers only the tools the window can hold.** Thirty-seven specs
+ * beside a conversation do not fit a local model's 8192 tokens, so the loop
+ * picks the subset the request can carry (`toolChoice.ts`) BEFORE it builds the
+ * prompt: the prompt names the offered tools, every request offers exactly
+ * them, and a call to anything else is answered as a name this turn does not
+ * have.
+ *
  * **Nothing the model writes can end the turn badly.** An unknown tool name and
  * a call whose arguments fail its schema both come back as a tool error MESSAGE
  * the model can read and correct - a `tool-result` with `ok: false`, no `error`
@@ -49,6 +56,12 @@ import { createFenceBoundary, fenceUntrusted, isFenced } from "./fence.js";
 import { buildSystemPrompt } from "./prompts.js";
 import { validateToolArguments } from "./schema.js";
 import { parseToolCalls } from "./toolCalls.js";
+import {
+  TOOL_BUDGET_SHARE,
+  chooseTools,
+  toolSpecCharacters,
+  toolSpecTokens,
+} from "./toolChoice.js";
 import type { MeasuredUsage } from "./budget.js";
 import type {
   AgentEvent,
@@ -142,9 +155,30 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       parameters: tool.parameters,
       effect: tool.effect,
     }));
+    const reserve = answerReserveTokens(input.model.info.contextTokens);
+    const ceiling = Math.max(0, input.model.info.contextTokens - reserve);
+    // Only the tools that fit the window are offered, and only those reach the
+    // prompt, the request and the tool runner: a call to anything else is a
+    // name the turn does not have, which is the same answer an unknown name
+    // has always been given. The runner is filtered rather than rebuilt so the
+    // registry's own objects (and their order) are what a call is dispatched to.
+    const offered = chooseTools({
+      tools: specs,
+      query: input.user.content,
+      earlier: earlierUserMessages(input.history),
+      recent: recentToolNames(input.history),
+      budgetTokens: Math.floor(ceiling * TOOL_BUDGET_SHARE),
+    });
+    const offeredNames = new Set(offered.map((spec) => spec.name));
+    const offeredTools = input.tools.filter((tool) => offeredNames.has(tool.name));
+    // What the offered specs add to EVERY request of this turn: the template
+    // renders one function per tool beside the messages, so the plan has to know
+    // their cost before it can say whether a request fits.
+    const fixedTokens = offered.reduce((sum, spec) => sum + toolSpecTokens(spec), 0);
+    const offeredCharacters = offered.reduce((sum, spec) => sum + toolSpecCharacters(spec), 0);
     const system = buildSystemPrompt({
       locale: input.locale,
-      tools: specs,
+      tools: offered,
       maxSteps: input.maxSteps,
     });
     // The loop owns the system prompt, so a system message that arrived in the
@@ -167,8 +201,6 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
           : message,
       );
     const pending: ChatMessage[] = [input.user];
-    const reserve = answerReserveTokens(input.model.info.contextTokens);
-    const ceiling = Math.max(0, input.model.info.contextTokens - reserve);
     let measured: MeasuredUsage | undefined;
     let counted = false;
 
@@ -183,6 +215,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         history,
         pending,
         ceiling,
+        fixedTokens,
         boundary,
         estimate: createEstimator(input.locale, measured),
         estimateTool: createToolEstimator(input.locale, measured),
@@ -202,18 +235,18 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       let result: CompletionResult;
       try {
         result = await input.model.complete(
-          { messages: plan.messages, tools: specs, maxTokens: reserve },
+          { messages: plan.messages, tools: offered, maxTokens: reserve },
           signal,
           (text) => {
             emit({ type: "token", text });
           },
         );
-      } catch {
+      } catch (error) {
         if (signal.aborted) {
           stopped();
           return;
         }
-        emit({ type: "error", code: "model-failed" });
+        emit({ type: "error", code: "model-failed", detail: errorMessage(error) });
         finish("end");
         return;
       }
@@ -223,13 +256,17 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       }
       measured = {
         promptTokens: result.promptTokens,
-        characters: requestCharacters(plan.messages),
+        // The model counted the tools too: every request carries the offered
+        // tools' specs beside its messages, and the ratio this measurement
+        // becomes has to be over everything the count was made of, or the next
+        // request's estimate would be short by the tools' own share.
+        characters: requestCharacters(plan.messages) + offeredCharacters,
       };
 
       // Some GGUF templates emit a tool call as text. The fallback only speaks
       // when the runtime reported no calls and at least one tool was offered.
       const recovered =
-        result.toolCalls.length === 0 && specs.length > 0 ? parseToolCalls(result.text) : null;
+        result.toolCalls.length === 0 && offered.length > 0 ? parseToolCalls(result.text) : null;
       const calls: readonly ToolCall[] =
         recovered !== null && recovered.calls.length > 0
           ? recovered.calls.map((call) => ({
@@ -258,7 +295,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
 
       pending.push({ role: "assistant", content: text, toolCalls: calls });
       for (const call of calls) emit({ type: "tool-call", call });
-      const outcome = await runToolCalls(calls, input.tools, input.context, emit);
+      const outcome = await runToolCalls(calls, offeredTools, input.context, emit);
       if (outcome.aborted) {
         stopped();
         return;
@@ -397,6 +434,27 @@ function requestCharacters(messages: readonly ChatMessage[]): number {
   let total = 0;
   for (const message of messages) total += message.content.length;
   return total;
+}
+
+/** The user messages of the history, newest first: what the tool chooser reads as context. */
+function earlierUserMessages(history: readonly ChatMessage[]): readonly string[] {
+  const texts: string[] = [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message !== undefined && message.role === "user") texts.push(message.content);
+  }
+  return texts;
+}
+
+/** The tools the assistant called in the history, newest first, in each step's own order. */
+function recentToolNames(history: readonly ChatMessage[]): readonly string[] {
+  const names: string[] = [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message === undefined) continue;
+    for (const call of message.toolCalls ?? []) names.push(call.name);
+  }
+  return names;
 }
 
 /**

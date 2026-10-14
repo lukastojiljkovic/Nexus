@@ -3,9 +3,11 @@ import { DEFAULT_MAX_STEPS, KNOWLEDGE_HIT_LIMIT, createAgentTurn, runAgentTurn }
 import { createScriptedModel } from "./fakeModel.js";
 import { countBoundary } from "./fence.js";
 import { answerReserveTokens } from "./budget.js";
+import { TOOL_BUDGET_SHARE, toolSpecTokens } from "./toolChoice.js";
 import type {
   AgentEvent,
   AssistantLocale,
+  AssistantText,
   ChatMessage,
   ChatModel,
   ConfirmRequest,
@@ -34,11 +36,12 @@ function makeTool(
     | ToolResult
     | ((args: unknown, context: ToolContext) => Promise<ToolResult>) = { ok: true, content: `${name} ok` },
   parameters: JsonSchema = { type: "object", properties: {}, additionalProperties: false },
+  description: AssistantText = { sr: `Alatka ${name}.`, en: `Tool ${name}.` },
 ): FakeTool {
   const seen: unknown[] = [];
   return {
     name,
-    description: { sr: `Alatka ${name}.`, en: `Tool ${name}.` },
+    description,
     parameters,
     effect: "read",
     seen,
@@ -117,6 +120,53 @@ async function turn(parts: TurnParts): Promise<AgentEvent[]> {
 
 const of = <T extends AgentEvent["type"]>(events: readonly AgentEvent[], type: T): EventOf<T>[] =>
   events.filter((event): event is EventOf<T> => event.type === type);
+
+/** The context the tool-offering tests run with, chosen so the prompt fits and the tool share does not. */
+const TIGHT_CONTEXT = 3072;
+
+/**
+ * A registry the window has an opinion about.
+ *
+ * `tasks.list` is what the question below names, `app.open` is a core tool, and
+ * `tasks.create` is a sibling of the named tool with a schema thousands of
+ * characters long - so it is a candidate the walk has to skip, which is the
+ * rule these two tests are about.
+ */
+function tightTools(): {
+  readonly tools: readonly FakeTool[];
+  readonly create: FakeTool;
+  readonly budgetTokens: number;
+} {
+  const open = makeTool(
+    "app.open",
+    { ok: true, content: "opened" },
+    undefined,
+    { sr: "Otvara stranicu.", en: "Opens a page in the app." },
+  );
+  const list = makeTool(
+    "tasks.list",
+    { ok: true, content: "two tasks" },
+    undefined,
+    { sr: "Izlistava otvorene zadatke.", en: "Lists the open tasks." },
+  );
+  const create = makeTool(
+    "tasks.create",
+    { ok: true, content: "created" },
+    {
+      type: "object",
+      properties: { title: { type: "string", description: "x".repeat(4000) } },
+      required: ["title"],
+      additionalProperties: false,
+    },
+    { sr: "Pravi novi zadatak.", en: "Creates a new task." },
+  );
+  const ceiling = TIGHT_CONTEXT - answerReserveTokens(TIGHT_CONTEXT);
+  return {
+    tools: [open, list, create],
+    create,
+    budgetTokens: Math.floor(ceiling * TOOL_BUDGET_SHARE),
+  };
+}
 
 const types = (events: readonly AgentEvent[]): string[] => events.map((event) => event.type);
 
@@ -246,6 +296,40 @@ describe("the loop's scripted conversations", () => {
         'Unknown tool "tasks.creat". The tools this turn may use are: tasks.list. Call one of those, or answer without a tool.',
     });
     expect(tasks.seen).toEqual([]);
+  });
+
+  it("offers only the tools the window can hold, in registry order", async () => {
+    const { tools, budgetTokens } = tightTools();
+    const model = createScriptedModel([{ text: "Ok." }], { contextTokens: TIGHT_CONTEXT });
+    await turn({ model, tools, user: { role: "user", content: "Dodaj zadatak za sutra" } });
+
+    const request = model.requests[0];
+    const offered = request?.tools ?? [];
+    // tasks.create is a sibling of the tool the question named, so it IS a
+    // candidate - and its schema is thousands of characters, which is what the
+    // walk skips rather than stops on.
+    expect(offered.map((tool) => tool.name)).toEqual(["app.open", "tasks.list"]);
+    expect(offered.reduce((sum, tool) => sum + toolSpecTokens(tool), 0)).toBeLessThanOrEqual(budgetTokens);
+    expect(request?.messages[0]?.content).toContain("- Tools that only read: app.open, tasks.list");
+  });
+
+  it("answers a call to a tool the turn did not offer as an unknown name", async () => {
+    const { tools, create } = tightTools();
+    const model = createScriptedModel(
+      [
+        { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+        { text: "Ne mogu." },
+      ],
+      { contextTokens: TIGHT_CONTEXT },
+    );
+    const events = await turn({ model, tools, user: { role: "user", content: "Dodaj zadatak za sutra" } });
+
+    expect(of(events, "tool-result")[0]?.result).toEqual({
+      ok: false,
+      content:
+        'Unknown tool "tasks.create". The tools this turn may use are: app.open, tasks.list. Call one of those, or answer without a tool.',
+    });
+    expect(create.seen).toEqual([]);
   });
 
   it("refuses arguments that fail the schema, before the tool runs", async () => {
@@ -437,6 +521,9 @@ describe("the loop's scripted conversations", () => {
 
     expect(types(events)).toEqual(["error", "done"]);
     expect(of(events, "error")[0]?.code).toBe("model-failed");
+    // The runtime's own sentence rides along for the log: the code alone cannot
+    // say whether llama.cpp refused a schema or ran out of memory.
+    expect(of(events, "error")[0]?.detail).toBe("the runtime lost the model");
     expect(of(events, "done")[0]?.stopReason).toBe("end");
   });
 

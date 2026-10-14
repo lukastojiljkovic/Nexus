@@ -490,6 +490,13 @@ export function register(host: ModuleHostSurface): void {
     void runAgentTurn(input, (event) => {
       const entry = turn.log.emit(event);
       collect(turn, event);
+      // The model's own reason for a failed turn goes to the app's log: the
+      // page draws the error code, and the sentence that says WHICH failure it
+      // was - a schema llama.cpp refused, a model that ran out of memory -
+      // would otherwise be lost between the runtime and the user.
+      if (event.type === "error" && event.code === "model-failed" && event.detail !== undefined) {
+        console.error("Nexus: the assistant model failed:", event.detail);
+      }
       if (entry === null) {
         // The buffer is full: the model is talking without stopping, and the
         // honest answer is to stop it rather than to keep counting.

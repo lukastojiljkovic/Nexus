@@ -166,7 +166,7 @@ export type ToolEffect = "read" | "write" | "navigate" | "network";
 export type JsonSchema = Readonly<Record<string, unknown>>;
 
 export interface ToolSpec {
-  /** `module.verb`, lower-case: `tasks.create`, `app.open`, `knowledge.search`. */
+  /** `module.verb`, lower-case: `tasks.create`, `app.open`, `calendar.events`. */
   readonly name: string;
   readonly description: AssistantText;
   readonly parameters: JsonSchema;
@@ -269,7 +269,16 @@ export type AgentEvent =
   | { readonly type: "tool-call"; readonly call: ToolCall }
   | { readonly type: "tool-result"; readonly callId: string; readonly result: ToolResult }
   | { readonly type: "message"; readonly message: ChatMessage; readonly citations: readonly Citation[] }
-  | { readonly type: "error"; readonly code: AgentErrorCode }
+  | {
+      readonly type: "error";
+      readonly code: AgentErrorCode;
+      /**
+       * Set only for `model-failed`: the runtime's own message. It is for the
+       * app's log - the reason a turn died is invisible otherwise - and is
+       * never shown as an answer or drawn by a page.
+       */
+      readonly detail?: string;
+    }
   | { readonly type: "done"; readonly stopReason: StopReason };
 
 export type AgentErrorCode =

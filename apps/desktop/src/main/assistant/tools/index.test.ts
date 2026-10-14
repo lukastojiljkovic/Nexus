@@ -3,6 +3,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NexusDatabase, TaskListStore, TaskStore, openDatabase, uuidv7 } from "@nexus/db";
+import {
+  ASSISTANT_WORKFLOWS,
+  DEFAULT_MAX_STEPS,
+  MAX_TOOLS_PER_TURN,
+  TOOL_BUDGET_SHARE,
+  answerReserveTokens,
+  buildSystemPrompt,
+  chooseTools,
+  estimateTokens,
+  toolSpecTokens,
+} from "@nexus/core";
 import type { Tool, ToolEffect, ToolRegistry, WebService } from "@nexus/core";
 import { createModuleRegistry } from "../../../shared/modules.js";
 import { createToolRegistry, type ToolDeps } from "./index.js";
@@ -208,5 +219,45 @@ describe("createToolRegistry", () => {
     );
     expect(result).toEqual({ ok: true, content: "This profile has no tasks." });
     expect(new TaskStore(db.raw, other).listActive()).toEqual([]);
+  });
+
+  it("names only tools the registry actually has, in every workflow", () => {
+    const names = new Set(registryWith().tools({ web: false }).map((tool) => tool.name));
+    for (const workflow of ASSISTANT_WORKFLOWS) {
+      // A recipe is data a user starts a turn from: a name the registry does not
+      // carry selects nothing and would leave the checklist pointing at a tool
+      // that does not exist, with no error anywhere to say so.
+      for (const name of workflow.tools) {
+        expect(names.has(name), `${workflow.id} names "${name}"`).toBe(true);
+      }
+    }
+  });
+
+  it("offers a turn's tools and prompt inside the window, with room left for the conversation", () => {
+    const tools = registryWith().tools({ web: false });
+    const contextTokens = 8192;
+    const reserve = answerReserveTokens(contextTokens);
+    const ceiling = contextTokens - reserve;
+    const offered = chooseTools({
+      tools,
+      query: "Dodaj zadatak za sutra",
+      earlier: [],
+      recent: [],
+      budgetTokens: Math.floor(ceiling * TOOL_BUDGET_SHARE),
+    });
+    const specTokens = offered.reduce((sum, tool) => sum + toolSpecTokens(tool), 0);
+    const promptTokens = estimateTokens(
+      buildSystemPrompt({ locale: "sr", tools: offered, maxSteps: DEFAULT_MAX_STEPS }),
+      "sr",
+    );
+
+    // Measured 2026-10-14 with this registry (37 tools, web off) and the
+    // question above: 8 tools offered, 2 640 tokens of tool specs, 1 373 tokens
+    // of Serbian prompt - 4 013 of the 7 168-token ceiling, leaving 3 155 for
+    // the history, the knowledge passages and the question. Before the tools
+    // were chosen per turn the specs alone were 22 271 characters, which is
+    // more than this window holds.
+    expect(offered.length).toBeLessThanOrEqual(MAX_TOOLS_PER_TURN);
+    expect(ceiling - specTokens - promptTokens).toBeGreaterThanOrEqual(3000);
   });
 });
