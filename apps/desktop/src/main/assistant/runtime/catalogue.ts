@@ -52,6 +52,14 @@ export interface CatalogueFit {
 /** A catalogue entry at runtime: the contract's model, plus what this part knows. */
 export interface CatalogueEntry extends ModelEntry {
   readonly fit?: CatalogueFit;
+  /**
+   * The parameters one token's forward pass runs through, as the model's own
+   * card states it — a dense model's whole count, a mixture-of-experts model's
+   * active count, a Gemma E-model's effective count (ADR-113). Every entry of the
+   * bundled catalogue carries one; a search result and an imported file carry
+   * none, which is what `activeParametersOf` answers `null` for.
+   */
+  readonly activeParameters?: number;
   /** Where an `origin: "file"` model lives. Never set for a download. */
   readonly path?: string;
 }
@@ -90,6 +98,7 @@ const ENTRY_KEYS: readonly string[] = [
   "origin",
   "title",
   "family",
+  "activeParameters",
   "repo",
   "file",
   // Stored by the registry (it writes the contract's own entry back) and IGNORED
@@ -143,6 +152,23 @@ export function fitOf(entry: ModelEntry): CatalogueFit | null {
 }
 
 /**
+ * The parameters one token's forward pass runs through, or `null` when the entry
+ * states none.
+ *
+ * Stored as the plain integer the model's own card claims rather than as a
+ * formatted string, and read through this function so the shape of the extra
+ * field is known in exactly one place — `fitOf`'s arrangement and its reason: a
+ * search result and an imported file carry neither field, and `recommend.ts`
+ * ranks the tiers by this one, so "this build has no count for it" has to be an
+ * answer it can act on rather than a zero it would silently sort first.
+ */
+export function activeParametersOf(entry: ModelEntry): number | null {
+  const value = (entry as CatalogueEntry).activeParameters;
+  if (!Number.isSafeInteger(value) || (value as number) <= 0) return null;
+  return value as number;
+}
+
+/**
  * The bundled catalogue, parsed on first use and remembered.
  *
  * A parse failure answers an EMPTY list rather than throwing, and that is the
@@ -185,6 +211,12 @@ export function parseCatalogue(value: unknown): readonly CatalogueEntry[] {
     // between `Q4_K_M` and `Q8_0` is the whole point of the field.
     if (entry.quantization === "") {
       throw new CatalogueError("shape", `"${entry.file}" in the catalogue states no quantization.`);
+    }
+    // The same rule for the count the tiers are ordered by: a catalogue entry
+    // without one is an entry the chooser has nothing to rank, and the list is
+    // written by a tool that refuses exactly this.
+    if (activeParametersOf(entry) === null) {
+      throw new CatalogueError("shape", `"${entry.id}" states no active parameter count.`);
     }
   }
   return entries;
@@ -269,9 +301,14 @@ export function parseEntry(value: unknown, where: string): CatalogueEntry {
     };
   }
 
+  const activeParameters = record["activeParameters"];
+  const decodedParameters =
+    activeParameters === undefined ? undefined : asPositiveInteger(activeParameters, "shape", "activeParameters");
+
   const path = record["path"];
   return {
     ...parsed,
+    ...(decodedParameters === undefined ? {} : { activeParameters: decodedParameters }),
     ...(decodedProjector === undefined ? {} : { projector: decodedProjector }),
     ...(decodedFit === undefined ? {} : { fit: decodedFit }),
     ...(path === undefined ? {} : { path: asString(path, "shape", "path") }),

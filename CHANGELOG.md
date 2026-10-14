@@ -36,6 +36,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   request has. They are now short rules, a quarter shorter, and no rule was
   dropped.
 
+- **Gemma 4 E2B is the fast model.** The three recommended models were ranked by
+  file size, and Gemma's smaller models carry large lookup tables that make the
+  file big without making each word more work. The ranking now uses the
+  parameter count each model's card states, so on a laptop with an 8 GB graphics
+  card the picks are Gemma 4 E2B, Qwen3.5 4B and Gemma 4 E4B. Qwen3.5 2B and
+  Qwen3-VL 4B are no longer recommended; a copy you installed keeps working.
+
 ### Fixed
 
 - **The installed app loads a local model.** Since 2.0.0 the assistant worked

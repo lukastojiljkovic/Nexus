@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bundledCatalogue, fitOf, parseCatalogue, parseEntry } from "./catalogue.js";
+import { activeParametersOf, bundledCatalogue, fitOf, parseCatalogue, parseEntry } from "./catalogue.js";
 import { CHAT_CONTEXT_TOKENS } from "./recommend.js";
 import raw from "./catalogue.json";
 
@@ -15,17 +15,16 @@ import raw from "./catalogue.json";
  * refresh that breaks one of these is a refresh that changed a promise.
  */
 describe("the bundled catalogue", () => {
-  it("parses, and names the nine models this run curated", () => {
+  it("parses, and names the eight models this run curated", () => {
     const entries = bundledCatalogue();
-    expect(entries).toHaveLength(9);
+    expect(entries).toHaveLength(8);
     expect(entries.map((entry) => entry.id)).toEqual([
-      "qwen3.5-2b-q4-k-m",
       "qwen3.5-4b-q4-k-m",
       "qwen3.5-9b-q4-k-m",
       "qwen3.5-27b-q4-k-m",
+      "gemma-4-e2b-it-q4-0",
       "gemma-4-e4b-it-q4-0",
       "gemma-4-12b-it-q4-0",
-      "qwen3-vl-4b-instruct-q4-k-m",
       "slava-qwen3-14b-serbian-q4-k-m",
       "qwen3-embedding-0.6b-q8-0",
     ]);
@@ -40,6 +39,25 @@ describe("the bundled catalogue", () => {
       expect(entry.licence.name, entry.id).not.toBe("");
       expect(entry.licence.url, entry.id).toMatch(/^https:\/\//);
     }
+  });
+
+  it("states the active parameters the tiers are ordered by, and the pair the rule exists for", () => {
+    // ADR-113: a whole number the model's own card states, positive on every
+    // entry — the chooser has nothing to rank an entry without one, which is why
+    // this file's reader refuses one.
+    for (const entry of bundledCatalogue()) {
+      expect(activeParametersOf(entry), entry.id).toBeGreaterThan(0);
+    }
+    // Gemma 4's E-models carry per-layer embedding tables, which are lookups
+    // rather than matrix work: E2B's file is BIGGER than Qwen3.5 4B's while its
+    // card states the smaller count. This pair is why file size no longer orders
+    // the tiers: a size-ordered list makes Qwen3.5 4B `speed` and E2B the tier
+    // above it, which is backwards on any machine that fits both.
+    const e2b = bundledCatalogue().find((entry) => entry.id === "gemma-4-e2b-it-q4-0");
+    const qwen4b = bundledCatalogue().find((entry) => entry.id === "qwen3.5-4b-q4-k-m");
+    if (e2b === undefined || qwen4b === undefined) throw new Error("the pair this test is about is not in the list");
+    expect(e2b.sizeBytes).toBeGreaterThan(qwen4b.sizeBytes);
+    expect(activeParametersOf(e2b) ?? 0).toBeLessThan(activeParametersOf(qwen4b) ?? 0);
   });
 
   it("measures every chat entry, at the context the runtime loads", () => {
@@ -67,10 +85,9 @@ describe("the bundled catalogue", () => {
     const visionCapable = bundledCatalogue().filter((entry) => entry.projector !== undefined);
     expect(visionCapable.map((entry) => entry.id).sort()).toEqual([
       "gemma-4-12b-it-q4-0",
+      "gemma-4-e2b-it-q4-0",
       "gemma-4-e4b-it-q4-0",
-      "qwen3-vl-4b-instruct-q4-k-m",
       "qwen3.5-27b-q4-k-m",
-      "qwen3.5-2b-q4-k-m",
       "qwen3.5-4b-q4-k-m",
       "qwen3.5-9b-q4-k-m",
     ]);
@@ -130,6 +147,15 @@ describe("the bundled catalogue", () => {
     expect(() =>
       parseCatalogue({ format: 1, models: [{ ...raw.models[0], id: "Bad Id" }] }),
     ).toThrow(/not an id/);
+    // The count the tiers are ordered by is the list's, not a search result's:
+    // an entry without one has nothing the chooser could rank it by.
+    const first = raw.models[0];
+    if (first === undefined) throw new Error("the catalogue has no first entry to copy");
+    const { activeParameters: _drop, ...withoutCount } = first;
+    expect(() => parseCatalogue({ format: 1, models: [withoutCount] })).toThrow(/active parameter/);
+    expect(() =>
+      parseCatalogue({ format: 1, models: [{ ...raw.models[0], activeParameters: 0 }] }),
+    ).toThrow(/activeParameters/);
   });
 
   it("accepts an imported file's entry, whose licence may be unstated", () => {

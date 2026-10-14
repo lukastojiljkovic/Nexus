@@ -1,6 +1,18 @@
 # ADR-096 — the assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen
 
-**Status:** accepted (2026-10-10) · **Owner:** founder
+**Status:** accepted (2026-10-10) · **Owner:** founder ·
+**§4 SUPERSEDED IN PART by [ADR-113](113-assistant-tiers-by-active-parameters.md)**
+(2026-10-15)
+
+> Only §4's second ordering decision changed, and only in part. **What still
+> holds**, and is untouched: the fit arithmetic at 8192 tokens, the 0.9/0.6
+> shares, the full-offload-first rule, the middle-of-what-fits balance rule and
+> the sentence when nothing fits. **What went** is the *reason* the tiers were
+> ordered by file size — a Gemma 4 E-model's file carries per-layer embedding
+> tables, which are lookups rather than matrix work — so the tiers are ordered by
+> the `activeParameters` the model's card states, and file size is only the
+> tie-break. The section's body is left as it was written; ADR-113 carries the
+> decision, the counts and their sources.
 
 ## 1. The finding
 

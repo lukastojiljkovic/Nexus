@@ -107,7 +107,7 @@ directory is the decision log behind it.
 | [093](093-navigation-groups.md) | Navigation groups, the pinned shortlist and the launcher | Accepted; supersedes ADR-008 decision #11, amends ADR-086 §4 | 2026-10-09 |
 | [094](094-tool-packs.md) | Tool packs: a GPL program as a separate process in a signed folder (amends ADR-091 §2 and §9) | Accepted | 2026-10-10 |
 | [095](095-assistant.md) | The assistant: eight parts, one contract, nothing off this machine | Accepted | 2026-10-10 |
-| [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted | 2026-10-10 |
+| [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted; §4 superseded in part by ADR-113 | 2026-10-10 |
 | [097](097-assistant-web-search.md) | Opt-in web search for the assistant: a consent beside the network mode, and the second sanctioned egress path | Accepted; amends ADR-092 §2 for one path | 2026-10-10 |
 | [098](098-zim-offline-library.md) | An offline library, through our own ZIM reader (module `wiki`, migration 086) | Accepted; amends ADR-092 | 2026-10-10 |
 | [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093) | 2026-10-10 |
@@ -124,3 +124,4 @@ directory is the decision log behind it.
 | [110](110-remembered-unlock.md) | „Traži pristupni kod": how often the app asks for the passcode | Accepted | 2026-10-10 |
 | [111](111-cards-module.md) | The Cards module on the kit: one shelf, nine engines, one worker (uses ADR-090, ADR-093) | Accepted | 2026-10-11 |
 | [112](112-assistant-tools-per-turn.md) | The assistant's tools per turn: what fits in the window, and a prompt that stops repeating them (uses ADR-095, ADR-104) | Accepted | 2026-10-14 |
+| [113](113-assistant-tiers-by-active-parameters.md) | The assistant's tiers are ordered by active parameters, and Gemma 4 E2B is the speed pick | Accepted; supersedes ADR-096 §4 in part | 2026-10-15 |
