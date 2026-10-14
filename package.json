@@ -46,6 +46,7 @@
     "check:pro-math": "node scripts/check-pro-math.mjs",
     "check:pro-flags": "node scripts/check-pro-flags.mjs",
     "check:licences": "node apps/desktop/scripts/generate-licences.mjs --check",
+    "check:unpack": "node scripts/check-unpack.mjs",
     "check:rls": "node supabase/scripts/check-rls-wall.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:copy": "node scripts/check-copy.mjs",

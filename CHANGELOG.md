@@ -6,6 +6,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The installed app loads a local model.** Since 2.0.0 the assistant worked
+  only in a development checkout. The installer unpacked `node-llama-cpp`
+  without the packages it imports, so the worker failed at its first import;
+  past that, the library's pre-load test of each llama.cpp build cannot run
+  inside an Electron utility process, so every build was refused. The whole
+  closure is unpacked now and `pnpm check:unpack` keeps it complete, the test is
+  skipped there, and a GPU build that does not load falls back to the CPU one.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that

@@ -1,0 +1,16 @@
+diff --git a/dist/bindings/utils/testBindingBinary.js b/dist/bindings/utils/testBindingBinary.js
+index fc2ed379662d4d5cc7282a9d01faf3c327caa593..f3ce03ffc03b0b7e83cd224a604b63d045615816 100644
+--- a/dist/bindings/utils/testBindingBinary.js
++++ b/dist/bindings/utils/testBindingBinary.js
+@@ -12,6 +12,11 @@ const __filename = fileURLToPath(import.meta.url);
+ const detectedFileName = path.basename(__filename);
+ const expectedFileName = "testBindingBinary";
+ export async function testBindingBinary(bindingBinaryPath, extBackendsPath, gpu, testTimeout = 1000 * 60 * 5, pipeOutputOnNode = false) {
++    // Nexus: inside an Electron utility process neither fork below can run. `utilityProcess` exists only in
++    // the main process, and a packaged app's executable cannot run as Node (the RunAsNode fuse is off), so
++    // the test always failed and no binary ever loaded. The caller falls back to the CPU build instead.
++    if (process.type === "utility")
++        return true;
+     if (!detectedFileName.startsWith(expectedFileName)) {
+         console.warn(getConsoleLogPrefix() +
+             `"${expectedFileName}.js" file is not independent, so testing a binding binary with the current system ` +
