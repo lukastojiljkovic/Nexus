@@ -6,6 +6,8 @@ keywords: [asistent, model, razgovor, bez interneta, gguf, llama]
 ---
 Asistent je razgovor sa modelom koji radi na ovom računaru. Model se izabere prema hardveru (inteligencija, ravnoteža ili brzina), preuzme jednom i posle radi bez interneta.
 
+Model koji si našao pretragom ili sam uvezao ne služi nijednom nivou: otvori „Modeli“ i pritisni „Koristi za odgovore“ na njegovom redu, pa odgovara od tada. „Koristi preporučeni model“ vraća odgovor nivou.
+
 Kako se koristi:
 
 1. „Modeli“: vidi preporuku za ovaj računar, pa preuzmi model (samo u režimu mreže „Preuzimanja“), uvezi `.gguf` datoteku ili pretraži Hugging Face. Svaka datoteka se proverava prema SHA-256.

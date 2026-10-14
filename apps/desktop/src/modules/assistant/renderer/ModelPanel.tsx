@@ -27,6 +27,12 @@ import { openAppLocation, openWebAddress } from "./location.js";
  * its licence name and address, and this pane draws both and opens the address
  * through `window.nexus.openExternal` (ADR-103) - the same one channel the
  * citations use, which refuses anything that is not https.
+ *
+ * **The installed list is where a model is chosen to answer.** A downloaded or
+ * imported chat model serves no tier, so without a choice it can never answer;
+ * "Use for answers" on its row is that choice, and it is the profile's own
+ * (migration 92's `chat_model_id`). An embedding model is offered nothing,
+ * because it cannot answer at all - main refuses such an id by the same rule.
  */
 
 export function ModelPanel({
@@ -222,6 +228,44 @@ export function ModelPanel({
                     <Chip variant="data">
                       {`${copy.setup.serves}: ${entry.servesTiers.map(tierLabel).join(", ")}`}
                     </Chip>
+                  )}
+                  {entry.chosen ? (
+                    <>
+                      <Chip variant="data">{copy.setup.answersYourQuestions}</Chip>
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() =>
+                            window.nexus.modules.assistant.setChatModel({
+                              profileId,
+                              modelId: null,
+                            }),
+                          )
+                        }
+                      >
+                        {copy.setup.useRecommended}
+                      </Button>
+                    </>
+                  ) : (
+                    entry.model.capabilities.includes("chat") && (
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() =>
+                            window.nexus.modules.assistant.setChatModel({
+                              profileId,
+                              modelId: entry.model.id,
+                            }),
+                          )
+                        }
+                      >
+                        {copy.setup.useForAnswers}
+                      </Button>
+                    )
                   )}
                   <Button size="sm" variant="quiet" onClick={() => setRemoving(entry.model)}>
                     {copy.setup.remove}
