@@ -34,6 +34,9 @@ import { defineModuleContract, type ModuleApiOf } from "../../../shared/moduleAp
  * offered: `downloadModel` takes an id and looks it up there. A renderer that
  * could send an entry would be sending a URL and a hash, and the whole point of
  * the download service (ADR-092) is that neither is the renderer's to choose.
+ * `setChatModel` names an id too, but its own kind: an INSTALLED model with the
+ * `chat` capability, checked against what is on this disk rather than against
+ * what was offered - nothing is downloaded by choosing a model to answer with.
  */
 
 /** One thread as the list reads it. */
@@ -158,6 +161,14 @@ export interface AssistantInstalledView {
   readonly model: ModelEntry;
   /** Which of the three tiers this model serves on THIS machine, in tier order. */
   readonly servesTiers: readonly ModelTier[];
+  /**
+   * True on the one model this profile answers with by hand.
+   *
+   * It is the EFFECTIVE choice, not the stored one: a chosen model that has been
+   * removed - or was never a chat model - marks nothing, and the page draws the
+   * tier as what answers, which is what `AssistantProfile.chatModelEntry` does.
+   */
+  readonly chosen: boolean;
 }
 
 /** Everything the setup and models screens read. */
@@ -172,6 +183,8 @@ export interface AssistantSetupView {
   /** The download this profile has running or stopped, or `null`. */
   readonly download: AssistantDownloadView | null;
   readonly defaultTier: ModelTier;
+  /** The model this profile answers with by hand, or `null` when the tier decides (including a choice that is gone). */
+  readonly chatModelId: string | null;
   /** Whether this launch may download at all: only the `downloads` network mode may (ADR-092). */
   readonly downloadsAllowed: boolean;
   readonly networkMode: AssistantNetworkMode;
@@ -271,6 +284,12 @@ interface SetTierPayload {
   tier: ModelTier;
 }
 
+interface SetChatModelPayload {
+  profileId: string;
+  /** The installed chat model to answer with, or `null` to let the default tier decide again. */
+  modelId: string | null;
+}
+
 interface SetWebSearchPayload {
   profileId: string;
   enabled: boolean;
@@ -347,6 +366,7 @@ type AssistantOps = {
   resumeDownload: { request: ModelIdPayload; response: AssistantSetupView };
   removeModel: { request: ModelIdPayload; response: AssistantSetupView };
   setDefaultTier: { request: SetTierPayload; response: AssistantSetupView };
+  setChatModel: { request: SetChatModelPayload; response: AssistantSetupView };
   setWebSearch: { request: SetWebSearchPayload; response: AssistantSettingsView };
   reindexKnowledge: { request: ProfilePayload; response: AssistantKnowledgeView };
   voice: { request: ProfilePayload; response: AssistantVoiceView };
@@ -380,6 +400,7 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "resumeDownload",
   "removeModel",
   "setDefaultTier",
+  "setChatModel",
   "setWebSearch",
   "reindexKnowledge",
   "voice",

@@ -406,8 +406,14 @@ function path(record: Record<string, unknown>, field: string): string {
   return text(record[field], field, PROTOCOL_LIMITS.pathChars);
 }
 
+/**
+ * A load request's context length. 0 is "not known": a model from the search or
+ * an import carries no catalogue figure, and the engine loads it at its own
+ * default (`loadedContextTokens` in `llama.ts`). A loaded model always reports
+ * the length it got, so `loadedInfo` keeps the floor at 1.
+ */
 function contextTokens(record: Record<string, unknown>): number {
-  return integer(record, "contextTokens", 1, PROTOCOL_LIMITS.contextTokens);
+  return integer(record, "contextTokens", 0, PROTOCOL_LIMITS.contextTokens);
 }
 
 function gpuLayers(record: Record<string, unknown>): number | "auto" {
