@@ -86,7 +86,7 @@ export const ASSISTANT_WORKFLOWS: readonly AssistantWorkflow[] = [
         en: "Never invent tasks, events or times.",
       },
     ],
-    tools: ["tasks.list", "calendar.list", "tasks.create", "app.open"],
+    tools: ["tasks.list", "calendar.events", "tasks.create", "app.open"],
   },
   {
     id: "note-to-tasks",
@@ -128,8 +128,8 @@ export const ASSISTANT_WORKFLOWS: readonly AssistantWorkflow[] = [
     },
     checklist: [
       {
-        sr: "Pretraži građu samo kroz alat za pretragu.",
-        en: "Search the knowledge only through the search tool.",
+        sr: "Koristi numerisane odlomke koji su ti dati, a kad treba više, pretraži zapisano kroz app.search.",
+        en: "Use the numbered passages you are given, and search what is already recorded with app.search when you need more.",
       },
       {
         sr: "Citiraj svaki izvor brojem iz bloka sa građom.",
@@ -144,7 +144,7 @@ export const ASSISTANT_WORKFLOWS: readonly AssistantWorkflow[] = [
         en: "Never invent titles, authors or sources.",
       },
     ],
-    tools: ["knowledge.search"],
+    tools: ["app.search"],
   },
   {
     id: "stranded",
@@ -159,8 +159,8 @@ export const ASSISTANT_WORKFLOWS: readonly AssistantWorkflow[] = [
         en: "First, if there is a signal, call 112; that is the first step and nothing replaces it.",
       },
       {
-        sr: "Pretraži građu pre svakog saveta i citiraj svaki izvor.",
-        en: "Search the knowledge before giving any advice, and cite every source.",
+        sr: "Koristi numerisane odlomke koji su ti dati pre svakog saveta i citiraj svaki izvor.",
+        en: "Use the numbered passages you are given before giving any advice, and cite every source.",
       },
       {
         sr: "Daj kratke i mirne korake, jedan po jedan.",
@@ -179,7 +179,7 @@ export const ASSISTANT_WORKFLOWS: readonly AssistantWorkflow[] = [
         en: "Never invent medicines, doses, routes or numbers.",
       },
     ],
-    tools: ["knowledge.search", "app.open"],
+    tools: ["app.open"],
   },
 ];
 
