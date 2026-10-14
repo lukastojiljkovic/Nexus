@@ -22,7 +22,7 @@
     "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {
-    "@types/node": "^24.19.1",
+    "@types/node": "^24.19.2",
     "typescript": "^5.8.0",
     "vitest": "^5.0.3"
   }

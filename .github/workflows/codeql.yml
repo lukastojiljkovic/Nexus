@@ -45,7 +45,7 @@ jobs:
       # analyses the source as written. That matters here because the app's own
       # build needs Electron's binary and a native SQLite module, neither of
       # which this job should have to fetch to read TypeScript.
-      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           languages: javascript-typescript
           # The query pack and the one path exclusion live in that file, because
@@ -55,7 +55,7 @@ jobs:
           # else is.
           config-file: ./.github/codeql/codeql-config.yml
 
-      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: "/language:javascript-typescript"
 
