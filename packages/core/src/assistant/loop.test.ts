@@ -6,6 +6,7 @@ import { answerReserveTokens } from "./budget.js";
 import { TOOL_BUDGET_SHARE, toolSpecTokens } from "./toolChoice.js";
 import type {
   AgentEvent,
+  AgentTurnInput,
   AssistantLocale,
   AssistantText,
   ChatMessage,
@@ -52,6 +53,32 @@ function makeTool(
   };
 }
 
+/**
+ * A tool with the shape a `write` has: it asks the user through
+ * `ToolContext.confirm`, and a "no" is an ordinary result rather than an error
+ * (`confirmOrDecline`, beside the app's own tools). `seen` holds the runs that
+ * happened, so a test can say that a refused call did not run at all.
+ */
+function makeAskingTool(
+  name: string,
+  result: ToolResult = { ok: true, content: `${name} ok` },
+): FakeTool {
+  const seen: unknown[] = [];
+  return {
+    name,
+    description: { sr: `Alatka ${name}.`, en: `Tool ${name}.` },
+    parameters: { type: "object", additionalProperties: true },
+    effect: "write",
+    seen,
+    async run(args, context) {
+      const approved = await context.confirm({ tool: name, summary: `${name}?`, effect: "write" });
+      if (!approved) return { ok: false, content: "The user declined." };
+      seen.push(args);
+      return result;
+    },
+  };
+}
+
 interface FakeKnowledge extends KnowledgeBase {
   readonly queries: readonly KnowledgeQuery[];
 }
@@ -86,6 +113,27 @@ interface TurnParts {
   readonly locale?: AssistantLocale;
 }
 
+/** The input one turn runs against, from the parts a test declared. */
+function turnInput(parts: TurnParts): AgentTurnInput {
+  const locale = parts.locale ?? "sr";
+  return {
+    history: parts.history ?? [],
+    user: parts.user ?? { role: "user", content: "Pomoc" },
+    locale,
+    tools: parts.tools ?? [],
+    knowledge: parts.knowledge ?? makeKnowledge(),
+    model: parts.model,
+    context: {
+      profileId: "profile-1",
+      locale,
+      signal: parts.signal ?? new AbortController().signal,
+      confirm: parts.confirm ?? (async () => true),
+    },
+    maxSteps: parts.maxSteps ?? DEFAULT_MAX_STEPS,
+    today: "2026-10-14",
+  };
+}
+
 /** Run one turn with a pinned fence and call ids, and collect what it emitted. */
 async function turn(parts: TurnParts): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];
@@ -94,24 +142,8 @@ async function turn(parts: TurnParts): Promise<AgentEvent[]> {
     newFenceBoundary: () => BOUNDARY,
     newCallId: () => `call_${(sequence += 1)}`,
   });
-  const locale = parts.locale ?? "sr";
   await loop(
-    {
-      history: parts.history ?? [],
-      user: parts.user ?? { role: "user", content: "Pomoc" },
-      locale,
-      tools: parts.tools ?? [],
-      knowledge: parts.knowledge ?? makeKnowledge(),
-      model: parts.model,
-      context: {
-        profileId: "profile-1",
-        locale,
-        signal: parts.signal ?? new AbortController().signal,
-        confirm: parts.confirm ?? (async () => true),
-      },
-      maxSteps: parts.maxSteps ?? DEFAULT_MAX_STEPS,
-      today: "2026-10-14",
-    },
+    turnInput(parts),
     (event) => {
       events.push(event);
     },
@@ -352,6 +384,180 @@ describe("the loop's scripted conversations", () => {
     );
     expect(create.seen).toEqual([]);
     expect(of(events, "done")[0]?.stopReason).toBe("end");
+  });
+
+  it("answers a repeated refused call without running it or asking again", async () => {
+    const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+      { text: "Nisam dodao zadatak." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    // The user is asked ONCE, for the first call, and the tool never runs.
+    expect(asked).toHaveLength(1);
+    expect(create.seen).toEqual([]);
+    // The first result is the tool's own refusal; the second is the loop's
+    // answer to the repeat, and the turn goes on to the model's own reply.
+    expect(of(events, "tool-result").map((event) => event.result)).toEqual([
+      { ok: false, content: "The user declined." },
+      {
+        ok: false,
+        content:
+          "The user already refused tasks.create with these arguments in this turn. Do not call it again: tell the user it was not done.",
+      },
+    ]);
+    expect(of(events, "error")).toEqual([]);
+    expect(of(events, "done")[0]?.stopReason).toBe("end");
+    expect(of(events, "message").at(-1)?.message.content).toBe("Nisam dodao zadatak.");
+  });
+
+  it("treats a repeat written with the keys in another order as the same call", async () => {
+    const create = makeAskingTool("tasks.create");
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          {
+            id: "c1",
+            name: "tasks.create",
+            arguments: { title: "Kupi vodu", when: { day: "2026-10-15", at: "09:00" } },
+          },
+        ],
+      },
+      {
+        toolCalls: [
+          {
+            id: "c2",
+            name: "tasks.create",
+            arguments: { when: { at: "09:00", day: "2026-10-15" }, title: "Kupi vodu" },
+          },
+        ],
+      },
+      { text: "Nisam dodao." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    expect(asked).toHaveLength(1);
+  });
+
+  it("asks the user again for the same tool with different arguments", async () => {
+    const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: { title: "Kupi hleb" } }] },
+      { text: "Dodao sam hleb." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      // The user refuses the first suggestion and accepts the corrected one.
+      confirm: async (request) => {
+        asked.push(request);
+        return asked.length > 1;
+      },
+    });
+
+    expect(asked).toHaveLength(2);
+    expect(create.seen).toEqual([{ title: "Kupi hleb" }]);
+    expect(of(events, "tool-result")[1]?.result).toEqual({ ok: true, content: "created" });
+  });
+
+  it("asks once for two identical calls in one step, and answers both with it", async () => {
+    const create = makeAskingTool("tasks.create");
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+          { id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+        ],
+      },
+      { text: "Nisam dodao." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    // One question for the one call the two ask for, and both calls take its
+    // answer: nothing ran, because the answer was no.
+    expect(asked).toHaveLength(1);
+    expect(create.seen).toEqual([]);
+    expect(of(events, "tool-result").map((event) => event.result)).toEqual([
+      { ok: false, content: "The user declined." },
+      { ok: false, content: "The user declined." },
+    ]);
+  });
+
+  it("runs both identical calls of one step when the single question was answered yes", async () => {
+    const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+          { id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+        ],
+      },
+      { text: "Dodao sam." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return true;
+      },
+    });
+
+    expect(asked).toHaveLength(1);
+    expect(create.seen).toEqual([{ title: "Kupi vodu" }, { title: "Kupi vodu" }]);
+    expect(of(events, "tool-result").map((event) => event.result.ok)).toEqual([true, true]);
+  });
+
+  it("asks again on the next turn, because a refusal belongs to one turn", async () => {
+    const create = makeAskingTool("tasks.create");
+    const asked: ConfirmRequest[] = [];
+    const confirm = async (request: ConfirmRequest): Promise<boolean> => {
+      asked.push(request);
+      return false;
+    };
+    const script = (): ChatModel =>
+      createScriptedModel([
+        { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+        { text: "Nisam dodao." },
+      ]);
+    // ONE loop and two turns: the production loop is a single instance
+    // (`runAgentTurn`), so a memory that outlived its turn would outlive it here.
+    const loop = createAgentTurn();
+    const events: AgentEvent[] = [];
+    await loop(turnInput({ model: script(), tools: [create], confirm }), (event) => events.push(event));
+    await loop(turnInput({ model: script(), tools: [create], confirm }), (event) => events.push(event));
+
+    expect(asked).toHaveLength(2);
+    expect(create.seen).toEqual([]);
   });
 
   it("stops at the step limit, having run the last call it was asked for", async () => {

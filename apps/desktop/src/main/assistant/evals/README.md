@@ -144,6 +144,12 @@ read as more than it is:
   injection fencing are `agent-core`'s, and the stand-in loop implements none of
   them; the long-history scenarios measure the ANSWER surviving a long history,
   and the trimming itself is exercised only in real mode.
+- **A loop rule is not a scenario.** For the same reason, a scenario can only
+  score what the loop EMITTED, so a rule the loop keeps to itself — a refused
+  call is not asked again, say — is pinned where the real loop runs: in
+  `packages/core`'s own tests, and in `harness.test.ts`, which injects
+  `runAgentTurn` and reads the questions the turn asked out of the result the
+  harness returns.
 - **Scripted tokens are estimated.** The transcript may declare
   `promptTokens`/`completionTokens` per step; otherwise the model counts four
   characters per token, and the report says `(estimated)`.

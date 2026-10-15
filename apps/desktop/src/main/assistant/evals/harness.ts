@@ -50,6 +50,8 @@ export interface ScenarioResult {
   };
   readonly durationMs: number;
   readonly finalText: string;
+  /** Every question the turn asked the user, in order, with the answer each was given. */
+  readonly confirmations: TurnTrace["confirmations"];
   readonly expectations: readonly ExpectationResult[];
   /** Set when the loop itself threw — the scenario fails, and the message says how. */
   readonly error?: string;
@@ -287,6 +289,7 @@ export function createHarness(options: HarnessOptions): Harness {
       tokens: { prompt: counter.prompt, completion: counter.completion, estimated: counter.estimated },
       durationMs: Math.max(0, Math.round(now() - start)),
       finalText: trace.finalText,
+      confirmations,
       expectations,
       ...(error === undefined ? {} : { error }),
     };
