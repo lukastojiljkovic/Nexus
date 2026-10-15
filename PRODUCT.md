@@ -4,12 +4,12 @@
 
 ## Platform
 
-web
+desktop (Electron). The web app is on hold permanently; no public copy describes it as coming.
 
 ## Users
 
-Students first. The founder is the first user: exams, a job hunt and ordinary
-life administration in the same weeks, which is the use case the product was
+Students first. The author is the first user: exams and ordinary life
+administration in the same weeks, which is the use case the product was
 built from. Then professionals who carry the same mix of personal and work
 obligations, and anyone running their life across a dozen disconnected tools.
 
@@ -39,8 +39,9 @@ Three commitments distinguish it from the tools it replaces:
 - Everything works with the network off, and nothing needs a server or an
   online account.
 - Privacy is structural. Private notes are encrypted under their own credential,
-  the app cannot reach the network unless the user turns on update checks (and then
-  reaches only GitHub's release hosts), and that limit is enforced by a CI gate
+  the app cannot reach the network unless the user turns on update checks or
+  downloads (and then reaches only the hosts compiled into the app), and that
+  limit is enforced by a CI gate
   rather than promised in copy.
 - The full data set can always be exported, so the product never holds the
   user's data hostage.
@@ -50,8 +51,8 @@ Three commitments distinguish it from the tools it replaces:
 The shipped build is a desktop application: Electron rendering a React
 interface, with an encrypted SQLite database in the main process. Releases are
 per-user installers for Windows 10 and 11 on x64, an AppImage and a tarball for
-Linux x64. macOS is not built. On Linux the app requires a running Secret
-Service keyring and refuses to create an account without one.
+Linux x64, and a dmg for macOS on arm64. On Linux the app requires a running
+Secret Service keyring and refuses to create an account without one.
 
 Accounts are local and passcode-protected; several accounts can exist on one
 machine, and a person can keep a personal and a business profile apart. The
@@ -60,13 +61,17 @@ run, and remembers the choice. Two themes ship: Dan (light) and Noc (dark),
 with an accent chosen from a fixed palette.
 
 Nexus works entirely on the device and has no online service. Code signing is
-not in place, so Windows shows a SmartScreen warning on first run.
+not in place: Windows shows a SmartScreen warning on first run, and the macOS
+dmg is not notarised.
 
 ## Capabilities and Constraints
 
-Sixteen modules can be switched on per profile: Dashboard, Tasks, Calendar,
-Notes, Private vault, Documents, Study, Finance, Habits, Fitness, Focus, Tools,
-Canvas, Electronics, Professional toolkits and Settings. Data and store logic
+The module registry holds 42 modules: sixteen compiled into the shell (Dashboard,
+Tasks, Calendar, Notes, Private notes, Files, Study, Finance, Habits, Fitness,
+Focus, Tools, Canvas, Electronics, Professional tools and Settings) and the rest
+discovered from their own folders. The setup chooses which modules a profile
+starts with, and one setting for the whole app hides any module and orders the
+sidebar groups. Data and store logic
 are written test-first, migrations are forward-only, and the desktop smoke
 script launches the built application and exercises the real IPC surface against
 a real database before it prints `SMOKE OK`.
@@ -79,10 +84,12 @@ Constraints that are deliberate:
 - The Electronics workbench derives and can run a plan on the user's own
   toolchain; anything that depends on a rule that can change is typed by the
   user rather than assumed by the app.
-- Updates are opt-in. On first start Nexus asks whether it may check GitHub
-  for new versions, offline is the default, nothing downloads until the user
-  presses Download and install, and an installer runs only after its signature and hash
-  verify (ADR-089).
+- The network has three modes, fixed for the life of a launch: `offline`, the
+  default, which cannot make a request; `updates`, which checks GitHub for new
+  versions; and `downloads`, which adds the content packs' downloads from a
+  compiled-in host list, each file verified against a signed manifest. Both
+  network modes are opt-in. Nothing downloads until the user asks, and an
+  installer runs only after its signature and hash verify (ADR-089).
 
 ## Brand Commitments
 
@@ -128,8 +135,8 @@ states plans without dates, and nothing here should claim otherwise.
 1. **Offline, forever.** Every feature works with no internet, and nothing needs
    a server.
 2. **Privacy as architecture.** Private notes are encrypted under their own
-   credential, the app cannot reach the network unless the user allows update
-   checks, and the guarantees are enforced by checks rather than stated only in
+   credential, the app cannot reach the network unless the user turns on update
+   checks or downloads, and the guarantees are enforced by checks rather than stated only in
    prose.
 3. **Modular by onboarding.** A person sees the modules they chose and enables
    the rest when they want them; personal and business profiles stay apart.
