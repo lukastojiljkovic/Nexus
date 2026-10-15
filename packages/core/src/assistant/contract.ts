@@ -205,6 +205,36 @@ export interface AppLocation {
   readonly module: string;
   readonly item?: string;
   readonly settings?: string;
+  readonly action?: AppAction;
+}
+
+/**
+ * Something the page of `module` applies when it opens: a change that lives in
+ * that page, not in a store.
+ *
+ * **Why a place can carry one.** A store-backed module is written from main: the
+ * tool calls the same store the app's own handler calls and the location then
+ * only has to REVEAL the row. A page-held module has no such row to write -
+ * Canvas keeps its scene in memory and autosaves it every 800 ms, and a device
+ * preference lives in the renderer's `localStorage` - so a write from main would
+ * be clobbered by the page's own next save. The page is the only thing that owns
+ * that state, so the tool states what it wants done and the page does it.
+ *
+ * `payload` is JSON the tool already validated and the page validates again: the
+ * location travels through a window event and a shell that reads neither field,
+ * so nothing between the tool and the page is a gate. `name` is the page's own
+ * verb and is opaque here, exactly as `item` is - a shell that knew what
+ * `sketch` meant would hold a second opinion about another module's page.
+ *
+ * Deliberately NOT part of a citation: a citation is a link to a place, and a
+ * link that acted when it was clicked would be a command wearing a link's shape.
+ * Nothing persisted may carry one either - an action is a request to apply now.
+ */
+export interface AppAction {
+  /** The page's own verb, e.g. `sketch`, `set-preference`. Each module documents the ones it accepts. */
+  readonly name: string;
+  /** JSON data the tool already validated. The page validates it again before applying it. */
+  readonly payload?: unknown;
 }
 
 // --- knowledge ---------------------------------------------------------------
@@ -221,7 +251,7 @@ export interface Citation {
   readonly packId?: string;
   /** Set for a passage from a `notice: "safety"` pack: the answer must carry the disclaimer. */
   readonly safety?: boolean;
-  /** Where opening the citation takes the user. */
+  /** Where opening the citation takes the user. Never carries an `action`: see `AppAction`. */
   readonly location?: AppLocation;
 }
 

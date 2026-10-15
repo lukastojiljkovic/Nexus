@@ -19,8 +19,16 @@ import { manifest } from "../shared/manifest.js";
 import type {
   AssistantSetupView,
   AssistantThreadView,
+  AssistantTurnEventView,
   AssistantView,
 } from "../shared/ipc.js";
+import {
+  NO_CONFIRMS,
+  dropConfirm,
+  enqueueConfirm,
+  headConfirm,
+  type ConfirmAsk,
+} from "./confirmQueue.js";
 import { copy } from "./copy.js";
 import { openAppLocation, openWebAddress } from "./location.js";
 import { ModelPanel } from "./ModelPanel.js";
@@ -29,9 +37,11 @@ import {
   groupThread,
   numberedCitations,
   toolLineView,
+  turnErrorSentence,
   type ThreadItem,
   type ThreadToolLine,
 } from "./thread.js";
+import { turnLocations } from "./turnLocations.js";
 import "./assistant.css";
 
 /**
@@ -46,11 +56,30 @@ import "./assistant.css";
  * PROVISIONAL draft of the answer, and the saved thread replaces it: what stays
  * on screen is what the store holds, not what this page hoped.
  *
- * **A confirmation is a dialog, and leaving the page refuses.** A `write` or
- * `network` tool parks in main until the user answers; this page draws the
- * house `ConfirmDialog` with the tool's own one-line summary, and its cleanup
- * calls `stop` - so a page that is left, or a turn that is stopped, resolves
- * every parked question as refused rather than leaving a tool waiting forever.
+ * **A confirmation is a dialog per parked tool, and leaving the page refuses.**
+ * A `write` or `network` tool parks in main until the user answers; this page
+ * draws the house `ConfirmDialog` with the tool's own one-line summary, and its
+ * cleanup calls `stop` - so a page that is left, or a turn that is stopped,
+ * resolves every parked question as refused rather than leaving a tool waiting
+ * forever. One step can park TWO tools (a model may write twice in one step), so
+ * the questions are a queue (`confirmQueue.ts`): the dialog draws the oldest,
+ * answering drops it and draws the next, and the end of the turn clears the lot.
+ * A single slot showed the second question and left the first tool parked on a
+ * promise nobody could answer - a turn only Stop could escape.
+ *
+ * **Where the turn asks to go is opened when the turn ENDS.** `app.open` and
+ * every later `navigate` tool answer with `result.navigateTo`, and acting on one
+ * mid-turn would unmount this page - whose cleanup stops the turn - so the page
+ * collects them while it polls (`turnLocations.ts`) and opens them, in order,
+ * once the poll has read `done`: the answer is saved, the draft dropped, the
+ * thread refreshed, and then the view moves. The last location's module is the
+ * page the user ends up on. A turn that ended in an error, or that the user
+ * stopped, opens nothing: its last request is not a place anybody asked for.
+ *
+ * **A failed turn says why.** The loop's `error` events are codes - `step-limit`,
+ * `context-full`, `model-failed` - and `thread.ts` turns each into one sentence
+ * this page draws in the line above the thread, so a turn that died of a full
+ * context does not read as one that merely stopped.
  *
  * **The rail is the conversations, and the composer is the only input.** Enter
  * sends and Shift+Enter is a new line, which is the app's own grammar for a
@@ -77,7 +106,12 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
   const [modelsOpen, setModelsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [live, setLive] = useState<LiveTurn | null>(null);
-  const [confirm, setConfirm] = useState<{ requestId: string; summary: string } | null>(null);
+  /**
+   * The questions parked tools are waiting on, oldest first. A queue and not one
+   * slot: two writes in one step are two questions, and a single slot let the
+   * second overwrite the first (`confirmQueue.ts` says what that cost).
+   */
+  const [confirms, setConfirms] = useState<readonly ConfirmAsk[]>(NO_CONFIRMS);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
@@ -92,6 +126,12 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
    * refuses, but as an error the user did not cause.
    */
   const sendingRef = useRef(false);
+  /**
+   * Every event of the turn being polled. The places a turn named are read from
+   * them once the poll has said the turn is over (`turnLocations.ts`), which is
+   * the only moment this page may leave itself.
+   */
+  const turnEvents = useRef<AssistantTurnEventView[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -164,6 +204,7 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
           workflowId,
         });
         cursor.current = 0;
+        turnEvents.current = [];
         const next: LiveTurn = { turnId: started.turnId, text: "", tools: [] };
         liveRef.current = next;
         setLive(next);
@@ -214,6 +255,7 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
             const event = entry.event;
             const current = liveRef.current;
             if (current === null) break;
+            turnEvents.current.push(event);
             if (event.type === "token") {
               current.text += event.text;
               setLive({ ...current });
@@ -236,17 +278,27 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
               }
               setLive({ ...current });
             } else if (event.type === "confirm") {
-              setConfirm({ requestId: event.requestId, summary: event.summary });
-            } else if (event.type === "error" && event.code === "aborted") {
-              setError(copy.thread.stopped);
+              // Queued, not shown in place: the dialog below draws the head, so
+              // a second question waits its turn instead of replacing the first.
+              setConfirms((queue) =>
+                enqueueConfirm(queue, { requestId: event.requestId, summary: event.summary }),
+              );
+            } else if (event.type === "error") {
+              // Every code, not only `aborted`: a turn cut off by the step limit
+              // or a full context says so rather than just stopping.
+              setError(turnErrorSentence(event.code));
             }
           }
           if (polled.done) {
+            const locations = turnLocations(turnEvents.current);
             liveRef.current = null;
             setLive(null);
-            setConfirm(null);
+            setConfirms(NO_CONFIRMS);
             if (polled.thread !== null) setThread(polled.thread);
             await refresh();
+            // Last, because opening a place unmounts this page: the answer and
+            // the saved thread are on screen first, and then the view moves.
+            for (const location of locations) openAppLocation(location);
           }
         } catch (failure) {
           if (!active) return;
@@ -319,6 +371,8 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
     setup !== null &&
     setup.installed.some((entry) => entry.chosen || entry.servesTiers.length > 0);
   const conversation = thread?.conversation ?? null;
+  /** The question the dialog draws: the oldest one a parked tool is waiting on. */
+  const confirm = headConfirm(confirms);
 
   return (
     <div className="asst nx-measure">
@@ -488,7 +542,7 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
           cancelLabel={copy.confirm.deny}
           onConfirm={() => {
             const requestId = confirm.requestId;
-            setConfirm(null);
+            setConfirms(dropConfirm);
             void window.nexus.modules.assistant
               .answerConfirm({ profileId, requestId, allow: true })
               .catch((failure: unknown) => {
@@ -497,7 +551,7 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
           }}
           onCancel={() => {
             const requestId = confirm.requestId;
-            setConfirm(null);
+            setConfirms(dropConfirm);
             void window.nexus.modules.assistant
               .answerConfirm({ profileId, requestId, allow: false })
               .catch((failure: unknown) => {

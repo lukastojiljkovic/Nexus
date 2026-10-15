@@ -1,6 +1,8 @@
 # ADR-114 — A citation's item reaches a kit page: one held intent, and the wiki page that reveals it
 
-**Status:** accepted (2026-10-15). **Owner:** the run that closed the citation
+**Status:** accepted (2026-10-15); amended by [ADR-117](117-assistant-acts-through-the-page.md),
+which makes the held item a queue per module and adds an action arm to the intent.
+**Owner:** the run that closed the citation
 loop. **Amends [ADR-106](106-assistant-module.md) §8**, which sent
 `location.item` to the shell "for a shell that learns to reveal one" and said in
 so many words that no shell did.

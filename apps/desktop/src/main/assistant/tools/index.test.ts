@@ -93,13 +93,47 @@ function registryWith(web: WebService | null = null): ToolRegistry {
 
 const EFFECTS: readonly ToolEffect[] = ["read", "write", "navigate", "network"];
 
+/** How many tools each area declares, keyed by the part of a name before the dot. */
+function countByArea(tools: readonly Tool[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const tool of tools) {
+    const area = tool.name.slice(0, tool.name.indexOf("."));
+    counts[area] = (counts[area] ?? 0) + 1;
+  }
+  return counts;
+}
+
 describe("createToolRegistry", () => {
   it("declares every area's tools, each named area.verb", () => {
     const tools = registryWith().tools({ web: false });
-    // 19 before wave 2, plus the eighteen the wave-1 kit modules added
-    // (library 2, pantry 2, car 2, cookbook 2, culture 2, recorder, reader,
-    // wiki, maps, calculator, lab 2, miniapps).
-    expect(tools).toHaveLength(37);
+    // ONE LINE PER AREA, so a run that adds an area changes only its own line
+    // rather than a total every parallel run also edits. The area is the part of
+    // a tool's name before the dot, and a new tool in an existing area changes
+    // that area's line alone. A count that reads too high is a tool that was
+    // added and never named here; one that reads too low is a tool that was
+    // removed and left in the table.
+    expect(countByArea(tools)).toEqual({
+      app: 3,
+      calculator: 1,
+      calendar: 2,
+      car: 2,
+      cookbook: 2,
+      culture: 2,
+      emergency: 1,
+      habits: 2,
+      lab: 2,
+      library: 2,
+      maps: 1,
+      miniapps: 1,
+      notes: 4,
+      packs: 1,
+      pantry: 2,
+      reader: 1,
+      recorder: 1,
+      tasks: 4,
+      timers: 2,
+      wiki: 1,
+    });
     for (const tool of tools) {
       expect(tool.name).toMatch(/^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$/);
       expect(EFFECTS).toContain(tool.effect);

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { Citation } from "@nexus/core";
+import type { AgentErrorCode, Citation } from "@nexus/core";
 import { applyLocale } from "../../../renderer/src/strings.js";
 import type { AssistantMessageView } from "../shared/ipc.js";
+import { en } from "./copy.en.js";
+import { sr } from "./copy.sr.js";
 import {
   CITATION_LOCATOR_SEPARATOR,
   TOOL_LINE_CHARS,
@@ -10,6 +12,7 @@ import {
   groupThread,
   numberedCitations,
   toolLineView,
+  turnErrorSentence,
   type ThreadToolLine,
 } from "./thread.js";
 
@@ -234,6 +237,26 @@ describe("citationTarget", () => {
       }),
     ).toEqual({ kind: "app", location: { module: "reader" } });
   });
+
+  it("strips an action from a citation's place: a citation is a link, not an instruction", () => {
+    // A citation is replayed from a stored thread, so a place that acted when it
+    // was clicked would be a command wearing a link's shape. Nothing writes an
+    // action into a citation; this is the guard that keeps one from acting.
+    expect(
+      citationTarget({
+        kind: "wiki",
+        id: "lib/A",
+        title: "Nikola Tesla",
+        location: { module: "canvas", item: "board-1", action: { name: "sketch" } },
+      }),
+    ).toEqual({ kind: "app", location: { module: "canvas", item: "board-1" } });
+    // A place with nothing to strip is handed on as it arrived.
+    const place = { module: "wiki", item: "lib/A" };
+    expect(citationTarget({ kind: "wiki", id: "lib/A", title: "T", location: place })).toEqual({
+      kind: "app",
+      location: place,
+    });
+  });
 });
 
 describe("firstLine", () => {
@@ -270,5 +293,50 @@ describe("numberedCitations", () => {
 
   it("is empty for an answer with no sources", () => {
     expect(numberedCitations([])).toEqual([]);
+  });
+});
+
+/**
+ * EVERY CODE THE LOOP CAN EMIT HAS A SENTENCE, IN BOTH LANGUAGES.
+ *
+ * The list is a `Record<AgentErrorCode, true>` rather than an array, so a code
+ * added to the contract and forgotten here is a COMPILE error in this file - and
+ * the copy tables are keyed by the same codes, so one without a sentence fails
+ * `thread.ts` first. That is the point of testing it at all: a turn that dies of
+ * a full context and says nothing is a screen nobody can act on.
+ */
+const EVERY_CODE: Readonly<Record<AgentErrorCode, true>> = {
+  "no-model": true,
+  "model-failed": true,
+  "tool-failed": true,
+  "step-limit": true,
+  "context-full": true,
+  aborted: true,
+};
+
+describe("what a failed turn says", () => {
+  it("has one sentence for every code the loop can emit, in both languages", () => {
+    const codes = Object.keys(EVERY_CODE) as AgentErrorCode[];
+    expect(Object.keys(sr.thread.errors).sort()).toEqual([...codes].sort());
+    expect(Object.keys(en.thread.errors).sort()).toEqual([...codes].sort());
+    for (const code of codes) {
+      expect(sr.thread.errors[code].trim().length, `sr: ${code}`).toBeGreaterThan(0);
+      expect(en.thread.errors[code].trim().length, `en: ${code}`).toBeGreaterThan(0);
+      // Two languages, not one sentence pasted twice.
+      expect(sr.thread.errors[code]).not.toBe(en.thread.errors[code]);
+    }
+  });
+
+  it("answers each code with its own sentence, drawn in the active language", () => {
+    applyLocale("sr");
+    for (const code of Object.keys(EVERY_CODE) as AgentErrorCode[]) {
+      expect(turnErrorSentence(code)).toBe(sr.thread.errors[code]);
+    }
+    applyLocale("en");
+    for (const code of Object.keys(EVERY_CODE) as AgentErrorCode[]) {
+      expect(turnErrorSentence(code), code).toBe(en.thread.errors[code]);
+    }
+    // The user's own Stop keeps the sentence the page has always drawn for it.
+    expect(turnErrorSentence("aborted")).toBe("Stopped.");
   });
 });

@@ -10,6 +10,9 @@ kit's own proof.
 Read [ADR-090](adr/090-module-kit.md) first: it says WHY each piece is where it
 is. This file says what to type.
 
+A module that the assistant should be able to act on also gets its tools, which
+follow [`assistant-tools.md`](assistant-tools.md) (ADR-117).
+
 ## What you create
 
 ```text

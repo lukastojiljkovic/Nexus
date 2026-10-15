@@ -39,7 +39,20 @@ export const sr = {
     emptyBody:
       "Asistent poznaje tvoje beleške, zadatke, događaje i priručnik same aplikacije, i odgovara bez interneta. Izaberi razgovor ili napiši pitanje ispod.",
     thinking: "Razmišljam…",
-    stopped: "Zaustavljeno.",
+    /**
+     * Šta se kaže kada se krug završi bez odgovora, po kodu koji je petlja
+     * poslala (`packages/core/src/assistant/contract.ts`). Ključ je sam kod, pa
+     * novi kod bez rečenice ne prolazi tipove; `aborted` je Zaustavi koji je
+     * korisnik sam pritisnuo.
+     */
+    errors: {
+      "no-model": "Nema modela koji može da odgovori.",
+      "model-failed": "Model nije uspeo da odgovori.",
+      "tool-failed": "Alatka nije uspela, pa je odgovor možda nepotpun.",
+      "step-limit": "Odgovor je prekinut: krug je potrošio sve korake.",
+      "context-full": "Odgovor je prekinut: kontekst je pun.",
+      aborted: "Zaustavljeno.",
+    },
     /**
      * Red o alatkama: šta je alatka radila i dokle je stigla. Naziv alatke je
      * adresa koju model izgovara (`tasks.create`), a ne reč kojom čovek čita
