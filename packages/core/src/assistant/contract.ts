@@ -62,6 +62,22 @@ export interface LoadedModelInfo {
   readonly capabilities: readonly ModelCapability[];
   /** The context length the runtime loaded it with, in tokens. */
   readonly contextTokens: number;
+  /**
+   * The chat wrapper the runtime resolved from the model file's own template, by
+   * name (`LlamaChat`'s `wrapperName`). It is the one fact that says which
+   * conversation format the model is being driven with, and the eval report
+   * prints it beside the numbers.
+   */
+  readonly wrapper: string;
+  /**
+   * Which calling path this runtime drives for the model: `native` when the
+   * resolved wrapper carries the library's own function-calling settings, `text`
+   * when the contract's text fallback is what the loop's tools go through. The
+   * `tools` capability of `capabilities` is derived from this and not from what
+   * the caller asked for (`llama.ts`), so a report or a screen that reads one of
+   * the two is reading the truth about the other.
+   */
+  readonly functionCalling: "native" | "text";
 }
 
 export interface CompletionRequest {

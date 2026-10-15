@@ -16,6 +16,10 @@
 //                         has wears the APP's own description and schema (see
 //                         `loadToolSpecs`), which is what a real model has to
 //                         be judged against.
+//   --models <id,…|all>   the same, for every listed installed chat model in one
+//                         run, loaded in turn from the app's own registry. `all`
+//                         is every installed chat model. One report holds a
+//                         summary row per model and each model's own rows.
 //
 // THE REAL MODE IS A SKIP, NOT A FAILURE, WHEN A PART IS ABSENT. Both factories
 // it needs are built by other runs of the 2.0 wave and merged after this one, so
@@ -37,8 +41,9 @@
 // load hook beside it does the bundler's other half — see there.
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { registerHooks, stripTypeScriptTypes } from "node:module";
-import { basename, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 registerHooks({
@@ -88,10 +93,15 @@ function transformTypeScript() {
 
 const USAGE = `Usage: node scripts/assistant-eval.mjs --scripted
        node scripts/assistant-eval.mjs --model <path.gguf> [--locale sr|en]
+       node scripts/assistant-eval.mjs --models <id,id,…|all> [--data <dir>] [--locale sr|en]
 
 Options:
   --scripted          run the checked-in transcripts; no model needed
   --model <path>      a GGUF file to load through the model host
+  --models <list>     every listed installed chat model, in turn: ids separated by
+                      commas, or all
+  --data <dir>        the app's data folder, where the model registry is
+                      (default: Nexus's folder for this platform)
   --locale <sr|en>    score only scenarios in one language
   --scenarios <dir>   a directory of scenario files (default: the evals' own)
   --timeout <ms>      per-scenario timeout (default: 120000)
@@ -101,11 +111,42 @@ Options:
   --help              print this text
 `;
 
+/**
+ * What a `--models` value names: `all`, or the ids it lists in order. An empty id
+ * is refused, so `a,,b` cannot quietly run one model fewer than it reads.
+ */
+export function parseModelSelection(value) {
+  if (value === "all") return "all";
+  const ids = value.split(",").map((id) => id.trim());
+  if (ids.some((id) => id === "")) throw new Error("--models takes model ids separated by commas, or all");
+  return ids;
+}
+
+/**
+ * The installed chat models a selection names, in the order it names them. `all`
+ * is every installed model that can chat, and an id that is not one of those is
+ * refused by name, so a typo cannot shrink a run without anybody seeing it.
+ */
+export function selectModels(installed, selection) {
+  const chat = installed.filter((entry) => entry.capabilities.includes("chat"));
+  if (selection === "all") {
+    if (chat.length === 0) throw new Error("no chat model is installed; install one in Nexus first");
+    return chat;
+  }
+  return selection.map((id) => {
+    const entry = chat.find((candidate) => candidate.id === id);
+    if (entry === undefined) throw new Error(`"${id}" is not an installed chat model`);
+    return entry;
+  });
+}
+
 /** The argument parser: `--flag`, `--key value`, and `--` refuses everything else. */
 export function parseArgs(argv) {
   const options = {
     scripted: false,
     model: null,
+    models: null,
+    data: null,
     locale: null,
     scenarios: null,
     timeoutMs: 120_000,
@@ -126,6 +167,8 @@ export function parseArgs(argv) {
     };
     if (arg === "--scripted") options.scripted = true;
     else if (arg === "--model") options.model = value();
+    else if (arg === "--models") options.models = parseModelSelection(value());
+    else if (arg === "--data") options.data = value();
     else if (arg === "--locale") {
       const locale = value();
       if (locale !== "sr" && locale !== "en") throw new Error("--locale must be sr or en");
@@ -141,8 +184,9 @@ export function parseArgs(argv) {
     else if (arg === "--help" || arg === "-h") options.help = true;
     else throw new Error(`unknown argument ${arg}`);
   }
-  if (!options.help && options.scripted === (options.model !== null)) {
-    throw new Error("choose exactly one of --scripted and --model");
+  const modes = [options.scripted, options.model !== null, options.models !== null].filter(Boolean).length;
+  if (!options.help && modes !== 1) {
+    throw new Error("choose exactly one of --scripted, --model and --models");
   }
   return options;
 }
@@ -237,6 +281,119 @@ function skip(message) {
   return 0;
 }
 
+/**
+ * What a real run needs from the app: the engine that loads a model, the agent
+ * loop that drives it and the app's own tool specs. Says which part is missing
+ * when one is not there yet, which is a skip and not a failure (see the header).
+ */
+async function realParts() {
+  // Before anything outside the evals is imported: the app's own modules use
+  // syntax Node strips only under a transform, and the registry below reads
+  // them.
+  transformTypeScript();
+  const engine = await loadPart("the llama engine", "../apps/desktop/src/main/assistant/runtime/llama.js", "createLlamaEngine");
+  if (!engine.ok) return { ok: false, reason: engine.reason };
+  const loop = await loadPart("the agent loop", "../packages/core/src/assistant/loop.js", "runAgentTurn");
+  if (!loop.ok) return { ok: false, reason: loop.reason };
+
+  // The app's own specs, so the model is offered the fields the real tools
+  // have. A runner that cannot read them says so and carries on: the real
+  // mode's job is to measure the model, and a scenario's own tools still
+  // describe themselves, just less.
+  const specSource = await loadToolSpecs();
+  if (specSource.ok) {
+    const count = Object.keys(specSource.specs).length;
+    console.error(`assistant-eval: the scenario tools wear ${count} of the app's own specs.`);
+  } else {
+    console.error(`assistant-eval: warning — ${specSource.reason}`);
+    console.error("The scenario tools keep their generic spec for this run.");
+  }
+  return { ok: true, engine: engine.factory, loop: loop.factory, specs: specSource.ok ? specSource.specs : null };
+}
+
+/** Where the app keeps its data, as Electron's `userData` puts it for the product name Nexus. */
+function defaultDataDir() {
+  if (process.platform === "win32") return join(process.env.APPDATA ?? homedir(), "Nexus");
+  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support", "Nexus");
+  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "Nexus");
+}
+
+/**
+ * The `--models` run: every selected installed model, loaded in turn through one
+ * engine and scored on the same scenarios, with the policy the app itself gives
+ * each entry (its context cap, thought budget and sampling), so the numbers are
+ * the ones the app would run. A model that cannot load is named and skipped; the
+ * run exits 1 when any model could not load or failed a scenario.
+ */
+async function runModels(options, evals, selected) {
+  const parts = await realParts();
+  if (!parts.ok) return skip(parts.reason);
+  const { readInstalled, modelFilePath } = await import("../apps/desktop/src/main/assistant/runtime/install.js");
+  const { SYSTEM_PROMPT_VERSION } = await import("../packages/core/src/assistant/prompts.js");
+  const report = await import("../apps/desktop/src/main/assistant/evals/report.js");
+
+  const dataDir = options.data ?? defaultDataDir();
+  let chosen;
+  try {
+    chosen = selectModels(readInstalled(dataDir), options.models);
+  } catch (error) {
+    console.error(`assistant-eval: ${error.message}`);
+    return 1;
+  }
+
+  const llama = parts.engine({ onToken: () => {} });
+  const hardware = await llama.hardware();
+  const runs = [];
+  let unloaded = 0;
+  for (const entry of chosen) {
+    let info;
+    try {
+      info = await llama.loadChat({
+        id: entry.id,
+        title: entry.title,
+        capabilities: entry.capabilities,
+        modelPath: entry.origin === "file" ? entry.path : modelFilePath(dataDir, entry.id, entry.file),
+        contextTokens: entry.contextTokens,
+        ...(entry.contextCap === undefined ? {} : { contextCap: entry.contextCap }),
+        ...(entry.thoughtTokens === undefined ? {} : { thoughtTokens: entry.thoughtTokens }),
+        ...(entry.sampling === undefined ? {} : { sampling: entry.sampling }),
+        gpuLayers: "auto",
+        threads: hardware.cpuThreads,
+      });
+    } catch (error) {
+      console.error(`assistant-eval: ${entry.id} could not be loaded: ${error.message}`);
+      unloaded += 1;
+      continue;
+    }
+    const harness = evals.createHarness({
+      runAgentTurn: parts.loop,
+      modelFor: () => llama.chat(entry.id),
+      timeoutMs: options.timeoutMs,
+      ...(parts.specs === null ? {} : { toolSpecs: parts.specs }),
+    });
+    const suite = await harness.runSuite(selected, entry.id);
+    runs.push({
+      id: entry.id,
+      quantization: entry.quantization ?? null,
+      wrapper: info.wrapper,
+      functionCalling: info.functionCalling,
+      promptVersion: SYSTEM_PROMPT_VERSION,
+      suite,
+    });
+  }
+  if (runs.length === 0) {
+    console.error("assistant-eval: no selected model could be loaded.");
+    return 1;
+  }
+
+  const markdown = report.reportMarkdownForModels(runs);
+  const json = report.reportJsonForModels(runs);
+  console.log(options.json ? json : markdown);
+  if (options.outMd !== null) writeFileSync(options.outMd, markdown, "utf8");
+  if (options.outJson !== null) writeFileSync(options.outJson, json, "utf8");
+  return unloaded === 0 && runs.every((run) => run.suite.totals.failed === 0) ? 0 : 1;
+}
+
 async function main() {
   let options;
   try {
@@ -259,6 +416,8 @@ async function main() {
     return 0;
   }
 
+  if (options.models !== null) return await runModels(options, evals, selected);
+
   let harness;
   let modelLabel;
   if (options.scripted) {
@@ -272,27 +431,8 @@ async function main() {
     });
     modelLabel = "scripted transcript";
   } else {
-    // Before anything outside the evals is imported: the app's own modules use
-    // syntax Node strips only under a transform, and the registry below reads
-    // them.
-    transformTypeScript();
-    const engine = await loadPart("the llama engine", "../apps/desktop/src/main/assistant/runtime/llama.js", "createLlamaEngine");
-    if (!engine.ok) return skip(engine.reason);
-    const loop = await loadPart("the agent loop", "../packages/core/src/assistant/loop.js", "runAgentTurn");
-    if (!loop.ok) return skip(loop.reason);
-
-    // The app's own specs, so the model is offered the fields the real tools
-    // have. A runner that cannot read them says so and carries on: the real
-    // mode's job is to measure the model, and a scenario's own tools still
-    // describe themselves, just less.
-    const specSource = await loadToolSpecs();
-    if (specSource.ok) {
-      const count = Object.keys(specSource.specs).length;
-      console.error(`assistant-eval: the scenario tools wear ${count} of the app's own specs.`);
-    } else {
-      console.error(`assistant-eval: warning — ${specSource.reason}`);
-      console.error("The scenario tools keep their generic spec for this run.");
-    }
+    const parts = await realParts();
+    if (!parts.ok) return skip(parts.reason);
 
     let chatModel;
     try {
@@ -302,7 +442,7 @@ async function main() {
       // have. The scenario owns the tools and the passages, so the real mode
       // varies exactly two things against the scripted one: the loop and the
       // model.
-      const llama = engine.factory({ onToken: () => {} });
+      const llama = parts.engine({ onToken: () => {} });
       const hardware = await llama.hardware();
       await llama.loadChat({
         id: "eval",
@@ -319,10 +459,10 @@ async function main() {
     }
 
     harness = evals.createHarness({
-      runAgentTurn: loop.factory,
+      runAgentTurn: parts.loop,
       modelFor: () => chatModel,
       timeoutMs: options.timeoutMs,
-      ...(specSource.ok ? { toolSpecs: specSource.specs } : {}),
+      ...(parts.specs === null ? {} : { toolSpecs: parts.specs }),
     });
     modelLabel = basename(options.model);
   }

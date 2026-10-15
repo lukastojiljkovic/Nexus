@@ -73,6 +73,10 @@ export function createScriptedModel(
     title: options.title ?? "Scripted model",
     capabilities: options.capabilities ?? ["chat", "tools"],
     contextTokens: options.contextTokens ?? 4096,
+    // A fake is not a template-driven model: it answers with the calls a step
+    // names, which is the contract's structural path and not a wrapper's.
+    wrapper: "scripted",
+    functionCalling: "native",
   };
   const requests: CompletionRequest[] = [];
   let index = 0;

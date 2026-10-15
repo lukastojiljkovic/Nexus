@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DownloadService } from "../../download/service.js";
-import { bundledCatalogue } from "./catalogue.js";
+import { bundledCatalogue, type CatalogueEntry } from "./catalogue.js";
 import { parseHostRequest, PROTOCOL_VERSION, type HostEvent } from "./protocol.js";
 import { createModelHost, type ModelHostDeps, type WorkerPort } from "./host.js";
 import { modelFilePath, upsertInstalled } from "./install.js";
@@ -29,8 +29,8 @@ afterEach(() => {
  * chooser cannot offer, because the registry — not the catalogue — is what the
  * host reads for the installed list, a load and a removal.
  */
-function installFixture(id: string, overrides: Partial<ModelEntry> = {}): ModelEntry {
-  const entry: ModelEntry = {
+function installFixture(id: string, overrides: Partial<CatalogueEntry> = {}): ModelEntry {
+  const entry: CatalogueEntry = {
     id,
     origin: "catalogue",
     title: "Qwen3.5 2B (Q4_K_M)",
@@ -120,6 +120,8 @@ class FakeWorker implements WorkerPort {
             title: request.title,
             capabilities: request.capabilities,
             contextTokens: request.contextTokens > 0 ? 8192 : 8192,
+            wrapper: "fixture",
+            functionCalling: "native",
           },
         });
         return;
@@ -258,6 +260,8 @@ describe("the model host on a fake worker", () => {
       title: "Qwen3.5 2B (Q4_K_M)",
       capabilities: ["chat", "tools"],
       contextTokens: 8192,
+      wrapper: "fixture",
+      functionCalling: "native",
     });
     const worker = workers[0];
     expect(worker?.requests).toEqual(["hardware", "load-chat"]);
@@ -280,6 +284,69 @@ describe("the model host on a fake worker", () => {
     expect(workers[0]?.parsed[1]).toMatchObject({ gpuLayers: "auto" });
     // The second load is the third request: hardware is cached.
     expect(workers[0]?.parsed[2]).toMatchObject({ gpuLayers: 12 });
+  });
+
+  it("answers a second load of the model it already has without asking the worker again", async () => {
+    // `register.ts` loads on every turn, and a model that is in memory is not
+    // read from disk again: the second call is the same request, so it is
+    // answered from what the first one produced.
+    installFixture("qwen3.5-2b-q4-k-m");
+    const { host, workers } = makeHost();
+    const first = await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    const second = await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    expect(second.info).toEqual(first.info);
+    expect(workers[0]?.requests).toEqual(["hardware", "load-chat"]);
+  });
+
+  it("loads a different entry in place of the resident one", async () => {
+    installFixture("qwen3.5-2b-q4-k-m");
+    installFixture("qwen3.5-2b-q4-k-m-second");
+    const { host, workers } = makeHost();
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    const next = await host.loadChat("qwen3.5-2b-q4-k-m-second", new AbortController().signal);
+    expect(next.info.id).toBe("qwen3.5-2b-q4-k-m-second");
+    expect(workers[0]?.requests).toEqual(["hardware", "load-chat", "load-chat"]);
+  });
+
+  it("reloads when the entry's own policy changes, because that is a different model to run", async () => {
+    installFixture("qwen3.5-2b-q4-k-m", { contextCap: 4096 });
+    const { host, workers } = makeHost();
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    // The user's copy of the entry is re-read on every load (`requireInstalled`),
+    // so a cap that arrives with a catalogue refresh is honoured on the next turn.
+    installFixture("qwen3.5-2b-q4-k-m", { contextCap: 2048 });
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    expect(workers[0]?.requests).toEqual(["hardware", "load-chat", "load-chat"]);
+    expect(workers[0]?.parsed[2]).toMatchObject({ contextCap: 2048 });
+  });
+
+  it("hands the entry's per-model policy to the worker", async () => {
+    installFixture("qwen3.5-2b-q4-k-m", {
+      contextCap: 16384,
+      thoughtTokens: 512,
+      sampling: { temperature: 0.7, topP: 0.9, topK: 40, repeatPenalty: 1.1 },
+    });
+    const { host, workers } = makeHost();
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    expect(workers[0]?.parsed[1]).toMatchObject({
+      kind: "load-chat",
+      contextCap: 16384,
+      thoughtTokens: 512,
+      sampling: { temperature: 0.7, topP: 0.9, topK: 40, repeatPenalty: 1.1 },
+    });
+  });
+
+  it("does not give a resident model back because the turn that asked for it was stopped", async () => {
+    installFixture("qwen3.5-2b-q4-k-m");
+    const { host, workers } = makeHost();
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(host.loadChat("qwen3.5-2b-q4-k-m", controller.signal)).rejects.toMatchObject({
+      code: "aborted",
+    });
+    // No `unload`: nothing was loaded for this call, so nothing is handed back.
+    expect(workers[0]?.requests).toEqual(["hardware", "load-chat"]);
   });
 
   it("streams an answer and answers with the tokens the worker reported", async () => {

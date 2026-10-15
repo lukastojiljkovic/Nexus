@@ -14,11 +14,12 @@
  * functions:
  *
  *   - a **catalogue entry**: the contract's `ModelEntry`, plus the `fit` block
- *     `--fit` measured and, for an imported file, the `path` it was imported
- *     from. The contract's `ModelEntry` is the shape everything else sees;
- *     `fit` and `path` are this module's own extension of it, which the
- *     contract explicitly allows ("a part that needs more than a type says so
- *     by extending its own interface").
+ *     `--fit` measured, the per-model policy this app runs it with (`contextCap`,
+ *     `thoughtTokens`, `sampling`) and, for an imported file, the `path` it was
+ *     imported from. The contract's `ModelEntry` is the shape everything else
+ *     sees; these are this module's own extension of it, which the contract
+ *     explicitly allows ("a part that needs more than a type says so by
+ *     extending its own interface").
  *   - the **installed registry**, `models/installed.json`, which holds those
  *     same entries as they were installed. It is derived and rebuilt-tolerant
  *     exactly like `packs/installed.json`: a missing or unreadable registry is
@@ -49,6 +50,34 @@ export interface CatalogueFit {
   readonly cpuRamBytes: number;
 }
 
+/**
+ * A model's own sampling, as an entry may state it.
+ *
+ * Every field is optional and NOTHING in the bundled catalogue states one today:
+ * the values a local model wants are a property of the model and its
+ * quantisation, and tuning them before a measured per-model run would be a guess
+ * written down as a setting (HR-23). The block exists so that the measurement,
+ * when it happens, has somewhere to land — and so that the eval that produces it
+ * (`scripts/assistant-eval.mjs --models`) is measuring the same numbers the app
+ * will run with.
+ *
+ * `repeatPenalty` is the library's `penalty` amount — the relative amount by
+ * which a recently repeated token's probability is lowered, `1` disabling it —
+ * rather than the whole `LLamaContextualRepeatPenalty` object: the other three
+ * fields of that object (a token window, a frequency penalty, a presence
+ * penalty) are not things a per-model figure can be measured for yet.
+ */
+export interface CatalogueSampling {
+  /** `0` is greedy decoding. */
+  readonly temperature?: number;
+  /** Nucleus sampling, `0`–`1`. */
+  readonly topP?: number;
+  /** The most likely tokens considered, `0` disabling the limit. */
+  readonly topK?: number;
+  /** `1` disables the penalty. */
+  readonly repeatPenalty?: number;
+}
+
 /** A catalogue entry at runtime: the contract's model, plus what this part knows. */
 export interface CatalogueEntry extends ModelEntry {
   readonly fit?: CatalogueFit;
@@ -62,6 +91,30 @@ export interface CatalogueEntry extends ModelEntry {
   readonly activeParameters?: number;
   /** Where an `origin: "file"` model lives. Never set for a download. */
   readonly path?: string;
+  /**
+   * The most context this app will load for the entry, in tokens.
+   *
+   * A policy figure, not a measurement: the entry's own `contextTokens` is what
+   * the model was TRAINED for, and this is the ceiling this app is willing to
+   * spend on a KV cache for it. Absent — every entry of the bundled catalogue
+   * today — means the runtime's own `LOAD_CONTEXT_TOKENS`, which is also the
+   * context the `fit` figures beside it were measured at; an entry that raises
+   * this has to have its fit measured again, because the arithmetic in
+   * `recommend.ts` was built on the figure it was measured at.
+   */
+  readonly contextCap?: number;
+  /**
+   * The most tokens one answer may spend REASONING, for this entry.
+   *
+   * Absent means today's rule (`llama.ts`: half of the answer's own reserve),
+   * which is a policy choice rather than a measurement and is what every entry
+   * gets until a per-model run says otherwise: a reasoning model that thinks for
+   * longer than its share ends at `length` with a truncated answer, and the eval
+   * is what would say how long each model actually thinks.
+   */
+  readonly thoughtTokens?: number;
+  /** This model's own sampling, or nothing for the library's defaults. */
+  readonly sampling?: CatalogueSampling;
 }
 
 /** Why an entry, a registry or a catalogue was refused. Machine codes; the caller writes the sentence. */
@@ -118,12 +171,38 @@ const ENTRY_KEYS: readonly string[] = [
   "projectorFile",
   "projector",
   "fit",
+  // The three per-model policy fields (HR-22, HR-23): what this app is willing
+  // to load, how long a model may think, and how it samples. They travel with
+  // the entry into the installed registry and out to the utility process, which
+  // is why they are read here beside `fit` rather than in a second schema.
+  "contextCap",
+  "thoughtTokens",
+  "sampling",
   "path",
 ];
 
 const LICENCE_KEYS: readonly string[] = ["name", "url"];
 const PROJECTOR_KEYS: readonly string[] = ["file", "sha256", "sizeBytes"];
 const FIT_KEYS: readonly string[] = ["contextTokens", "vramBytes", "hostRamBytes", "cpuRamBytes"];
+const SAMPLING_KEYS: readonly string[] = ["temperature", "topP", "topK", "repeatPenalty"];
+
+/**
+ * What the numbers of a sampling block are allowed to be.
+ *
+ * `protocol.ts` validates the same block on the wire with its own helpers and
+ * its own reason (a process receives whatever is posted to it), and it repeats
+ * these figures rather than importing them: this module reads the catalogue
+ * file, and the utility process that runs the wire has no business carrying
+ * `catalogue.json` in its bundle to learn four bounds. `temperature`'s ceiling
+ * is the wire's own bound for a request's temperature; `repeatPenalty` is
+ * bounded to the range a local model is ever tuned in, which is a policy choice
+ * and not a measurement.
+ */
+const SAMPLING_LIMITS = {
+  temperature: { min: 0, max: 4 },
+  topP: { min: 0, max: 1 },
+  repeatPenalty: { min: 1, max: 4 },
+} as const;
 
 /**
  * The fit of an entry, or `null` when this build has not measured one.
@@ -305,13 +384,57 @@ export function parseEntry(value: unknown, where: string): CatalogueEntry {
   const decodedParameters =
     activeParameters === undefined ? undefined : asPositiveInteger(activeParameters, "shape", "activeParameters");
 
+  const contextCap = record["contextCap"];
+  const decodedCap = contextCap === undefined ? undefined : asPositiveInteger(contextCap, "shape", "contextCap");
+
+  const thoughtTokens = record["thoughtTokens"];
+  const decodedThought =
+    thoughtTokens === undefined ? undefined : asPositiveInteger(thoughtTokens, "shape", "thoughtTokens");
+
+  const sampling = record["sampling"];
+  const decodedSampling = sampling === undefined ? undefined : parseSampling(sampling, id);
+
   const path = record["path"];
   return {
     ...parsed,
     ...(decodedParameters === undefined ? {} : { activeParameters: decodedParameters }),
     ...(decodedProjector === undefined ? {} : { projector: decodedProjector }),
     ...(decodedFit === undefined ? {} : { fit: decodedFit }),
+    ...(decodedCap === undefined ? {} : { contextCap: decodedCap }),
+    ...(decodedThought === undefined ? {} : { thoughtTokens: decodedThought }),
+    ...(decodedSampling === undefined ? {} : { sampling: decodedSampling }),
     ...(path === undefined ? {} : { path: asString(path, "shape", "path") }),
+  };
+}
+
+/**
+ * A sampling block, or a refusal.
+ *
+ * The block is refused as a whole when any of its fields is not a number in the
+ * range the runtime can act on: a temperature of `9` is a mistake in the list,
+ * and reading past it would put a value in `generateResponse` that no model was
+ * ever measured at. An empty block is accepted and means nothing at all — the
+ * library's own defaults — which is what the brief's "no entry gets values in
+ * this package" leaves behind.
+ */
+function parseSampling(value: unknown, id: string): CatalogueSampling {
+  const record = asRecord(value, `the sampling of "${id}"`);
+  requireKnownKeys(record, SAMPLING_KEYS, `the sampling of "${id}"`);
+  const temperature = record["temperature"];
+  const topP = record["topP"];
+  const topK = record["topK"];
+  const repeatPenalty = record["repeatPenalty"];
+  return {
+    ...(temperature === undefined
+      ? {}
+      : { temperature: asBounded(temperature, "temperature", SAMPLING_LIMITS.temperature) }),
+    ...(topP === undefined ? {} : { topP: asBounded(topP, "topP", SAMPLING_LIMITS.topP) }),
+    // `0` is the library's own way of saying "the whole vocabulary", so the floor
+    // is a real value here rather than a bound to refuse.
+    ...(topK === undefined ? {} : { topK: asNonNegativeInteger(topK, "shape", `the sampling of "${id}": topK`) }),
+    ...(repeatPenalty === undefined
+      ? {}
+      : { repeatPenalty: asBounded(repeatPenalty, "repeatPenalty", SAMPLING_LIMITS.repeatPenalty) }),
   };
 }
 
@@ -396,4 +519,16 @@ function asNonNegativeInteger(value: unknown, problem: CatalogueProblem, field: 
     throw new CatalogueError(problem, `${field} must be a whole number and not negative.`);
   }
   return value as number;
+}
+
+/** A number inside the band the runtime can act on, or a refusal naming the band. */
+function asBounded(
+  value: unknown,
+  field: string,
+  band: { readonly min: number; readonly max: number },
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < band.min || value > band.max) {
+    throw new CatalogueError("shape", `${field} must be a number between ${band.min} and ${band.max}.`);
+  }
+  return value;
 }

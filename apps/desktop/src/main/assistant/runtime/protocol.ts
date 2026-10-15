@@ -39,9 +39,19 @@ import type {
   ToolSpec,
 } from "@nexus/core";
 import { MAX_ID_LENGTH } from "@nexus/core";
+import type { CatalogueSampling } from "./catalogue.js";
 
-/** The one protocol version this build speaks, in both directions. */
-export const PROTOCOL_VERSION = 1;
+/**
+ * The one protocol version this build speaks, in both directions.
+ *
+ * `2` adds the per-model load policy to a `load-chat` (`contextCap`,
+ * `thoughtTokens`, `sampling`) and the resolved wrapper and calling path to a
+ * `loaded` (`LoadedModelInfo.wrapper`, `.functionCalling`). Both sides MUST
+ * agree about them: a v1 worker would read a v2 load request, ignore the policy
+ * and answer as if the model had been loaded the way the app used to load it —
+ * which is exactly the silent difference the version field exists to refuse.
+ */
+export const PROTOCOL_VERSION = 2;
 
 /** Bounds on everything that crosses. A number here is a bound on work, not a guess at a real value. */
 export const PROTOCOL_LIMITS = {
@@ -87,6 +97,16 @@ export type HostRequest =
       readonly modelPath: string;
       readonly projectorPath?: string;
       readonly contextTokens: number;
+      /**
+       * The most context this load may use, in tokens, when the entry states
+       * one (`contextCap` in `catalogue.ts`). Absent means the engine's own
+       * figure, which is what every catalogue entry gets today.
+       */
+      readonly contextCap?: number;
+      /** The most tokens one answer may spend reasoning, when the entry states one. */
+      readonly thoughtTokens?: number;
+      /** The model's own sampling, when the entry states one. */
+      readonly sampling?: CatalogueSampling;
       readonly gpuLayers: number | "auto";
       readonly threads: number;
       readonly title: string;
@@ -208,6 +228,9 @@ export function parseHostRequest(value: unknown): HostRequest {
       return { v, kind, seq: seq(record) };
     case "load-chat": {
       const projectorPath = record["projectorPath"];
+      const contextCap = record["contextCap"];
+      const thoughtTokens = record["thoughtTokens"];
+      const sampling = record["sampling"];
       return {
         v,
         kind,
@@ -216,6 +239,16 @@ export function parseHostRequest(value: unknown): HostRequest {
         modelPath: path(record, "modelPath"),
         ...(projectorPath === undefined ? {} : { projectorPath: path(record, "projectorPath") }),
         contextTokens: contextTokens(record),
+        // Bounded by the protocol's own reading rather than by the catalogue's:
+        // the wire carries whatever main posts, and the worker is the process
+        // that has to refuse a value it cannot act on.
+        ...(contextCap === undefined
+          ? {}
+          : { contextCap: integer(record, "contextCap", 1, PROTOCOL_LIMITS.contextTokens) }),
+        ...(thoughtTokens === undefined
+          ? {}
+          : { thoughtTokens: integer(record, "thoughtTokens", 1, PROTOCOL_LIMITS.maxTokens) }),
+        ...(sampling === undefined ? {} : { sampling: samplingBlock(sampling) }),
         gpuLayers: gpuLayers(record),
         threads: integer(record, "threads", 1, 1024),
         title: text(record["title"], "title", 200),
@@ -430,6 +463,30 @@ function asCapability(field: string, value: unknown): ModelCapability {
   return value as ModelCapability;
 }
 
+/**
+ * A model's sampling block, as the catalogue's reader writes it (`catalogue.ts`,
+ * which owns the shape and the bounds; this is the wire's own check of the same
+ * figures, because a process receives whatever is posted to it).
+ */
+function samplingBlock(value: unknown): CatalogueSampling {
+  const record = asRecord(value, "a sampling block");
+  const temperature = record["temperature"];
+  const topP = record["topP"];
+  const topK = record["topK"];
+  const repeatPenalty = record["repeatPenalty"];
+  for (const key of Object.keys(record)) {
+    if (key !== "temperature" && key !== "topP" && key !== "topK" && key !== "repeatPenalty") {
+      throw new ProtocolError("shape", `"${key}" is not a sampling field this build knows.`);
+    }
+  }
+  return {
+    ...(temperature === undefined ? {} : { temperature: number(temperature, "temperature", 0, 4) }),
+    ...(topP === undefined ? {} : { topP: number(topP, "topP", 0, 1) }),
+    ...(topK === undefined ? {} : { topK: integer(record, "topK", 0, 1_000_000) }),
+    ...(repeatPenalty === undefined ? {} : { repeatPenalty: number(repeatPenalty, "repeatPenalty", 1, 4) }),
+  };
+}
+
 function chatMessage(value: unknown): ChatMessage {
   const record = asRecord(value, "a message");
   const role = record["role"];
@@ -522,6 +579,10 @@ function completionResult(value: unknown): CompletionResult {
 
 function loadedInfo(value: unknown): LoadedModelInfo {
   const record = asRecord(value, "loaded model info");
+  const functionCalling = record["functionCalling"];
+  if (functionCalling !== "native" && functionCalling !== "text") {
+    throw new ProtocolError("shape", "Loaded model info carries a calling path this build does not know.");
+  }
   return {
     id: text(record["id"], "info.id", MAX_ID_LENGTH),
     title: text(record["title"], "info.title", 200),
@@ -529,6 +590,8 @@ function loadedInfo(value: unknown): LoadedModelInfo {
       asCapability("info.capabilities", capability),
     ),
     contextTokens: integer(record, "contextTokens", 1, PROTOCOL_LIMITS.contextTokens),
+    wrapper: text(record["wrapper"], "info.wrapper", 200),
+    functionCalling,
   };
 }
 

@@ -52,12 +52,15 @@ and `modules`; `timers`; `private`; `emergency`) are the same kind of assumption
 ```
 node scripts/assistant-eval.mjs --scripted          # transcripts; no model
 node scripts/assistant-eval.mjs --model <path.gguf> # a real model
+node scripts/assistant-eval.mjs --models qwen,gemma # every listed installed chat model, one report
 pnpm eval:assistant --model <path.gguf>             # the same, through the root script
 ```
 
 `--scripted` proves the harness and the expectations and runs in the ordinary
-test suite (`scenarios.test.ts` runs the same set). `--model` is the real thing
-and is never part of CI.
+test suite (`scenarios.test.ts` runs the same set). `--model` and `--models` are
+the real thing and are never part of CI. `--models` takes ids or `all`, reads the
+registry from the app's data folder (`--data` overrides it), and loads each model
+with the policy the app gives its entry (context cap, thought budget, sampling).
 
 **The real mode is a skip, not a failure, when a part is absent.** It needs
 `createLlamaEngine` from `apps/desktop/src/main/assistant/runtime/llama.ts` and

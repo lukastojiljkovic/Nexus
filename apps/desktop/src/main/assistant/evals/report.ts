@@ -107,20 +107,22 @@ function quote(text: string): string {
 }
 
 /**
- * The Markdown table: one row per scenario, one cell per expectation. A
- * scenario's expectation cell lists every expectation as `label=ok` or
- * `label=FAIL`, in the order the checkers ran, so a failing row says which
- * expectation failed without leaving the table.
+ * The lines of one suite's Markdown: the totals, the scenario table and the
+ * failure section. `failuresHeading` is the heading level the caller's own
+ * document gives the section, so a per-model report nests it under the model.
+ *
+ * The table has one row per scenario and one cell per expectation. A scenario's
+ * expectation cell lists every expectation as `label=ok` or `label=FAIL`, in the
+ * order the checkers ran, so a failing row says which expectation failed without
+ * leaving the table.
  *
  * The failure section quotes the answer, because a failed scenario's row says
  * WHAT failed and never WHAT was said — and the answer is the thing the model
  * actually did. Whitespace is collapsed and the quote is bounded, so the section
  * stays a list of lines whatever the model streamed.
  */
-export function reportMarkdown(suite: SuiteResult): string {
+function suiteLines(suite: SuiteResult, failuresHeading: string): string[] {
   const lines: string[] = [];
-  lines.push(`# Assistant evaluation — ${suite.model}`);
-  lines.push("");
   lines.push(
     `${suite.totals.passed} of ${suite.totals.scenarios} scenarios passed, ` +
       `${suite.totals.failed} failed. ${suite.totals.steps} model steps, ` +
@@ -145,7 +147,7 @@ export function reportMarkdown(suite: SuiteResult): string {
   const failures = suite.results.filter((scenario) => !scenario.passed);
   if (failures.length > 0) {
     lines.push("");
-    lines.push("## Failures");
+    lines.push(failuresHeading);
     lines.push("");
     for (const scenario of failures) {
       if (scenario.error !== undefined) {
@@ -159,5 +161,93 @@ export function reportMarkdown(suite: SuiteResult): string {
       lines.push(`- \`${scenario.id}\` — the answer: ${quote(scenario.finalText)}`);
     }
   }
+  return lines;
+}
+
+/** The Markdown report of one suite: a heading, then {@link suiteLines}. */
+export function reportMarkdown(suite: SuiteResult): string {
+  return `${[`# Assistant evaluation — ${suite.model}`, "", ...suiteLines(suite, "## Failures")].join("\n")}\n`;
+}
+
+/**
+ * One model's run in a `--models` report: the model as the runtime loaded it
+ * (its quantisation from the catalogue, the wrapper and calling path the library
+ * resolved), and the suite it scored.
+ */
+export interface ModelRun {
+  readonly id: string;
+  readonly quantization: string | null;
+  readonly wrapper: string;
+  readonly functionCalling: "native" | "text";
+  readonly promptVersion: string;
+  readonly suite: SuiteResult;
+}
+
+/** The figures a model's row carries in the summary table and in the JSON. */
+export interface ModelSummary {
+  readonly id: string;
+  readonly quantization: string | null;
+  readonly wrapper: string;
+  readonly functionCalling: boolean;
+  readonly promptVersion: string;
+  readonly passed: number;
+  readonly scenarios: number;
+  /** The median scenario time, rounded to whole milliseconds. */
+  readonly medianMs: number;
+}
+
+/** The median of the scenarios' own times: a model that ran no scenario has a median of 0. */
+function medianMs(suite: SuiteResult): number {
+  const times = suite.results.map((scenario) => scenario.durationMs).sort((a, b) => a - b);
+  if (times.length === 0) return 0;
+  const middle = Math.floor(times.length / 2);
+  const median = times.length % 2 === 1 ? (times[middle] ?? 0) : ((times[middle - 1] ?? 0) + (times[middle] ?? 0)) / 2;
+  return Math.round(median);
+}
+
+function summaryOf(run: ModelRun): ModelSummary {
+  return {
+    id: run.id,
+    quantization: run.quantization,
+    wrapper: run.wrapper,
+    functionCalling: run.functionCalling === "native",
+    promptVersion: run.promptVersion,
+    passed: run.suite.totals.passed,
+    scenarios: run.suite.totals.scenarios,
+    medianMs: medianMs(run.suite),
+  };
+}
+
+/**
+ * The Markdown report of a `--models` run: a summary table with one row per
+ * model, then each model's own report under its id. The runs keep the order
+ * they were given in, so a scripted run with the same models prints the same bytes.
+ */
+export function reportMarkdownForModels(runs: readonly ModelRun[]): string {
+  const lines: string[] = [];
+  lines.push(`# Assistant evaluation — ${runs.length} ${runs.length === 1 ? "model" : "models"}`);
+  lines.push("");
+  lines.push("| Model | Quantisation | Wrapper | Function calling | Prompt | Passed | Median time |");
+  lines.push("| --- | --- | --- | --- | --- | --- | --- |");
+  for (const run of runs) {
+    const summary = summaryOf(run);
+    lines.push(
+      `| ${summary.id} | ${summary.quantization ?? "-"} | ${summary.wrapper} | ` +
+        `${summary.functionCalling ? "yes" : "no"} | ${summary.promptVersion} | ` +
+        `${summary.passed} / ${summary.scenarios} | ${summary.medianMs} ms |`,
+    );
+  }
+  for (const run of runs) {
+    lines.push("");
+    lines.push(`## ${run.id}`);
+    lines.push("");
+    lines.push(...suiteLines(run.suite, "### Failures"));
+  }
   return `${lines.join("\n")}\n`;
+}
+
+/** The JSON of a `--models` run: each model's summary beside its full report. */
+export function reportJsonForModels(runs: readonly ModelRun[]): string {
+  const models = runs.map((run) => ({ ...summaryOf(run), report: toReport(run.suite) }));
+  return `${JSON.stringify(models, null, 2)}\n`;
 }

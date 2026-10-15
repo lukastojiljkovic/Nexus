@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ScenarioResult, SuiteResult } from "./harness.js";
-import { reportJson, reportMarkdown } from "./report.js";
+import { reportJson, reportJsonForModels, reportMarkdown, reportMarkdownForModels, type ModelRun } from "./report.js";
 
 function result(overrides: Partial<ScenarioResult> & Pick<ScenarioResult, "id">): ScenarioResult {
   return {
@@ -198,5 +198,57 @@ describe("reportJson", () => {
 }
 `,
     );
+  });
+});
+
+describe("reportMarkdownForModels", () => {
+  const runs: ModelRun[] = [
+    {
+      id: "qwen3.5-4b-q4-k-m",
+      quantization: "Q4_K_M",
+      wrapper: "Qwen",
+      functionCalling: "native",
+      promptVersion: "assistant-2026-10-15.3",
+      suite,
+    },
+    {
+      id: "gemma-4-e2b-q4-0",
+      quantization: null,
+      wrapper: "Generic",
+      functionCalling: "text",
+      promptVersion: "assistant-2026-10-15.3",
+      suite: { ...suite, totals: { ...suite.totals, scenarios: 1, passed: 1, failed: 0 }, results: [suite.results[0] as ScenarioResult] },
+    },
+  ];
+
+  it("prints one summary row per model, then each model's own report under its id", () => {
+    const lines = reportMarkdownForModels(runs).split("\n");
+    expect(lines.slice(0, 7)).toEqual([
+      "# Assistant evaluation — 2 models",
+      "",
+      "| Model | Quantisation | Wrapper | Function calling | Prompt | Passed | Median time |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      "| qwen3.5-4b-q4-k-m | Q4_K_M | Qwen | yes | assistant-2026-10-15.3 | 1 / 2 | 6 ms |",
+      "| gemma-4-e2b-q4-0 | - | Generic | no | assistant-2026-10-15.3 | 1 / 1 | 4 ms |",
+      "",
+    ]);
+    expect(lines).toContain("## qwen3.5-4b-q4-k-m");
+    expect(lines).toContain("## gemma-4-e2b-q4-0");
+    expect(lines).toContain("### Failures");
+    expect(lines.indexOf("## gemma-4-e2b-q4-0")).toBeGreaterThan(lines.indexOf("## qwen3.5-4b-q4-k-m"));
+  });
+
+  it("gives a single model the singular heading, and is the same bytes for the same runs", () => {
+    expect(reportMarkdownForModels(runs.slice(0, 1)).split("\n")[0]).toBe("# Assistant evaluation — 1 model");
+    expect(reportMarkdownForModels(runs)).toBe(reportMarkdownForModels(runs));
+  });
+
+  it("carries the same summary in the JSON, beside each model's full report", () => {
+    const models = JSON.parse(reportJsonForModels(runs)) as { id: string; medianMs: number; functionCalling: boolean; report: unknown }[];
+    expect(models.map((model) => [model.id, model.functionCalling, model.medianMs])).toEqual([
+      ["qwen3.5-4b-q4-k-m", true, 6],
+      ["gemma-4-e2b-q4-0", false, 4],
+    ]);
+    expect(models[0]?.report).toMatchObject({ model: "scripted transcript", totals: { passed: 1 } });
   });
 });
