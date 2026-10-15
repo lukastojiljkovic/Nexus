@@ -61,6 +61,7 @@ import { dayKeyToUtcMs, isValidDayKey, shiftDayKey, type DayKey } from "../calen
 import { validateRecurrenceRule } from "../recurrence/recurrence.js";
 import type { RecurrenceRule, RecurrenceWeekday } from "../recurrence/recurrence.js";
 import type { ExportEvent, ProfileData } from "./exportArchive.js";
+import { emptyImportedProfile } from "./emptyImportedProfile.js";
 
 /** One component the file carried and this import does not read, counted by its own `BEGIN` name — first-seen order, exactly as it sat in the file. */
 export interface IcsSkippedComponent {
@@ -923,10 +924,8 @@ export interface IcsTranslateTarget {
  * Parsed events as the profile data an import inserts. The shape of the answer
  * is deliberately narrow, exactly as `translateApkg`'s is: an `.ics` carries
  * events and NOTHING else this app models, so every other member of
- * `ProfileData` is planned empty. Written as one object literal typed
- * `ProfileData` for the reason `planForeignImport`'s pass 2 is — a member
- * added to that interface later fails to compile here rather than silently
- * arriving absent.
+ * `ProfileData` is planned empty — `emptyImportedProfile`, the base every
+ * importer that reads some modules spreads its rows over.
  *
  * `reminderOffsets` is the empty default on every row — the named asymmetry of
  * the round trip: a reminder ladder does not travel in ICS, so an imported
@@ -953,78 +952,5 @@ export function translateIcsEvents(
     reminderOffsets: [],
   }));
 
-  return {
-    tasks: [],
-    taskLists: [],
-    taskSections: [],
-    taskTags: [],
-    taskTagLinks: [],
-    taskAttachments: [],
-    taskTemplates: [],
-    taskDependencies: [],
-    events,
-    eventTemplates: [],
-    documents: [],
-    renewals: [],
-    people: [],
-    calendarSettings: [],
-    subjects: [],
-    subjectAttachments: [],
-    subjectNoteLinks: [],
-    exams: [],
-    decks: [],
-    cards: [],
-    reviewLog: [],
-    examTopics: [],
-    plans: [],
-    blocks: [],
-    focusSessions: [],
-    studySettings: [],
-    notifications: [],
-    notes: [],
-    noteFolders: [],
-    noteTags: [],
-    noteCategories: [],
-    noteTagLinks: [],
-    noteTemplates: [],
-    noteAttachments: [],
-    noteVersions: [],
-    dashboardSettings: [],
-    dashboardSets: [],
-    dashboardWidgets: [],
-    // An .ics calendar carries no ledger (migration 051): empty, like every
-    // other module this importer does not read.
-    finAccounts: [],
-    finCategories: [],
-    finRecurring: [],
-    finTransactions: [],
-    finBudgets: [],
-    // Nor any habits (migration 055): empty, like every other module this
-    // importer does not read.
-    habits: [],
-    habitEntries: [],
-    // Nor any food log (migration 058): empty, like every other module this
-    // importer does not read.
-    fitFoods: [],
-    fitMealItems: [],
-    fitTargets: [],
-    // Nor any training log (migration 060): empty, like every other module this
-    // importer does not read.
-    fitExercises: [],
-    fitRoutines: [],
-    fitRoutineItems: [],
-    fitWorkouts: [],
-    fitWorkoutSets: [],
-    fitMeasurements: [],
-    fitBodyProfile: [],
-    canvasBoards: [],
-    circuits: [],
-    circuitChassis: [],
-    circuitParts: [],
-    circuitWires: [],
-    // No kit-module data: a translator produces rows for the collections it
-    // understands, and a module's own payload is written by that module
-    // (ADR-090). Empty here, on every other field's terms.
-    modules: [],
-  };
+  return { ...emptyImportedProfile(), events };
 }

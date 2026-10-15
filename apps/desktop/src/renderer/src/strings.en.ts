@@ -36,6 +36,8 @@ import type {
   FinCsvImportRowDropCode,
   FinCsvImportRowSkipCode,
   FinCsvImportSignConvention,
+  BookmarksImportReadErrorCode,
+  BookmarksImportSkipCode,
   IcsImportReadErrorCode,
   IcsImportSkipCode,
   ImportDuplicateType,
@@ -5845,12 +5847,13 @@ export const en = {
       notifications: "Notifications",
       backup: "Backup and restore",
       /**
-       * The eight sub-pages of „Import and export" (SET-015). The text is the
+       * The nine sub-pages of „Import and export" (SET-015). The text is the
        * one the block inside each already draws, so a list row and its card
        * name the same thing rather than two spellings of it.
        */
       "import-archive": "Import from an archive",
       "import-ics": "Import a calendar (.ics)",
+      "import-bookmarks": "Import bookmarks (.html)",
       "export-ics": "Calendar export",
       "import-apkg": "Import from Anki (.apkg)",
       "import-csv": "Import tasks (.csv)",
@@ -7262,6 +7265,41 @@ export const en = {
       nothingToImport: "There is nothing to import from this file — the reasons are listed above.",
       /** The post-reload banner (App.tsx) when the undo slot holds an .ics import. */
       undoBanner: "The events were imported from a calendar (.ics).",
+    },
+    /**
+     * Bookmarks import (IMEX-007) — the browser's HTML export. Its own card,
+     * beside the calendar's, on the same pick → preview → apply flow.
+     */
+    bookmarksImport: {
+      title: "Import bookmarks (.html)",
+      description:
+        "Import bookmarks from the HTML file Chrome, Edge or Firefox export. Each folder becomes one note holding a list of its links, and every note gets a \"Bookmarks\" tag. The import deletes nothing. Only http and https links come over; everything else is counted in the preview before the import. You can undo the import with one click, but only until you lock or close the app.",
+      pickButton: "Choose an HTML file…",
+      previewRunning: "Reading bookmarks…",
+      columnSource: "In the file",
+      columnPlanned: "Imported",
+      rowBookmarks: "Bookmarks",
+      rowFolders: "Notes (folders)",
+      skipsTitle: "What is not imported",
+      /** One sentence per `BookmarksImportSkipCode`. */
+      skips: {
+        "unsupported-url":
+          "The link is not an http or https address (javascript:, file:, data: and the like), so it is skipped.",
+      } satisfies Record<BookmarksImportSkipCode, string>,
+      /** One sentence per `BookmarksImportReadErrorCode`: the file could not be read at all. */
+      unreadable: {
+        "too-large": "The file is past the safety limits, so it was refused.",
+        "not-bookmarks": "This file is not a bookmarks export from a browser.",
+      } satisfies Record<BookmarksImportReadErrorCode, string>,
+      applyButton: "Import",
+      applying: "Importing…",
+      applied: "The bookmarks were imported. The app is refreshing…",
+      readError: "Reading the file failed. Try again.",
+      error: "The import failed. Try again.",
+      noFileError: "The file is no longer chosen. Choose it again.",
+      nothingToImport: "There is nothing to import from this file — the reasons are listed above.",
+      /** The post-reload banner (App.tsx) when the undo slot holds a bookmarks import. */
+      undoBanner: "The notes were imported from bookmarks.",
     },
     /**
      * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose

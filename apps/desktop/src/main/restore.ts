@@ -5,6 +5,7 @@ import {
   documentDuplicateKey,
   eventDuplicateKey,
   finBudgetKey,
+  parseBookmarksHtml,
   parseCsv,
   parseIcsCalendar,
   parseImportArchive,
@@ -16,11 +17,13 @@ import {
   suggestCsvFinanceMapping,
   suggestCsvMapping,
   translateApkg,
+  translateBookmarks,
   translateCsvFinance,
   translateCsvTasks,
   translateIcsEvents,
   translateLlmRecords,
   type ApkgSkip as CoreApkgSkip,
+  type BookmarksImportSkip as CoreBookmarksImportSkip,
   type CsvColumnRole as CoreCsvColumnRole,
   type CsvFinanceColumnRole as CoreCsvFinanceColumnRole,
   type CsvFinanceReport,
@@ -34,6 +37,7 @@ import {
   type ForeignImportPlan,
   type ForeignImportTarget,
   type IcsImportSkip as CoreIcsImportSkip,
+  type ParsedBookmarks,
   type IcsParsedCalendar,
   type IcsSkippedComponent as CoreIcsSkippedComponent,
   type ImportDuplicateChoices as CoreImportDuplicateChoices,
@@ -62,7 +66,9 @@ import type {
 import { ApkgReadError, readApkg } from "./apkgReader.js";
 import { ArchiveReadError, inspectArchiveFile, openArchive, type OpenedArchive } from "./archiveReader.js";
 import { CsvReadError, readCsvText } from "./csvReader.js";
+import { BookmarksReadError, readBookmarksText } from "./bookmarksReader.js";
 import { IcsReadError, readIcsText } from "./icsReader.js";
+import { shellStrings } from "./shellStrings.js";
 import { ModuleImportError, type ModuleImportBlob } from "./moduleIpc.js";
 import { cancelIdleCompactions } from "./notes.js";
 import type { PrivResealOutcome } from "./priv.js";
@@ -103,6 +109,12 @@ import type {
   FinCsvImportRowDrop,
   FinCsvImportRowSkip,
   FinCsvImportSignConvention,
+  BookmarksImportApplyResult,
+  BookmarksImportPickResult,
+  BookmarksImportPreviewResult,
+  BookmarksImportReadErrorCode,
+  BookmarksImportSkip,
+  BookmarksImportSkipCode,
   IcsImportApplyResult,
   IcsImportPickResult,
   IcsImportPreview,
@@ -193,6 +205,8 @@ import { CSV_IMPORT_MAX_COLUMNS, CSV_IMPORT_SAMPLE_ROWS } from "../shared/ipc.js
  *   read out of it — never the file's raw text, which is dropped the moment
  *   the parse returns. Re-previewing under the other duplicate answer then
  *   costs a re-plan, never a second read.
+ * - `pendingBookmarks`: the browser bookmarks file picked, plus its PARSED
+ *   folders once a preview has read it (IMEX-007). The same rule as `pendingIcs`.
  * - `pendingLlm`: the plan a pasted LLM answer produced (IMEX-005), with the
  *   parsed records a re-plan re-uses — never the paste itself.
  * - `undo`: the pre-restore snapshot of the last COMPLETED restore, gathered
@@ -278,7 +292,7 @@ interface ReadyImport {
  */
 interface RestoreUndo {
   /** Which operation this snapshot was taken for — carried onto the wire so the banner can name what it is offering to undo. */
-  kind: "restore" | "import" | "apkg" | "llm" | "csv" | "fin-csv" | "ics";
+  kind: "restore" | "import" | "apkg" | "llm" | "csv" | "fin-csv" | "ics" | "bookmarks";
   profileId: string;
   snapshot: {
     profileName: string;
@@ -340,6 +354,8 @@ export interface RestoreDeps extends ProfileDataDeps {
   pickFinCsvFile(): Promise<string | null>;
   /** The same dialog with the `.ics` filter (ADR-061), its own injection on the same terms: no surface can open another's picker. */
   pickIcsFile(): Promise<string | null>;
+  /** The same dialog with the bookmarks filter (IMEX-007), on the same terms: its own injection, so no surface can open another's picker. */
+  pickBookmarksFile(): Promise<string | null>;
   /** Reloads the renderer once a restore or an undo has landed. */
   reloadRenderer(): void;
   /** Discards this profile's in-memory focus timer. */
@@ -440,6 +456,8 @@ let pendingImport: PendingImport | null = null;
 let pendingApkg: PendingApkg | null = null;
 /** The calendar `.ics` the user picked, its parsed events once read, and the plan once a preview has succeeded (ADR-061). A fourth variable, on the same terms: no surface here can reach another's file. */
 let pendingIcs: PendingIcs | null = null;
+/** The bookmarks file the user picked, its parsed folders once read, and the plan once a preview has succeeded (IMEX-007). A variable of its own, on the same terms: no surface here can reach another's file. */
+let pendingBookmarks: PendingBookmarks | null = null;
 /** The plan a pasted LLM answer produced (IMEX-005). A fifth variable, on the same terms: no surface here can reach another's source. */
 let pendingLlm: ReadyLlm | null = null;
 /** The CSV the user picked, its text and parse once a preview has read it, and the plan once a mapping has been confirmed (ADR-062). A fifth variable, on the terms of the other four. */
@@ -1192,6 +1210,9 @@ export function clearRestoreState(): void {
   // The calendar pick holds no handle either, but it holds somebody's whole
   // parsed calendar. Same rule.
   pendingIcs = null;
+  // The bookmarks pick holds the parsed folders of somebody's browsing, the
+  // same rule again.
+  pendingBookmarks = null;
   // Nor does the LLM plan, and it holds what the user pasted out of their own
   // chat — their content, in plaintext, in main's heap. Same rule.
   pendingLlm = null;
@@ -2101,54 +2122,37 @@ function icsPreviewOf(
 }
 
 /**
- * Applies the ready plan identified by `token`. The import half of
- * `applyApkgImport`, minus nothing at all: an `.ics` names no attachment, so
- * `blobNames` is empty by construction and there is no pre-transaction copy
- * loop — the same shape, for the same reason.
- *
- * Everything else is identical, deliberately: the undo snapshot is taken before
- * a single row is added, the insert is one transaction, the snapshot lands in
- * the SAME one slot every archive operation shares, and the renderer reload is
- * scheduled on `setTimeout(…, 0)` so this call's reply reaches it first.
+ * The write every import of a foreign plan shares, the `.ics` and the browser
+ * bookmarks alike: the undo snapshot is taken before a single row is added, the
+ * insert is one transaction, the snapshot lands in the SAME one slot every
+ * archive operation shares, and the renderer reload is scheduled on
+ * `setTimeout(…, 0)` so this call's reply reaches it first. Neither source names
+ * an attachment, so there is no blob to copy and none that can be missing.
  */
-export async function applyIcsImport(
+async function applyForeignPlan(
   deps: ImportDeps,
   profileId: string,
-  token: string,
-): Promise<IcsImportApplyResult> {
-  const ready = pendingIcs?.ready;
-  if (ready === undefined || ready === null) {
-    throw new Error("No .ics preview is ready to apply.");
-  }
-  if (ready.token !== token) {
-    throw new Error("This .ics preview is stale; re-run the preview before applying.");
-  }
-  if (ready.profileId !== profileId) {
-    throw new Error("This .ics preview was computed for a different profile.");
-  }
-
+  plan: ForeignImportPlan,
+  kind: "ics" | "bookmarks",
+): Promise<RestoreApplyResult> {
   const currentProfile = deps.getProfile(profileId);
   const undoSettings = await gatherProfileSettings(deps, profileId);
   const undoData = gatherProfileData(deps, profileId);
   const undoDerived = deriveRestoredNotes(undoData.notes);
 
   const now = new Date().toISOString();
-  const derived = deriveRestoredNotes(ready.plan.data.notes);
-  const rowsWritten = deps
-    .foreignImportStore(profileId)
-    .insertPlanned(ready.plan.data, derived, now);
+  const derived = deriveRestoredNotes(plan.data.notes);
+  const rowsWritten = deps.foreignImportStore(profileId).insertPlanned(plan.data, derived, now);
 
-  const summary: IcsImportApplyResult = {
-    restored: countProfileModules(ready.plan.data),
+  const summary: RestoreApplyResult = {
+    restored: countProfileModules(plan.data),
     rowsWritten,
     blobsAdded: 0,
-    // An `.ics` names no attachment row at all, so there is no blob that could
-    // be missing.
     missingBlobs: 0,
   };
 
   undo = {
-    kind: "ics",
+    kind,
     profileId,
     snapshot: {
       profileName: currentProfile.name,
@@ -2166,10 +2170,34 @@ export async function applyIcsImport(
     summary,
   };
 
-  pendingIcs = null;
-
   setTimeout(() => deps.reloadRenderer(), 0);
 
+  return summary;
+}
+
+/**
+ * Applies the ready plan identified by `token`. The import half of
+ * `applyApkgImport`: an `.ics` names no attachment, so the shared write below
+ * has nothing to copy, and the picked session is dropped once it has landed.
+ */
+export async function applyIcsImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+): Promise<IcsImportApplyResult> {
+  const ready = pendingIcs?.ready;
+  if (ready === undefined || ready === null) {
+    throw new Error("No .ics preview is ready to apply.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This .ics preview is stale; re-run the preview before applying.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This .ics preview was computed for a different profile.");
+  }
+
+  const summary = await applyForeignPlan(deps, profileId, ready.plan, "ics");
+  pendingIcs = null;
   return summary;
 }
 
@@ -2181,6 +2209,139 @@ export async function applyIcsImport(
  */
 export function cancelIcsImport(): void {
   pendingIcs = null;
+}
+
+// --- Browser bookmarks import (IMEX-007) ------------------------------------
+
+/**
+ * The bookmarks file picked, its parsed folders once read, and the plan once a
+ * preview has succeeded. The shape `PendingIcs` has, for the same reason: what a
+ * preview keeps is the parsed bookmarks, never the file's raw text.
+ */
+interface PendingBookmarks {
+  filePath: string;
+  fileName: string;
+  /** The parsed bookmarks, read once. Null until the first preview succeeds. */
+  source: ParsedBookmarks | null;
+  ready: ReadyBookmarks | null;
+}
+
+/** One successful bookmarks preview, held exactly as `applyBookmarksImport` needs it: the plan, and the token proving an apply is confirming THIS plan. */
+interface ReadyBookmarks {
+  token: string;
+  /** The profile this plan was computed against — the apply refuses any other, mirroring the token check. */
+  profileId: string;
+  plan: ForeignImportPlan;
+}
+
+/** Maps one core `BookmarksImportSkip` onto the wire, with the same drift check `toIcsSkip` makes. */
+function toBookmarksSkip(skip: CoreBookmarksImportSkip): BookmarksImportSkip {
+  const code: BookmarksImportSkipCode = skip.code;
+  return { code, count: skip.count };
+}
+
+/** Picks a bookmarks file, replacing whatever was picked for one before. */
+export async function pickBookmarksFile(deps: ImportDeps): Promise<BookmarksImportPickResult> {
+  pendingBookmarks = null;
+
+  const filePath = await deps.pickBookmarksFile();
+  if (filePath === null) return { canceled: true };
+
+  pendingBookmarks = { filePath, fileName: basename(filePath), source: null, ready: null };
+  return { canceled: false, path: filePath, fileName: basename(filePath) };
+}
+
+/**
+ * Reads and parses the picked file (once), then translates it and really plans
+ * it against this profile. The preview is a dry run: the plan it describes is
+ * the plan the apply writes.
+ */
+export async function previewBookmarksImport(
+  deps: ImportDeps,
+  profileId: string,
+): Promise<BookmarksImportPreviewResult> {
+  // Bound to a local for the reason `previewIcsImport` binds its own.
+  const picked = pendingBookmarks;
+  if (picked === null) return { status: "no-file" };
+
+  let source = picked.source;
+  if (source === null) {
+    let text: string;
+    try {
+      text = await readBookmarksText(picked.filePath);
+    } catch (error) {
+      if (error instanceof BookmarksReadError) return { status: "unreadable", code: error.code };
+      throw error;
+    }
+    // Re-checked after the await: a second pick may have replaced this one while
+    // the read was in flight, exactly as `previewIcsImport` checks.
+    if (pendingBookmarks !== picked) return { status: "no-file" };
+    const parsed = parseBookmarksHtml(text);
+    if (parsed.status === "failed") {
+      const code: BookmarksImportReadErrorCode = parsed.code;
+      return { status: "unreadable", code };
+    }
+    source = parsed.bookmarks;
+    picked.source = source;
+  }
+
+  const translated = translateBookmarks(source, {
+    profileId,
+    now: new Date().toISOString(),
+    tagName: shellStrings().bookmarksTagName,
+    rootTitle: shellStrings().bookmarksRootTitle,
+  });
+  const plan = planForeignImport(
+    { data: translated, dropped: [], profilePicture: null, privateNotes: { notes: 0, versions: 0 } },
+    importTargetFor(deps, profileId),
+    uuidv7,
+  );
+
+  const token = randomBytes(16).toString("hex");
+  picked.ready = { token, profileId, plan };
+
+  return {
+    status: "ready",
+    preview: {
+      token,
+      fileName: picked.fileName,
+      bookmarks: source.bookmarks,
+      // Counted off the PLAN, so the number on screen is what will be inserted.
+      folders: plan.data.notes.length,
+      skips: source.skips.map(toBookmarksSkip),
+    },
+  };
+}
+
+/**
+ * Applies the ready plan identified by `token`, creating one note per folder.
+ * The same shared write the `.ics` import makes; only the undo banner's kind
+ * differs.
+ */
+export async function applyBookmarksImport(
+  deps: ImportDeps,
+  profileId: string,
+  token: string,
+): Promise<BookmarksImportApplyResult> {
+  const ready = pendingBookmarks?.ready;
+  if (ready === undefined || ready === null) {
+    throw new Error("No bookmarks preview is ready to apply.");
+  }
+  if (ready.token !== token) {
+    throw new Error("This bookmarks preview is stale; re-run the preview before applying.");
+  }
+  if (ready.profileId !== profileId) {
+    throw new Error("This bookmarks preview was computed for a different profile.");
+  }
+
+  const summary = await applyForeignPlan(deps, profileId, ready.plan, "bookmarks");
+  pendingBookmarks = null;
+  return summary;
+}
+
+/** Drops the picked bookmarks file and the parsed folders main holds for it. */
+export function cancelBookmarksImport(): void {
+  pendingBookmarks = null;
 }
 
 // --- LLM-assisted import (IMEX-005) -----------------------------------------

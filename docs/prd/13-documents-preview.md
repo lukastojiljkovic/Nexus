@@ -42,12 +42,19 @@ and actions (download/copy/open externally).
   video/audio (Chromium-native codecs), TXT/MD/code (highlighting), CSV,
   DOCX (text-focused approximate), XLSX (grid preview), ZIP (listing +
   nested preview with SEC-FILE-03 caps).
+  *Amended to ADR-064 (the shipped tiers):* PDF opens in Chromium's own
+  PDFium viewer in a dedicated window, not PDF.js; images and text/markdown
+  preview inline. Office formats are refused by name (ADR-064 §1): DOCX, XLSX,
+  PPTX and their kin have no preview and keep „Otvori" only.
 - **DOC-003 (M)** Escape hatch on every preview: open in OS default app
   (desktop); download (web).
 - **DOC-004 (M)** Fidelity labeling: Office previews marked "pregled" with
   tooltip explaining approximation (research conclusion #3).
 - **DOC-005 (M)** Thumbnail service: shared, cached, size-capped thumbnails
   for file cards (CANV), lists, and widgets; generation in the sandbox.
+  *Not built, by ADR-064:* images are drawn in place through `nx-blob://`
+  (§1), and the subject-materials row keeps no thumbnail on purpose (§4).
+  No shared thumbnail cache exists.
 - **DOC-006 (M)** Library: cross-module file inventory with type/module/
   date filters, per-file "gde se koristi" (references list), storage usage
   by module; deleting from library warns about all references.
@@ -55,6 +62,10 @@ and actions (download/copy/open externally).
   (bundle discipline per research §3).
 - **DOC-008 (S)** PDF extras: text search within document, page thumbnails
   sidebar, remembered last-read position per file (study use case).
+  *Remembered position: not built.* The PDF window is Chromium's own viewer
+  with no preload and no IPC (ADR-064 §2), so Nexus cannot observe the page
+  being read. Recording it means changing that window's posture first, which
+  this PRD does not ask for.
 - **DOC-009 (S)** Text extraction feed to SRCH for indexable formats
   (SRCH-008, opt-in).
 - **DOC-010 (C)** PPTX/EPUB/RTF/ODT previews (tier-2 per research).

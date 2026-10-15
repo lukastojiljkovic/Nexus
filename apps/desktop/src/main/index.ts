@@ -644,6 +644,7 @@ import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
+  applyBookmarksImport,
   applyCsvImport,
   applyFinCsvImport,
   applyIcsImport,
@@ -651,6 +652,7 @@ import {
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
+  cancelBookmarksImport,
   cancelCsvImport,
   cancelFinCsvImport,
   cancelIcsImport,
@@ -661,12 +663,14 @@ import {
   mapCsvImport,
   mapFinCsvImport,
   pickApkgFile,
+  pickBookmarksFile,
   pickCsvFile,
   pickFinCsvFile,
   pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
+  previewBookmarksImport,
   previewCsvImport,
   previewFinCsvImport,
   previewIcsImport,
@@ -753,6 +757,9 @@ import {
   type GlobalShortcutChord,
   type GlobalShortcutResult,
   type IcsExportResult,
+  type BookmarksImportApplyResult,
+  type BookmarksImportPickResult,
+  type BookmarksImportPreviewResult,
   type IcsImportApplyResult,
   type IcsImportPickResult,
   type IcsImportPreviewResult,
@@ -7416,6 +7423,18 @@ function restoreDeps(): ImportDeps {
         : await dialog.showOpenDialog(options);
       return canceled ? null : (filePaths[0] ?? null);
     },
+    // IMEX-007's picker: the browser's HTML export, on the same terms as the
+    // calendar's — its own injection, so no surface can open another's dialog.
+    pickBookmarksFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: shellStrings().bookmarksFilterName, extensions: ["html", "htm"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
     // The renderer comes back UNLOCKED: main keeps the open database and the
     // data key across this reload (ADR-023 section 7) — all it discards is the
     // renderer's own view of a profile that just changed under it.
@@ -12451,6 +12470,37 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportIcsCancel, (event): void => {
     assertTrustedSender(event);
     cancelIcsImport();
+  });
+
+  // The browser bookmarks import (IMEX-007): the calendar's four-step shape on
+  // its own channels, for the same reason the calendar has its own. A preview
+  // takes no duplicate answer — a bookmark folder always becomes a new note.
+  ipcMain.handle(IpcChannel.imexImportBookmarksPick, (event): Promise<BookmarksImportPickResult> => {
+    assertTrustedSender(event);
+    return pickBookmarksFile(restoreDeps());
+  });
+
+  ipcMain.handle(
+    IpcChannel.imexImportBookmarksPreview,
+    (event, payload): Promise<BookmarksImportPreviewResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asId(body.profileId, "profileId");
+      return previewBookmarksImport(restoreDeps(), profileId);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.imexImportBookmarksApply, (event, payload): Promise<BookmarksImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asId(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyBookmarksImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportBookmarksCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelBookmarksImport();
   });
 
   // The LLM-assisted import (IMEX-005): no pick, because there is no file — the

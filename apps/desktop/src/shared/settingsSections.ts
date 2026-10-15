@@ -90,13 +90,14 @@ export interface SettingsSubPageList {
 }
 
 /**
- * The import/export list's eight rows, in the order the brief fixes. Seven
+ * The import/export list's nine rows, in the order the brief fixes. Eight
  * importers plus the calendar export, which used to be the fourth of eleven
  * blocks inside „Rezervna kopija" and is a different act from a backup.
  */
 const IMPORT_EXPORT_SUB_PAGES: readonly SettingsSubPage[] = [
   { id: "import-archive", icon: "import" },
   { id: "import-ics", icon: "import" },
+  { id: "import-bookmarks", icon: "import" },
   { id: "export-ics", icon: "export" },
   { id: "import-apkg", icon: "import" },
   { id: "import-csv", icon: "import" },
