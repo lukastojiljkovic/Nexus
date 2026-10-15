@@ -317,6 +317,77 @@ describe("CultureStore visits", () => {
   });
 });
 
+describe("CultureStore plan tickets", () => {
+  const TICKET = { fileName: "karta.pdf", mime: "application/pdf", sizeBytes: 2_048, sha256: HASH };
+
+  it("attaches tickets to a plan and lists them in the order they were attached", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    const first = culture.addPlanTicket(plan.id, TICKET, NOW);
+    const second = culture.addPlanTicket(
+      plan.id,
+      { fileName: "ulaz.png", mime: "image/png", sizeBytes: 512, sha256: OTHER_HASH },
+      LATER,
+    );
+
+    expect(culture.listPlanTickets(plan.id)).toEqual([first, second]);
+    expect(first).toMatchObject({ planId: plan.id, fileName: "karta.pdf", createdAt: NOW });
+    expect(culture.planTicket(plan.id, second.id)).toEqual(second);
+  });
+
+  it("returns the removed row so the caller can decide whether the blob is orphaned", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    const ticket = culture.addPlanTicket(plan.id, TICKET, NOW);
+
+    expect(culture.removePlanTicket(plan.id, ticket.id)).toEqual(ticket);
+    expect(culture.listPlanTickets(plan.id)).toEqual([]);
+    expect(() => culture.removePlanTicket(plan.id, ticket.id)).toThrow(CultureNotFoundError);
+  });
+
+  it("refuses a plan that is not this profile's, a ticket that is not on the plan named, and a plan that was deleted", () => {
+    const mine = store();
+    const theirs = store();
+    const plan = mine.createPlan(PLAN, NOW);
+    const other = mine.createPlan({ ...PLAN, title: "Drugi" }, NOW);
+    const ticket = mine.addPlanTicket(plan.id, TICKET, NOW);
+
+    expect(() => theirs.addPlanTicket(plan.id, TICKET, NOW)).toThrow(CultureNotFoundError);
+    expect(() => theirs.listPlanTickets(plan.id)).toThrow(CultureNotFoundError);
+    expect(() => mine.planTicket(other.id, ticket.id)).toThrow(CultureNotFoundError);
+    expect(() => mine.removePlanTicket(other.id, ticket.id)).toThrow(CultureNotFoundError);
+
+    mine.softDeletePlan(plan.id, LATER);
+    expect(() => mine.addPlanTicket(plan.id, TICKET, LATER)).toThrow(CultureNotFoundError);
+  });
+
+  it("keeps a deleted plan's tickets and brings them back with the plan", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    const ticket = culture.addPlanTicket(plan.id, TICKET, NOW);
+
+    culture.softDeletePlan(plan.id, LATER);
+    culture.restorePlan(plan.id, LAST);
+    expect(culture.listPlanTickets(plan.id)).toEqual([ticket]);
+  });
+
+  it("counts a ticket's hash and answers its mime with the photo and track tables alongside", () => {
+    const culture = store();
+    const plan = culture.createPlan(PLAN, NOW);
+    culture.addPlanTicket(plan.id, TICKET, NOW);
+    expect(culture.refCount(HASH)).toBe(1);
+    expect(culture.mimeForHash(HASH)).toBe("application/pdf");
+
+    culture.createTrack({ title: "Isti bajtovi", durationMs: 1_000, ...MP3, sha256: HASH }, NOW);
+    expect(culture.refCount(HASH)).toBe(2);
+    expect(culture.mimeForHash(HASH)).toBe("application/pdf");
+
+    culture.removePlanTicket(plan.id, culture.listPlanTickets(plan.id)[0]?.id ?? "");
+    expect(culture.refCount(HASH)).toBe(1);
+    expect(culture.mimeForHash(HASH)).toBe("audio/mpeg");
+  });
+});
+
 describe("CultureStore visit photos", () => {
   it("adds photos and lists them in the order they were added", () => {
     const culture = store();

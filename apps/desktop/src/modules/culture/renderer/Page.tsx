@@ -1021,7 +1021,101 @@ function PlanRow({
         {` \u00b7 ${plan.venue}`}
         {plan.city === null ? "" : `, ${plan.city}`}
       </span>
+      <PlanTickets profileId={profileId} plan={plan} run={run} />
     </ListRow>
+  );
+}
+
+/**
+ * A programme entry's tickets: the files it came with. A ticket opens in the OS
+ * viewer (main's `openPlanTicket`, the notes' "Otvori" path), and a removal asks
+ * first, as every removal on this page does.
+ */
+function PlanTickets({
+  profileId,
+  plan,
+  run,
+}: {
+  profileId: string;
+  plan: CulturePlanView;
+  run: Run;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function attach(files: FileList | null): Promise<void> {
+    if (files === null) return;
+    setProblem(null);
+    for (const file of Array.from(files)) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      try {
+        await run((culture) =>
+          culture.addPlanTicket({ profileId, id: plan.id, fileName: file.name, bytes }),
+        );
+      } catch (failure) {
+        setProblem(copy.errors.photoType);
+        console.error("Nexus: the ticket could not be attached:", failure);
+      }
+    }
+    if (fileRef.current !== null) fileRef.current.value = "";
+  }
+
+  async function open(ticketId: string): Promise<void> {
+    try {
+      await window.nexus.modules.culture.openPlanTicket({ profileId, id: plan.id, ticketId });
+    } catch (failure) {
+      setProblem(copy.errors.ticketOpen);
+      console.error("Nexus: the ticket could not be opened:", failure);
+    }
+  }
+
+  return (
+    <span className="culture__row-meta culture__tickets">
+      {plan.tickets.length === 0 ? copy.programme.noTickets : copy.programme.tickets}
+      {plan.tickets.map((ticket) => (
+        <span key={ticket.id} className="culture__ticket">
+          <Button size="sm" variant="quiet" onClick={() => void open(ticket.id)}>
+            {ticket.fileName}
+          </Button>
+          {confirmingId === ticket.id ? (
+            <>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() =>
+                  void run((culture) =>
+                    culture.removePlanTicket({ profileId, id: plan.id, ticketId: ticket.id }),
+                  )
+                }
+              >
+                {copy.confirm}
+              </Button>
+              <Button size="sm" variant="quiet" onClick={() => setConfirmingId(null)}>
+                {copy.cancel}
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="quiet" onClick={() => setConfirmingId(ticket.id)}>
+              {copy.programme.removeTicket}
+            </Button>
+          )}
+        </span>
+      ))}
+      <Button size="sm" variant="quiet" onClick={() => fileRef.current?.click()}>
+        {copy.programme.attachTicket}
+      </Button>
+      {/* The same OS picker the visit's photos use: `type="file"` is the one input a surface may draw itself. */}
+      <input
+        ref={fileRef}
+        className="culture__file"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+        aria-label={copy.programme.attachTicket}
+        onChange={(event) => void attach(event.target.files)}
+      />
+      {problem !== null && <span className="culture__field-error">{problem}</span>}
+    </span>
   );
 }
 

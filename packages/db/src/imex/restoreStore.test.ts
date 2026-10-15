@@ -1741,6 +1741,10 @@ describe("RestoreStore", () => {
       "library_thoughts",
       "library_collections",
       "library_collection_items",
+      // Loans and goals (migration 096) are not in the library archive yet: a loan
+      // goes with the work it belongs to, and the goals stay, as the migration says.
+      "library_loans",
+      "library_goals",
       "culture_visits",
       "culture_visit_photos",
       "culture_venues",
@@ -1749,6 +1753,8 @@ describe("RestoreStore", () => {
       "culture_playlists",
       "culture_playlist_items",
       "culture_plans",
+      // Tickets (migration 097) go with their plan: the culture import empties them first.
+      "culture_plan_tickets",
       "culture_settings",
       "vehicles",
       "odometer_readings",

@@ -36,6 +36,21 @@ export interface CulturePhotoView {
   readonly createdAt: string;
 }
 
+/**
+ * One ticket on a programme entry, as it crosses the wire: the photo's shape, and
+ * the same rule about bytes. The page opens it through main (`openPlanTicket`),
+ * which hands the blob to the OS viewer the notes' "Otvori" uses.
+ */
+export interface CulturePlanTicketView {
+  readonly id: string;
+  readonly planId: string;
+  readonly fileName: string;
+  readonly mime: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+  readonly createdAt: string;
+}
+
 export interface CultureVisitView {
   readonly id: string;
   readonly kind: VisitKind;
@@ -80,6 +95,8 @@ export interface CulturePlanView {
   readonly notes: string;
   /** Set once this plan became a visit - which is what stops the page asking twice. */
   readonly visitId: string | null;
+  /** The files the booking came with, oldest first. */
+  readonly tickets: readonly CulturePlanTicketView[];
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -206,6 +223,13 @@ interface RemovePhotoPayload {
   profileId: string;
   id: string;
   photoId: string;
+}
+
+/** One ticket of one plan: the open and the remove both name the pair, and the store checks it. */
+interface PlanTicketPayload {
+  profileId: string;
+  id: string;
+  ticketId: string;
 }
 
 /** Removing ONE appearance of a track from a playlist: the playlist, and the item row (a playlist may hold one track twice). */
@@ -373,6 +397,9 @@ type CultureOps = {
   removeVisit: { request: RowPayload; response: CultureView };
   addVisitPhoto: { request: AttachPhotoPayload; response: CultureView };
   removeVisitPhoto: { request: RemovePhotoPayload; response: CultureView };
+  addPlanTicket: { request: AttachPhotoPayload; response: CultureView };
+  removePlanTicket: { request: PlanTicketPayload; response: CultureView };
+  openPlanTicket: { request: PlanTicketPayload; response: null };
   createVenue: { request: CreateVenuePayload; response: CultureView };
   updateVenue: { request: UpdateVenuePayload; response: CultureView };
   removeVenue: { request: RowPayload; response: CultureView };
@@ -415,6 +442,9 @@ export const contract = defineModuleContract<"culture", CultureOps>("culture", [
   "removeVisit",
   "addVisitPhoto",
   "removeVisitPhoto",
+  "addPlanTicket",
+  "removePlanTicket",
+  "openPlanTicket",
   "createVenue",
   "updateVenue",
   "removeVenue",

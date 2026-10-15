@@ -171,6 +171,21 @@ export interface CultureVisitPhoto {
 }
 
 /**
+ * One ticket's index row on a programme entry: the same arrangement as a visit's
+ * photo (`CultureVisitPhoto`), one table over. The bytes are in the shared blob
+ * store under `sha256`, and the row carries nothing but what the page shows.
+ */
+export interface CulturePlanTicket {
+  id: string;
+  planId: string;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+/**
  * A place, remembered once: `Museum of Contemporary Art`, `Beograd`, a kind,
  * and the module's own notes about it (which are the venue's, not a visit's -
  * "sit in the balcony" is true of every evening there).
@@ -571,6 +586,16 @@ interface PhotoRow {
   created_at: string;
 }
 
+interface PlanTicketRow {
+  id: string;
+  plan_id: string;
+  file_name: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string;
+  created_at: string;
+}
+
 interface VenueRow {
   id: string;
   profile_id: string;
@@ -653,6 +678,8 @@ const VISIT_COLUMNS =
   "price_minor, price_currency, companions, created_at, updated_at";
 
 const PHOTO_COLUMNS = "id, visit_id, file_name, mime, size_bytes, sha256, created_at";
+
+const PLAN_TICKET_COLUMNS = "id, plan_id, file_name, mime, size_bytes, sha256, created_at";
 
 const VENUE_COLUMNS = "id, profile_id, name, city, kind, notes, created_at, updated_at";
 
@@ -739,6 +766,11 @@ export class CultureStore {
   private readonly selectAllPhotos: Database.Statement;
   private readonly selectPhoto: Database.Statement;
   private readonly deletePhoto: Database.Statement;
+  // --- plan tickets ---------------------------------------------------------
+  private readonly insertPlanTicket: Database.Statement;
+  private readonly selectPlanTickets: Database.Statement;
+  private readonly selectPlanTicket: Database.Statement;
+  private readonly deletePlanTicket: Database.Statement;
   // --- venues ---------------------------------------------------------------
   private readonly insertVenue: Database.Statement;
   private readonly selectVenues: Database.Statement;
@@ -797,6 +829,7 @@ export class CultureStore {
   private readonly updateItemRank: Database.Statement;
   private readonly deleteItem: Database.Statement;
   // --- the archive ----------------------------------------------------------
+  private readonly deletePlanTickets: Database.Statement;
   private readonly deletePlans: Database.Statement;
   private readonly deleteVenues: Database.Statement;
   private readonly deleteSettings: Database.Statement;
@@ -871,6 +904,22 @@ export class CultureStore {
     );
     this.deletePhoto = db.prepare(
       `DELETE FROM culture_visit_photos WHERE id = ? AND visit_id = ?`,
+    );
+
+    this.insertPlanTicket = db.prepare(
+      `INSERT INTO culture_plan_tickets
+         (id, plan_id, file_name, mime, size_bytes, sha256, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.selectPlanTickets = db.prepare(
+      `SELECT ${PLAN_TICKET_COLUMNS} FROM culture_plan_tickets
+        WHERE plan_id = ? ORDER BY created_at, id`,
+    );
+    this.selectPlanTicket = db.prepare(
+      `SELECT ${PLAN_TICKET_COLUMNS} FROM culture_plan_tickets WHERE id = ? AND plan_id = ?`,
+    );
+    this.deletePlanTicket = db.prepare(
+      `DELETE FROM culture_plan_tickets WHERE id = ? AND plan_id = ?`,
     );
 
     this.insertVenue = db.prepare(
@@ -963,10 +1012,10 @@ export class CultureStore {
                      updated_at = excluded.updated_at`,
     );
 
-    // The ONE place this module's blob references are counted, across its two
-    // hash-naming tables - a photo and a track may hold byte-identical content,
-    // so the count has to see both before main's union can be asked whether a
-    // file on disk is orphaned.
+    // The ONE place this module's blob references are counted, across its three
+    // hash-naming tables - a photo, a ticket and a track may hold byte-identical
+    // content, so the count has to see all three before main's union can be asked
+    // whether a file on disk is orphaned.
     //
     // Deliberately PROFILE-AGNOSTIC, like every other member of that union: the
     // blob store is content-addressed across the whole database, so a count
@@ -977,19 +1026,22 @@ export class CultureStore {
     this.countBlobReferences = db.prepare(
       `SELECT
          (SELECT count(*) FROM culture_visit_photos p WHERE p.sha256 = ?) +
+         (SELECT count(*) FROM culture_plan_tickets k WHERE k.sha256 = ?) +
          (SELECT count(*) FROM culture_tracks t
            WHERE t.sha256 = ?) AS n`,
     );
     // What the bytes are served as. The photo table is asked first, which is the
-    // order main's own mime union asks these two in - and the track table is the
-    // fallback, because a hash may be named by a track alone, or by both (in
-    // which case the photo's mime is the one the served bytes are). Read with NO
-    // profile, on the count's own rule: `nx-blob:` asks for a hash and has no
-    // profile to ask with.
+    // order main's own mime union asks these in; the ticket and then the track
+    // table are the fallbacks, because a hash may be named by a track alone, or by
+    // several (in which case the first named row's mime is the one the served bytes
+    // are). Read with NO profile, on the count's own rule: `nx-blob:` asks for a
+    // hash and has no profile to ask with.
     this.selectBlobMime = db.prepare(
       `SELECT COALESCE(
          (SELECT p.mime FROM culture_visit_photos p
            WHERE p.sha256 = ? LIMIT 1),
+         (SELECT k.mime FROM culture_plan_tickets k
+           WHERE k.sha256 = ? LIMIT 1),
          (SELECT t.mime FROM culture_tracks t
            WHERE t.sha256 = ? LIMIT 1)
        ) AS mime`,
@@ -1147,6 +1199,10 @@ export class CultureStore {
     // go before the tracks they may name; the plans go before the visits and
     // venues they point at, and the tracks before nothing that names them here.
     this.deletePlans = db.prepare(`DELETE FROM culture_plans WHERE profile_id = ?`);
+    this.deletePlanTickets = db.prepare(
+      `DELETE FROM culture_plan_tickets
+        WHERE plan_id IN (SELECT id FROM culture_plans WHERE profile_id = ?)`,
+    );
     this.deletePlaylistItems = db.prepare(
       `DELETE FROM culture_playlist_items
         WHERE playlist_id IN (SELECT id FROM culture_playlists WHERE profile_id = ?)`,
@@ -1493,6 +1549,46 @@ export class CultureStore {
     }
   }
 
+  /** Attaches one ticket to a live plan. The bytes are already in the blob store; this writes the index row. */
+  addPlanTicket(planId: string, input: CulturePhotoInput, now: string): CulturePlanTicket {
+    const validNow = validateNow(now);
+    this.requirePlan(planId);
+    const fileName = validateFileName(input.fileName);
+    const mime = validateMime(input.mime);
+    const sizeBytes = validateSizeBytes(input.sizeBytes, MAX_CULTURE_PHOTO_BYTES, "sizeBytes");
+    const sha256 = validateSha256(input.sha256);
+
+    const id = uuidv7();
+    this.insertPlanTicket.run(id, planId, fileName, mime, sizeBytes, sha256, validNow);
+    return { id, planId, fileName, mime, sizeBytes, sha256, createdAt: validNow };
+  }
+
+  /** A live plan's tickets, in the order they were attached. */
+  listPlanTickets(planId: string): CulturePlanTicket[] {
+    this.requirePlan(planId);
+    return (this.selectPlanTickets.all(planId) as PlanTicketRow[]).map(toPlanTicket);
+  }
+
+  /** One ticket on a live plan, or throws. */
+  planTicket(planId: string, ticketId: string): CulturePlanTicket {
+    this.requirePlan(planId);
+    const row = this.selectPlanTicket.get(ticketId, planId) as PlanTicketRow | undefined;
+    if (row === undefined) {
+      throw new CultureNotFoundError(`No ticket "${ticketId}" on plan "${planId}".`);
+    }
+    return toPlanTicket(row);
+  }
+
+  /**
+   * Removes one ticket row and RETURNS it. The caller uses the returned `sha256`
+   * to decide whether the blob is now orphaned, as `removeVisitPhoto` does.
+   */
+  removePlanTicket(planId: string, ticketId: string): CulturePlanTicket {
+    const ticket = this.planTicket(planId, ticketId);
+    this.deletePlanTicket.run(ticketId, planId);
+    return ticket;
+  }
+
   /**
    * The plan's one question, answered: writes the visit it became and points
    * the plan at it, in one transaction.
@@ -1574,13 +1670,13 @@ export class CultureStore {
    * the collector would take it.
    */
   refCount(sha256: string): number {
-    const { n } = this.countBlobReferences.get(sha256, sha256) as { n: number };
+    const { n } = this.countBlobReferences.get(sha256, sha256, sha256) as { n: number };
     return n;
   }
 
   /** The mime any row registered for a hash, or null when none of them names it - profile-agnostic, like the count above. */
   mimeForHash(sha256: string): string | null {
-    const row = this.selectBlobMime.get(sha256, sha256) as { mime: string | null };
+    const row = this.selectBlobMime.get(sha256, sha256, sha256) as { mime: string | null };
     return row.mime;
   }
 
@@ -2093,6 +2189,7 @@ export class CultureStore {
     const parsed = parseCultureExport(value);
 
     return this.db.transaction((): CultureImportSummary => {
+      this.deletePlanTickets.run(this.profileId);
       this.deletePlans.run(this.profileId);
       this.deletePlaylistItems.run(this.profileId);
       this.deletePlaylists.run(this.profileId);
@@ -2354,6 +2451,18 @@ function toPlan(row: PlanRow): CulturePlan {
 function foldVenueKey(name: string, city: string | null): string {
   const fold = (value: string): string => value.trim().replace(/\s+/g, " ").toLowerCase();
   return `${fold(name)}\u0000${city === null ? "" : fold(city)}`;
+}
+
+function toPlanTicket(row: PlanTicketRow): CulturePlanTicket {
+  return {
+    id: row.id,
+    planId: row.plan_id,
+    fileName: row.file_name,
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    sha256: row.sha256,
+    createdAt: row.created_at,
+  };
 }
 
 function toPhoto(row: PhotoRow): CultureVisitPhoto {

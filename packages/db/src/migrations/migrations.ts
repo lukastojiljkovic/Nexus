@@ -93,6 +93,8 @@ import { migration090 } from "./090-assistant-knowledge.js";
 import { migration091 } from "./091-assistant-conversations.js";
 import { migration092 } from "./092-assistant-chat-model.js";
 import { migration093 } from "./093-assistant-tool-outcome.js";
+import { migration096 } from "./096-library-goals-loans.js";
+import { migration097 } from "./097-culture-plan-tickets.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -197,6 +199,8 @@ export const MIGRATIONS: readonly Migration[] = [
   migration091,
   migration092,
   migration093,
+  migration096,
+  migration097,
 ];
 
 /**

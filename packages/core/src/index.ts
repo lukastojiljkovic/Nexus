@@ -1457,6 +1457,15 @@ export { LIBRARY_MAX_SUGGESTION_ITEMS, validateSuggestedCollection } from "./lib
 export type { SuggestedCollectionItemV1, SuggestedCollectionV1, SuggestedTitle } from "./library/suggested.js";
 export { libraryYearStats } from "./library/stats.js";
 export type { LibraryStatsItem, LibraryStatsPass, LibraryYearStats } from "./library/stats.js";
+export {
+  LIBRARY_MAX_GOAL_TARGET,
+  LIBRARY_MIN_GOAL_TARGET,
+  isLibraryGoalTarget,
+  libraryGoalProgress,
+} from "./library/goals.js";
+export type { LibraryGoal, LibraryGoalProgress } from "./library/goals.js";
+export { LIBRARY_MAX_LOAN_TO_LENGTH, isLibraryLoanOverdue } from "./library/loans.js";
+export type { LibraryLoan } from "./library/loans.js";
 export { normalizeLibraryTitle, titleMatchKey } from "./library/title.js";
 export { collectionProgress } from "./library/collections.js";
 export type {

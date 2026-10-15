@@ -35,11 +35,14 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 93 (whether a tool call did the thing), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(93);
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
-      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
-    );
+  it("is at version 97 (culture plan tickets), ascending from 1 with 94, 95 and 98 still reserved", () => {
+    expect(LATEST_VERSION).toBe(97);
+    // 94, 95 and 98 are held by other packages of this wave, so the gap is deliberate.
+    expect(MIGRATIONS.map((migration) => migration.version)).toEqual([
+      ...Array.from({ length: 93 }, (_, index) => index + 1),
+      96,
+      97,
+    ]);
   });
 });
 
