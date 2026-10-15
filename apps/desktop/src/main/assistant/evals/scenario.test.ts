@@ -226,6 +226,18 @@ describe("parseScenario", () => {
         draft["expect"] = { claimsOnlyWhatRan: false };
       }),
     ],
+    [
+      "a destination with an unknown key",
+      broken((draft) => {
+        draft["expect"] = { navigatesTo: [{ module: "tasks", tab: "today" }] };
+      }),
+    ],
+    [
+      "a synthetic tool whose flag is not a boolean",
+      broken((draft) => {
+        draft["tools"] = [{ name: "tasks.delete", effect: "navigate", synthetic: "yes" }];
+      }),
+    ],
   ];
 
   for (const [what, value] of refusals) {
@@ -250,6 +262,19 @@ describe("parseScenario", () => {
     );
     expect(scenario.expect.script).toBe("latin");
     expect(scenario.expect.claimsOnlyWhatRan).toBe(true);
+  });
+
+  it("reads where a turn is expected to navigate, and reads a tool as synthetic", () => {
+    const scenario = parseScenario(
+      broken((draft) => {
+        draft["tools"] = [{ name: "tasks.delete", effect: "navigate", synthetic: true }];
+        draft["expect"] = { navigatesTo: [{ module: "tasks" }] };
+        draft["script"] = [{ toolCalls: [{ name: "tasks.delete" }] }];
+      }),
+      "open.json",
+    );
+    expect(scenario.expect.navigatesTo).toEqual([{ module: "tasks" }]);
+    expect(scenario.tools[0]?.synthetic).toBe(true);
   });
 });
 

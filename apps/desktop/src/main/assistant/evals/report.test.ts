@@ -13,6 +13,8 @@ function result(overrides: Partial<ScenarioResult> & Pick<ScenarioResult, "id">)
     durationMs: 1,
     finalText: "",
     confirmations: [],
+    toolsOffered: [],
+    navigations: [],
     calls: [],
     expectations: [],
     ...overrides,

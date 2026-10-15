@@ -1,0 +1,406 @@
+{
+  "scenarios": [
+    {
+      "id": "quantity-decimal-comma-sr",
+      "title": "Decimalni zarez u količini",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Dodaj u ostavu 1,5 l soka od pomorandže."
+        }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću sok od pomorandže.",
+            "en": "I will add the orange juice."
+          },
+          "content": "Sok od pomorandže, 1.5 l, je u ostavi."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": {
+                "contains": "sok"
+              },
+              "quantity": {
+                "eq": 1.5
+              },
+              "unit": {
+                "eq": "l"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "1.5"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Sok od pomorandže",
+                "quantity": "1,5",
+                "unit": "l"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Dodao sam sok od pomorandže, količina je 1.5 litra."
+        }
+      ]
+    },
+    {
+      "id": "quantity-spelled-unit-sr",
+      "title": "Jedinica ispisana rečju",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Dodaj u ostavu 2 kile šećera."
+        }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću šećer.",
+            "en": "I will add the sugar."
+          },
+          "content": "Šećer, 2 kg, je u ostavi."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": {
+                "contains": "šećer"
+              },
+              "quantity": {
+                "eq": 2
+              },
+              "unit": {
+                "eq": "kg"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "kg"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Šećer",
+                "quantity": 2,
+                "unit": "kila"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Dodao sam šećer, količina je 2 kilograma."
+        }
+      ]
+    },
+    {
+      "id": "quantity-half-kilo-sr",
+      "title": "„Pola kile“ kao količina",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Dodaj u ostavu pola kile mleka."
+        }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću mleko.",
+            "en": "I will add the milk."
+          },
+          "content": "Mleko, 0.5 kg, je u ostavi."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": {
+                "contains": "mleko"
+              },
+              "quantity": {
+                "eq": 0.5
+              },
+              "unit": {
+                "eq": "kg"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "0.5"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Mleko",
+                "quantity": "pola kile",
+                "unit": "kg"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Dodao sam mleko u ostavu, pola kile ostaje u frižideru."
+        }
+      ]
+    },
+    {
+      "id": "quantity-decimal-comma-en",
+      "title": "Decimal comma in a quantity",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Add 1,5 l of orange juice to the pantry."
+        }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću sok od pomorandže.",
+            "en": "I will add the orange juice."
+          },
+          "content": "Orange juice, 1.5 l, is in the pantry."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": {
+                "contains": "juice"
+              },
+              "quantity": {
+                "eq": 1.5
+              },
+              "unit": {
+                "eq": "l"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "1.5"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Orange juice",
+                "quantity": "1,5",
+                "unit": "l"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I added the orange juice, and the amount is 1.5 litres."
+        }
+      ]
+    },
+    {
+      "id": "quantity-spelled-unit-en",
+      "title": "A unit spelled as a word",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Add 2 kilos of sugar to the pantry."
+        }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću šećer.",
+            "en": "I will add the sugar."
+          },
+          "content": "Sugar, 2 kg, is in the pantry."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": {
+                "contains": "sugar"
+              },
+              "quantity": {
+                "eq": 2
+              },
+              "unit": {
+                "eq": "kg"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "kg"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Sugar",
+                "quantity": 2,
+                "unit": "kilos"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I added the sugar, and the amount is 2 kilograms."
+        }
+      ]
+    },
+    {
+      "id": "quantity-half-kilo-en",
+      "title": "“Half a kilo” as a quantity",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Add half a kilo of sugar to the pantry."
+        }
+      ],
+      "tools": [
+        {
+          "name": "pantry.add",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću šećer.",
+            "en": "I will add the sugar."
+          },
+          "content": "Sugar, 0.5 kg, is in the pantry."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "pantry.add",
+            "args": {
+              "name": {
+                "contains": "sugar"
+              },
+              "quantity": {
+                "eq": 0.5
+              },
+              "unit": {
+                "eq": "kg"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "0.5"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "pantry.add",
+              "arguments": {
+                "name": "Sugar",
+                "quantity": "half a kilo",
+                "unit": "kg"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I added the sugar, and the amount is 0.5 kilograms."
+        }
+      ]
+    }
+  ]
+}

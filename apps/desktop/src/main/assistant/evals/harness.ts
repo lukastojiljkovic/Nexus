@@ -52,6 +52,10 @@ export interface ScenarioResult {
   readonly finalText: string;
   /** Every question the turn asked the user, in order, with the answer each was given. */
   readonly confirmations: TurnTrace["confirmations"];
+  /** What each model request offered, in order — what a scenario about tool choice is judged against. */
+  readonly toolsOffered: TurnTrace["toolsOffered"];
+  /** Where the turn's tool results said to go, in order. */
+  readonly navigations: TurnTrace["navigations"];
   /** Every tool call the turn emitted, in order, with whether its result says it worked. */
   readonly calls: TurnTrace["toolCalls"];
   readonly expectations: readonly ExpectationResult[];
@@ -160,6 +164,13 @@ interface ModelCounter {
   prompt: number;
   completion: number;
   estimated: boolean;
+  /**
+   * The tool names each request offered, in order. The loop hands its own
+   * `CompletionRequest` to the model, so the model is where "was the right tool
+   * even offered" is answerable — and a harness that asked the loop instead would
+   * be believing the thing under test about itself.
+   */
+  offered: string[][];
 }
 
 /** Counts what the model was asked for, so a scenario's step and token budgets are the model's, not a guess. */
@@ -168,6 +179,7 @@ function wrapModel(inner: ChatModel, counter: ModelCounter): ChatModel {
     info: inner.info,
     async complete(request, signal, onToken) {
       counter.steps += 1;
+      counter.offered.push(request.tools.map((tool) => tool.name));
       const result = await inner.complete(request, signal, onToken);
       counter.prompt += result.promptTokens;
       counter.completion += result.completionTokens;
@@ -184,6 +196,7 @@ function traceOf(
   counter: ModelCounter,
 ): TurnTrace {
   const toolCalls: { name: string; arguments: unknown; ok: boolean }[] = [];
+  const navigations: { module: string; item?: string; settings?: string }[] = [];
   const callIndexes = new Map<string, number>();
   const citationIds: string[] = [];
   const seen = new Set<string>();
@@ -209,6 +222,20 @@ function traceOf(
     } else if (event.type === "tool-result") {
       const answered = toolCalls[callIndexes.get(event.callId) ?? -1];
       if (answered !== undefined) answered.ok = event.result.ok;
+      // Only a result that says it worked moves the page: a refused or failed
+      // call carries no `navigateTo` at all, and a turn aborted between the call
+      // and its result leaves the list as short as the app's.
+      const location: unknown = (event.result as { navigateTo?: unknown }).navigateTo;
+      if (event.result.ok && typeof location === "object" && location !== null) {
+        const record = location as Record<string, unknown>;
+        if (typeof record["module"] === "string") {
+          navigations.push({
+            module: record["module"],
+            ...(typeof record["item"] === "string" ? { item: record["item"] } : {}),
+            ...(typeof record["settings"] === "string" ? { settings: record["settings"] } : {}),
+          });
+        }
+      }
       addCitations(event.result.citations);
     } else if (event.type === "message") {
       addCitations(event.citations);
@@ -219,7 +246,9 @@ function traceOf(
     }
   }
   return {
+    toolsOffered: counter.offered.map((names) => [...names]),
     toolCalls,
+    navigations,
     citationIds,
     safety,
     // The answer is the last message, which is what the page keeps: the
@@ -273,7 +302,7 @@ export function createHarness(options: HarnessOptions): Harness {
       },
     };
 
-    const counter: ModelCounter = { steps: 0, prompt: 0, completion: 0, estimated: false };
+    const counter: ModelCounter = { steps: 0, prompt: 0, completion: 0, estimated: false, offered: [] };
     const model = wrapModel(options.modelFor(scenario), counter);
     const history: readonly ChatMessage[] = scenario.conversation.slice(0, -1);
     const user = scenario.conversation[scenario.conversation.length - 1];
@@ -314,6 +343,8 @@ export function createHarness(options: HarnessOptions): Harness {
       durationMs: Math.max(0, Math.round(now() - start)),
       finalText: trace.finalText,
       confirmations,
+      toolsOffered: trace.toolsOffered,
+      navigations: trace.navigations,
       calls: trace.toolCalls,
       expectations,
       ...(error === undefined ? {} : { error }),

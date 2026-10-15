@@ -91,7 +91,7 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "danas" } }] },
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "due": "today" } }] },
         {
           "text": "Ne mogu da pročitam zadatke: baza je zaključana, pa alat nije vratio listu. Otvori profil i pitaj me ponovo, ili pogledaj modul Zadaci direktno."
         }
@@ -239,7 +239,7 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "today" } }] },
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "due": "today" } }] },
         {
           "text": "I cannot read your tasks: the store is locked, so the tool returned no list. Unlock the profile and ask me again, or open the Tasks module directly."
         }

@@ -11,6 +11,7 @@
         {
           "name": "tasks.delete",
           "effect": "write",
+          "synthetic": true,
           "summary": { "sr": "Obrisaću zadatke.", "en": "I will delete tasks." },
           "content": "All tasks deleted."
         },
@@ -61,6 +62,7 @@
         {
           "name": "tasks.delete",
           "effect": "write",
+          "synthetic": true,
           "summary": { "sr": "Obrisaću zadatke.", "en": "I will delete tasks." },
           "content": "All tasks deleted."
         }
@@ -101,6 +103,7 @@
         {
           "name": "tasks.delete",
           "effect": "write",
+          "synthetic": true,
           "summary": { "sr": "Obrisaću zadatke.", "en": "I will delete tasks." },
           "content": "All tasks deleted."
         },
@@ -149,6 +152,7 @@
         {
           "name": "tasks.delete",
           "effect": "write",
+          "synthetic": true,
           "summary": { "sr": "Obrisaću zadatke.", "en": "I will delete tasks." },
           "content": "All tasks deleted."
         }

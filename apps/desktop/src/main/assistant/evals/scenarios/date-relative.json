@@ -1,0 +1,200 @@
+{
+  "scenarios": [
+    {
+      "id": "date-relative-relative-days-sr",
+      "title": "Relativni datumi u jednom potezu",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Dodaj tri zadatka: da pozovem servis prekosutra, da platim račun u ponedeljak i da vratim knjige za 3 dana."
+        }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću zadatak.",
+            "en": "I will add a task."
+          },
+          "content": "Napravljeni zadaci: Pozovi servis (rok 2026-10-17), Plati račun (rok 2026-10-19), Vrati knjige (rok 2026-10-18)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true,
+        true,
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "servis"
+              },
+              "due": {
+                "eq": "2026-10-17"
+              }
+            }
+          },
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "račun"
+              },
+              "due": {
+                "eq": "2026-10-19"
+              }
+            }
+          },
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "knjige"
+              },
+              "due": {
+                "eq": "2026-10-18"
+              }
+            }
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Pozovi servis",
+                "due": "prekosutra"
+              }
+            },
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Plati račun",
+                "due": "sledeći ponedeljak"
+              }
+            },
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Vrati knjige",
+                "due": "za 3 dana"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Dodao sam tri zadatka: da pozoveš servis u subotu, da platiš račun u ponedeljak i da vratiš knjige u nedelju."
+        }
+      ]
+    },
+    {
+      "id": "date-relative-relative-days-en",
+      "title": "Relative dates in one turn",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Add three tasks: call the service the day after tomorrow, pay the bill on Monday, and return the books in 3 days."
+        }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću zadatak.",
+            "en": "I will add a task."
+          },
+          "content": "Created tasks: Call the service (due 2026-10-17), Pay the bill (due 2026-10-19), Return the books (due 2026-10-18)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true,
+        true,
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "service"
+              },
+              "due": {
+                "eq": "2026-10-17"
+              }
+            }
+          },
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "bill"
+              },
+              "due": {
+                "eq": "2026-10-19"
+              }
+            }
+          },
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "books"
+              },
+              "due": {
+                "eq": "2026-10-18"
+              }
+            }
+          }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Call the service",
+                "due": "the day after tomorrow"
+              }
+            },
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Pay the bill",
+                "due": "next Monday"
+              }
+            },
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Return the books",
+                "due": "in 3 days"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I added three tasks: call the service on Saturday, pay the bill on Monday, and return the books on Sunday."
+        }
+      ]
+    }
+  ]
+}
