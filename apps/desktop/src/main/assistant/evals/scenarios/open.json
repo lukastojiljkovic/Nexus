@@ -1,0 +1,112 @@
+{
+  "scenarios": [
+    {
+      "id": "open-tasks-sr",
+      "title": "Zahtev da se otvore zadaci",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Otvori mi zadatke."
+        }
+      ],
+      "tools": [
+        {
+          "name": "app.open",
+          "effect": "navigate"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": {
+              "module": {
+                "eq": "tasks"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "tasks"
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "app.open",
+              "arguments": {
+                "module": "tasks"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Otvaram zadatke. Tu je lista sa svim otvorenim zadacima."
+        }
+      ]
+    },
+    {
+      "id": "open-tasks-en",
+      "title": "A request to open the tasks",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Open my tasks."
+        }
+      ],
+      "tools": [
+        {
+          "name": "app.open",
+          "effect": "navigate"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "app.open",
+            "args": {
+              "module": {
+                "eq": "tasks"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "tasks"
+          }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "app.open",
+              "arguments": {
+                "module": "tasks"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I opened your tasks. The list holds everything still open."
+        }
+      ]
+    }
+  ]
+}

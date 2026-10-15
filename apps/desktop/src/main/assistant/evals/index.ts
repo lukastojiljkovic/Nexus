@@ -20,6 +20,7 @@ export {
   parseScenarioFile,
   ScenarioError,
   type ArgumentConstraint,
+  type ExpectedLocation,
   type Scenario,
   type ScenarioCitation,
   type ScenarioExpectation,

@@ -17,10 +17,22 @@ import type { AssistantLocale } from "@nexus/core";
 
 import { claimsCompletion, detectDoesNotKnow, detectLanguage, detectScript } from "./language.js";
 import type { ReplyScript } from "./language.js";
-import type { ArgumentConstraint, ScenarioExpectation, ToolCallExpectation } from "./scenario.js";
+import type {
+  ArgumentConstraint,
+  ExpectedLocation,
+  ScenarioExpectation,
+  ToolCallExpectation,
+} from "./scenario.js";
 
 /** What the harness saw a turn do. The checkers read nothing else. */
 export interface TurnTrace {
+  /**
+   * The tool names the turn was OFFERED, one list per model request, in order.
+   * A turn that never saw the right tool cannot call it, and a scenario that
+   * only says `toolsCalled` cannot tell that failure from a model that was
+   * offered the tool and chose not to use it.
+   */
+  readonly toolsOffered: readonly (readonly string[])[];
   /**
    * Every call the loop emitted, in order, with what its result said. `false`
    * is a refusal, a failure, or a call whose result never arrived (an aborted
@@ -32,6 +44,12 @@ export interface TurnTrace {
     readonly arguments: unknown;
     readonly ok: boolean;
   }[];
+  /**
+   * Where the turn's tool results said to go, in order — the `navigateTo` of
+   * each result, which is what the page acts on. A result that carries none
+   * contributes nothing.
+   */
+  readonly navigations: readonly ExpectedLocation[];
   /** Citation ids the turn emitted, on message events and on tool results, deduplicated in order. */
   readonly citationIds: readonly string[];
   /** Whether the answer's own citations include a safety pack's: what makes the page draw the safety notice under it. */
@@ -109,29 +127,43 @@ function matchArgument(
 }
 
 /** One expected call, against the calls the turn actually made. */
+/** The first constraint a call's arguments break, as the report words it; `undefined` when none is broken. */
+function argumentRefusal(
+  callArguments: unknown,
+  constraints: Readonly<Record<string, ArgumentConstraint>>,
+): string | undefined {
+  const args =
+    typeof callArguments === "object" && callArguments !== null && !Array.isArray(callArguments)
+      ? (callArguments as Record<string, unknown>)
+      : {};
+  for (const [name, constraint] of Object.entries(constraints)) {
+    const outcome = matchArgument(args[name], constraint);
+    if (!outcome.ok) return `argument "${name}" is ${json(args[name])} but ${outcome.reason}`;
+  }
+  return undefined;
+}
+
+/**
+ * A turn may call one tool more than once (two tasks in one message), and the
+ * expectation is met by any one of those calls: an expectation per task then
+ * reads two different calls, not the first one twice.
+ */
 function checkCall(expectation: ToolCallExpectation, calls: TurnTrace["toolCalls"]): ExpectationResult {
   const label = `toolsCalled(${expectation.name})`;
-  const call = calls.find((entry) => entry.name === expectation.name);
-  if (call === undefined) {
+  const named = calls.filter((entry) => entry.name === expectation.name);
+  if (named.length === 0) {
     const made = calls.length === 0 ? "none" : calls.map((entry) => entry.name).join(", ");
     return { kind: "toolsCalled", label, passed: false, detail: `not called; the turn called: ${made}` };
   }
-  const args =
-    typeof call.arguments === "object" && call.arguments !== null && !Array.isArray(call.arguments)
-      ? (call.arguments as Record<string, unknown>)
-      : {};
-  for (const [name, constraint] of Object.entries(expectation.args ?? {})) {
-    const outcome = matchArgument(args[name], constraint);
-    if (!outcome.ok) {
-      return {
-        kind: "toolsCalled",
-        label,
-        passed: false,
-        detail: `argument "${name}" is ${json(args[name])} but ${outcome.reason}`,
-      };
+  let refusal: string | undefined;
+  for (const call of named) {
+    const broken = argumentRefusal(call.arguments, expectation.args ?? {});
+    if (broken === undefined) {
+      return { kind: "toolsCalled", label, passed: true, detail: "called with the expected arguments" };
     }
+    refusal ??= broken;
   }
-  return { kind: "toolsCalled", label, passed: true, detail: "called with the expected arguments" };
+  return { kind: "toolsCalled", label, passed: false, detail: refusal ?? "" };
 }
 
 function checkNotCalled(name: string, calls: TurnTrace["toolCalls"]): ExpectationResult {
@@ -142,6 +174,48 @@ function checkNotCalled(name: string, calls: TurnTrace["toolCalls"]): Expectatio
     passed: !called,
     detail: called ? "called, and the scenario forbids it" : "not called",
   };
+}
+
+/**
+ * Whether `actual` holds everything `expected` says, and nothing it contradicts:
+ * every key the expectation writes is compared, and a key it does not write is
+ * free. That is the shape every other expectation here already has (a constraint
+ * on an argument the call never sent fails; an argument the expectation does not
+ * mention is not looked at), and it is what lets a destination say `{ module:
+ * "tasks" }` without having to restate the item and the settings card.
+ */
+function holds(actual: unknown, expected: unknown): boolean {
+  if (typeof expected !== "object" || expected === null) return equal(actual, expected);
+  if (Array.isArray(expected)) {
+    return Array.isArray(actual) && expected.every((entry, index) => holds(actual[index], entry));
+  }
+  if (typeof actual !== "object" || actual === null || Array.isArray(actual)) return false;
+  return Object.entries(expected).every(([key, value]) =>
+    holds((actual as Record<string, unknown>)[key], value),
+  );
+}
+
+/**
+ * Where the turn moved the page. The pages a turn navigated to are a LIST, and
+ * each expectation is satisfied by one of them — a turn that opened two pages
+ * satisfies one expectation per page, and a scenario that cares about the order
+ * writes one expectation per destination.
+ */
+function checkNavigatesTo(expected: ExpectedLocation, navigations: TurnTrace["navigations"]): ExpectationResult {
+  const label = `navigatesTo(${labelOf(expected)})`;
+  const passed = navigations.some((location) => holds(location, expected));
+  const seen = navigations.length === 0 ? "nowhere" : navigations.map(labelOf).join(", ");
+  return {
+    kind: "navigatesTo",
+    label,
+    passed,
+    detail: passed ? "the turn navigated there" : `the turn navigated: ${seen}`,
+  };
+}
+
+/** A destination as one report column: the module, plus the item or card when the scenario names one. */
+function labelOf(location: ExpectedLocation): string {
+  return [location.module, location.item, location.settings].filter((part) => part !== undefined).join("/");
 }
 
 function checkCite(id: string, trace: TurnTrace): ExpectationResult {
@@ -231,10 +305,10 @@ function checkMaxSteps(budget: number, trace: TurnTrace): ExpectationResult {
 }
 
 /**
- * Every expectation a scenario declares, in a fixed order: tools, citations,
- * the notice, the text, the claim, the language and the script, the gap, the
- * budget. The order is the report's, so two runs of one scenario print the same
- * column.
+ * Every expectation a scenario declares, in a fixed order: the tools it calls
+ * and the ones it may not, where it navigates, citations, the notice, the text,
+ * the claim, the language and the script, the gap, the budget. The order is the
+ * report's, so two runs of one scenario print the same column.
  */
 export function checkExpectations(
   expect: ScenarioExpectation,
@@ -245,6 +319,7 @@ export function checkExpectations(
   const results: ExpectationResult[] = [];
   for (const call of expect.toolsCalled ?? []) results.push(checkCall(call, trace.toolCalls));
   for (const name of expect.toolsNotCalled ?? []) results.push(checkNotCalled(name, trace.toolCalls));
+  for (const location of expect.navigatesTo ?? []) results.push(checkNavigatesTo(location, trace.navigations));
   for (const id of expect.cites ?? []) results.push(checkCite(id, trace));
   if (expect.safetyNotice !== undefined) {
     // The user sees the notice when the page draws it under the answer, and

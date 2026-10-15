@@ -5,13 +5,15 @@ pick behaves differently with tools, citations and Serbian, so the catalogue, th
 prompts and every later change are judged by these numbers rather than by
 impressions.
 
-The set is 74 scenarios — 36 in Serbian and 38 in English — over ten files in
-`scenarios/`: navigation, tasks, calendar, the stranded-hiker sequence,
-prompt-injection, knowledge gaps and sourced answers, robustness (a long
-history, a tool error, a step budget), the web tools, the wave-2 module tools,
-and `field-2026-10-15.json` — the six scenarios the first packaged run asked
-for: a fact the model knows by itself, today's tasks in Serbian Latin, a task
-added, a task whose write failed, and two answers that cite a Cyrillic article.
+The set is the files in `scenarios/`: navigation, tasks, calendar, the
+stranded-hiker sequence, prompt-injection, knowledge gaps and sourced answers,
+robustness (a long history, a tool error, a step budget), the web tools, the
+wave-2 module tools, `field-2026-10-15.json` (the scenarios the first packaged
+run asked for: a fact the model knows by itself, today's tasks in Serbian Latin,
+a task added, a task whose write failed, and two answers that cite a Cyrillic
+article), and the scenarios the next harness work is measured against: relative
+dates, quantities, opening a module, two writes in one message, and a completion
+claim after a failed write. Each is written in both locales.
 
 ## The tool names, and whose spec the model is shown
 
@@ -31,14 +33,16 @@ description, which is what every scripted transcript was written against.
 | Name | Effect | The model's spec | Arguments the scenarios use |
 | --- | --- | --- | --- |
 | `app.open` | `navigate` | the registry's | `{ module, item?, settings? }` |
-| `tasks.create` | `write` | the registry's | `{ title, due?, list? }` — the registry calls the list `project`, and the real loop refuses a field its schema does not have |
-| `tasks.list` | `read` | the registry's | `{ filter? }` — the registry's fields are `status`, `due`, `project` and `limit` |
-| `tasks.delete` | `write` | generic | `{ filter? }` — only in the two prompt-injection scenarios, and the app has no delete tool |
+| `tasks.create` | `write` | the registry's | `{ title, due?, project? }` |
+| `tasks.list` | `read` | the registry's | `{ due? }` — the registry's fields are `status`, `due`, `project` and `limit` |
+| `tasks.delete` | `write` | generic | `{ filter? }` — `synthetic: true` in the prompt-injection scenarios, because the app has no delete tool; the guard test accepts a synthetic name only when the registry lacks it |
 | `calendar.create` | `write` | the registry's | `{ title, start, end? }` |
 | `calendar.events` | `read` | the registry's | `{ from, to }` |
-| `notes.create` | `write` | the registry's | `{ title, body }` — the registry's fields are `title` and `text` |
+| `notes.create` | `write` | the registry's | `{ title, text }` |
 | `web.search` | `network` | the registry's, via the web service the runner stands up with stand-ins | `{ query }` |
-| `web.readPage` | `network` | the registry's, the same way | `{ url }` — used by no scenario yet |
+| `web.read` | `network` | the registry's, the same way | `{ url }` — used by no scenario yet |
+
+With web search and reading on, the registry declares 39 tools: 37 in `tools/*.ts`, and `web.search` and `web.read` from the web service. `tools/index.ts`'s `checkTools` refuses the set when it is built if a name is not `area.verb` in lower case or two tools share one, and `scenario-tools.test.ts` builds that same registry to read the specs.
 
 The module ids the navigation scenarios open (`settings` with `security`, `data`
 and `modules`; `timers`; `private`; `emergency`) are the same kind of assumption.
@@ -91,7 +95,7 @@ warnings on stderr; the report is unaffected.
 | `id`, `title` | A lower-case slug and a label for the report. Ids are unique across files. |
 | `locale` | `sr` or `en`. The turn is expected to answer in it. |
 | `conversation` | The history, oldest first. The **last** message must be the user turn under test. |
-| `tools` | What the turn may use: `name`, `effect`, and for `write`/`network` a bilingual `summary` (the confirmation line) and the result it returns. `declined` overrides what a refusal returns; `fail` makes the tool throw. |
+| `tools` | What the turn may use: `name`, `effect`, and for `write`/`network` a bilingual `summary` (the confirmation line) and the result it returns. `declined` overrides what a refusal returns; `fail` makes the tool throw; `synthetic` marks a name the app does not have, which the scenario keeps as its own. |
 | `knowledge` | Fake hits with citations, including `safety: true` ones. The loop retrieves them before the model runs, highest score first, as the app does: no scenario offers a search tool. |
 | `confirmations` | What the user answers to each confirmation, in order. Required whenever a `write` or `network` tool is offered. An exhausted list refuses. |
 | `maxSteps` | The model calls the turn may spend. |
@@ -109,13 +113,14 @@ step budget, an argument constraint that constrains nothing, and the rest.
 
 ## The expectations
 
-Eleven kinds, each one a pure function in `expectations.ts`, each tested on a
+The kinds, each a pure function in `expectations.ts` and each tested on a
 passing and a failing trace:
 
 | Key | What it checks |
 | --- | --- |
-| `toolsCalled: [{ name, args? }]` | The tool was called. `args` constrains the arguments the model sent, per field: `eq`, `contains`, `matches` (a regular expression source, case-insensitive), `oneOf`. A constraint on an argument the call never sent fails. |
+| `toolsCalled: [{ name, args? }]` | The tool was called. `args` constrains the arguments the model sent, per field: `eq`, `contains`, `matches` (a regular expression source, case-insensitive), `oneOf`. A constraint on an argument the call never sent fails. When the turn called the tool more than once, any one of those calls may satisfy it. |
 | `toolsNotCalled: [name]` | It was not called. |
+| `navigatesTo: [{ module, item?, settings? }]` | The turn moved the page there: some navigation of its tool results (their `navigateTo`, in order) holds every key the expectation writes. A key it leaves out is free, so `{ module: "tasks" }` names the module only. |
 | `cites: [id]` | The turn emitted that citation, on its message or on a tool result. |
 | `safetyNotice` | The user sees the safety notice: the answer cites a safety pack, so the page draws it, or the text carries the sentence verbatim (`fixtures/safety-notice.json`). |
 | `language` | `detectLanguage` reads the answer as that language. |
@@ -125,6 +130,24 @@ passing and a failing trace:
 | `maxSteps` | The turn spent no more model calls than this. |
 | `answerContains: [text]` | The answer holds each phrase, case-insensitively. |
 | `answerNotContains: [text]` | It holds none of them. |
+
+## The scenarios the scripted run leaves red
+
+`scenarios.test.ts` lists the scenarios whose scripted transcript is expected to
+fail, each with the expectation it fails on. A listed scenario that passes, and
+an unlisted one that fails, both fail that test, so the list cannot go stale.
+Each entry is a piece of work the scenario waits on:
+
+| Scenarios | Waiting on | Fails on |
+| --- | --- | --- |
+| `date-relative-*` | an argument resolver that turns "prekosutra", "sledeći ponedeljak" and "za 3 dana" into a date | `toolsCalled(tasks.create)` |
+| `quantity-*` | an argument resolver for a decimal comma, a spelled unit ("kila", "kilos") and a fraction ("pola kile", "half a kilo") | `toolsCalled(pantry.add)` |
+| `claim-without-doing-*` | a verification pass that stops a completion claim after a write failed | `claimsOnlyWhatRan` |
+
+`open-*` and `two-writes-*` pass the scripted run: the navigation and two writes
+in one step already work in the loop, so they stand as regression checks. The
+real mode runs every scenario, the listed ones included, and measures the model
+on each.
 
 ## The two modes, and what differs
 
@@ -209,9 +232,10 @@ read as more than it is:
 | `language.ts` | The detectors: language, script, does-not-know, and the completion-claim phrases. |
 | `fakes.ts` | The knowledge base and the tools built from a scenario, wearing the app's specs when the caller has them. |
 | `scripted.ts` | The scripted model and the stand-in loop. |
-| `expectations.ts` | The eleven checkers, over a plain `TurnTrace`. |
+| `expectations.ts` | The checkers, over a plain `TurnTrace`. |
 | `harness.ts` | Loading a scenario set and the safety notice, and scoring runs. |
 | `report.ts` | The JSON and Markdown writers. |
 | `index.ts` | The public surface. |
 | `fixtures/safety-notice.json` | The fixed safety sentence, both languages. |
 | `scenarios/*.json` | The scenario set. |
+| `scenario-tools.test.ts` | The guard: every tool a scenario offers, and every argument it expects or sends, is one the app's registry declares. |

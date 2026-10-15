@@ -11,7 +11,9 @@ const NOTICE: SafetyNotice = {
 
 function trace(overrides: Partial<TurnTrace> = {}): TurnTrace {
   return {
+    toolsOffered: [],
     toolCalls: [],
+    navigations: [],
     citationIds: [],
     safety: false,
     finalText: "",
@@ -59,6 +61,22 @@ describe("toolsCalled", () => {
     expect(entry.passed).toBe(false);
     expect(entry.detail).toContain("Kupi hleb");
     expect(entry.detail).toContain("helikopter");
+  });
+
+  it("is met by any one of two calls to the same tool, so one expectation per task can read two calls", () => {
+    const current = trace({
+      toolCalls: [
+        { name: "tasks.create", arguments: { title: "Kupi hleb" }, ok: true },
+        { name: "tasks.create", arguments: { title: "Pozovi helikopter" }, ok: true },
+      ],
+    });
+    expect(result(expectation, current, "toolsCalled(tasks.create)").passed).toBe(true);
+    const bread = result(
+      { toolsCalled: [{ name: "tasks.create", args: { title: { contains: "hleb" } } }] },
+      current,
+      "toolsCalled(tasks.create)",
+    );
+    expect(bread.passed).toBe(true);
   });
 
   it("checks eq, oneOf and matches as well as contains", () => {
@@ -116,6 +134,53 @@ describe("toolsNotCalled", () => {
     const entry = result(expectation, trace({ toolCalls: [{ name: "tasks.create", arguments: {}, ok: true }] }), "toolsNotCalled(tasks.create)");
     expect(entry.passed).toBe(false);
     expect(entry.detail).toContain("forbids");
+  });
+});
+
+describe("navigatesTo", () => {
+  it("passes when the turn moved the page to the module the scenario names", () => {
+    const entry = result(
+      { navigatesTo: [{ module: "tasks" }] },
+      trace({ navigations: [{ module: "tasks" }] }),
+      "navigatesTo(tasks)",
+    );
+    expect(entry.passed).toBe(true);
+    expect(entry.detail).toBe("the turn navigated there");
+  });
+
+  it("checks the item and the settings card only when the scenario writes them", () => {
+    const current = trace({ navigations: [{ module: "settings", settings: "security" }] });
+    expect(result({ navigatesTo: [{ module: "settings" }] }, current, "navigatesTo(settings)").passed).toBe(
+      true,
+    );
+    expect(
+      result({ navigatesTo: [{ module: "settings", settings: "security" }] }, current, "navigatesTo(settings/security)")
+        .passed,
+    ).toBe(true);
+    const other = result(
+      { navigatesTo: [{ module: "settings", settings: "profile" }] },
+      current,
+      "navigatesTo(settings/profile)",
+    );
+    expect(other.passed).toBe(false);
+    expect(other.detail).toContain("settings/security");
+  });
+
+  it("is satisfied by one of several destinations, and fails naming where the turn went", () => {
+    const current = trace({
+      navigations: [{ module: "notes", item: "note-7" }, { module: "tasks" }],
+    });
+    expect(result({ navigatesTo: [{ module: "tasks" }] }, current, "navigatesTo(tasks)").passed).toBe(true);
+    const missed = result({ navigatesTo: [{ module: "calendar" }] }, current, "navigatesTo(calendar)");
+    expect(missed.passed).toBe(false);
+    expect(missed.detail).toContain("notes/note-7");
+    expect(missed.detail).toContain("tasks");
+  });
+
+  it("fails, and says nowhere, when nothing carried a location", () => {
+    const entry = result({ navigatesTo: [{ module: "tasks" }] }, trace(), "navigatesTo(tasks)");
+    expect(entry.passed).toBe(false);
+    expect(entry.detail).toBe("the turn navigated: nowhere");
   });
 });
 
@@ -292,11 +357,12 @@ describe("answer text", () => {
 });
 
 describe("checkExpectations", () => {
-  it("keeps a fixed order: calls, citations, notice, text, language, gap, budget", () => {
+  it("keeps a fixed order: calls, forbiddances, destinations, citations, notice, text, language, gap, budget", () => {
     const kinds = checkExpectations(
       {
         toolsCalled: [{ name: "knowledge.search" }],
         toolsNotCalled: ["tasks.create"],
+        navigatesTo: [{ module: "tasks" }],
         cites: ["pack-a"],
         safetyNotice: true,
         answerContains: ["x"],
@@ -307,6 +373,7 @@ describe("checkExpectations", () => {
       },
       trace({
         toolCalls: [{ name: "knowledge.search", arguments: {}, ok: true }],
+        navigations: [{ module: "tasks" }],
         citationIds: ["pack-a"],
         finalText: NOTICE.sr,
       }),
@@ -316,6 +383,7 @@ describe("checkExpectations", () => {
     expect(kinds.map((entry) => entry.kind)).toEqual([
       "toolsCalled",
       "toolsNotCalled",
+      "navigatesTo",
       "cites",
       "safetyNotice",
       "answerContains",
