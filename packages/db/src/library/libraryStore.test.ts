@@ -915,3 +915,145 @@ describe("migration 072's schema", () => {
     ).toThrow();
   });
 });
+
+describe("LibraryStore reading goals", () => {
+  it("keeps one goal per scope: a second set for the same scope edits the first", () => {
+    const library = store();
+    const every = library.setGoal(null, 12, NOW);
+    const books = library.setGoal("book", 5, NOW);
+    expect(library.setGoal(null, 20, LATER)).toMatchObject({ id: every.id, target: 20 });
+    expect(library.listGoals()).toEqual([
+      expect.objectContaining({ id: every.id, kind: null, target: 20 }),
+      expect.objectContaining({ id: books.id, kind: "book", target: 5 }),
+    ]);
+  });
+
+  it("refuses a target outside the bounds, and a kind the library does not have", () => {
+    const library = store();
+    expect(() => library.setGoal(null, 0, NOW)).toThrow(LibraryValidationError);
+    expect(() => library.setGoal(null, 1001, NOW)).toThrow(LibraryValidationError);
+    expect(() => library.setGoal(null, 2.5, NOW)).toThrow(LibraryValidationError);
+    expect(() => library.setGoal("podcast" as never, 3, NOW)).toThrow(LibraryValidationError);
+    expect(library.listGoals()).toEqual([]);
+    expect(library.setGoal(null, 1000, NOW).target).toBe(1000);
+  });
+
+  it("keeps goals per profile", () => {
+    const first = store();
+    const second = store();
+    first.setGoal(null, 3, NOW);
+    expect(second.listGoals()).toEqual([]);
+    expect(second.setGoal(null, 7, NOW).target).toBe(7);
+    expect(first.listGoals()).toEqual([expect.objectContaining({ target: 3 })]);
+  });
+
+  it("refuses a second goal for one scope at the schema, not only in the store", () => {
+    const profileId = createProfile();
+    new LibraryStore(db.raw, profileId).setGoal(null, 4, NOW);
+    expect(() =>
+      db.raw
+        .prepare(
+          `INSERT INTO library_goals (id, profile_id, kind, target, created_at, updated_at)
+           VALUES (?, ?, NULL, 9, ?, ?)`,
+        )
+        .run(uuidv7(), profileId, NOW, NOW),
+    ).toThrow();
+  });
+});
+
+describe("LibraryStore loans", () => {
+  it("lends a work, returns it, and keeps the lending as history", () => {
+    const library = store();
+    const item = library.createItem({ kind: "book", title: "Solaris" }, NOW);
+
+    const lent = library.lend(item.id, { to: "  Marko  ", lentOn: "2026-05-01", dueOn: "2026-05-31" }, LATER);
+    expect(lent).toMatchObject({
+      itemId: item.id,
+      to: "Marko",
+      lentOn: "2026-05-01",
+      dueOn: "2026-05-31",
+      returnedOn: null,
+    });
+
+    const back = library.returnLoan(item.id, lent.id, "2026-05-20", LATER_STILL);
+    expect(back.returnedOn).toBe("2026-05-20");
+    expect(library.listLoans(item.id)).toEqual([back]);
+
+    // The same work can go out again: the first lending is history now.
+    const again = library.lend(item.id, { to: "Ana", lentOn: "2026-06-01" }, LATER_STILL);
+    expect(library.listLoans(item.id).map((loan) => loan.id)).toEqual([lent.id, again.id]);
+    expect(library.listLoans(item.id)[1]).toMatchObject({ dueOn: null, returnedOn: null });
+  });
+
+  it("refuses a second active loan for one work, and a return that is already in", () => {
+    const library = store();
+    const item = library.createItem({ kind: "film", title: "Stalker" }, NOW);
+    const lent = library.lend(item.id, { to: "Ivan", lentOn: "2026-05-01" }, LATER);
+    expect(() => library.lend(item.id, { to: "Petar", lentOn: "2026-05-02" }, LATER)).toThrow(
+      LibraryValidationError,
+    );
+
+    library.returnLoan(item.id, lent.id, "2026-05-03", LATER);
+    expect(() => library.returnLoan(item.id, lent.id, "2026-05-04", LATER)).toThrow(
+      LibraryValidationError,
+    );
+  });
+
+  it("refuses a due day before the lending, a return before the lending, and a day that is not a day", () => {
+    const library = store();
+    const item = library.createItem({ kind: "book", title: "Ana Karenjina" }, NOW);
+    expect(() =>
+      library.lend(item.id, { to: "Ivan", lentOn: "2026-05-10", dueOn: "2026-05-09" }, LATER),
+    ).toThrow(LibraryValidationError);
+    expect(() => library.lend(item.id, { to: "Ivan", lentOn: "2026-02-30" }, LATER)).toThrow(
+      LibraryValidationError,
+    );
+    expect(() => library.lend(item.id, { to: "   ", lentOn: "2026-05-10" }, LATER)).toThrow(
+      LibraryValidationError,
+    );
+
+    const lent = library.lend(item.id, { to: "Ivan", lentOn: "2026-05-10" }, LATER);
+    expect(() => library.returnLoan(item.id, lent.id, "2026-05-09", LATER)).toThrow(
+      LibraryValidationError,
+    );
+    expect(library.listLoans(item.id)[0]?.returnedOn).toBeNull();
+  });
+
+  it("refuses a loan on another profile's work, and a loan id that is not this work's", () => {
+    const owner = store();
+    const other = store();
+    const item = owner.createItem({ kind: "book", title: "Ostrvo" }, NOW);
+    expect(() => other.lend(item.id, { to: "X", lentOn: "2026-05-01" }, LATER)).toThrow(
+      LibraryNotFoundError,
+    );
+
+    const second = owner.createItem({ kind: "book", title: "Dvojnik" }, NOW);
+    const lent = owner.lend(item.id, { to: "X", lentOn: "2026-05-01" }, LATER);
+    expect(() => owner.returnLoan(second.id, lent.id, "2026-05-02", LATER)).toThrow(
+      LibraryNotFoundError,
+    );
+  });
+});
+
+describe("migration 096's schema", () => {
+  it("refuses a second active loan for one work at the schema, and lets a returned one repeat", () => {
+    const profileId = createProfile();
+    const item = new LibraryStore(db.raw, profileId).createItem({ kind: "book", title: "X" }, NOW);
+    const insert = db.raw.prepare(
+      `INSERT INTO library_loans (id, item_id, to_name, lent_on, returned_on, created_at, updated_at)
+       VALUES (?, ?, 'Ana', '2026-05-01', ?, ?, ?)`,
+    );
+    insert.run("l1", item.id, null, NOW, NOW);
+    expect(() => insert.run("l2", item.id, null, NOW, NOW)).toThrow();
+    expect(() => insert.run("l3", item.id, "2026-05-02", NOW, NOW)).not.toThrow();
+    expect(() => insert.run("l4", item.id, "2026-05-03", NOW, NOW)).not.toThrow();
+  });
+
+  it("removes a work's loans with the work", () => {
+    const library = store();
+    const item = library.createItem({ kind: "book", title: "X" }, NOW);
+    library.lend(item.id, { to: "Ana", lentOn: "2026-05-01" }, LATER);
+    db.raw.prepare("DELETE FROM library_items WHERE id = ?").run(item.id);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM library_loans").get()).toEqual({ n: 0 });
+  });
+});

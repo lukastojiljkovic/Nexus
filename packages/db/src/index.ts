@@ -819,6 +819,7 @@ export type {
   CultureImportSummary,
   CultureMusicEntry,
   CulturePhotoInput,
+  CulturePlanTicket,
   CulturePlaylist,
   CulturePlaylistItem,
   CulturePrice,

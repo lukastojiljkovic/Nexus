@@ -4,6 +4,8 @@ import {
   LIBRARY_MAX_COUNT,
   LIBRARY_MAX_CREATOR_LENGTH,
   LIBRARY_MAX_CREATORS,
+  LIBRARY_MAX_GOAL_TARGET,
+  LIBRARY_MAX_LOAN_TO_LENGTH,
   LIBRARY_MAX_RATING,
   LIBRARY_MAX_SUMMARY_LENGTH,
   LIBRARY_MAX_TAGS,
@@ -11,6 +13,7 @@ import {
   LIBRARY_MAX_THOUGHT_LENGTH,
   LIBRARY_MAX_TITLE_LENGTH,
   LIBRARY_MAX_YEAR,
+  LIBRARY_MIN_GOAL_TARGET,
   LIBRARY_MIN_RATING,
   LIBRARY_MIN_YEAR,
   isLibraryKind,
@@ -26,7 +29,9 @@ import type { ModuleCall, ModuleHostSurface } from "../../../main/moduleIpc.js";
 import {
   contract,
   type LibraryCollectionView,
+  type LibraryGoalView,
   type LibraryItemView,
+  type LibraryLoanView,
   type LibraryPassView,
   type LibrarySuggestionView,
   type LibraryThoughtView,
@@ -148,6 +153,15 @@ export function register(host: ModuleHostSurface): void {
       createdAt: thought.createdAt,
       updatedAt: thought.updatedAt,
     }));
+    const loans: LibraryLoanView[] = store.listLoans(item.id).map((loan) => ({
+      id: loan.id,
+      to: loan.to,
+      lentOn: loan.lentOn,
+      dueOn: loan.dueOn,
+      returnedOn: loan.returnedOn,
+      createdAt: loan.createdAt,
+      updatedAt: loan.updatedAt,
+    }));
     return {
       id: item.id,
       kind: item.kind,
@@ -170,6 +184,7 @@ export function register(host: ModuleHostSurface): void {
       updatedAt: item.updatedAt,
       passes,
       thoughts,
+      loans,
     };
   }
 
@@ -189,7 +204,10 @@ export function register(host: ModuleHostSurface): void {
     // adopted" mark on a suggested list, so the two cannot disagree.
     const adoptedIds = new Set<string>();
     for (const row of rows) if (row.suggestedId !== null) adoptedIds.add(row.suggestedId);
-    return { items, collections, suggestions: await suggestionsOf(call, adoptedIds) };
+    const goals: LibraryGoalView[] = store
+      .listGoals()
+      .map((goal) => ({ id: goal.id, kind: goal.kind, target: goal.target }));
+    return { items, collections, suggestions: await suggestionsOf(call, adoptedIds), goals };
   }
 
   /** What every mutation answers with: the rows read back, which is also what the page then draws. */
@@ -301,6 +319,46 @@ export function register(host: ModuleHostSurface): void {
     library(call, profileId).removePass(
       call.as.asId(payload.itemId, "itemId"),
       call.as.asId(payload.id, "id"),
+      instant(call.now()),
+    );
+    return changed(call, profileId);
+  });
+
+  ctx.handle("lendItem", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    library(call, profileId).lend(
+      call.as.asId(payload.itemId, "itemId"),
+      {
+        to: loanRecipientOf(call, payload.to),
+        lentOn: dayOf(call, payload.lentOn),
+        dueOn: nullableDay(call, payload.dueOn, "dueOn"),
+      },
+      instant(call.now()),
+    );
+    return changed(call, profileId);
+  });
+
+  ctx.handle("returnLoan", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    library(call, profileId).returnLoan(
+      call.as.asId(payload.itemId, "itemId"),
+      call.as.asId(payload.id, "id"),
+      dayOf(call, payload.returnedOn),
+      instant(call.now()),
+    );
+    return changed(call, profileId);
+  });
+
+  ctx.handle("setGoal", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    library(call, profileId).setGoal(
+      payload.kind === null ? null : kindOf(payload.kind),
+      call.as.asBoundedInteger(
+        payload.target,
+        "target",
+        LIBRARY_MIN_GOAL_TARGET,
+        LIBRARY_MAX_GOAL_TARGET,
+      ),
       instant(call.now()),
     );
     return changed(call, profileId);
@@ -603,6 +661,15 @@ function nullableCapped(
 function nullableDay(call: { as: As }, value: unknown, field: string): string | null {
   const day = call.as.asNullableString(value, field);
   return day === null ? null : call.as.asCappedChars(day, field, 10);
+}
+
+/** Who a work is lent to: bounded, and trimmed by the store, which refuses a blank name. */
+function loanRecipientOf(call: { as: As }, value: unknown): string {
+  return call.as.asCappedChars(
+    call.as.asNonEmptyString(value, "to"),
+    "to",
+    LIBRARY_MAX_LOAN_TO_LENGTH,
+  );
 }
 
 /** A required bare day: what a thought is filed under. */

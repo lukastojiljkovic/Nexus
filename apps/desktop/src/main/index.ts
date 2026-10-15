@@ -1670,6 +1670,8 @@ configureCultureServices({
   readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
   deleteBlobIfOrphaned: (sha256, refCount) =>
     deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
+  openBlob: (sha256, fileName) =>
+    openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), { fileName, sha256 }),
   blobRefCount,
   packsRoot: () => packsRoot(userDataDir()),
   releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,

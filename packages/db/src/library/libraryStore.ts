@@ -5,13 +5,18 @@ import {
   LIBRARY_MAX_COLLECTION_DESCRIPTION_LENGTH,
   LIBRARY_MAX_COLLECTION_NAME_LENGTH,
   LIBRARY_MAX_COVER_BYTES,
+  LIBRARY_MAX_GOAL_TARGET,
+  LIBRARY_MAX_LOAN_TO_LENGTH,
   LIBRARY_MAX_SUMMARY_LENGTH,
   LIBRARY_MAX_THOUGHT_LENGTH,
   LIBRARY_MAX_TITLE_LENGTH,
+  LIBRARY_MIN_GOAL_TARGET,
   deriveLibraryRatingFromPass,
   deriveLibraryStatusFromPass,
   isLibraryCount,
   isLibraryDay,
+  isLibraryGoalTarget,
+  isLibraryKind,
   isLibraryReadPages,
   isLibraryRating,
   isLibraryStatus,
@@ -35,8 +40,10 @@ import type {
   LibraryCollectionProgress,
   LibraryCover,
   LibraryExportV1,
+  LibraryGoal,
   LibraryItem,
   LibraryKind,
+  LibraryLoan,
   LibraryPass,
   LibraryPassOutcome,
   LibraryProgress,
@@ -143,6 +150,13 @@ export interface AddLibraryPassInput {
 
 /** A partial pass patch, on `UpdateLibraryItemFields`' terms. */
 export type UpdateLibraryPassFields = AddLibraryPassInput;
+
+/** What lending a work accepts: who has it, the day it left, and the day it is due back if anyone set one. */
+export interface LendLibraryItemInput {
+  to: string;
+  lentOn: string;
+  dueOn?: string | null;
+}
 
 export interface AddLibraryThoughtInput {
   date: string;
@@ -287,6 +301,26 @@ interface MatchRow {
   wikidata_id: string | null;
 }
 
+interface GoalRow {
+  id: string;
+  profile_id: string;
+  kind: string | null;
+  target: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface LoanRow {
+  id: string;
+  item_id: string;
+  to_name: string;
+  lent_on: string;
+  due_on: string | null;
+  returned_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const ITEM_COLUMNS =
   "id, profile_id, kind, title, original_title, creators_json, year, status, rating, " +
   "pages_read, pages_total, season, episode, seasons_total, episodes_total, tags_json, " +
@@ -304,15 +338,19 @@ const COLLECTION_COLUMNS =
 
 const LINK_COLUMNS = "id, collection_id, item_id, rank, created_at, updated_at";
 
+const GOAL_COLUMNS = "id, profile_id, kind, target, created_at, updated_at";
+
+const LOAN_COLUMNS = "id, item_id, to_name, lent_on, due_on, returned_on, created_at, updated_at";
+
 /** The item columns, aliased with `i.`, for the one query that joins a child table. */
 const JOINED_ITEM_COLUMNS = ITEM_COLUMNS.split(", ")
   .map((column) => `i.${column}`)
   .join(", ");
 
 /**
- * The LIBRARY module's storage for one profile (migration 072): the works, their
- * passes, their journal, their covers, and the collections that organise them.
- * One store over six tables, because a pass or a thought is not a thing with a
+ * The LIBRARY module's storage for one profile (migrations 072 and 096): the
+ * works, their passes, their journal, their covers, the collections that organise
+ * them, their loans and the reading goals. One store over eight tables, because a pass or a thought is not a thing with a
  * page of its own — it is part of the work's story, and splitting the store
  * would only mean two objects that both had to know the item's rules.
  *
@@ -405,6 +443,17 @@ export class LibraryStore {
   private readonly wipeThoughts: Database.Statement;
   private readonly wipeCollections: Database.Statement;
   private readonly wipeItems: Database.Statement;
+
+  private readonly selectGoals: Database.Statement;
+  private readonly selectGoalByScope: Database.Statement;
+  private readonly insertGoal: Database.Statement;
+  private readonly updateGoalTarget: Database.Statement;
+
+  private readonly selectLoans: Database.Statement;
+  private readonly selectLoan: Database.Statement;
+  private readonly selectActiveLoan: Database.Statement;
+  private readonly insertLoan: Database.Statement;
+  private readonly markLoanReturned: Database.Statement;
 
   constructor(
     private readonly db: DatabaseHandle,
@@ -701,6 +750,41 @@ export class LibraryStore {
       `DELETE FROM library_collections WHERE profile_id = ?`,
     );
     this.wipeItems = db.prepare(`DELETE FROM library_items WHERE profile_id = ?`);
+
+    // Goals sort the every-kind goal first: `''` is below every kind's name.
+    this.selectGoals = db.prepare(
+      `SELECT ${GOAL_COLUMNS} FROM library_goals WHERE profile_id = ? ORDER BY IFNULL(kind, ''), id`,
+    );
+    // The scope is matched through the same expression the unique index names, so
+    // "the goal for this scope" is one indexed lookup.
+    this.selectGoalByScope = db.prepare(
+      `SELECT ${GOAL_COLUMNS} FROM library_goals WHERE profile_id = ? AND IFNULL(kind, '') = ?`,
+    );
+    this.insertGoal = db.prepare(
+      `INSERT INTO library_goals (id, profile_id, kind, target, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    this.updateGoalTarget = db.prepare(
+      `UPDATE library_goals SET target = ?, updated_at = ? WHERE id = ?`,
+    );
+
+    this.selectLoans = db.prepare(
+      `SELECT ${LOAN_COLUMNS} FROM library_loans WHERE item_id = ? ORDER BY lent_on, id`,
+    );
+    this.selectLoan = db.prepare(
+      `SELECT ${LOAN_COLUMNS} FROM library_loans WHERE id = ? AND item_id = ?`,
+    );
+    this.selectActiveLoan = db.prepare(
+      `SELECT ${LOAN_COLUMNS} FROM library_loans WHERE item_id = ? AND returned_on IS NULL`,
+    );
+    this.insertLoan = db.prepare(
+      `INSERT INTO library_loans
+         (id, item_id, to_name, lent_on, due_on, returned_on, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+    );
+    this.markLoanReturned = db.prepare(
+      `UPDATE library_loans SET returned_on = ?, updated_at = ? WHERE id = ? AND item_id = ?`,
+    );
   }
 
   // --- items ---------------------------------------------------------------
@@ -1244,6 +1328,89 @@ export class LibraryStore {
     })();
   }
 
+  // --- reading goals -------------------------------------------------------
+
+  /** This profile's goals: the goal over every kind first, then one for each kind that has one. */
+  listGoals(): LibraryGoal[] {
+    return (this.selectGoals.all(this.profileId) as GoalRow[]).map(toGoal);
+  }
+
+  /**
+   * Sets the goal for one scope - `kind`, or `null` for every kind - and returns
+   * it. A scope with no goal gets one; a scope that has one keeps its row and
+   * takes the new target, so editing a goal is never a second goal.
+   */
+  setGoal(kind: LibraryKind | null, target: number, now: string): LibraryGoal {
+    const validNow = validateNow(now);
+    if (kind !== null && !isLibraryKind(kind)) {
+      throw new LibraryValidationError(`"kind" must be book, film or series, or null for every kind.`);
+    }
+    if (!isLibraryGoalTarget(target)) {
+      throw new LibraryValidationError(
+        `"target" must be a whole number from ${LIBRARY_MIN_GOAL_TARGET} to ${LIBRARY_MAX_GOAL_TARGET}.`,
+      );
+    }
+    const scope = kind ?? "";
+    return this.db.transaction((): LibraryGoal => {
+      const existing = this.selectGoalByScope.get(this.profileId, scope) as GoalRow | undefined;
+      if (existing === undefined) {
+        this.insertGoal.run(uuidv7(), this.profileId, kind, target, validNow, validNow);
+      } else {
+        this.updateGoalTarget.run(target, validNow, existing.id);
+      }
+      return toGoal(this.selectGoalByScope.get(this.profileId, scope) as GoalRow);
+    })();
+  }
+
+  // --- loans ---------------------------------------------------------------
+
+  /** One work's loans, oldest first: its history, with the active loan (if there is one) among them. */
+  listLoans(itemId: string): LibraryLoan[] {
+    this.requireItemRow(itemId);
+    return (this.selectLoans.all(itemId) as LoanRow[]).map(toLoan);
+  }
+
+  /**
+   * Lends one work. A work is lent to one person at a time, so a work that is
+   * already out is refused rather than given a second active loan; the partial
+   * unique index holds the same rule for any write that skips this method.
+   */
+  lend(itemId: string, input: LendLibraryItemInput, now: string): LibraryLoan {
+    const validNow = validateNow(now);
+    this.requireItemRow(itemId);
+    const to = validateLoanRecipient(input.to);
+    const lentOn = validateRequiredDay(input.lentOn, "lentOn");
+    const dueOn = validateDay(input.dueOn ?? null, "dueOn");
+    if (dueOn !== null && dueOn < lentOn) {
+      throw new LibraryValidationError(`"dueOn" must not be before "lentOn".`);
+    }
+
+    return this.db.transaction((): LibraryLoan => {
+      if (this.selectActiveLoan.get(itemId) !== undefined) {
+        throw new LibraryValidationError(`The work "${itemId}" is already lent out.`);
+      }
+      const id = uuidv7();
+      this.insertLoan.run(id, itemId, to, lentOn, dueOn, validNow, validNow);
+      return toLoan(this.selectLoan.get(id, itemId) as LoanRow);
+    })();
+  }
+
+  /** Marks one active loan as returned on `returnedOn`, which may not be before the day it left. */
+  returnLoan(itemId: string, loanId: string, returnedOn: string, now: string): LibraryLoan {
+    const validNow = validateNow(now);
+    this.requireItemRow(itemId);
+    const current = this.requireLoanRow(itemId, loanId);
+    if (current.returned_on !== null) {
+      throw new LibraryValidationError(`The loan "${loanId}" was already returned.`);
+    }
+    const day = validateRequiredDay(returnedOn, "returnedOn");
+    if (day < current.lent_on) {
+      throw new LibraryValidationError(`"returnedOn" must not be before the day the work was lent.`);
+    }
+    this.markLoanReturned.run(day, validNow, loanId, itemId);
+    return toLoan(this.selectLoan.get(loanId, itemId) as LoanRow);
+  }
+
   // --- archive -------------------------------------------------------------
 
   /**
@@ -1386,6 +1553,14 @@ export class LibraryStore {
     const row = this.selectPass.get(passId, itemId) as PassRow | undefined;
     if (!row) {
       throw new LibraryNotFoundError(`No pass "${passId}" on item "${itemId}".`);
+    }
+    return row;
+  }
+
+  private requireLoanRow(itemId: string, loanId: string): LoanRow {
+    const row = this.selectLoan.get(loanId, itemId) as LoanRow | undefined;
+    if (!row) {
+      throw new LibraryNotFoundError(`No loan "${loanId}" on item "${itemId}".`);
     }
     return row;
   }
@@ -1618,6 +1793,29 @@ function toPass(row: PassRow): LibraryPass {
     startedOn: row.started_on,
     finishedOn: row.finished_on,
     rating: row.rating,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toGoal(row: GoalRow): LibraryGoal {
+  return {
+    id: row.id,
+    kind: row.kind as LibraryKind | null,
+    target: row.target,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toLoan(row: LoanRow): LibraryLoan {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    to: row.to_name,
+    lentOn: row.lent_on,
+    dueOn: row.due_on,
+    returnedOn: row.returned_on,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1889,6 +2087,23 @@ function validateProgressCount(
 
 function validateDay(value: string | null, field: string): string | null {
   if (value === null) return null;
+  if (!isLibraryDay(value)) {
+    throw new LibraryValidationError(`"${field}" must be a real bare date (YYYY-MM-DD).`);
+  }
+  return value;
+}
+
+function validateLoanRecipient(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > LIBRARY_MAX_LOAN_TO_LENGTH) {
+    throw new LibraryValidationError(
+      `"to" must be 1-${LIBRARY_MAX_LOAN_TO_LENGTH} characters after trimming.`,
+    );
+  }
+  return trimmed;
+}
+
+function validateRequiredDay(value: string, field: string): string {
   if (!isLibraryDay(value)) {
     throw new LibraryValidationError(`"${field}" must be a real bare date (YYYY-MM-DD).`);
   }

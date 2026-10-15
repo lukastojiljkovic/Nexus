@@ -130,6 +130,21 @@
   color: var(--nx-text-muted);
 }
 
+/* A plan's tickets share the visit photos' strip: the same wrap and gap, with
+   each ticket's open and remove controls kept together. */
+.culture__tickets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.culture__ticket {
+  display: inline-flex;
+  gap: var(--nx-space-1);
+  align-items: center;
+}
+
 /* The `type="file"` input is a real control the page draws itself - the OS owns
    the picker - and the button beside it is what the user sees and clicks. It
    stays in the tab order rather than being `display: none`, because a hidden

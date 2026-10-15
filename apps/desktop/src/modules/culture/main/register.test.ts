@@ -73,6 +73,8 @@ let db: NexusDatabase;
 let clock = Date.parse("2026-06-01T08:00:00.000Z");
 let blobs: Map<string, Uint8Array>;
 let extraHashHolds = 0;
+/** What `openBlob` was asked to open, in order: the fake OS viewer records instead of launching. */
+let opened: { sha256: string; fileName: string }[] = [];
 let packKey: { publicKeyPem: string; privateKey: import("node:crypto").KeyObject };
 let packsDir: string;
 /** How many packs roots this file has made; each test gets its own so an install in one cannot be seen by the next. */
@@ -103,6 +105,9 @@ function harness(): ModuleHost {
     readBlob: async (sha256) => blobs.get(sha256) ?? null,
     deleteBlobIfOrphaned: async (sha256, refCount) => {
       if (refCount === 0) blobs.delete(sha256);
+    },
+    openBlob: async (sha256, fileName) => {
+      opened.push({ sha256, fileName });
     },
     // Exactly main's shape: the module's own count, plus whatever else names
     // the hash.
@@ -161,6 +166,7 @@ beforeEach(() => {
   clock = Date.parse("2026-06-01T08:00:00.000Z");
   blobs = new Map();
   extraHashHolds = 0;
+  opened = [];
   packKey = makeKey();
   packsRoots += 1;
   packsDir = join(dir, `userData-${String(packsRoots)}`);
@@ -189,6 +195,9 @@ describe("the culture handler surface", () => {
       "culture:updatePlan",
       "culture:removePlan",
       "culture:completePlan",
+      "culture:addPlanTicket",
+      "culture:removePlanTicket",
+      "culture:openPlanTicket",
       "culture:importTrack",
       "culture:updateTrack",
       "culture:removeTrack",
@@ -423,6 +432,57 @@ describe("the blobs this module stores", () => {
       }),
     ).rejects.toThrow(/audio formats this library holds/);
     expect(blobs.size).toBe(0);
+  });
+});
+
+describe("the programme's tickets", () => {
+  it("attaches a ticket, opens it through main, and collects its bytes when it is removed", async () => {
+    const host = harness();
+    const profileId = createProfile();
+    const created = await call<{ plans: { id: string }[] }>(host, "culture:createPlan", {
+      profileId,
+      kind: "concert",
+      title: "Koncert",
+      venue: "Sava centar",
+      city: "Beograd",
+      date: "2026-07-10",
+      startTime: null,
+      link: null,
+      notes: "",
+    });
+    const planId = created.plans[0]?.id ?? "";
+    // Its own bytes: the shared database keeps an earlier test's visit photo of PNG alive.
+    const pdf = new TextEncoder().encode("%PDF-1.4\n% a concert ticket\n");
+
+    const attached = await call<{ plans: { tickets: { id: string; fileName: string; mime: string }[] }[] }>(
+      host,
+      "culture:addPlanTicket",
+      { profileId, id: planId, fileName: "karta.pdf", bytes: pdf },
+    );
+    const ticket = attached.plans[0]?.tickets[0];
+    // Sniffed from the bytes, never taken from the name the renderer wrote.
+    expect(ticket).toMatchObject({ fileName: "karta.pdf", mime: "application/pdf" });
+    expect(blobs.has(shaOf(pdf))).toBe(true);
+
+    await call(host, "culture:openPlanTicket", { profileId, id: planId, ticketId: ticket?.id ?? "" });
+    expect(opened).toEqual([{ sha256: shaOf(pdf), fileName: "karta.pdf" }]);
+
+    await expect(
+      call(host, "culture:addPlanTicket", {
+        profileId,
+        id: planId,
+        fileName: "karta.txt",
+        bytes: new TextEncoder().encode("nije slika"),
+      }),
+    ).rejects.toThrow(/PNG, JPEG, GIF, WebP or PDF/);
+
+    const removed = await call<{ plans: { tickets: unknown[] }[] }>(host, "culture:removePlanTicket", {
+      profileId,
+      id: planId,
+      ticketId: ticket?.id ?? "",
+    });
+    expect(removed.plans[0]?.tickets).toEqual([]);
+    expect(blobs.has(shaOf(pdf))).toBe(false);
   });
 });
 
