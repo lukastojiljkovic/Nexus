@@ -167,8 +167,8 @@ export const SERBIAN_SOURCES = [
     reason: "the LLM prompt's Serbian half, and the Serbian words the two CSV importers RECOGNISE in input — a vocabulary read from the user's file, never written to one",
   },
   {
-    match: /^packages\/core\/src\/pro\/(pravo|racunovodstvo|tekst)\.ts$/,
-    reason: "Serbian number words, tax-form vocabulary and typographic tables — the arithmetic of tools that only make sense in Serbia (`pro/pravo.ts`, `pro/racunovodstvo.ts`), and the quote-pair table `check:quotes` exempts by design",
+    match: /^packages\/core\/src\/pro\/(pravo|racunovodstvo|srNumeral|tekst)\.ts$/,
+    reason: "Serbian number words, tax-form vocabulary and typographic tables — the arithmetic of tools that only make sense in Serbia (`pro/pravo.ts`, `pro/racunovodstvo.ts`, and the lexicon they share, `pro/srNumeral.ts`), and the quote-pair table `check:quotes` exempts by design",
   },
   {
     match: /^packages\/db\/src\/migrations\/[^/]+\.ts$/,

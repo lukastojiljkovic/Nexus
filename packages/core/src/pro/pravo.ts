@@ -36,6 +36,8 @@ import {
   roundHalfUp,
   type ProResult,
 } from "./result.js";
+import { checkDigitsFrom, groupsOfFour, mod97, stripSeparators } from "./iso7064.js";
+import { agreementOf, groupWords, type NumeralGender } from "./srNumeral.js";
 
 // ---------------------------------------------------------------------------
 // Decimal arithmetic
@@ -461,17 +463,6 @@ export interface NounForms {
   readonly gender: NounGender;
 }
 
-const ONES_MASCULINE = ["", "jedan", "dva", "tri", "četiri", "pet", "šest", "sedam", "osam",
-  "devet"] as const;
-const ONES_FEMININE = ["", "jedna", "dve", "tri", "četiri", "pet", "šest", "sedam", "osam",
-  "devet"] as const;
-const TEENS = ["deset", "jedanaest", "dvanaest", "trinaest", "četrnaest", "petnaest", "šesnaest",
-  "sedamnaest", "osamnaest", "devetnaest"] as const;
-const TENS = ["", "", "dvadeset", "trideset", "četrdeset", "pedeset", "šezdeset", "sedamdeset",
-  "osamdeset", "devedeset"] as const;
-const HUNDREDS = ["", "sto", "dvesta", "trista", "četiristo", "petsto", "šeststo", "sedamsto",
-  "osamsto", "devetsto"] as const;
-
 /** Long scale, as Serbian uses it: 10^9 is a milijarda, not a bilion. */
 const SCALES: readonly NounForms[] = [
   { one: "hiljada", few: "hiljade", many: "hiljada", gender: "f" },
@@ -490,30 +481,15 @@ const PARA: NounForms = { one: "para", few: "pare", many: "para", gender: "f" };
  * the last digit": 11 takes the same form as 5, not the same form as 1.
  */
 function paucalForm(count: number, forms: NounForms): string {
-  const tail = count % 100;
-  const ones = count % 10;
-  if (ones === 1 && tail !== 11) return forms.one;
-  if (ones >= 2 && ones <= 4 && (tail < 12 || tail > 14)) return forms.few;
+  const agreement = agreementOf(count);
+  if (agreement === "singular") return forms.one;
+  if (agreement === "paucal") return forms.few;
   return forms.many;
 }
 
-/** 0–999 in words, in the gender of the noun the group qualifies. */
-function groupWords(value: number, gender: NounGender): string[] {
-  const words: string[] = [];
-  const hundreds = Math.floor(value / 100);
-  const rest = value % 100;
-  const hundredWord = HUNDREDS[hundreds] ?? "";
-  if (hundredWord !== "") words.push(hundredWord);
-  if (rest >= 10 && rest <= 19) {
-    words.push(TEENS[rest - 10] ?? "");
-    return words;
-  }
-  const tensWord = TENS[Math.floor(rest / 10)] ?? "";
-  if (tensWord !== "") words.push(tensWord);
-  const table = gender === "f" ? ONES_FEMININE : ONES_MASCULINE;
-  const onesWord = table[rest % 10] ?? "";
-  if (onesWord !== "") words.push(onesWord);
-  return words;
+/** The shared numeral words speak of masculine and feminine; this pack's nouns say `m` and `f`. */
+function numeralGender(gender: NounGender): NumeralGender {
+  return gender === "f" ? "feminine" : "masculine";
 }
 
 /**
@@ -671,17 +647,17 @@ export function amountInWords(input: AmountInWordsInput): ProResult<AmountInWord
       words.push("hiljadu");
       continue;
     }
-    words.push(...groupWords(value, scale.gender), paucalForm(value, scale));
+    words.push(...groupWords(value, numeralGender(scale.gender)), paucalForm(value, scale));
   }
   const unitsGroup = groups[0] ?? 0;
   if (whole === 0n) words.push("nula");
-  else if (unitsGroup > 0) words.push(...groupWords(unitsGroup, main.gender));
+  else if (unitsGroup > 0) words.push(...groupWords(unitsGroup, numeralGender(main.gender)));
   words.push(paucalForm(Number(whole % 100n), main));
 
   if (decimals > 0 && sub !== undefined) {
     words.push("i");
     if (fraction === 0) words.push("nula");
-    else words.push(...groupWords(fraction, sub.gender));
+    else words.push(...groupWords(fraction, numeralGender(sub.gender)));
     words.push(paucalForm(fraction, sub));
   }
 
@@ -1653,27 +1629,6 @@ export function splitAmount(input: SplitAmountInput): ProResult<SplitAmountResul
 // arithmetic — not that an account exists, is open, or belongs to anyone.
 // ---------------------------------------------------------------------------
 
-/** r = (r·10 + digit) mod 97, letters counting as their two-digit value. */
-function mod97(text: string): number | undefined {
-  let remainder = 0;
-  for (const character of text) {
-    const code = character.charCodeAt(0);
-    if (code >= 48 && code <= 57) remainder = (remainder * 10 + (code - 48)) % 97;
-    else if (code >= 65 && code <= 90) remainder = (remainder * 100 + (code - 55)) % 97;
-    else return undefined;
-  }
-  return remainder;
-}
-
-function stripSeparators(text: string): string {
-  return text.replace(/[\s.-]/g, "").toUpperCase();
-}
-
-/** Four-character groups, the way an account or IBAN is written down. */
-function groupsOfFour(text: string): string {
-  return (text.match(/.{1,4}/g) ?? []).join(" ");
-}
-
 export interface DomesticAccountInput {
   /** 18 digits to check, or 16 (3 bank + 13 account) to compute the check pair. */
   readonly account: string;
@@ -1702,21 +1657,19 @@ export interface DomesticAccountResult {
  * means the implementation is wrong rather than that the account is unusual.
  */
 export function domesticAccount(input: DomesticAccountInput): ProResult<DomesticAccountResult> {
-  const cleaned = stripSeparators(input.account);
+  const cleaned = stripSeparators(input.account, true).toUpperCase();
   if (!/^[0-9]+$/.test(cleaned)) return fail("account");
   const expected = input.mode === "check" ? 18 : 16;
   if (cleaned.length !== expected) return fail("account");
 
   const payload = cleaned.slice(0, 16);
   const computed = mod97(`${payload}00`);
-  if (computed === undefined) return fail("account");
-  const checkDigits = String(98 - computed).padStart(2, "0");
+  const checkDigits = checkDigitsFrom(computed);
   const digits = `${payload}${input.mode === "check" ? cleaned.slice(16) : checkDigits}`;
   // In `compute` this would always be 1 — the pair was just built to make it
   // so — telling the reader nothing; `computed`, the payload's own remainder,
   // is the number the check digits were derived FROM.
   const finalRemainder = mod97(digits);
-  if (finalRemainder === undefined) return fail("account");
 
   return {
     ok: true,
@@ -1763,7 +1716,7 @@ export interface IbanResult {
  */
 export function ibanRecord(input: IbanInput): ProResult<IbanResult> {
   if (input.mode === "check") {
-    const cleaned = stripSeparators(input.iban ?? "");
+    const cleaned = stripSeparators(input.iban ?? "", true).toUpperCase();
     if (!/^[A-Z]{2}[0-9]{2}[0-9A-Z]{1,30}$/.test(cleaned)) return fail("iban");
     // MOD 97-10 cannot see the format: it would happily accept "AB0012345"
     // whether or not the middle two characters are check digits at all. ISO
@@ -1773,7 +1726,6 @@ export function ibanRecord(input: IbanInput): ProResult<IbanResult> {
     if (checkDigits < 2 || checkDigits > 98) return fail("iban");
     const rearranged = `${cleaned.slice(4)}${cleaned.slice(0, 4)}`;
     const remainder = mod97(rearranged);
-    if (remainder === undefined) return fail("iban");
     return {
       ok: true,
       iban: cleaned,
@@ -1785,13 +1737,12 @@ export function ibanRecord(input: IbanInput): ProResult<IbanResult> {
     };
   }
 
-  const country = stripSeparators(input.country ?? "");
-  const bban = stripSeparators(input.bban ?? "");
+  const country = stripSeparators(input.country ?? "", true).toUpperCase();
+  const bban = stripSeparators(input.bban ?? "", true).toUpperCase();
   if (!/^[A-Z]{2}$/.test(country)) return fail("country");
   if (!/^[0-9A-Z]{1,30}$/.test(bban)) return fail("bban");
   const remainder = mod97(`${bban}${country}00`);
-  if (remainder === undefined) return fail("bban");
-  const checkDigits = String(98 - remainder).padStart(2, "0");
+  const checkDigits = checkDigitsFrom(remainder);
   const iban = `${country}${checkDigits}${bban}`;
   return {
     ok: true,
@@ -1825,12 +1776,11 @@ export interface Mod97Result {
  * string parsed into an integer first would check a different value.
  */
 export function mod97CheckDigits(input: Mod97Input): ProResult<Mod97Result> {
-  const cleaned = stripSeparators(input.digits);
+  const cleaned = stripSeparators(input.digits, true).toUpperCase();
   if (!/^[0-9]{1,60}$/.test(cleaned)) return fail("digits");
   if (input.mode === "check") {
     if (cleaned.length < 3) return fail("digits");
     const remainder = mod97(cleaned);
-    if (remainder === undefined) return fail("digits");
     return {
       ok: true,
       digits: cleaned,
@@ -1840,8 +1790,7 @@ export function mod97CheckDigits(input: Mod97Input): ProResult<Mod97Result> {
     };
   }
   const remainder = mod97(`${cleaned}00`);
-  if (remainder === undefined) return fail("digits");
-  const checkDigits = String(98 - remainder).padStart(2, "0");
+  const checkDigits = checkDigitsFrom(remainder);
   return {
     ok: true,
     digits: `${cleaned}${checkDigits}`,
