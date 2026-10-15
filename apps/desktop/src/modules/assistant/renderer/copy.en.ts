@@ -28,7 +28,19 @@ export const en: typeof sr = {
     emptyBody:
       "The assistant knows your notes, tasks, events and the app's own manual, and answers with no internet. Pick a conversation, or type a question below.",
     thinking: "Thinking…",
-    stopped: "Stopped.",
+    /**
+     * What is said when a turn ended without an answer, by the code the loop
+     * sent. The key is the code itself, so a new code with no sentence fails the
+     * types; `aborted` is the Stop the user pressed.
+     */
+    errors: {
+      "no-model": "No model is ready to answer.",
+      "model-failed": "The model failed to answer.",
+      "tool-failed": "A tool failed, so the answer may be incomplete.",
+      "step-limit": "The answer was cut short: the turn used all its steps.",
+      "context-full": "The answer was cut short: the context is full.",
+      aborted: "Stopped.",
+    },
     /**
      * The line of tool activity: what the tool was doing, and how far it got. A
      * tool's own name is the address the model speaks (`tasks.create`), not a

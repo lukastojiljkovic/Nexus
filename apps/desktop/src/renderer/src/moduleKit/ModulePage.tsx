@@ -11,11 +11,11 @@ import { modulePage } from "./pages.js";
  * the coupling the kit removes: a module reaches its own stores through its own
  * contract.
  *
- * **The intent pair is passed through and never made.** `App.tsx` holds the item
- * one `nexus:open-location` request named and hands it to the page of the module
- * that request named (ADR-114); this component is the wire between the two and
- * decides nothing about it, which is also why a page that ignores the prop cannot
- * tell it was ever there.
+ * **The intent pair is passed through and never made.** `App.tsx` holds what the
+ * `nexus:open-location` requests named and hands the next one to the page of the
+ * module that named it (ADR-114, ADR-117); this component is the wire between the
+ * two and decides nothing about it, which is also why a page that ignores the
+ * prop cannot tell it was ever there.
  *
  * The suspension boundary belongs to `PageSlot`, which already knows how to keep
  * the previous page on screen while a chunk arrives and how to draw a failure if

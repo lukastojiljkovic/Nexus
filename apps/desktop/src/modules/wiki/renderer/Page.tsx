@@ -192,7 +192,13 @@ export default function WikiPage({ profileId, intent, onIntentHandled }: ModuleP
    * a second click is a new value that reveals the entry again.
    */
   useEffect(() => {
-    if (!intent) return;
+    // A reveal, and only a reveal: an action is another module's verb, and this
+    // page reports it handled without acting on it, so the shell's queue moves
+    // on instead of parking a request here forever (ADR-117).
+    if (intent?.kind !== "reveal") {
+      if (intent !== null && intent !== undefined) onIntentHandled?.();
+      return;
+    }
     const target = itemTarget(intent.item);
     if (target === null) setError(copy.problem["not-found"]);
     else void open(target.libraryId, target.zimPath);

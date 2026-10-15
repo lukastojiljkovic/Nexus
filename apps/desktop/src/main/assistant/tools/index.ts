@@ -27,22 +27,36 @@
  *
  * **Where the tools come from, area by area.** `app.ts` (navigation and the
  * global search), `tasks.ts`, `calendar.ts`, `notes.ts`, `habits.ts`,
- * `timers.ts`, `packs.ts`, `emergency.ts`. A module built on the kit in a later
- * wave adds its own file here and one line to `appTools`'s neighbours below —
- * the registry is a flat list of areas, and a name that collides with another's
- * is refused rather than shadowed.
+ * `timers.ts`, `packs.ts`, `emergency.ts`, and one file per kit module:
+ * `library.ts`, `culture.ts`, `car.ts`, `pantry.ts`, `cookbook.ts`,
+ * `recorder.ts`, `calculator.ts`, `reader.ts`, `wiki.ts`, `maps.ts`, `lab.ts`
+ * and `miniapps.ts`. The registry is a flat list of areas, and a name that
+ * collides with another's is refused rather than shadowed.
  *
- * **The wave-1 kit modules joined in wave 2**, one file each: `library.ts`,
- * `culture.ts`, `car.ts`, `pantry.ts`, `cookbook.ts`, `recorder.ts`,
- * `calculator.ts`, `reader.ts`, `wiki.ts`, `maps.ts`, `lab.ts` and
- * `miniapps.ts`. A module with nothing of the user's own to read or write has no
- * file here on purpose, and the merge report lists which and why: the games are
- * reachable through `app.open` and a tool that answered with a score would be
- * the page's own table restated worse; `signals.ts`, `workshop.ts` and
- * `drawings.ts` own no table at all (a meter, a file on disk, a drawing on
- * disk); the scanner's one write path is `NoteStore`, which `notes.ts` already
- * covers; and the translator's dictionary is a signed content pack read through
- * its own module's main half, which this registry is not handed a seam to.
+ * **EVERY module gets tools.** The earlier reading of this file — that the games,
+ * `signals`, `workshop`, `drawings`, the scanner and the translator had nothing
+ * worth a tool because `app.open` or another area's store covered them — was
+ * overturned by the maintainer on 2026-10-15: the assistant is to be able to do
+ * everything the app can, so each of those gets an area of its own. What a run
+ * adding an area follows:
+ *
+ * - **One file per area**, named for the module it serves, one line in
+ *   `createToolRegistry` beside its neighbours, one line in each locale's
+ *   `thread.tools.labels` (`modules/assistant/renderer/copy.{sr,en}.ts`, which
+ *   `toolLabels.test.ts` pins against this registry) and one line in
+ *   `index.test.ts`'s per-area counts.
+ * - **A store-backed module writes in main** — the same store or function the
+ *   app's own IPC handler calls — and answers `navigateTo` with an `item`, so the
+ *   app shows the row it just wrote.
+ * - **A page-held module** — Canvas's scene, a device preference in the
+ *   renderer's `localStorage` — cannot be written from main without the page's
+ *   own next save clobbering it, so it answers `navigateTo` with an `action` its
+ *   page applies (`AppAction`, ADR-117).
+ * - **Every write still asks first** through `ToolContext.confirm`, and a refusal
+ *   is an ordinary result the model reads rather than an error.
+ *
+ * `docs/architecture/assistant-tools.md` is the guide to all of it — the schema
+ * the harness relies on, the deps, an eval scenario, and the count line.
  */
 
 import type { Tool, ToolRegistry, WebService } from "@nexus/core";

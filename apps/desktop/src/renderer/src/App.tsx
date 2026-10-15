@@ -112,7 +112,14 @@ import {
   type ShellVisibility,
 } from "../../shared/moduleVisibility.js";
 import { DRAWER_MODULES } from "./toolCatalogue.js";
-import { holdItemIntent, intentForPage, type HeldItemIntent } from "./moduleKit/itemIntent.js";
+import {
+  NO_ITEM_INTENTS,
+  dropIntent,
+  enqueueIntent,
+  forgetIntents,
+  intentForPage,
+  type ItemIntents,
+} from "./moduleKit/itemIntent.js";
 import { hasModulePage } from "./moduleKit/pages.js";
 import { KitModulePage } from "./moduleKit/ModulePage.js";
 import { ProfileAvatar } from "./profileAvatar.js";
@@ -172,6 +179,40 @@ type ToolsPageModuleId = (typeof DRAWER_MODULES)[ToolDrawer];
  */
 function assertNever(value: never): never {
   throw new Error(`Nexus: unhandled case ${String(value)}`);
+}
+
+/**
+ * A COMPILED-IN page's own reveal intent, from the one thing a location can
+ * carry: `{ module: "tasks", item }` means the task with that id.
+ *
+ * The kit's modules are handed the item itself and read it their own way
+ * (`moduleKit/itemIntent.ts`); these four pages predate the kit and take a typed
+ * payload each, which the shell can build only because it holds their pages
+ * beside it. The item is read with `typeof` for the same reason the module and
+ * the settings key are: a window event's detail is a payload nobody type-checks
+ * on the way in.
+ *
+ * **What an item names, and what it cannot.** `app.open`'s own words for an item
+ * are "a note, a task, an event", so a calendar item is an event id — a calendar
+ * DOCUMENT is reachable only through the search result that knows its kind — and
+ * `study` gets nothing at all: its reveal needs `entity` and `parentId` as well
+ * as an id, and an id alone does not say which of its four kinds it names, so a
+ * location naming a study row opens the module and stops there. Every other
+ * compiled-in page takes a reveal it could not use from an id (`finance` has
+ * only `create`), and answers `null` like the rest.
+ */
+function compiledInReveal(moduleId: string, item: unknown): PendingIntent | null {
+  if (typeof item !== "string" || item === "") return null;
+  switch (moduleId) {
+    case "tasks":
+      return { module: "tasks", intent: { kind: "reveal", taskId: item } };
+    case "notes":
+      return { module: "notes", intent: { kind: "reveal", noteId: item } };
+    case "calendar":
+      return { module: "calendar", intent: { kind: "reveal-event", eventId: item } };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -292,20 +333,26 @@ export function App() {
   // never re-fires the same intent.
   const [pending, setPending] = useState<PendingIntent | null>(null);
   /**
-   * The item one `nexus:open-location` request named, held until the module's
-   * own page reports it consumed (ADR-114).
+   * What each module's kit page is owed: the item or the action the
+   * `nexus:open-location` requests named, held as one FIFO queue per module
+   * until that module's page reports the head consumed (ADR-114, ADR-117).
    *
    * A second state beside `pending` above, and deliberately not another arm of
    * it: that union is closed over the compiled-in pages' own payload types, so an
    * arm whose module could be any string would leave every
    * `pending?.module === "electronics"` beside it narrowed to two shapes at once.
-   * This one has a single shape — `location.item`, opaque to the shell. The rule
-   * is `pending`'s rule all the same: at most one is held, it is a VALUE rather
-   * than an event (a kit page arrives in its own chunk, so the page it is for may
-   * not be mounted when the request arrives), and it is cleared when that page
-   * says it was acted on.
+   * This one holds two shapes the shell never reads — `location.item` and
+   * `location.action`, both opaque to it.
+   *
+   * It is a VALUE rather than an event (a kit page arrives in its own chunk, so
+   * the page it is for may not be mounted when the request arrives), and it is a
+   * QUEUE rather than one slot: one turn can ask a page to do two things, and one
+   * slot answered the second request by dropping the first. It is keyed by module
+   * for the same reason — a request for one module must not clear what another is
+   * still owed. A compiled-in page reads its own typed intent instead
+   * (`pending` above), so it is handed nothing here.
    */
-  const [pendingItem, setPendingItem] = useState<HeldItemIntent | null>(null);
+  const [itemIntents, setItemIntents] = useState<ItemIntents>(NO_ITEM_INTENTS);
   /**
    * The module card a gear asked „Podešavanja" to open at
    * (`moduleSettingsGear.tsx`). The page consumes it on the mount the press
@@ -727,7 +774,8 @@ export function App() {
    * every page hangs off (each page carries `key={activeProfile.id}`, so it
    * remounts and re-enters the new profile cleanly), persist the device pref,
    * re-apply the profile's own accent (§3) and re-read its flags. Cross-profile
-   * leftovers — a pending intent, a seeded search query, the open palette —
+   * leftovers — a pending intent, a queued intent for a kit page, a seeded
+   * search query, the open palette —
    * are dropped: they were aimed at entities of the profile being left.
    */
   async function completeSwitch(profile: Profile): Promise<void> {
@@ -741,6 +789,9 @@ export function App() {
     // burst, because its ledger was untouched while it was inactive.
     reportActiveProfile(profile.id);
     setPending(null);
+    // The queued item/action was aimed at the profile being left too, and the
+    // pages of the new one never asked for it.
+    setItemIntents(NO_ITEM_INTENTS);
     setSearchSeed(null);
     closePalette();
     // The launcher lists the modules of the profile being LEFT, and a modal that
@@ -898,8 +949,9 @@ export function App() {
       // consume it and call onIntentHandled — clear it here instead, or it
       // would sit pending forever.
       setPending((current) => (current?.module === activeId ? null : current));
-      // The held item goes with it, for the same reason and by the same rule.
-      setPendingItem((current) => (current?.module === activeId ? null : current));
+      // The queued intent goes with it, for the same reason and by the same
+      // rule — that module's whole queue, and no other's.
+      setItemIntents((current) => forgetIntents(current, activeId));
     }
   }, [activeId, visibleIds]);
 
@@ -941,10 +993,6 @@ export function App() {
   // unrelated App re-render would retrigger that effect for nothing.
   const clearIntent = useCallback(() => setPending(null), []);
 
-  // The held item's half of the same rule, and stable for the same reason: a kit
-  // page lists it in its own intent-effect's dependency array.
-  const clearPendingItem = useCallback(() => setPendingItem(null), []);
-
   /** Sets the pending intent and switches to the module that owns it — the one place both happen together. */
   function dispatchIntent(next: PendingIntent): void {
     setPending(next);
@@ -977,25 +1025,43 @@ export function App() {
    *
    * The mapping is deliberately shallow and deliberately the shell's own: the
    * module is shown, a `settings` name that matches a module publishing a card
-   * opens that card, and an `item` is held for that module's page as its intent
-   * (`moduleKit/itemIntent.ts`). What the shell does NOT do is invent an intent
-   * per module: an item is opaque here, and only the module that named it — the
-   * one whose page is drawn below — knows what it means.
+   * opens that card, and an `item` or an `action` is QUEUED for that module's kit
+   * page (`moduleKit/itemIntent.ts`). What the shell does NOT do is invent an
+   * intent per MODULE: an item is opaque here, and only the module that named it
+   * — the one whose page is drawn below — knows what it means.
+   *
+   * The four compiled-in pages are the exception that proves that rule: they take
+   * their own typed payloads (`PendingIntent`, 021-e) rather than the kit's, so
+   * the shell — which holds their pages beside it — maps the one thing a location
+   * can carry onto the shape each of them declared (`compiledInReveal`). Nothing
+   * is queued for them: a queue nothing consumes would hold the request forever.
    */
   useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (
-        event as CustomEvent<{ module?: unknown; settings?: unknown; item?: unknown }>
+        event as CustomEvent<{
+          module?: unknown;
+          settings?: unknown;
+          item?: unknown;
+          action?: unknown;
+        }>
       ).detail;
       const moduleId = detail?.module;
       if (typeof moduleId !== "string" || moduleId === "") return;
       setActiveId(moduleId);
-      // An item is HELD rather than announced (ADR-114): the request's own
-      // module gets it as its page's intent, and `intentForPage` below is what
-      // decides that — including for a page that mounts after this moment. A
-      // request naming no item drops whatever was held, because a location that
-      // does not name a place is not one this shell may still be holding.
-      setPendingItem(holdItemIntent(moduleId, detail?.item));
+      // An item or an action is QUEUED rather than announced (ADR-114, ADR-117):
+      // the request's own module gets it as the next thing its page is owed, and
+      // `intentForPage` below is what decides that — including for a page that
+      // mounts after this moment. A request naming neither queues nothing and
+      // leaves every other module's queue alone.
+      if (hasModulePage(moduleId)) {
+        setItemIntents((current) =>
+          enqueueIntent(current, moduleId, { item: detail?.item, action: detail?.action }),
+        );
+      } else {
+        const reveal = compiledInReveal(moduleId, detail?.item);
+        if (reveal !== null) setPending(reveal);
+      }
       const settings = detail?.settings;
       if (typeof settings === "string" && moduleSettingsCardIds(registry).has(settings)) {
         setSettingsTarget(settings);
@@ -1462,6 +1528,20 @@ export function App() {
    * differ, and the screenshot sweep waits on it.
    */
   const shownId = useDeferredValue(effectiveId);
+
+  /**
+   * A kit page saying it acted on what it was handed: the queue moves on to the
+   * next request for that module, or owes it nothing.
+   *
+   * `shownId` rather than `effectiveId`, because the prop it answers was read
+   * from the page being DRAWN. Stable for as long as the shown page does not
+   * change: every kit page lists `onIntentHandled` in its own intent-effect's
+   * dependency array, and a fresh reference on every unrelated App re-render
+   * would retrigger that effect for nothing.
+   */
+  const handleIntentHandled = useCallback((): void => {
+    setItemIntents((current) => dropIntent(current, shownId));
+  }, [shownId]);
 
   /**
    * Every state of the shell, inside the same window frame.
@@ -2251,17 +2331,17 @@ export function App() {
                 // in. Adding a module is a folder; adding a branch here would be
                 // the twenty-way conflict the kit exists to end.
                 //
-                // The intent pair is `intentForPage`'s answer — the item the
-                // shell is holding, and ONLY if it was this module a location
-                // named (ADR-114). A page that never asked for one, and a
-                // module that ignores the prop, are handed `null` and behave
-                // exactly as they did before it existed.
+                // The intent pair is `intentForPage`'s answer — the next thing
+                // this module's own queue owes, and ONLY if it is this module a
+                // location named (ADR-114, ADR-117). A page that never asked for
+                // one, and a module that ignores the prop, are handed `null` and
+                // behave exactly as they did before it existed.
                 <KitModulePage
                   key={activeProfile.id}
                   id={shownId}
                   profileId={activeProfile.id}
-                  intent={intentForPage(pendingItem, shownId)}
-                  onIntentHandled={clearPendingItem}
+                  intent={intentForPage(itemIntents, shownId)}
+                  onIntentHandled={handleIntentHandled}
                 />
               ) : (
                 <ModulePage id={shownId} />
