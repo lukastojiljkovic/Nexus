@@ -15,6 +15,7 @@ import {
   readManual,
   scanRepo,
   settingsCategoryIds,
+  validateCoverage,
   validateManual,
 } from "./check-manual.mjs";
 
@@ -214,6 +215,72 @@ describe("the cross-page rules", () => {
   });
 });
 
+describe("the module coverage rule", () => {
+  /** A vocabulary of two modules, so a fixture is the rule rather than the whole registry. */
+  const vocabularyFor = (moduleIds) => ({
+    moduleIds: new Set(moduleIds),
+    builtInPages: new Set(BUILT_IN_PAGES),
+    settingsCategories: new Set(),
+  });
+
+  /** One well-formed page for `module` in `locale`, built from the two templates above. */
+  const modulePage = (locale, module) => {
+    const heading = locale === "sr" ? "Povezano" : "Related";
+    return page(
+      locale,
+      (locale === "sr" ? GOOD_SR : GOOD_EN)
+        .replace("id: tasks-recurring", `id: ${module}`)
+        .replace("location: { module: tasks }", `location: { module: ${module} }`)
+        .replace(`${heading}: tasks-recurring`, `${heading}: ${module}`),
+    );
+  };
+
+  it("passes when every module the registry declares has a page in both languages", () => {
+    const pages = ["sr", "en"].flatMap((locale) => [
+      modulePage(locale, "tasks"),
+      modulePage(locale, "notes"),
+    ]);
+    expect(validateCoverage(pages, vocabularyFor(["tasks", "notes"]))).toEqual([]);
+  });
+
+  it("refuses a module with no page in either language", () => {
+    const pages = ["sr", "en"].map((locale) => modulePage(locale, "tasks"));
+    const findings = validateCoverage(pages, vocabularyFor(["tasks", "notes"]));
+    expect(findings).toContainEqual(
+      expect.objectContaining({ locale: "sr", message: "module `notes` has no page in `sr`" }),
+    );
+    expect(findings).toContainEqual(
+      expect.objectContaining({ locale: "en", message: "module `notes` has no page in `en`" }),
+    );
+  });
+
+  it("refuses a module whose page exists in one language only", () => {
+    const pages = [
+      modulePage("sr", "tasks"),
+      modulePage("en", "tasks"),
+      modulePage("sr", "notes"),
+    ];
+    expect(validateCoverage(pages, vocabularyFor(["tasks", "notes"]))).toEqual([
+      expect.objectContaining({ locale: "en", message: "module `notes` has no page in `en`" }),
+    ]);
+  });
+
+  it("excuses a module the allowlist carries a reason for", () => {
+    const pages = ["sr", "en"].map((locale) => modulePage(locale, "tasks"));
+    const allowlist = { notes: "the module's screen is not built yet" };
+    expect(validateCoverage(pages, vocabularyFor(["tasks", "notes"]), allowlist)).toEqual([]);
+  });
+
+  it("refuses an allowlist entry that names no module, which is an exemption gone stale", () => {
+    const pages = ["sr", "en"].map((locale) => modulePage(locale, "tasks"));
+    expect(validateCoverage(pages, vocabularyFor(["tasks"]), { zadaci: "renamed since" })).toContainEqual(
+      expect.objectContaining({
+        message: "the coverage allowlist names `zadaci`, which is not a module",
+      }),
+    );
+  });
+});
+
 describe("the vocabulary the tree declares", () => {
   const modulesSource = readFileSync(join(REPO_ROOT, "apps", "desktop", "src", "shared", "modules.ts"), "utf8");
 
@@ -279,6 +346,10 @@ describe("the pages in this tree", () => {
     expect(census.ids).toBe(census.pages[0]);
     expect(census.relatedEdges).toBeGreaterThan(census.pages[0]);
     expect(census.moduleIds).toBeGreaterThanOrEqual(17);
+    // The coverage rule's own line: every module the registry declares has a
+    // page in both languages, and nothing is exempt today.
+    expect(census.documented).toBe(census.moduleIds);
+    expect(census.exempt).toBe(0);
     expect(census.settingsCategories).toBe(8);
   });
 });

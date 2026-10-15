@@ -38,50 +38,40 @@ the manual is only useful if the reader can find the button it names.
 
 ## What is written
 
-Modules: `dashboard`, `tasks`, `calendar`, `notes`, `files`, `study`, `priv`,
-`finance`, `habits`, `fitness`, `focus`, `tools`, `canvas`, `electronics`, `pro`,
-`timers`, `assistant`.
+The rule, rather than a list of names the next module would make stale:
 
-Shell: `search`, `onboarding`, `accounts`, `lock`, `shortcuts`.
+- **Every module the registry declares** has a page in `sr/` and one in `en/`:
+  the compiled-in modules in `shared/modules.ts` and the discovered ones under
+  `modules/<id>/shared/manifest.ts`. That is the coverage rule in
+  `check:manual` — a module with no page is a finding, and a module whose screen
+  genuinely is not real yet goes into `COVERAGE_ALLOWLIST` in that script, one
+  line per module with the reason beside it.
+- **The shell's pages** — onboarding, the account picker, the lock screen,
+  search, the shortcut list — are pages too. A screen the assistant can open
+  names its place in `location` (`search` is a built-in id, so `{ module: search }`);
+  one it cannot open, such as the account picker or the lock screen, omits it.
+- **The Settings page and its eight categories** have a page each, so that every
+  Settings `location` names a card the assistant can open.
+- **A task somebody asks about in words rather than by module** — "how do I
+  repeat a task", "how do I import a calendar", "how do content packs arrive" —
+  has a page named for the task (`tasks-recurring`, `import-ics`,
+  `content-packs`).
 
-Settings: `settings` (the eight categories) and one page per category —
-`settings-profile`, `settings-appearance`, `settings-keyboard`,
-`settings-modules`, `settings-notifications`, `settings-data`,
-`settings-privacy`, `settings-about`.
+`pnpm check:manual` prints the count of all of it: pages per language, paired
+ids, related links, and how many of the registry's modules are documented.
 
-Common tasks: `dashboard-widgets`, `tasks-recurring`, `calendar-documents`,
-`notes-markdown`, `study-cards`, `study-plan`, `finance-transactions`,
-`habits-streaks`, `fitness-training`, `focus-session`, `devtools`,
-`packs-toolkits`, `backup`, `restore`, `import-archive`, `import-ics`,
-`export-ics`, `import-apkg`, `import-csv`, `import-fin-csv`, `import-llm`,
-`import-markdown`, `content-packs`, `network-and-updates`.
+## Adding a page
 
-## To write
+1. Write the page twice: `<id>.md` in `sr/` and again in `en/`, with the same
+   `id` in the front matter. The id is what pairs the two halves, so a page in
+   one language is a finding in itself.
+2. Give it a `location`: `{ module: <module id> }` for a module,
+   `{ module: settings, settings: <category> }` for a Settings card, and no
+   `location` at all for a screen the assistant cannot open.
+3. Run `pnpm check:manual`. It fails on an unpaired page, on a location naming a
+   module or a category the app does not have, on a `related` id no page
+   carries, and on a module the registry declares that has no page.
 
-The modules whose cores already exist in `packages/core` (and, where they store
-anything, in `packages/db`) but whose desktop pages are built in the next wave.
-Each gets its own page (or pages) here, in both languages, once its screen is
-real:
-
-| Module | Core packages |
-| --- | --- |
-| Library | `packages/core/src/library` |
-| Culture | `packages/core/src/culture` |
-| Car | `packages/core/src/car` |
-| Pantry | `packages/core/src/pantry` |
-| Cookbook | `packages/core/src/cookbook` |
-| Recorder | `packages/core/src/recorder` |
-| Emergency card | `packages/core/src/emergency` |
-| Calculator | `packages/core/src/calculator`, `packages/db/src/calculator` |
-| Arcade (games) | `packages/core/src/games` (`bricks`, `blocks`, `snake`, `broj`) |
-| Cards | `packages/core/src/games/cards`, `packages/core/src/games/boards-shared` |
-| Chess | `packages/core/src/games/chess` |
-| Sky (astronomy) | `packages/core/src/sky` |
-| Signals | `packages/core/src/signals` |
-| Boards (backgammon, draughts, ludo, mlin, …) | `packages/core/src/games` |
-| Puzzles (sudoku, nonogram, mahjong, minesweeper, tile2048, …) | `packages/core/src/games` |
-| Reader, Maps, Wiki, Translator, Scanner, Workshop, Drawings, Lab | the mini-app engines under `packages/core/src/miniapps` |
-
-Emergency is the one with copy obligations that do not wait: when its page is
-written, it says where the Emergency card and the survival packs are and that
-112 is the number to call — and gives no medical or survival advice of its own.
+Emergency is the one module whose copy carries an obligation that does not wait:
+its page says where the Emergency card is and that 112 is the number to call,
+and gives no medical or survival advice of its own.
