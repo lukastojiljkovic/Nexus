@@ -94,6 +94,15 @@ export function outputMime(format: Exclude<ImageOutputFormat, "keep">): string {
 }
 
 /**
+ * The 0..1 quality the canvas encoder takes, from the plan's 1..100. This is the
+ * one place the two scales meet, so the conversion is named and tested rather
+ * than left as a division inside the encode step.
+ */
+export function encoderQuality(quality: number): number {
+  return quality / IMAGE_QUALITY_MAX;
+}
+
+/**
  * The name an output file gets: the source's base name with the extension the
  * chosen format earns.
  *

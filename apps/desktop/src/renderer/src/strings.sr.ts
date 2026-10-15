@@ -3000,6 +3000,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * empty. Four other fields took the same parenthesis on the same day.
      */
     semesterLabel: "Semestar (opciono)",
+    /** Prazno nasleđuje; u polju stoji vrednost koja važi. Deli se među predmetima i špilovima. */
+    retentionOverrideLabel: "Ciljana zapamćenost (prazno nasleđuje)",
+    retentionProblem: "Ciljana zapamćenost mora biti između 0,70 i 0,97.",
     colorLabel: "Boja",
     /** Colour-dot names, keyed by subject colour value (labels are presentation). */
     color: {

@@ -66,7 +66,7 @@ import type {
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
-import { CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
+import { CARD_TEXT_MAX_LENGTH, MAX_TARGET_RETENTION, MIN_TARGET_RETENTION } from "../../shared/ipc.js";
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import {
@@ -134,6 +134,25 @@ function formatBytes(sizeBytes: number): string {
   const kb = sizeBytes / 1024;
   if (kb < 1024) return `${numberFormat({ maximumFractionDigits: 1 }).format(kb)} KB`;
   return `${numberFormat({ maximumFractionDigits: 1 }).format(kb / 1024)} MB`;
+}
+
+/**
+ * What a retention field holds: `null` when it is empty (inherit), the number
+ * when it is a target retention in the profile setting's window, and `undefined`
+ * for anything else. A decimal comma reads as a point, the way Serbian writes it.
+ */
+function readRetentionField(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+  const value = Number(trimmed.replace(",", "."));
+  return Number.isFinite(value) && value >= MIN_TARGET_RETENTION && value <= MAX_TARGET_RETENTION
+    ? value
+    : undefined;
+}
+
+/** The value an empty retention field inherits, drawn as its placeholder. */
+function retentionPlaceholder(inherited: number | null | undefined): string | undefined {
+  return inherited == null ? undefined : inherited.toFixed(2);
 }
 
 /** Shared empty lists, so a subject with neither materials nor linked notes allocates nothing per render. */
@@ -578,6 +597,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [decks, setDecks] = useState<Deck[] | null>(null);
+  const [profileRetention, setProfileRetention] = useState<number | null>(null);
   const [deckCounts, setDeckCounts] = useState<DeckCounts[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -601,6 +621,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [subjectName, setSubjectName] = useState("");
   const [subjectColor, setSubjectColor] = useState<SubjectColor>("jade");
   const [subjectSemester, setSubjectSemester] = useState("");
+  const [subjectRetention, setSubjectRetention] = useState("");
   const [pendingUndoSubjectId, setPendingUndoSubjectId] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -673,6 +694,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [deckFormSubjectId, setDeckFormSubjectId] = useState<string | null>(null);
   const [editingDeckId, setEditingDeckId] = useState<string | null>(null);
   const [deckName, setDeckName] = useState("");
+  const [deckRetention, setDeckRetention] = useState("");
   const [pendingUndoDeckId, setPendingUndoDeckId] = useState<string | null>(null);
 
   // Study plans (Planovi učenja): every plan's blocks are kept loaded so each
@@ -821,6 +843,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           nextStatsYear,
           nextStatsRecent,
           nextFocusSessions,
+          nextStudySettings,
         ] = await Promise.all([
           window.nexus.listSubjects(profileId),
           window.nexus.listExams(profileId),
@@ -833,6 +856,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           window.nexus.studyStats(profileId, shiftDayKey(today, -365), today),
           window.nexus.studyStats(profileId, shiftDayKey(today, -29), today),
           window.nexus.listFocusRange(profileId, shiftDayKey(today, -6), today),
+          window.nexus.studySettings(profileId),
         ]);
         // Both fan-outs wait on the list they key off — plans for their blocks,
         // active subjects for their materials and linked notes (STUDY-001).
@@ -871,6 +895,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         setProfileNotes(nextNotes);
         setExams(nextExams);
         setDecks(nextDecks);
+        setProfileRetention(nextStudySettings.targetRetention);
         setDeckCounts(nextCounts);
         setPlans(nextPlans);
         setTodayBlocks(nextTodayBlocks);
@@ -1164,6 +1189,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName("");
     setSubjectColor("jade");
     setSubjectSemester("");
+    setSubjectRetention("");
   }
 
   /** „Dodaj predmet" from the page header: an empty form, opened. */
@@ -1172,6 +1198,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName("");
     setSubjectColor("jade");
     setSubjectSemester("");
+    setSubjectRetention("");
     setSubjectFormOpen(true);
     nameRef.current?.focus();
   }
@@ -1181,6 +1208,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName(subject.name);
     setSubjectColor(subject.color);
     setSubjectSemester(subject.semester ?? "");
+    setSubjectRetention(String(subject.targetRetention ?? ""));
     setSubjectFormOpen(true);
     // Focuses the field when the form is ALREADY open; when this call is what
     // mounts it, the field's own `autoFocus` does the job on mount instead.
@@ -1192,6 +1220,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     const trimmedName = subjectName.trim();
     if (trimmedName.length === 0) return;
     const trimmedSemester = subjectSemester.trim();
+    const retention = readRetentionField(subjectRetention);
+    if (retention === undefined) {
+      setActionError(strings.study.retentionProblem);
+      return;
+    }
 
     try {
       if (editingSubjectId != null) {
@@ -1199,12 +1232,17 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           name: trimmedName,
           color: subjectColor,
           semester: trimmedSemester.length > 0 ? trimmedSemester : null,
+          targetRetention: retention,
         };
         const updated = await window.nexus.updateSubject(profileId, editingSubjectId, changes);
         setSubjects((prev) => prev && prev.map((s) => (s.id === updated.id ? updated : s)));
         resetSubjectForm();
       } else {
-        const fields: NewSubjectFields = { name: trimmedName, color: subjectColor };
+        const fields: NewSubjectFields = {
+          name: trimmedName,
+          color: subjectColor,
+          targetRetention: retention,
+        };
         // Only send semester when present (exactOptionalPropertyTypes).
         if (trimmedSemester.length > 0) fields.semester = trimmedSemester;
         const created = await window.nexus.createSubject(profileId, fields);
@@ -1215,6 +1253,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         setSubjectName("");
         setSubjectColor("jade");
         setSubjectSemester("");
+        setSubjectRetention("");
         nameRef.current?.focus();
       }
     } catch (error) {
@@ -1471,18 +1510,21 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setDeckFormSubjectId(null);
     setEditingDeckId(null);
     setDeckName("");
+    setDeckRetention("");
   }
 
   function startAddDeck(subjectId: string): void {
     setDeckFormSubjectId(subjectId);
     setEditingDeckId(null);
     setDeckName("");
+    setDeckRetention("");
   }
 
   function startEditDeck(deck: Deck): void {
     setDeckFormSubjectId(deck.subjectId);
     setEditingDeckId(deck.id);
     setDeckName(deck.name);
+    setDeckRetention(String(deck.targetRetention ?? ""));
   }
 
   async function submitDeckForm(
@@ -1492,14 +1534,19 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     event.preventDefault();
     const trimmedName = deckName.trim();
     if (trimmedName.length === 0) return;
+    const retention = readRetentionField(deckRetention);
+    if (retention === undefined) {
+      setActionError(strings.study.retentionProblem);
+      return;
+    }
 
     try {
       if (editingDeckId != null) {
-        const changes: DeckFieldChanges = { name: trimmedName };
+        const changes: DeckFieldChanges = { name: trimmedName, targetRetention: retention };
         const updated = await window.nexus.updateDeck(profileId, editingDeckId, changes);
         setDecks((prev) => prev && prev.map((d) => (d.id === updated.id ? updated : d)));
       } else {
-        const fields: NewDeckFields = { subjectId, name: trimmedName };
+        const fields: NewDeckFields = { subjectId, name: trimmedName, targetRetention: retention };
         const created = await window.nexus.createDeck(profileId, fields);
         setDecks((prev) => (prev ? [...prev, created] : [created]));
         await reloadDeckCounts();
@@ -3114,6 +3161,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             value={subjectSemester}
             onChange={(event) => setSubjectSemester(event.target.value)}
           />
+          <TextField
+            className="study__retention-input"
+            label={strings.study.retentionOverrideLabel}
+            placeholder={retentionPlaceholder(profileRetention)}
+            inputMode="decimal"
+            value={subjectRetention}
+            onChange={(event) => setSubjectRetention(event.target.value)}
+          />
           <Button type="submit" variant="primary">
             {editingSubjectId != null ? strings.study.save : strings.study.add}
           </Button>
@@ -3578,6 +3633,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         value={deckName}
                         autoFocus
                         onChange={(event) => setDeckName(event.target.value)}
+                      />
+                      <TextField
+                        className="study__deck-retention-input"
+                        label={strings.study.retentionOverrideLabel}
+                        placeholder={retentionPlaceholder(subject.targetRetention ?? profileRetention)}
+                        inputMode="decimal"
+                        value={deckRetention}
+                        onChange={(event) => setDeckRetention(event.target.value)}
                       />
                       <Button type="submit" variant="primary" size="sm">
                         {editingDeckId != null ? strings.study.saveDeck : strings.study.addDeck}

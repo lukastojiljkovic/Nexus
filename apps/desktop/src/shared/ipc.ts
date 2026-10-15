@@ -2554,6 +2554,8 @@ export interface Subject {
   color: SubjectColor;
   semester: string | null;
   archived: boolean;
+  /** This subject's own target retention, or `null` to inherit the profile's (STUDY-007). */
+  targetRetention: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2563,14 +2565,16 @@ export interface NewSubjectFields {
   name: string;
   color?: SubjectColor;
   semester?: string | null;
+  targetRetention?: number | null;
 }
 
-/** A partial edit of a subject's own fields; an omitted key is untouched, `null` clears `semester`. */
+/** A partial edit of a subject's own fields; an omitted key is untouched, `null` clears `semester` or `targetRetention`. */
 export interface SubjectFieldChanges {
   name?: string;
   color?: SubjectColor;
   semester?: string | null;
   archived?: boolean;
+  targetRetention?: number | null;
 }
 
 export interface SubjectsListRequest {
@@ -2760,6 +2764,8 @@ export interface Deck {
   profileId: string;
   subjectId: string;
   name: string;
+  /** This deck's own target retention, or `null` to inherit its subject's (STUDY-007). */
+  targetRetention: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2768,12 +2774,14 @@ export interface Deck {
 export interface NewDeckFields {
   subjectId: string;
   name: string;
+  targetRetention?: number | null;
 }
 
-/** A partial edit of a deck's own fields; an omitted key is untouched. */
+/** A partial edit of a deck's own fields; an omitted key is untouched, `null` clears `targetRetention`. */
 export interface DeckFieldChanges {
   subjectId?: string;
   name?: string;
+  targetRetention?: number | null;
 }
 
 export interface DecksListRequest {

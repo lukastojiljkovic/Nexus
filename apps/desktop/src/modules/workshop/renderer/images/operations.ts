@@ -1,6 +1,7 @@
 import { readExifSummary, sniffMime, type ImageExifSummary } from "@nexus/core";
 import { WORKSHOP_MAX_OUTPUT_BYTES } from "../../shared/workshopFiles.js";
 import {
+  encoderQuality,
   needsReencode,
   outputMime,
   outputName,
@@ -139,9 +140,7 @@ async function encode(
     throw new ImageRefusal("unreadable", "This machine's canvas has no 2D context.");
   }
   context.drawImage(bitmap, 0, 0, width, height);
-  // `quality` is 0..1 to the encoder, and 1..100 in the plan: the single
-  // conversion between the two units is this line.
-  const blob = await canvas.convertToBlob({ type: mime, quality: quality / 100 });
+  const blob = await canvas.convertToBlob({ type: mime, quality: encoderQuality(quality) });
   const bytes = new Uint8Array(await blob.arrayBuffer());
   if (bytes.byteLength === 0) {
     throw new ImageRefusal("unreadable", "The encoder produced an empty file.");

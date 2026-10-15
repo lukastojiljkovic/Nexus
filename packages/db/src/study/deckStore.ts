@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { DeckNotFoundError, DeckValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
+import { validateRetention } from "./studySettingsStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -10,6 +11,8 @@ export interface Deck {
   profileId: string;
   subjectId: string;
   name: string;
+  /** This deck's own target retention, or `null` to inherit its subject's (STUDY-007). */
+  targetRetention: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,6 +21,7 @@ export interface Deck {
 export interface CreateDeckInput {
   subjectId: string;
   name: string;
+  targetRetention?: number | null;
 }
 
 /**
@@ -27,6 +31,7 @@ export interface CreateDeckInput {
 export interface UpdateDeckFields {
   subjectId?: string;
   name?: string;
+  targetRetention?: number | null;
 }
 
 interface DeckRow {
@@ -34,11 +39,12 @@ interface DeckRow {
   profile_id: string;
   subject_id: string;
   name: string;
+  target_retention: number | null;
   created_at: string;
   updated_at: string;
 }
 
-const COLUMNS = "id, profile_id, subject_id, name, created_at, updated_at";
+const COLUMNS = "id, profile_id, subject_id, name, target_retention, created_at, updated_at";
 
 const MAX_NAME_LENGTH = 200;
 
@@ -65,8 +71,8 @@ export class DeckStore {
   ) {
     this.insert = db.prepare(
       `INSERT INTO decks
-         (id, profile_id, subject_id, name, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, subject_id, name, target_retention, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM decks
@@ -83,7 +89,7 @@ export class DeckStore {
     );
     this.updateFields = db.prepare(
       `UPDATE decks
-         SET subject_id = ?, name = ?, updated_at = ?
+         SET subject_id = ?, name = ?, target_retention = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markDeleted = db.prepare(
@@ -106,12 +112,16 @@ export class DeckStore {
   create(input: CreateDeckInput): Deck {
     const name = validateName(input.name);
     const subjectId = this.resolveSubject(input.subjectId);
+    const targetRetention = validateOptionalRetention(input.targetRetention);
     const now = new Date().toISOString();
     const id = uuidv7();
 
-    this.insert.run(id, this.profileId, subjectId, name, now, now);
+    this.insert.run(id, this.profileId, subjectId, name, targetRetention, now, now);
 
-    return { id, profileId: this.profileId, subjectId, name, createdAt: now, updatedAt: now };
+    return {
+      id, profileId: this.profileId, subjectId, name, targetRetention,
+      createdAt: now, updatedAt: now,
+    };
   }
 
   /** Applies a partial field patch to an active deck (STUDY flashcards editing). */
@@ -121,6 +131,10 @@ export class DeckStore {
       subjectId:
         fields.subjectId !== undefined ? this.resolveSubject(fields.subjectId) : current.subjectId,
       name: fields.name !== undefined ? validateName(fields.name) : current.name,
+      targetRetention:
+        fields.targetRetention !== undefined
+          ? validateOptionalRetention(fields.targetRetention)
+          : current.targetRetention,
     });
   }
 
@@ -155,7 +169,9 @@ export class DeckStore {
   private writeFields(current: Deck, next: Required<UpdateDeckFields>): Deck {
     const now = new Date().toISOString();
 
-    this.updateFields.run(next.subjectId, next.name, now, current.id, this.profileId);
+    this.updateFields.run(
+      next.subjectId, next.name, next.targetRetention, now, current.id, this.profileId,
+    );
 
     return { ...current, ...next, updatedAt: now };
   }
@@ -182,9 +198,15 @@ function toDeck(row: DeckRow): Deck {
     profileId: row.profile_id,
     subjectId: row.subject_id,
     name: row.name,
+    targetRetention: row.target_retention,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/** `null` is "inherit the subject's"; anything else must sit in the profile setting's window. */
+function validateOptionalRetention(value: number | null | undefined): number | null {
+  return value === undefined || value === null ? null : validateRetention(value);
 }
 
 function validateName(value: string): string {

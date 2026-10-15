@@ -8,6 +8,7 @@ import {
   DeckValidationError,
   NexusDatabase,
   openDatabase,
+  StudySettingsValidationError,
   SubjectStore,
   uuidv7,
 } from "../index.js";
@@ -157,5 +158,33 @@ describe("DeckStore", () => {
     expect(() => b.decks.update(owned.id, { name: "y" })).toThrow(DeckNotFoundError);
     expect(() => b.decks.softDelete(owned.id)).toThrow(DeckNotFoundError);
     expect(a.decks.listActive()).toHaveLength(1);
+  });
+});
+
+describe("DeckStore — per-deck target retention (STUDY-007)", () => {
+  it("inherits (null) unless a retention is given on create, and keeps the one given", () => {
+    const { decks, subjectId } = fixture();
+    expect(decks.create({ subjectId, name: "a" }).targetRetention).toBeNull();
+    expect(decks.create({ subjectId, name: "b", targetRetention: 0.85 }).targetRetention).toBe(0.85);
+  });
+
+  it("sets, changes and clears the override on update, and leaves it alone when omitted", () => {
+    const { decks, subjectId } = fixture();
+    const deck = decks.create({ subjectId, name: "a" });
+    expect(decks.update(deck.id, { targetRetention: 0.8 }).targetRetention).toBe(0.8);
+    expect(decks.update(deck.id, { name: "renamed" }).targetRetention).toBe(0.8);
+    expect(decks.update(deck.id, { targetRetention: null }).targetRetention).toBeNull();
+  });
+
+  it("accepts both ends of the profile setting's window and refuses a value outside it", () => {
+    const { decks, subjectId } = fixture();
+    expect(() => decks.create({ subjectId, name: "lo", targetRetention: 0.7 })).not.toThrow();
+    expect(() => decks.create({ subjectId, name: "hi", targetRetention: 0.97 })).not.toThrow();
+    expect(() => decks.create({ subjectId, name: "low", targetRetention: 0.69 })).toThrow(
+      StudySettingsValidationError,
+    );
+    expect(() => decks.create({ subjectId, name: "nan", targetRetention: Number.NaN })).toThrow(
+      StudySettingsValidationError,
+    );
   });
 });
