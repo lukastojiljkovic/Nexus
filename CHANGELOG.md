@@ -6,6 +6,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-10-15
+
+The assistant works in the installed app: it loads a model, answers within the
+model's window, reads the Wikipedia you downloaded, and can answer with a model
+you found yourself. Accounts made with 1.x are back, and the first launch moves
+what 2.x stored into the folder 1.x used.
+
 ### Added
 
 - **A model you found or imported can answer.** A model downloaded through the
@@ -90,7 +97,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it answers, as Qwen3.5 does, spent the whole reply on its reasoning and
   stopped mid-sentence. Reasoning may now take half of the reply, it shows only
   while the model is writing, and the conversation keeps the answer. The
-  assistant is also told today's date, so a task for „tomorrow" gets a real day.
+  assistant is also told today's date, so a task for "tomorrow" gets a real day.
 
 - **The assistant reads the Wikipedia you downloaded.** Its knowledge base was
   built to read the Wiki module's libraries, but nothing connected the two, so
@@ -99,6 +106,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Serbian one also in Cyrillic and without the case ending, so "o Beogradu"
   finds Београд), and cites the opening section of the few articles that
   match.
+
+- **The assistant cites only the articles a question is about.** A Wikipedia
+  title list matches the start of a word, so "Šta imam od zadataka za danas?"
+  cited a film and a newspaper, and a Serbian question about the capital of
+  France lost Француска to titles that only began like it. The assistant now
+  reads more titles than it cites and keeps those the question names and that
+  carry at least two of its words, best first. A Serbian library's titles and
+  passages reach the model in Latin, the script the app writes Serbian in, and a
+  tool call is no longer refused for an optional field the model left empty.
 
 ## [2.0.2] - 2026-10-14
 

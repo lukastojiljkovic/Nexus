@@ -30,7 +30,13 @@ import type { WikiSource, WikiTitle } from "./types.js";
  * nothing. What can be a title is a run of capitalised words ("Nikola Tesla") or
  * a content word ("Francuska"), so those are the keys - and a title index cannot
  * rank, so an exact title is put before a prefix match and the rest keeps the
- * file's own order.
+ * file's own order. A hit that equals a STEM is not exact, though: a stem is a
+ * guess at a title's ending, and a title that happens to be spelled like one
+ * ("Нико" for "Nikola") is a prefix match like any other. What comes back is
+ * therefore candidates rather than an answer, and the caller asks for more of
+ * them than it cites (`sources.ts`'s `WIKI_CANDIDATE_LIMIT`) so that the
+ * relevance gate there, which is the only place the question is still known, has
+ * something to choose from.
  *
  * **A Serbian library is also asked in Cyrillic.** sr.wikipedia writes its
  * titles in Cyrillic while its readers type Latin, so every key is
@@ -41,7 +47,12 @@ import type { WikiSource, WikiTitle } from "./types.js";
  * ambiguous (`nadživeti` is not *nađiveti*) cost a key that finds nothing, which
  * is the whole of the harm here: the other keys are still asked. A word is
  * also asked without its case ending (`stems`), because a question declines
- * the noun its title names.
+ * the noun its title names. And that table reads the answer back the other way:
+ * a Serbian library's titles and article text are transliterated to Latin,
+ * because this app's Serbian is Latin and a passage a model can copy without
+ * carrying Cyrillic into its answer is the point. A `WikiTitle.path` is left as
+ * the reader wrote it - it routes back to the entry, and no transliteration of
+ * it would.
  *
  * **An article is read as the plain text `leadSection` expects.** A ZIM stores
  * the HTML whoever built the pack wrote, full of scripts, infoboxes, tables,
@@ -145,19 +156,60 @@ const NOT_A_WORD = /[^\p{L}\p{N}]+/u;
 /** The first codepoint of a word, tested for uppercase - `\p{Lu}` because it is the question's own spelling that decides. */
 const UPPERCASE = /\p{Lu}/u;
 
+/** `text` as its words: anything that is not a letter or a digit separates them. */
+function wordsOf(text: string): readonly string[] {
+  return text.split(NOT_A_WORD).filter((word) => word !== "");
+}
+
 /** A question as words, each carrying what the key builder decides on. */
 function tokenize(query: string): QueryToken[] {
-  const tokens: QueryToken[] = [];
-  for (const text of query.split(NOT_A_WORD)) {
-    if (text === "") continue;
-    const head = [...text][0] ?? "";
-    tokens.push({
-      text,
-      stop: STOP_WORDS.has(foldSearchText(text)),
-      capitalised: UPPERCASE.test(head),
-    });
-  }
-  return tokens;
+  return wordsOf(query).map((text) => ({
+    text,
+    stop: STOP_WORDS.has(foldSearchText(text)),
+    capitalised: UPPERCASE.test([...text][0] ?? ""),
+  }));
+}
+
+/**
+ * `text` with its Cyrillic letters read as Latin, by `pro/tekst.ts`'s table -
+ * the same one a key is asked in, and the unambiguous direction of it, because
+ * Cyrillic to Latin is a substitution rather than a guess.
+ *
+ * The one text it refuses is one past the tool's own cap (half a million code
+ * points), and that text is handed on as it stands rather than dropped: an
+ * article this long is an article, and its passage is still worth citing.
+ */
+function transliterated(text: string): string {
+  const latin = transliterate({ text, direction: "cyrillicToLatin" });
+  return latin.ok ? latin.text : text;
+}
+
+/**
+ * The words of a question that carry its subject: `tokenize`'s tokens minus
+ * `STOP_WORDS`, each in the one form a comparison reads.
+ *
+ * Exported for the relevance gate in `sources.ts`. The gate judges every
+ * `WikiSource` and not only this reader, but it has to read the question the way
+ * the keys were built from it: a second tokenizer would be a second answer to
+ * "what is this question about", and the two would disagree exactly when the
+ * question is unusual.
+ */
+export function contentWords(query: string): readonly string[] {
+  return tokenize(query)
+    .filter((token) => !token.stop)
+    .map((token) => foldSearchText(transliterated(token.text)));
+}
+
+/**
+ * A title or a lead as the words a comparison reads, in that same one form:
+ * transliterated to Latin, then folded.
+ *
+ * The transliteration happens BEFORE the split, because the digraph rule reads
+ * the case of the letter beside a capital ("Њ" before a lower-case letter is
+ * "Nj"), which a word transliterated on its own would have lost.
+ */
+export function comparableWords(text: string): readonly string[] {
+  return wordsOf(transliterated(text)).map(foldSearchText);
 }
 
 /** The same word with its first letter upper-cased and the rest untouched. */
@@ -246,9 +298,12 @@ function cyrillicSpelling(key: string): string {
  * Serbian declines its nouns ("o Beogradu", "glavni grad Francuske") while a
  * title is the nominative ("Београд", "Француска"), and a prefix walk cannot
  * see past an ending. A case ending is one or two letters, so the cut word is
- * the title itself (which then ranks as exact) or a prefix of it. A wrong cut
- * costs a search that finds nothing, or prefix matches that rank after every
- * exact title. Only single words are cut, and never below four letters.
+ * the title itself or a prefix of it - and either way the hit is a prefix match,
+ * because a stem is a guess at an ending and a guess cannot make a title exact.
+ * A wrong cut costs a search that finds nothing, or prefix matches the caller's
+ * relevance gate then drops. Only single words are cut, and never below four
+ * letters: that floor is a POLICY CHOICE rather than a measurement, since no
+ * fixed rule separates a case ending from the word's own tail.
  */
 function stems(key: string): readonly string[] {
   if (key.includes(" ")) return [];
@@ -259,6 +314,11 @@ function stems(key: string): readonly string[] {
 /** `<library id>/<entry path>`, and back. The id has no slash in it, so the first one is the boundary. */
 function titlePath(libraryId: string, zimPath: string): string {
   return `${libraryId}/${zimPath}`;
+}
+
+/** Whether a library's own language is one whose titles are Cyrillic. */
+function isSerbian(library: ZimWikiLibrary): boolean {
+  return SERBIAN_TAG.test((library.language ?? "").trim().toLowerCase());
 }
 
 /** The knowledge base's `WikiSource`, over one ZIM service. */
@@ -277,9 +337,20 @@ export function zimWikiSource(host: ZimWikiHost): WikiSource {
       const exact: WikiTitle[] = [];
       const prefixed: WikiTitle[] = [];
       const seen = new Set<string>();
+      /** What has been collected, which is what the caller's budget is spent on. */
+      const collected = (): number => exact.length + prefixed.length;
 
-      /** One prefix, one library: a hit is the title itself or a title that starts with the key. */
-      const ask = (library: ZimWikiLibrary, prefix: string): void => {
+      /**
+       * One prefix, one library: a hit is the key itself or a title that starts
+       * with it.
+       *
+       * `fromKey` is what decides whether a hit can be EXACT, and it is false
+       * for a stem: a stem is a guess at a title's ending, so a hit that merely
+       * equals one is a prefix match like the rest.
+       */
+      const ask = (library: ZimWikiLibrary, prefix: string, fromKey: boolean): void => {
+        if (collected() >= limit) return;
+        const serbian = isSerbian(library);
         for (const hit of host.search(library.id, prefix, limit)) {
           const path = titlePath(library.id, hit.zimPath);
           // A path is what the citation's `id` becomes, and `MAX_ID_LENGTH` is
@@ -292,32 +363,39 @@ export function zimWikiSource(host: ZimWikiHost): WikiSource {
           if (path.length > MAX_ID_LENGTH) continue;
           if (seen.has(path)) continue;
           seen.add(path);
-          if (hit.title === prefix) exact.push({ path, title: hit.title });
-          else if (prefixed.length < limit) prefixed.push({ path, title: hit.title });
+          const title = serbian ? transliterated(hit.title) : hit.title;
+          // The reader's OWN title is what is compared: a Serbian library's
+          // transliterated title would never equal the Cyrillic spelling of the
+          // key it was found under.
+          if (fromKey && hit.title === prefix) exact.push({ path, title });
+          else if (collected() < limit) prefixed.push({ path, title });
         }
       };
 
       const answer = (): readonly WikiTitle[] => [...exact, ...prefixed].slice(0, limit);
+      // Every key is asked, because the ranking is no longer this reader's: a
+      // title index answers in byte order, and the caller ranks what comes back
+      // by how much of the question each candidate carries. Stopping at the
+      // first key that filled a list would hand the gate the one thing it cannot
+      // fix, which is a candidate it never saw.
       for (const key of keys) {
         if (signal.aborted) return answer();
+        if (collected() >= limit) return answer();
         for (const library of libraries) {
           if (signal.aborted) return answer();
-          if (!SERBIAN_TAG.test((library.language ?? "").trim().toLowerCase())) {
-            ask(library, key);
+          if (!isSerbian(library)) {
+            ask(library, key, true);
             continue;
           }
-          // The stems right after their word, so that their prefix matches rank
-          // before the next, less likely word's.
+          // The stems right after their word, so that what they reach is
+          // collected before the next, less likely word's.
           for (const spelling of [key, ...stems(key)]) {
-            ask(library, spelling);
+            const fromKey = spelling === key;
+            ask(library, spelling, fromKey);
             const cyrillic = cyrillicSpelling(spelling);
-            if (cyrillic !== spelling) ask(library, cyrillic);
+            if (cyrillic !== spelling) ask(library, cyrillic, fromKey);
           }
         }
-        // An exact title is the answer, and the keys after this one are guesses
-        // at what the user meant: once `limit` of them are found, asking the
-        // rest would only spend reads on titles nobody asked for.
-        if (exact.length >= limit) break;
       }
       return answer();
     },
@@ -342,7 +420,15 @@ export function zimWikiSource(host: ZimWikiHost): WikiSource {
       // An entry that is not a document - an image, a stylesheet - has no lead
       // to read, and the caller would rather know that than see its bytes.
       if (served === null || !served.html) return "";
-      return articleText(new TextDecoder("utf-8", { fatal: false }).decode(served.bytes));
+      const text = articleText(new TextDecoder("utf-8", { fatal: false }).decode(served.bytes));
+      // The article follows the titles `searchTitles` returns, in the app's own
+      // script: a Serbian library writes Cyrillic and this app's Serbian is
+      // Latin, so a passage that answers a Serbian question is one the model can
+      // quote without answering in the script it copied. The library is looked
+      // up rather than remembered - for the reason the list is read afresh - and
+      // a path whose library is no longer listed is read as it stands.
+      const library = host.libraries().find((candidate) => candidate.id === libraryId);
+      return library !== undefined && isSerbian(library) ? transliterated(text) : text;
     },
   };
 }

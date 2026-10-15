@@ -21,6 +21,9 @@
  *
  * Nothing here throws, and nothing coerces: `"5"` is not a `5`, `"yes"` is not
  * a `true`. A silently coerced call is a call the model never learns was wrong.
+ * The one thing that is DROPPED rather than refused is an optional property
+ * whose value is an empty string - the shape a model uses for "not given"
+ * ({@link withoutEmptyOptionals}).
  */
 
 import type { JsonSchema } from "./contract.js";
@@ -39,11 +42,88 @@ export interface ToolArgumentsInvalid {
 
 export type ToolArgumentsCheck = ToolArgumentsValid | ToolArgumentsInvalid;
 
-/** Validate one tool call's arguments against the tool's own schema. */
+/**
+ * Validate one tool call's arguments against the tool's own schema.
+ *
+ * The one thing done to the arguments first is {@link withoutEmptyOptionals}:
+ * an optional property a model filled with `""` is read as a property it did not
+ * fill, and the tool is handed the arguments without it.
+ */
 export function validateToolArguments(schema: JsonSchema, args: unknown): ToolArgumentsCheck {
+  const value = withoutEmptyOptionals(schema, args);
   const errors: string[] = [];
-  validate(schema, args, "", errors);
-  return errors.length === 0 ? { ok: true, value: args } : { ok: false, errors };
+  validate(schema, value, "", errors);
+  return errors.length === 0 ? { ok: true, value } : { ok: false, errors };
+}
+
+/**
+ * The arguments with every empty optional string dropped.
+ *
+ * Gemma 4 E2B called `tasks.create` with `"description": ""`. The spec states
+ * `minLength: 1` for that property, so the call was refused - for a reason the
+ * model could not see the point of, having left the description out as far as it
+ * was concerned - and its next message told the user the task had been added. An
+ * empty string, or one that is only whitespace, is therefore read as what it
+ * means: a property the model did not fill. It is dropped BEFORE validation,
+ * when the object's schema does not require it, so a call the model got
+ * substantially right is not answered with a complaint about a property that
+ * carries nothing.
+ *
+ * A REQUIRED property is left exactly as it arrived, because there `""` is a
+ * call that has to be refused rather than quietly repaired. Everything that is
+ * not such a string is left alone too: `0`, `false` and `[]` are values a model
+ * chose to send, and only an empty string means "nothing".
+ *
+ * The walk goes where the schema goes - into nested objects and array items -
+ * because that is where an optional property can be as well. The SAME value is
+ * returned when nothing was dropped, so a call the model got right reaches the
+ * tool as the object the model wrote.
+ */
+function withoutEmptyOptionals(schema: JsonSchema, value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const items = isPlainObject(schema["items"]) ? (schema["items"] as JsonSchema) : undefined;
+    let dropped = false;
+    const cleaned = value.map((element) => {
+      const child = items === undefined ? element : withoutEmptyOptionals(items, element);
+      if (child !== element) dropped = true;
+      return child;
+    });
+    return dropped ? cleaned : value;
+  }
+  if (!isPlainObject(value)) return value;
+
+  const properties = isPlainObject(schema["properties"]) ? schema["properties"] : undefined;
+  const required = requiredNames(schema);
+  let dropped = false;
+  const cleaned: Record<string, unknown> = {};
+  for (const [name, item] of Object.entries(value)) {
+    const child =
+      properties !== undefined && Object.hasOwn(properties, name)
+        ? withoutEmptyOptionals((properties[name] ?? {}) as JsonSchema, item)
+        : item;
+    if (child !== item) dropped = true;
+    if (isBlankString(child) && !required.includes(name)) {
+      dropped = true;
+      continue;
+    }
+    // Defined rather than assigned: an argument named `__proto__` is a property
+    // of the object the model wrote, and `cleaned["__proto__"] = child` would
+    // reach the prototype instead of adding one.
+    Object.defineProperty(cleaned, name, { value: child, enumerable: true, writable: true, configurable: true });
+  }
+  return dropped ? cleaned : value;
+}
+
+/** Whether a value is a string that says nothing. */
+function isBlankString(value: unknown): boolean {
+  return typeof value === "string" && value.trim() === "";
+}
+
+/** The property names a schema's object states as required, as strings. */
+function requiredNames(schema: JsonSchema): readonly string[] {
+  return Array.isArray(schema["required"])
+    ? (schema["required"] as readonly unknown[]).filter((name): name is string => typeof name === "string")
+    : [];
 }
 
 function validate(schema: JsonSchema, value: unknown, path: string, errors: string[]): void {
@@ -97,11 +177,7 @@ function validate(schema: JsonSchema, value: unknown, path: string, errors: stri
 
   if (isPlainObject(value)) {
     const properties = isPlainObject(schema["properties"]) ? schema["properties"] : undefined;
-    const required = Array.isArray(schema["required"])
-      ? (schema["required"] as readonly unknown[]).filter(
-          (name): name is string => typeof name === "string",
-        )
-      : [];
+    const required = requiredNames(schema);
     for (const name of required) {
       if (!Object.hasOwn(value, name) || value[name] === undefined) {
         errors.push(`${display(`${path}/${escapePointer(name)}`)}: required property is missing`);
