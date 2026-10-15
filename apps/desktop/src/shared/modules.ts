@@ -89,6 +89,16 @@ const CALENDAR_WIDGETS: WidgetContract[] = [
       },
     ],
   },
+  // NTF's centre as a card (DASH-003). Owned by CAL: the card is about when
+  // something needs attention, and the rows open whichever module the reminder
+  // came from, so there is no one module it belongs to more than this one.
+  {
+    id: "podsetnici",
+    title: "dashboard.reminders.title",
+    sizes: ["S", "M"],
+    deepLink: "calendar",
+    configFields: [ROW_CAP],
+  },
 ];
 
 const TASKS_WIDGETS: WidgetContract[] = [
@@ -123,6 +133,22 @@ const TASKS_WIDGETS: WidgetContract[] = [
     sizes: ["S", "M"],
     deepLink: "tasks",
     configFields: [ROW_CAP],
+  },
+  // The palette's quick-creates as buttons (DASH-003). Owned by TASK, which is
+  // where the capture chord lands and where most of what it creates lives.
+  {
+    id: "brze-radnje",
+    title: "dashboard.quickActions.title",
+    sizes: ["S", "M"],
+    deepLink: "tasks",
+  },
+  // Two small charts over the last seven days (DASH-003). Owned by TASK for its
+  // completed-tasks series; the focus series is drawn only while FOKUS is on.
+  {
+    id: "statistika",
+    title: "dashboard.stats.title",
+    sizes: ["M", "L"],
+    deepLink: "tasks",
   },
 ];
 

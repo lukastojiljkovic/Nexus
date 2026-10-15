@@ -2126,6 +2126,8 @@ export function App() {
                   enabledModules={visibleIds}
                   onOpenModule={setActiveId}
                   onOpenNote={openNote}
+                  onCreate={createInModule}
+                  onCapture={openTaskCapture}
                 />
               ) : shownId === "tasks" && activeProfile ? (
                 <TasksPage

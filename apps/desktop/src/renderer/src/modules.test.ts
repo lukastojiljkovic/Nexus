@@ -908,10 +908,13 @@ describe("the widgets the v0 modules publish (ADR-045)", () => {
     expect(registry.widgetsOf("calendar").map((widget) => widget.id)).toEqual([
       "danas",
       "isticanja",
+      "podsetnici",
     ]);
     expect(registry.widgetsOf("tasks").map((widget) => widget.id)).toEqual([
       "predstojece",
       "hitno-kasni",
+      "brze-radnje",
+      "statistika",
     ]);
     expect(registry.widgetsOf("study").map((widget) => widget.id)).toEqual(["ispiti", "ucenje"]);
     expect(registry.widgetsOf("notes").map((widget) => widget.id)).toEqual(["nedavno"]);

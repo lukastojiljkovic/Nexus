@@ -1,5 +1,7 @@
 import { matchesSmartList, selectSmartList } from "@nexus/core";
 import type { SmartListContext, SmartListTask } from "@nexus/core";
+import type { NotificationRecord } from "../../shared/ipc.js";
+import { shiftDayKey } from "./examDates.js";
 
 /**
  * The configurable widgets' row selection, pure (DASH-004 / ADR-059) — what
@@ -120,4 +122,65 @@ export function capTodayGroups<E, B, T>(
   const keptBirthdays = birthdays.slice(0, Math.max(0, cap - keptEvents.length));
   const keptTasks = tasks.slice(0, Math.max(0, cap - keptEvents.length - keptBirthdays.length));
   return { events: keptEvents, birthdays: keptBirthdays, tasks: keptTasks };
+}
+
+/** The ledger fields a reminder row is read through — a row of the centre, or a fixture carrying these. */
+export type ReminderLike = Pick<
+  NotificationRecord,
+  "id" | "status" | "source" | "snoozedUntil" | "deliveredAt"
+>;
+
+/**
+ * The instant a reminder asks for the user's attention: a snoozed one when it
+ * comes back, a delivered one when it fired.
+ */
+export function reminderInstant(notification: ReminderLike): string {
+  return notification.status === "snoozed" && notification.snoozedUntil !== null
+    ? notification.snoozedUntil
+    : notification.deliveredAt;
+}
+
+/**
+ * „Podsetnici“ (`calendar:podsetnici`): the centre's open rows — delivered and
+ * snoozed, never dismissed (that is history) — filtered to the sources whose
+ * module is on, oldest instant first, capped. The oldest waiting reminder is the
+ * one that has waited longest, so it leads.
+ */
+export function reminderRows<T extends ReminderLike>(
+  notifications: readonly T[],
+  shows: (source: T["source"]) => boolean,
+  cap: number,
+): T[] {
+  return notifications
+    .filter((notification) => notification.status !== "dismissed" && shows(notification.source))
+    .sort(
+      (a, b) =>
+        reminderInstant(a).localeCompare(reminderInstant(b)) || a.id.localeCompare(b.id),
+    )
+    .slice(0, cap);
+}
+
+/**
+ * The last `days` local days, oldest first, ending on `today` — the x axis of
+ * every seven-day chart on the dashboard.
+ */
+export function recentDays(today: string, days: number): string[] {
+  return Array.from({ length: days }, (_, index) => shiftDayKey(today, index - (days - 1)));
+}
+
+/**
+ * One total per day of `days`, in the same order: the sum of the amounts whose
+ * day falls on it. A day with nothing is a MEASURED zero — nothing was done —
+ * so it is a number, not a gap; `ColumnPlot` draws it as no column at all.
+ */
+export function dailyTotals(
+  days: readonly string[],
+  entries: readonly { day: string; amount: number }[],
+): number[] {
+  const totals = new Map(days.map((day) => [day, 0]));
+  for (const entry of entries) {
+    const total = totals.get(entry.day);
+    if (total !== undefined) totals.set(entry.day, total + entry.amount);
+  }
+  return days.map((day) => totals.get(day) ?? 0);
 }
