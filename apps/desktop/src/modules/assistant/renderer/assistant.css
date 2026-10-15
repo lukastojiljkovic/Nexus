@@ -92,6 +92,25 @@
   border-inline-start: 1px solid var(--nx-border-subtle);
 }
 
+/* The one line that did NOT do the thing is the one that is not quiet: the
+   problem ink, with a word and a glyph carrying the same state, so nothing
+   about it depends on seeing the colour. The ink, the size and the measure are
+   `.nx-hint`'s, which every line keeps. */
+.nx-hint.asst__tool-failed {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-1);
+  color: var(--nx-danger);
+}
+
+/* The glyph of that line, on `.nx-field__error-mark`'s terms: never squeezed
+   narrower by a long first word, and on the first line rather than beside it. */
+.asst__tool-mark {
+  flex: none;
+  line-height: 0;
+  padding-top: 3px;
+}
+
 .asst__citations {
   display: flex;
   flex-wrap: wrap;

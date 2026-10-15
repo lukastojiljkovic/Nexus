@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectDoesNotKnow, detectLanguage } from "./language.js";
+import { claimsCompletion, detectDoesNotKnow, detectLanguage, detectScript } from "./language.js";
 
 describe("detectLanguage", () => {
   it("reads a Serbian sentence by its letters alone", () => {
@@ -56,5 +56,43 @@ describe("detectDoesNotKnow", () => {
     // `nema` alone is a Serbian word ("there is no") and not an admission; the
     // detector asks for the phrase it is part of.
     expect(detectDoesNotKnow("U paketu nema te teme, ali evo sta pise o vodi.")).toBe(false);
+  });
+});
+
+describe("detectScript", () => {
+  it("reads a Latin sentence, and a Serbian Latin one, as Latin", () => {
+    expect(detectScript("Beograd je glavni grad Srbije i najveći grad.")).toBe("latin");
+    expect(detectScript("The capital of France is Paris.")).toBe("latin");
+  });
+
+  it("reads a Cyrillic sentence as Cyrillic", () => {
+    expect(detectScript("Београд је главни град Србије.")).toBe("cyrillic");
+  });
+
+  it("keeps a Latin answer that quotes a Cyrillic title Latin", () => {
+    // The share is a policy number, and half is where it sits: a quotation
+    // inside a Latin sentence is not the answer's script.
+    expect(
+      detectScript("The article „Никола Тесла“ says he was born in Smiljan, in 1856."),
+    ).toBe("latin");
+  });
+
+  it("calls an answer with no letters at all Latin rather than Cyrillic", () => {
+    expect(detectScript("112")).toBe("latin");
+  });
+});
+
+describe("claimsCompletion", () => {
+  it("sees a claim in either language, and through case and diacritics", () => {
+    expect(claimsCompletion("Dodao sam zadatak.")).toBe(true);
+    expect(claimsCompletion("I have added the task to your list.")).toBe(true);
+    expect(claimsCompletion("Zakazao sam termin za petak.")).toBe(true);
+    expect(claimsCompletion("Zabeležio sam to u beleške.")).toBe(true);
+  });
+
+  it("is silent on a refusal, which is the sentence it exists beside", () => {
+    expect(claimsCompletion("Nisam dodao zadatak, jer si predlog odbio.")).toBe(false);
+    expect(claimsCompletion("I did not add the task: the store is locked.")).toBe(false);
+    expect(claimsCompletion("Nije dodat nijedan zadatak.")).toBe(false);
   });
 });

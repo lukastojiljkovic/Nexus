@@ -6,6 +6,7 @@ import { answerReserveTokens } from "./budget.js";
 import { TOOL_BUDGET_SHARE, toolSpecTokens } from "./toolChoice.js";
 import type {
   AgentEvent,
+  AgentTurnInput,
   AssistantLocale,
   AssistantText,
   ChatMessage,
@@ -52,6 +53,32 @@ function makeTool(
   };
 }
 
+/**
+ * A tool with the shape a `write` has: it asks the user through
+ * `ToolContext.confirm`, and a "no" is an ordinary result rather than an error
+ * (`confirmOrDecline`, beside the app's own tools). `seen` holds the runs that
+ * happened, so a test can say that a refused call did not run at all.
+ */
+function makeAskingTool(
+  name: string,
+  result: ToolResult = { ok: true, content: `${name} ok` },
+): FakeTool {
+  const seen: unknown[] = [];
+  return {
+    name,
+    description: { sr: `Alatka ${name}.`, en: `Tool ${name}.` },
+    parameters: { type: "object", additionalProperties: true },
+    effect: "write",
+    seen,
+    async run(args, context) {
+      const approved = await context.confirm({ tool: name, summary: `${name}?`, effect: "write" });
+      if (!approved) return { ok: false, content: "The user declined." };
+      seen.push(args);
+      return result;
+    },
+  };
+}
+
 interface FakeKnowledge extends KnowledgeBase {
   readonly queries: readonly KnowledgeQuery[];
 }
@@ -86,6 +113,27 @@ interface TurnParts {
   readonly locale?: AssistantLocale;
 }
 
+/** The input one turn runs against, from the parts a test declared. */
+function turnInput(parts: TurnParts): AgentTurnInput {
+  const locale = parts.locale ?? "sr";
+  return {
+    history: parts.history ?? [],
+    user: parts.user ?? { role: "user", content: "Pomoc" },
+    locale,
+    tools: parts.tools ?? [],
+    knowledge: parts.knowledge ?? makeKnowledge(),
+    model: parts.model,
+    context: {
+      profileId: "profile-1",
+      locale,
+      signal: parts.signal ?? new AbortController().signal,
+      confirm: parts.confirm ?? (async () => true),
+    },
+    maxSteps: parts.maxSteps ?? DEFAULT_MAX_STEPS,
+    today: "2026-10-14",
+  };
+}
+
 /** Run one turn with a pinned fence and call ids, and collect what it emitted. */
 async function turn(parts: TurnParts): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];
@@ -94,24 +142,8 @@ async function turn(parts: TurnParts): Promise<AgentEvent[]> {
     newFenceBoundary: () => BOUNDARY,
     newCallId: () => `call_${(sequence += 1)}`,
   });
-  const locale = parts.locale ?? "sr";
   await loop(
-    {
-      history: parts.history ?? [],
-      user: parts.user ?? { role: "user", content: "Pomoc" },
-      locale,
-      tools: parts.tools ?? [],
-      knowledge: parts.knowledge ?? makeKnowledge(),
-      model: parts.model,
-      context: {
-        profileId: "profile-1",
-        locale,
-        signal: parts.signal ?? new AbortController().signal,
-        confirm: parts.confirm ?? (async () => true),
-      },
-      maxSteps: parts.maxSteps ?? DEFAULT_MAX_STEPS,
-      today: "2026-10-14",
-    },
+    turnInput(parts),
     (event) => {
       events.push(event);
     },
@@ -346,10 +378,15 @@ describe("the loop's scripted conversations", () => {
     ]);
     const events = await turn({ model, tools: [create] });
 
-    expect(of(events, "tool-result")[0]?.result.ok).toBe(false);
-    expect(of(events, "tool-result")[0]?.result.content).toBe(
-      "Invalid arguments for tasks.create: /title: expected string, got number. Call it again with arguments that match its schema.",
+    const result = of(events, "tool-result")[0]?.result;
+    expect(result?.ok).toBe(false);
+    // The finding names the field, what the schema expects of every field is
+    // read off the schema itself, and the failed call is NOT repeated: a small
+    // model copies a call that sits in its context back verbatim.
+    expect(result?.content).toBe(
+      "Invalid arguments for tasks.create: /title: expected string, got number. Its arguments are: title (required): text. Call it again with the corrected arguments, or tell the user what is missing.",
     );
+    expect(result?.content).not.toContain("7");
     expect(create.seen).toEqual([]);
     expect(of(events, "done")[0]?.stopReason).toBe("end");
   });
@@ -379,6 +416,259 @@ describe("the loop's scripted conversations", () => {
 
     expect(of(events, "tool-result")[0]?.result.ok).toBe(true);
     expect(create.seen).toEqual([{ title: "Kupi mleko" }]);
+  });
+
+  it("answers a repeated refused call without running it or asking again", async () => {
+    const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+      { text: "Nisam dodao zadatak." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    // The user is asked ONCE, for the first call, and the tool never runs.
+    expect(asked).toHaveLength(1);
+    expect(create.seen).toEqual([]);
+    // The first result is the tool's own refusal; the second is the loop's
+    // answer to the repeat, and the turn goes on to the model's own reply.
+    expect(of(events, "tool-result").map((event) => event.result)).toEqual([
+      { ok: false, content: "The user declined." },
+      {
+        ok: false,
+        content:
+          "The user already refused tasks.create with these arguments in this turn. Do not call it again: tell the user it was not done.",
+      },
+    ]);
+    expect(of(events, "error")).toEqual([]);
+    expect(of(events, "done")[0]?.stopReason).toBe("end");
+    expect(of(events, "message").at(-1)?.message.content).toBe("Nisam dodao zadatak.");
+  });
+
+  it("treats a repeat written with the keys in another order as the same call", async () => {
+    const create = makeAskingTool("tasks.create");
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          {
+            id: "c1",
+            name: "tasks.create",
+            arguments: { title: "Kupi vodu", when: { day: "2026-10-15", at: "09:00" } },
+          },
+        ],
+      },
+      {
+        toolCalls: [
+          {
+            id: "c2",
+            name: "tasks.create",
+            arguments: { when: { at: "09:00", day: "2026-10-15" }, title: "Kupi vodu" },
+          },
+        ],
+      },
+      { text: "Nisam dodao." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    expect(asked).toHaveLength(1);
+  });
+
+  it("asks the user again for the same tool with different arguments", async () => {
+    const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: { title: "Kupi hleb" } }] },
+      { text: "Dodao sam hleb." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      // The user refuses the first suggestion and accepts the corrected one.
+      confirm: async (request) => {
+        asked.push(request);
+        return asked.length > 1;
+      },
+    });
+
+    expect(asked).toHaveLength(2);
+    expect(create.seen).toEqual([{ title: "Kupi hleb" }]);
+    expect(of(events, "tool-result")[1]?.result).toEqual({ ok: true, content: "created" });
+  });
+
+  it("asks once for two identical calls in one step, and answers both with it", async () => {
+    const create = makeAskingTool("tasks.create");
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+          { id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+        ],
+      },
+      { text: "Nisam dodao." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    // One question for the one call the two ask for, and both calls take its
+    // answer: nothing ran, because the answer was no.
+    expect(asked).toHaveLength(1);
+    expect(create.seen).toEqual([]);
+    expect(of(events, "tool-result").map((event) => event.result)).toEqual([
+      { ok: false, content: "The user declined." },
+      { ok: false, content: "The user declined." },
+    ]);
+  });
+
+  it("asks the second identical call of one step for itself when the first was answered yes", async () => {
+    const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+          { id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } },
+        ],
+      },
+      { text: "Dodao sam." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      // Yes to the first question, no to the second.
+      confirm: async (request) => {
+        asked.push(request);
+        return asked.length === 1;
+      },
+    });
+
+    // One approval runs one write: the twin asked for itself and was refused.
+    expect(asked).toHaveLength(2);
+    expect(create.seen).toEqual([{ title: "Kupi vodu" }]);
+    expect(of(events, "tool-result").map((event) => event.result.ok)).toEqual([true, false]);
+  });
+
+  it("asks again on the next turn, because a refusal belongs to one turn", async () => {
+    const create = makeAskingTool("tasks.create");
+    const asked: ConfirmRequest[] = [];
+    const confirm = async (request: ConfirmRequest): Promise<boolean> => {
+      asked.push(request);
+      return false;
+    };
+    const script = (): ChatModel =>
+      createScriptedModel([
+        { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+        { text: "Nisam dodao." },
+      ]);
+    // ONE loop and two turns: the production loop is a single instance
+    // (`runAgentTurn`), so a memory that outlived its turn would outlive it here.
+    const loop = createAgentTurn();
+    const events: AgentEvent[] = [];
+    await loop(turnInput({ model: script(), tools: [create], confirm }), (event) => events.push(event));
+    await loop(turnInput({ model: script(), tools: [create], confirm }), (event) => events.push(event));
+
+    expect(asked).toHaveLength(2);
+    expect(create.seen).toEqual([]);
+  });
+
+  it("resolves a day word in a day field against the turn's own date", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1 },
+        due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          {
+            id: "c1",
+            name: "tasks.create",
+            arguments: { title: "Kupi vodu", due: "tomorrow" },
+          },
+        ],
+      },
+      { text: "Dodato." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    // `turn` pins today at 2026-10-14.
+    expect(of(events, "tool-result")[0]?.result.ok).toBe(true);
+    expect(create.seen).toEqual([{ title: "Kupi vodu", due: "2026-10-15" }]);
+  });
+
+  it("answers a tool's second refusal by name, and does not run its third call", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: { title: { type: "string", minLength: 1 } },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const wrong = { title: 7 };
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: wrong }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: wrong }] },
+      { toolCalls: [{ id: "c3", name: "tasks.create", arguments: wrong }] },
+      { text: "Nisam ga dodao." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    const twice =
+      "tasks.create failed twice this turn. Do not call it again: tell the user it was not done and why.";
+    const results = of(events, "tool-result").map((event) => event.result.content);
+    expect(results).toHaveLength(3);
+    expect(results[0]).toContain("Invalid arguments for tasks.create:");
+    expect(results[1]).toBe(twice);
+    // The third call is answered without being read, and never runs.
+    expect(results[2]).toBe(twice);
+    expect(create.seen).toEqual([]);
+    expect(model.requests).toHaveLength(4);
+    expect(of(events, "done")[0]?.stopReason).toBe("end");
+  });
+
+  it("counts refusals per tool, so one tool's refusal does not silence another", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: { title: { type: "string", minLength: 1 } },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const list = makeTool("tasks.list", { ok: true, content: "two tasks" });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: 7 } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.list", arguments: {} }] },
+      { text: "Evo." },
+    ]);
+    const events = await turn({ model, tools: [create, list] });
+
+    expect(of(events, "tool-result")[1]?.result.ok).toBe(true);
+    expect(list.seen).toEqual([{}]);
   });
 
   it("stops at the step limit, having run the last call it was asked for", async () => {
@@ -441,7 +731,7 @@ describe("the loop's scripted conversations", () => {
 
   it("carries a knowledge hit's citation into the message, and fences the passage", async () => {
     const knowledge = makeKnowledge([hit("n1", "Vodu trazi nizvodno.")]);
-    const model = createScriptedModel([{ text: "Nizvodno." }]);
+    const model = createScriptedModel([{ text: "Vodu trazi nizvodno." }]);
     const events = await turn({ model, knowledge, user: { role: "user", content: "Gde je voda" } });
 
     expect(of(events, "message")[0]?.citations).toEqual([
@@ -460,7 +750,7 @@ describe("the loop's scripted conversations", () => {
 
   it("marks a safety citation, from a passage and from a tool alike", async () => {
     const knowledge = makeKnowledge([
-      hit("p1", "Pozovi 112.", { kind: "pack", safety: true, packId: "survival" }),
+      hit("p1", "Pozovi 112. Hitna pomoc dolazi brzo.", { kind: "pack", safety: true, packId: "survival" }),
     ]);
     const emergency = makeTool("app.open", {
       ok: true,
@@ -469,11 +759,13 @@ describe("the loop's scripted conversations", () => {
     });
     const model = createScriptedModel([
       { toolCalls: [{ id: "c1", name: "app.open", arguments: {} }] },
-      { text: "Pozovi 112." },
+      { text: "Pozovi 112, hitna pomoc." },
     ]);
     const events = await turn({ model, knowledge, tools: [emergency] });
 
     const citations = of(events, "message")[0]?.citations ?? [];
+    // Both stand, and the cited passage stands before the tool that was called:
+    // the answer's own source comes first, whatever order the turn met them in.
     expect(citations.map((citation) => citation.safety)).toEqual([true, true]);
     expect(citations[0]?.packId).toBe("survival");
     expect(citations[1]?.id).toBe("emergency");
@@ -610,6 +902,9 @@ describe("the loop's scripted conversations", () => {
       content: "Provericu.",
       toolCalls: [{ id: "c1", name: "tasks.list", arguments: {} }],
     });
+    // The preamble is not the answer, so it carries no source: the answer is the
+    // step that calls nothing, and the sources are what it draws on.
+    expect(preamble?.citations).toEqual([]);
     expect(of(events, "message")).toHaveLength(2);
   });
 
@@ -620,6 +915,143 @@ describe("the loop's scripted conversations", () => {
 
     expect(types(events)).toEqual(["token", "token", "message", "done"]);
     expect(model.requests[0]?.messages.map((entry) => entry.role)).toEqual(["system", "user"]);
+  });
+
+  it("answers in English, in the Latin script, when the user wrote English and the passages are Cyrillic", async () => {
+    const knowledge = makeKnowledge([hit("tesla", "Никола Тесла је рођен у Смиљану.")]);
+    const model = createScriptedModel([
+      {
+        text: "Никола Тесла је рођен у Смиљану.",
+        tokens: ["Никола", " Тесла", " је рођен", " у Смиљану."],
+      },
+    ]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Who was Nikola Tesla?" },
+    });
+
+    // The prompt states the decided language as a fact, and the block closes
+    // with the same line.
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      "The user wrote in English. Answer in English",
+    );
+    expect(model.requests[0]?.messages[1]?.content).toContain("The user wrote in English.");
+    // The script is ENFORCED: every streamed chunk is Latin, and the message the
+    // page stores carries the same text.
+    const streamed = of(events, "token").map((event) => event.text);
+    expect(streamed.join("")).toBe("Nikola Tesla je rođen u Smiljanu.");
+    expect(of(events, "message")[0]?.message.content).toBe("Nikola Tesla je rođen u Smiljanu.");
+    // The passage's own Cyrillic is what the answer was transliterated TO share
+    // words with, so it is what the answer is shown with.
+    expect(of(events, "message")[0]?.citations.map((citation) => citation.id)).toEqual(["tesla"]);
+  });
+
+  it("leaves a Cyrillic answer alone when the user wrote Cyrillic", async () => {
+    const model = createScriptedModel([
+      { text: "Здраво, ту сам.", tokens: ["Здраво,", " ту сам."] },
+    ]);
+    const events = await turn({
+      model,
+      user: { role: "user", content: "Шта имам од задатака за данас?" },
+    });
+
+    expect(of(events, "token").map((event) => event.text).join("")).toBe("Здраво, ту сам.");
+    expect(of(events, "message")[0]?.message.content).toBe("Здраво, ту сам.");
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      "The user wrote in Serbian (Cyrillic script)",
+    );
+  });
+
+  it("lists only the passage the answer cites, renumbered, and drops the unrelated ones", async () => {
+    const knowledge = makeKnowledge([
+      hit("dan", "Дана је женско име.", { title: "Дана" }),
+      hit("imam", "Имам је реч која значи поседовање.", { title: "Имам" }),
+      hit("zadatak", "Задатак је посао који треба обавити.", { title: "Задатак" }),
+      hit("film", "Задатак (филм) је филм из 2007.", { title: "Задатак (филм)" }),
+      hit("novine", "Данас (новине) су дневне новине.", { title: "Данас (новине)" }),
+    ]);
+    const model = createScriptedModel([
+      { text: "Задатак је посао који треба обавити [3]." },
+    ]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Šta imam od zadataka za danas?" },
+    });
+
+    const answer = of(events, "message")[0];
+    // The question was Serbian in the Latin script, so the answer is whatever
+    // the model wrote, in Latin: the Cyrillic passages do not move either half
+    // of the decision.
+    expect(answer?.message.content).toBe("Zadatak je posao koji treba obaviti [1].");
+    expect(answer?.citations.map((citation) => citation.title)).toEqual(["Задатак"]);
+  });
+
+  it("keeps the passage an uncited answer shares words with, and drops the rest", async () => {
+    const knowledge = makeKnowledge([
+      hit("tesla", "Никола Тесла је рођен у Смиљану и умро у Њујорку.", { title: "Никола Тесла" }),
+      hit("novine", "Данас (новине) су дневне новине.", { title: "Данас (новине)" }),
+    ]);
+    const model = createScriptedModel([{ text: "Nikola Tesla je rodjen u Smiljanu." }]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Who was Nikola Tesla?" },
+    });
+
+    const answer = of(events, "message")[0];
+    expect(answer?.citations.map((citation) => citation.title)).toEqual(["Никола Тесла"]);
+    // The answer cites nothing, so there is no marker to rewrite.
+    expect(answer?.message.content).toBe("Nikola Tesla je rodjen u Smiljanu.");
+  });
+
+  it("contributes no citation from a tool result that failed", async () => {
+    const refused = makeTool("app.open", {
+      ok: false,
+      content: "the user refused",
+      citations: [{ kind: "note", id: "nope", title: "Ne sme se pojaviti" }],
+    });
+    const listed = makeTool("tasks.list", {
+      ok: true,
+      content: "two tasks",
+      citations: [{ kind: "task", id: "t1", title: "Kupi vodu" }],
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "app.open", arguments: {} },
+          { id: "c2", name: "tasks.list", arguments: {} },
+        ],
+      },
+      { text: "Dva zadatka." },
+    ]);
+    const events = await turn({ model, tools: [refused, listed] });
+
+    expect(of(events, "message")[0]?.citations.map((citation) => citation.id)).toEqual(["t1"]);
+    expect(of(events, "message")[0]?.citations.some((citation) => citation.id === "nope")).toBe(false);
+  });
+
+  it("chooses the grounding rule from what retrieval returned", async () => {
+    const english = createScriptedModel([{ text: "Paris is the capital of France." }]);
+    await turn({ model: english, user: { role: "user", content: "What is the capital of France?" } });
+    expect(english.requests[0]?.messages[0]?.content).toContain(
+      "No passage from the user's library matches this question.",
+    );
+    expect(english.requests[0]?.messages[0]?.content).not.toContain("Answer from the numbered passages");
+
+    const withPassages = createScriptedModel([{ text: "Vodu trazi nizvodno." }]);
+    await turn({
+      model: withPassages,
+      knowledge: makeKnowledge([hit("n1", "Vodu trazi nizvodno.")]),
+      user: { role: "user", content: "Gde je voda" },
+    });
+    expect(withPassages.requests[0]?.messages[0]?.content).toContain(
+      "Answer from the numbered passages and cite them.",
+    );
+    expect(withPassages.requests[0]?.messages[0]?.content).not.toContain(
+      "No passage from the user's library",
+    );
   });
 
   it("fences a tool result that arrived in the history, and does not fence it twice", async () => {

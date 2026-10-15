@@ -10,8 +10,9 @@
  *   2. knowledge, retrieved ONCE before the first completion and injected as a
  *      fenced block, so every step of the turn reads the same passages;
  *   3. the model, streamed out as `token` events;
- *   4. the model's tool calls, each one checked against its own JSON schema
- *      before anything runs (`schema.ts`), then run together;
+ *   4. the model's tool calls, each one normalised for the loose values a small
+ *      model writes (`arguments.ts`) and then checked against its own JSON
+ *      schema before anything runs (`schema.ts`), then run together;
  *   5. the results, fenced as data, back to the model; repeat until it answers,
  *      or until `maxSteps`.
  *
@@ -31,11 +32,37 @@
  * (`budget.ts` refuses a request that cannot fit), `model-failed`, `step-limit`,
  * or the user's own abort.
  *
+ * **A refusal is remembered for the rest of the turn.** A tool that has to ask
+ * (`write`, `network`: `ToolContext.confirm`) would otherwise have the user
+ * answer one question twice, because a local model repeats the call it was just
+ * refused often enough to be worth guarding against. The loop keeps those "no"s
+ * (`refusals.ts`): a repeat of a refused call is answered without running the
+ * tool and without asking again. A call with other arguments is a new question
+ * and is asked normally, and the memory is gone by the next user message.
+ *
+ * **A refusal names what the schema wanted, and a second one ends the trying.**
+ * The message a refused call comes back as carries the finding and the fields
+ * with what each expects, built from the schema, and NOT the call the model
+ * just made: a small model copies a failed call that sits in its context back
+ * verbatim. The same tool refused twice in one turn is answered with the same
+ * sentence - do not call it again, tell the user - and a third attempt is not
+ * read at all, because a model that has written the same bad call twice will
+ * write it a third time, and the turn has `maxSteps` steps to answer in.
+ *
  * **A tool call is never lost to the step limit.** The limit counts MODEL calls;
  * a final call that still asks for tools has those tools run and its results
  * emitted, and then the turn stops with `step-limit`. Discarding a call the
  * model already made would drop a write the user had confirmed, and the page
  * would draw a request with no answer.
+ *
+ * **The last step carries the sources, and the reply's script is the loop's.**
+ * A step that calls tools is not an answer, so its `message` event carries no
+ * citations; the step that calls nothing is the answer, and the event that
+ * carries it is emitted after the whole turn - because the sources are decided
+ * by the answer and by the results of every call the turn made
+ * (`citations.ts`). The text itself streams as it arrives, transliterated to the
+ * script `language.ts` decided, and the stored answer is transliterated the same
+ * way, so the draft a page shows and the message it replaces are one text.
  *
  * **Stop reasons are the model's, with two exceptions.** `length` and `end` pass
  * through as reported; a turn cut short by the step limit or by a request that
@@ -52,8 +79,12 @@ import {
   createToolEstimator,
   planContext,
 } from "./budget.js";
+import { DAY_PATTERN, normalizeToolArguments } from "./arguments.js";
+import { filterAnswer } from "./citations.js";
 import { createFenceBoundary, fenceUntrusted, isFenced } from "./fence.js";
+import { replyLanguage, transliterateToLatin } from "./language.js";
 import { buildSystemPrompt } from "./prompts.js";
+import { createRefusalMemory } from "./refusals.js";
 import { validateToolArguments } from "./schema.js";
 import { parseToolCalls } from "./toolCalls.js";
 import {
@@ -63,11 +94,13 @@ import {
   toolSpecTokens,
 } from "./toolChoice.js";
 import type { MeasuredUsage } from "./budget.js";
+import type { RefusalMemory } from "./refusals.js";
 import type {
   AgentEvent,
   ChatMessage,
   Citation,
   CompletionResult,
+  JsonSchema,
   KnowledgeHit,
   RunAgentTurn,
   StopReason,
@@ -131,7 +164,26 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     let sequence = 0;
     const nextCallId = options.newCallId ?? ((): string => `call_${(sequence += 1)}`);
 
-    const citations = new CitationList();
+    /**
+     * The sources this turn collected, ready for the answer's filter
+     * (`citations.ts`). The passages and the tool citations are kept apart
+     * because they are chosen by different rules: a passage is a source when
+     * the answer cites it or shares words with it, and a tool citation stands
+     * on its own once its result said `ok`.
+     */
+    const passageCitations: KnowledgeHit[] = [];
+    const toolCitations: Citation[] = [];
+    // The reply's language and script, decided here rather than asked of the
+    // model (`language.ts`): the prompt states it as a fact, and a Latin answer
+    // is transliterated on the way out.
+    const reply = replyLanguage(input.user.content, input.locale);
+    const { script } = reply;
+    const latin = (text: string): string =>
+      script === "latin" ? transliterateToLatin(text) : text;
+    /** The turn's final answer: its text, held until the sources are settled. */
+    let answer: string | null = null;
+    // One turn, one memory of what the user refused: see `refusals.ts`.
+    const refusals = createRefusalMemory();
     let hits: readonly KnowledgeHit[] = [];
     try {
       const found = await input.knowledge.search(
@@ -177,7 +229,10 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     const fixedTokens = offered.reduce((sum, spec) => sum + toolSpecTokens(spec), 0);
     const offeredCharacters = offered.reduce((sum, spec) => sum + toolSpecCharacters(spec), 0);
     const system = buildSystemPrompt({
-      locale: input.locale,
+      reply,
+      // What the Rules block says about grounding is a fact about this turn:
+      // retrieval already ran, so the loop knows whether there is a block.
+      passages: hits.length > 0,
       tools: offered,
       maxSteps: input.maxSteps,
       today: input.today,
@@ -204,6 +259,13 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     const pending: ChatMessage[] = [input.user];
     let measured: MeasuredUsage | undefined;
     let counted = false;
+    /**
+     * How many times this turn a tool's arguments have been refused, by tool
+     * name. The loop's own small memory, kept as its own object so a second one
+     * (another reason a call must not be repeated) can sit beside it rather
+     * than inside it.
+     */
+    const invalidCalls = new Map<string, number>();
 
     for (let step = 0; step < input.maxSteps; step += 1) {
       if (signal.aborted) {
@@ -218,6 +280,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         ceiling,
         fixedTokens,
         boundary,
+        reply,
         estimate: createEstimator(input.locale, measured),
         estimateTool: createToolEstimator(input.locale, measured),
       });
@@ -229,7 +292,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       if (!counted) {
         // Only the hits that survived the FIRST fit are sources of this answer:
         // a passage the model never read cannot be what it cites.
-        for (const hit of plan.knowledge) citations.add(hit.citation);
+        passageCitations.push(...plan.knowledge);
         counted = true;
       }
 
@@ -239,7 +302,9 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
           { messages: plan.messages, tools: offered, maxTokens: reserve },
           signal,
           (text) => {
-            emit({ type: "token", text });
+            // What a page draws as the answer arrives, transliterated like the
+            // message that replaces it (`language.ts` pins the two agreeing).
+            emit({ type: "token", text: latin(text) });
           },
         );
       } catch (error) {
@@ -280,30 +345,52 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         recovered !== null && recovered.calls.length > 0 ? recovered.text : result.text;
 
       if (text.trim().length > 0) {
-        emit({
-          type: "message",
-          message:
-            calls.length > 0
-              ? { role: "assistant", content: text, toolCalls: calls }
-              : { role: "assistant", content: text },
-          citations: citations.all(),
-        });
+        if (calls.length > 0) {
+          // A step that answers AND calls tools is not an answer: what it says
+          // is the preamble to the calls ("let me look"), and no source belongs
+          // beside it. The sources are what the ANSWER draws on, and the answer
+          // is the step that calls nothing.
+          emit({
+            type: "message",
+            message: { role: "assistant", content: latin(text), toolCalls: calls },
+            citations: [],
+          });
+        } else {
+          // The final answer. Its TEXT streams below as it arrives; the event
+          // that carries it waits for the whole turn, because a citation is
+          // decided by the answer and by the citations of any result the turn
+          // has not received yet.
+          answer = text;
+        }
       }
       if (calls.length === 0) {
+        emitAnswer(answer ?? "", passageCitations, toolCitations, latin, emit);
         finish(result.stopReason === "length" ? "length" : "end");
         return;
       }
 
       pending.push({ role: "assistant", content: text, toolCalls: calls });
       for (const call of calls) emit({ type: "tool-call", call });
-      const outcome = await runToolCalls(calls, offeredTools, input.context, emit);
+      const outcome = await runToolCalls(
+        calls,
+        offeredTools,
+        input.context,
+        emit,
+        input.today,
+        refusals,
+        invalidCalls,
+      );
       if (outcome.aborted) {
         stopped();
         return;
       }
       for (const entry of outcome.entries) {
         emit({ type: "tool-result", callId: entry.call.id, result: entry.result });
-        for (const citation of entry.result.citations ?? []) citations.add(citation);
+        // A result that failed is not a source: a tool that refused, threw, or
+        // was called by a name the turn does not have contributed nothing the
+        // answer may be shown with. A result that said `ok` did, whether or not
+        // the answer cites it (`contract.ts`: a tool names its own source).
+        if (entry.result.ok) toolCitations.push(...(entry.result.citations ?? []));
         // What the PAGE draws is the result itself; what the MODEL reads is the
         // same text fenced and labelled as data (`fence.ts`).
         pending.push({
@@ -352,14 +439,25 @@ type ToolOutcome =
  *
  * Parallel because two reads have no reason to queue; ordered because a page
  * (and a test) should not see the results of a step reshuffled by whichever
- * tool was faster. A refusal is not here at all: `ToolContext.confirm` is the
- * tool's own question, and the tool decides what a „no" means.
+ * tool was faster. A refusal is the tool's own business: `ToolContext.confirm`
+ * is its question, and the tool decides what the answer means for its result.
+ *
+ * What this adds to that is two memories of the turn, both owned by
+ * `createAgentTurn`: the refusals the user already gave (`refusals.ts`) - a call
+ * they said no to is answered here, because running the tool would ask them the
+ * same question a second time - and `invalidCalls`, the tools whose arguments
+ * were already refused, so a third attempt is answered without being read.
+ * `today` is the turn's own day, which a day word in the arguments is resolved
+ * against before validation.
  */
 async function runToolCalls(
   calls: readonly ToolCall[],
   tools: readonly Tool[],
   context: ToolContext,
   emit: (event: AgentEvent) => void,
+  today: string,
+  refusals: RefusalMemory,
+  invalidCalls: Map<string, number>,
 ): Promise<ToolOutcome> {
   const names = tools.map((tool) => tool.name);
   const settled = await Promise.all(
@@ -376,20 +474,40 @@ async function runToolCalls(
           },
         };
       }
-      const check = validateToolArguments(tool.parameters, call.arguments);
+      // Before the schema check, because a call in this memory matched its
+      // schema when the user was asked about it: what the model has to hear now
+      // is that the question was answered, not that its arguments look odd.
+      const declined = refusals.alreadyDeclined(call);
+      if (declined !== undefined) {
+        return { aborted: false, entry: { call, result: declined } };
+      }
+      const refused = invalidCalls.get(call.name) ?? 0;
+      if (refused >= 2) {
+        // Not validated and not run: the model has written this same bad call
+        // twice already, and the answer it gets is the one that tells it to
+        // stop, in the same words as the second refusal.
+        return { aborted: false, entry: { call, result: failure(refusedTwice(call.name)) } };
+      }
+      const check = validateToolArguments(
+        tool.parameters,
+        normalizeToolArguments(tool.parameters, call.arguments, today),
+      );
       if (!check.ok) {
+        invalidCalls.set(call.name, refused + 1);
         return {
           aborted: false,
           entry: {
             call,
             result: failure(
-              `Invalid arguments for ${call.name}: ${check.errors.join("; ")}. Call it again with arguments that match its schema.`,
+              refused + 1 >= 2
+                ? refusedTwice(call.name)
+                : refusal(call.name, tool.parameters, check.errors),
             ),
           },
         };
       }
       try {
-        const result = await tool.run(check.value, context);
+        const result = await tool.run(check.value, refusals.contextFor(call, context));
         if (context.signal.aborted) {
           return { aborted: true, entry: { call, result } };
         }
@@ -426,6 +544,97 @@ function failure(content: string): ToolResult {
   return { ok: false, content };
 }
 
+/**
+ * What one refused call tells the model: the finding, what the tool's schema
+ * wants of each field, and the two ways out.
+ *
+ * The failed arguments are deliberately NOT repeated. A small model copies a
+ * call that sits in its context back verbatim - the 2.0.3 run this repairs is
+ * the proof - so the one thing this message must not carry is a second copy of
+ * the call it is answering. The finding (`schema.ts`'s own sentence) names the
+ * field and the shape it wanted; the rest is read off the schema rather than
+ * written out by hand, because a hand-kept list is wrong the first time a tool
+ * changes its arguments.
+ */
+function refusal(name: string, schema: JsonSchema, errors: readonly string[]): string {
+  return `Invalid arguments for ${name}: ${errors.join("; ")}. ${expectations(schema)} Call it again with the corrected arguments, or tell the user what is missing.`;
+}
+
+/**
+ * The same tool refused twice in one turn. The model is told the call will not
+ * run and asked to answer instead, which is the only useful thing left to say:
+ * a second identical refusal has already been read and not acted on.
+ */
+function refusedTwice(name: string): string {
+  return `${name} failed twice this turn. Do not call it again: tell the user it was not done and why.`;
+}
+
+/** What a tool's schema expects of its arguments, one clause per field. */
+function expectations(schema: JsonSchema): string {
+  const properties = isPlainObject(schema["properties"]) ? schema["properties"] : {};
+  const required = stringList(schema["required"]);
+  const fields = Object.entries(properties).map(([name, property]) =>
+    expectation(name, isPlainObject(property) ? property : {}, required.includes(name)),
+  );
+  return fields.length === 0 ? "It takes no arguments." : `Its arguments are: ${fields.join("; ")}.`;
+}
+
+/** One field: its name, whether it may be left out, and what it expects. */
+function expectation(name: string, property: JsonSchema, required: boolean): string {
+  return `${name} (${required ? "required" : "optional"}): ${expected(property)}`;
+}
+
+/**
+ * What one field expects, in the schema's own terms: a closed vocabulary is
+ * quoted, a calendar day is named as the form it takes, and everything else is
+ * its type.
+ */
+function expected(property: JsonSchema): string {
+  if (property["pattern"] === DAY_PATTERN) return "a day as YYYY-MM-DD";
+  const members = stringList(property["enum"]);
+  if (members.length > 0) return `one of ${members.map((member) => JSON.stringify(member)).join(", ")}`;
+  switch (property["type"]) {
+    case "integer":
+      return "a whole number";
+    case "number":
+      return "a number";
+    case "boolean":
+      return "true or false";
+    case "array":
+      return "a list";
+    case "object":
+      return "an object";
+    default:
+      return text(property);
+  }
+}
+
+/** A text field, with the length the schema states when it states one. */
+function text(property: JsonSchema): string {
+  const bounds: string[] = [];
+  const min = property["minLength"];
+  const max = property["maxLength"];
+  if (typeof min === "number" && min > 0) bounds.push(`at least ${characters(min)}`);
+  if (typeof max === "number") bounds.push(`at most ${characters(max)}`);
+  return ["text", ...bounds].join(", ");
+}
+
+/** A count of characters a refusal can read. */
+function characters(count: number): string {
+  return count === 1 ? "1 character" : `${count} characters`;
+}
+
+/** The strings of a list-valued keyword, ignoring anything that is not one. */
+function stringList(value: unknown): readonly string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -435,6 +644,33 @@ function requestCharacters(messages: readonly ChatMessage[]): number {
   let total = 0;
   for (const message of messages) total += message.content.length;
   return total;
+}
+
+/**
+ * The turn's answer, as the page draws it: the text in the decided script, and
+ * the sources it may be shown with.
+ *
+ * The text is transliterated here as well as token by token above, because a
+ * stored answer and a streamed one have to be the same text - and because a
+ * script the loop decided is enforced rather than requested (`language.ts`).
+ * The text the citations are filtered against is the transliterated one, so a
+ * Cyrillic answer and a Latin passage meet each other in one script.
+ */
+function emitAnswer(
+  text: string,
+  passages: readonly KnowledgeHit[],
+  tools: readonly Citation[],
+  latin: (text: string) => string,
+  emit: (event: AgentEvent) => void,
+): void {
+  const content = latin(text);
+  if (content.trim().length === 0) return;
+  const filtered = filterAnswer(content, { passages, tools });
+  emit({
+    type: "message",
+    message: { role: "assistant", content: filtered.text },
+    citations: filtered.citations,
+  });
 }
 
 /** The user messages of the history, newest first: what the tool chooser reads as context. */
@@ -458,23 +694,3 @@ function recentToolNames(history: readonly ChatMessage[]): readonly string[] {
   return names;
 }
 
-/**
- * The citations one turn collected, in the order they arrived and without
- * repeating one: a hit injected once and a tool that returned the same page
- * twice are one source, and the page shows the list.
- */
-class CitationList {
-  private readonly seen = new Set<string>();
-  private readonly list: Citation[] = [];
-
-  add(citation: Citation): void {
-    const key = [citation.kind, citation.id, citation.locator ?? "", citation.packId ?? ""].join("|");
-    if (this.seen.has(key)) return;
-    this.seen.add(key);
-    this.list.push(citation);
-  }
-
-  all(): readonly Citation[] {
-    return this.list;
-  }
-}

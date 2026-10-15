@@ -59,6 +59,14 @@ export interface AssistantMessageView {
   readonly toolCalls: readonly ToolCall[] | null;
   /** On a tool message: the call it answers. */
   readonly toolCallId: string | null;
+  /**
+   * On a tool message: whether the tool did what it was asked, read from the
+   * stored row rather than from the model's sentence about it. A tool row that
+   * recorded no outcome reads as done (`main/register.ts` says why), and `null`
+   * stands on every other row - and on a call, which has no result until it has
+   * one.
+   */
+  readonly ok: boolean | null;
   /** True when a citation came from a `notice: "safety"` pack: the page draws the notice. */
   readonly safety: boolean;
   readonly createdAt: string;

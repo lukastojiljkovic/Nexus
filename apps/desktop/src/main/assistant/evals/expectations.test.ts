@@ -13,6 +13,7 @@ function trace(overrides: Partial<TurnTrace> = {}): TurnTrace {
   return {
     toolCalls: [],
     citationIds: [],
+    safety: false,
     finalText: "",
     steps: 1,
     confirmations: [],
@@ -36,7 +37,7 @@ describe("toolsCalled", () => {
 
   it("passes on the call it expects", () => {
     const current = trace({
-      toolCalls: [{ name: "tasks.create", arguments: { title: "Pozovi helikopter" } }],
+      toolCalls: [{ name: "tasks.create", arguments: { title: "Pozovi helikopter" }, ok: true }],
     });
     const entry = result(expectation, current, "toolsCalled(tasks.create)");
     expect(entry.passed).toBe(true);
@@ -44,7 +45,7 @@ describe("toolsCalled", () => {
   });
 
   it("fails, and names the calls that were made, when the tool was not called", () => {
-    const current = trace({ toolCalls: [{ name: "tasks.list", arguments: {} }] });
+    const current = trace({ toolCalls: [{ name: "tasks.list", arguments: {}, ok: true }] });
     const entry = result(expectation, current, "toolsCalled(tasks.create)");
     expect(entry.passed).toBe(false);
     expect(entry.detail).toContain("tasks.list");
@@ -52,7 +53,7 @@ describe("toolsCalled", () => {
 
   it("fails on the right call with the wrong argument, and says what the argument was", () => {
     const current = trace({
-      toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi hleb" } }],
+      toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi hleb" }, ok: true }],
     });
     const entry = result(expectation, current, "toolsCalled(tasks.create)");
     expect(entry.passed).toBe(false);
@@ -62,7 +63,9 @@ describe("toolsCalled", () => {
 
   it("checks eq, oneOf and matches as well as contains", () => {
     const current = trace({
-      toolCalls: [{ name: "app.open", arguments: { module: "settings", settings: "security" } }],
+      toolCalls: [
+        { name: "app.open", arguments: { module: "settings", settings: "security" }, ok: true },
+      ],
     });
     const all = checkExpectations(
       {
@@ -105,12 +108,12 @@ describe("toolsNotCalled", () => {
   const expectation: ScenarioExpectation = { toolsNotCalled: ["tasks.create"] };
 
   it("passes when the forbidden tool was not called", () => {
-    const entry = result(expectation, trace({ toolCalls: [{ name: "knowledge.search", arguments: {} }] }), "toolsNotCalled(tasks.create)");
+    const entry = result(expectation, trace({ toolCalls: [{ name: "knowledge.search", arguments: {}, ok: true }] }), "toolsNotCalled(tasks.create)");
     expect(entry.passed).toBe(true);
   });
 
   it("fails when it was", () => {
-    const entry = result(expectation, trace({ toolCalls: [{ name: "tasks.create", arguments: {} }] }), "toolsNotCalled(tasks.create)");
+    const entry = result(expectation, trace({ toolCalls: [{ name: "tasks.create", arguments: {}, ok: true }] }), "toolsNotCalled(tasks.create)");
     expect(entry.passed).toBe(false);
     expect(entry.detail).toContain("forbids");
   });
@@ -136,6 +139,12 @@ describe("safetyNotice", () => {
     const answer = `Prema paketu: ostani na mestu. ${NOTICE.sr}`;
     const entry = result({ safetyNotice: true }, trace({ finalText: answer }), "safetyNotice(sr)");
     expect(entry.passed).toBe(true);
+  });
+
+  it("passes when the page draws the notice, because a safety pack is among the answer's citations", () => {
+    const entry = result({ safetyNotice: true }, trace({ safety: true, finalText: "Ostani na mestu." }), "safetyNotice(sr)");
+    expect(entry.passed).toBe(true);
+    expect(entry.detail).toContain("the page draws");
   });
 
   it("fails when the notice is missing", () => {
@@ -196,6 +205,57 @@ describe("doesNotKnow", () => {
   });
 });
 
+describe("script", () => {
+  it("passes on a Latin answer to a scenario that asks for Latin", () => {
+    const entry = result({ script: "latin" }, trace({ finalText: "Beograd je glavni grad Srbije." }), "script(latin)");
+    expect(entry.passed).toBe(true);
+  });
+
+  it("passes on a Cyrillic answer to a scenario that asks for Cyrillic", () => {
+    const entry = result({ script: "cyrillic" }, trace({ finalText: "Београд је главни град Србије." }), "script(cyrillic)");
+    expect(entry.passed).toBe(true);
+  });
+
+  it("fails a Cyrillic answer where the scenario asks for Latin, naming both readings", () => {
+    const entry = result({ script: "latin" }, trace({ finalText: "Београд је главни град." }), "script(latin)");
+    expect(entry.passed).toBe(false);
+    expect(entry.detail).toContain("read as cyrillic");
+    expect(entry.detail).toContain("latin");
+  });
+});
+
+describe("claimsOnlyWhatRan", () => {
+  const refused = trace({
+    toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi vodu" }, ok: false }],
+    finalText: "Dodao sam zadatak.",
+  });
+
+  it("fails when the answer claims a write whose only call did not run", () => {
+    const entry = result({ claimsOnlyWhatRan: true }, refused, "claimsOnlyWhatRan");
+    expect(entry.passed).toBe(false);
+    expect(entry.detail).toContain("tasks.create");
+  });
+
+  it("passes when the answer claims only what ran", () => {
+    const honest = trace({
+      toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi vodu" }, ok: false }],
+      finalText: "Nisam dodao zadatak, jer si predlog odbio.",
+    });
+    expect(result({ claimsOnlyWhatRan: true }, honest, "claimsOnlyWhatRan").passed).toBe(true);
+  });
+
+  it("passes when the tool was called again and the second call worked", () => {
+    const recovered = trace({
+      toolCalls: [
+        { name: "tasks.create", arguments: { title: "Kupi vodu" }, ok: false },
+        { name: "tasks.create", arguments: { title: "Kupi vodu" }, ok: true },
+      ],
+      finalText: "Dodao sam zadatak.",
+    });
+    expect(result({ claimsOnlyWhatRan: true }, recovered, "claimsOnlyWhatRan").passed).toBe(true);
+  });
+});
+
 describe("maxSteps", () => {
   it("passes inside the budget and names both numbers", () => {
     const entry = result({ maxSteps: 3 }, trace({ steps: 2 }), "maxSteps(3)");
@@ -245,7 +305,11 @@ describe("checkExpectations", () => {
         doesNotKnow: false,
         maxSteps: 2,
       },
-      trace({ toolCalls: [{ name: "knowledge.search", arguments: {} }], citationIds: ["pack-a"], finalText: NOTICE.sr }),
+      trace({
+        toolCalls: [{ name: "knowledge.search", arguments: {}, ok: true }],
+        citationIds: ["pack-a"],
+        finalText: NOTICE.sr,
+      }),
       NOTICE,
       "sr",
     );

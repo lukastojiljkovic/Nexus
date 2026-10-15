@@ -247,7 +247,13 @@ describe("createToolRegistry", () => {
     });
     const specTokens = offered.reduce((sum, tool) => sum + toolSpecTokens(tool), 0);
     const promptTokens = estimateTokens(
-      buildSystemPrompt({ locale: "sr", tools: offered, maxSteps: DEFAULT_MAX_STEPS, today: "2026-10-14" }),
+      buildSystemPrompt({
+        reply: { language: "sr", script: "latin" },
+        passages: true,
+        tools: offered,
+        maxSteps: DEFAULT_MAX_STEPS,
+        today: "2026-10-14",
+      }),
       "sr",
     );
 

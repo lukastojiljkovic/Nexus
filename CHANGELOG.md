@@ -6,6 +6,50 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The assistant shows what each tool did.** Every tool call in a turn is a
+  line in plain words, such as "Add a task" or "Read the tasks", marked as
+  running, done or not done. The mark comes from the tool's own result, not
+  from the model's sentence about it, so an answer that claims a change the
+  tool refused or failed is visible as such. The outcome is stored with the
+  conversation and carried in its backup.
+- **A Wikipedia citation opens the article.** A source the assistant cited from
+  a downloaded Wikipedia opens that article in the Wiki module.
+
+### Changed
+
+- **The assistant answers in the language and script you wrote in.** The app
+  decides the reply's language, and for Serbian its script, from your message
+  and tells the model as a fact. A Serbian Latin answer that drifts into
+  Cyrillic, the script of the Serbian Wikipedia's articles, is transliterated.
+- **Only the sources an answer used are listed.** Sources the answer cites by
+  number are kept and renumbered in order. When it cites none, a source is kept
+  only if the answer shares words with it. A safety pack's source is always
+  kept, so its notice still shows.
+- **General knowledge is allowed, numbers from memory are not.** When your
+  library has nothing on a question, the assistant may answer a well-known fact
+  and says that it is general knowledge. It never gives a number or a date from
+  memory, and questions of health, medicine, law, money and safety are still
+  answered only from a source. A small model used to refuse "what is the
+  capital of France".
+- **The app draws the safety notice.** Under an answer that draws on a safety
+  pack, the page shows the notice verbatim. The model is no longer asked to
+  quote it, which a small model often did not do.
+- **The assistant says when web search is off**, instead of answering a request
+  to search the internet as if it had searched.
+
+### Fixed
+
+- **A tool call written loosely still runs.** Before a call is checked, a day
+  written as "sutra", "tomorrow" or "16.10.2026.", a number written as text, a
+  listed value in the wrong case and an empty optional field are read as what
+  they mean. The model may now leave an optional field out, and a day field is
+  decoded as a date. A call that is still wrong is described to the model
+  without repeating it, and after two failures the model is told to stop and
+  say why.
+- **A tool call you declined is not asked again in the same turn.**
+
 ## [2.0.3] - 2026-10-15
 
 The assistant works in the installed app: it loads a model, answers within the

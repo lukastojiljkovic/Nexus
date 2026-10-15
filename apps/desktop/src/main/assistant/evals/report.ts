@@ -25,6 +25,14 @@ export interface ReportScenario {
   readonly completionTokens: number;
   readonly estimatedTokens: boolean;
   readonly durationMs: number;
+  /** The answer the turn finished with, verbatim — what a failure has to be read against. */
+  readonly answer: string;
+  /** Every tool call the turn emitted, in order, with the arguments it sent and whether it ran. */
+  readonly calls: readonly {
+    readonly name: string;
+    readonly arguments: unknown;
+    readonly ok: boolean;
+  }[];
   readonly expectations: readonly {
     readonly kind: string;
     readonly passed: boolean;
@@ -50,6 +58,12 @@ function scenarioReport(result: ScenarioResult): ReportScenario {
     completionTokens: result.tokens.completion,
     estimatedTokens: result.tokens.estimated,
     durationMs: result.durationMs,
+    answer: result.finalText,
+    calls: result.calls.map((call) => ({
+      name: call.name,
+      arguments: call.arguments,
+      ok: call.ok,
+    })),
     expectations: result.expectations.map((expectation) => ({
       kind: expectation.label,
       passed: expectation.passed,
@@ -79,11 +93,29 @@ function tokens(totals: SuiteTotals): string {
   return totals.estimatedTokens ? `${count} (estimated)` : `${count}`;
 }
 
+/** How much of a failed scenario's answer the Markdown failure section quotes: a line, not a transcript. */
+const QUOTED_ANSWER_CHARS = 200;
+
+/** The first {@link QUOTED_ANSWER_CHARS} characters of an answer, on one line. */
+function quote(text: string): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  const bounded =
+    collapsed.length > QUOTED_ANSWER_CHARS
+      ? `${collapsed.slice(0, QUOTED_ANSWER_CHARS)}…`
+      : collapsed;
+  return `“${bounded}”`;
+}
+
 /**
  * The Markdown table: one row per scenario, one cell per expectation. A
  * scenario's expectation cell lists every expectation as `label=ok` or
  * `label=FAIL`, in the order the checkers ran, so a failing row says which
  * expectation failed without leaving the table.
+ *
+ * The failure section quotes the answer, because a failed scenario's row says
+ * WHAT failed and never WHAT was said — and the answer is the thing the model
+ * actually did. Whitespace is collapsed and the quote is bounded, so the section
+ * stays a list of lines whatever the model streamed.
  */
 export function reportMarkdown(suite: SuiteResult): string {
   const lines: string[] = [];
@@ -124,6 +156,7 @@ export function reportMarkdown(suite: SuiteResult): string {
           lines.push(`- \`${scenario.id}\` — \`${expectation.label}\`: ${expectation.detail}`);
         }
       }
+      lines.push(`- \`${scenario.id}\` — the answer: ${quote(scenario.finalText)}`);
     }
   }
   return `${lines.join("\n")}\n`;

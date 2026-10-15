@@ -19,11 +19,13 @@
  * their own input regardless (`contract.ts`), so the subset stays honest
  * instead of pretending to be a complete JSON Schema implementation.
  *
- * Nothing here throws, and nothing coerces: `"5"` is not a `5`, `"yes"` is not
- * a `true`. A silently coerced call is a call the model never learns was wrong.
- * The one thing that is DROPPED rather than refused is an optional property
- * whose value is an empty string - the shape a model uses for "not given"
- * ({@link withoutEmptyOptionals}).
+ * Nothing here throws, and nothing here coerces: `"5"` is not a `5`, `"yes"` is
+ * not a `true`. The loop tidies a call BEFORE it gets here (`arguments.ts`:
+ * day words, numeric strings, enum case), and what is left after that is a call
+ * the model has to hear was wrong. The one thing that is DROPPED rather than
+ * refused is an optional property whose value is an empty string - the shape a
+ * model uses for "not given" ({@link withoutEmptyOptionals}) - so a caller that
+ * validates without the loop's tidying gets the same answer for it.
  */
 
 import type { JsonSchema } from "./contract.js";

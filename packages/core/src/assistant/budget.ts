@@ -63,6 +63,7 @@
 
 import { renderKnowledgeBlock } from "./prompts.js";
 import type { AssistantLocale, ChatMessage, KnowledgeHit } from "./contract.js";
+import type { ReplyLanguage } from "./language.js";
 
 /**
  * Characters per token for PROSE (a prompt, a conversation, a knowledge
@@ -201,6 +202,13 @@ export interface ContextPlanInput {
   readonly fixedTokens?: number;
   /** The fence boundary this turn drew, for the knowledge block. */
   readonly boundary: string;
+  /**
+   * The reply's language and script, the line that follows the knowledge block:
+   * the one the model reads last before it answers (`prompts.ts`). Left out
+   * means the block carries no such line, which is what a caller that has not
+   * decided a language means.
+   */
+  readonly reply?: ReplyLanguage;
   /** Token estimator for this turn ({@link createEstimator}). */
   readonly estimate: TokenEstimator;
   /**
@@ -254,7 +262,7 @@ export function planContext(input: ContextPlanInput): ContextPlan {
   let droppedKnowledge = 0;
 
   const assemble = (): ChatMessage[] => {
-    const block = renderKnowledgeBlock(hits, input.boundary);
+    const block = renderKnowledgeBlock(hits, input.boundary, input.reply);
     const messages: ChatMessage[] = [{ role: "system", content: input.system }];
     if (block !== null) messages.push({ role: "system", content: block });
     messages.push(...history, ...pending);

@@ -7,7 +7,14 @@
  * assistant's own module is built in the wave that follows this one.
  */
 
-export { detectDoesNotKnow, detectLanguage, type ReplyLanguage } from "./language.js";
+export {
+  claimsCompletion,
+  detectDoesNotKnow,
+  detectLanguage,
+  detectScript,
+  type ReplyLanguage,
+  type ReplyScript,
+} from "./language.js";
 export {
   parseScenario,
   parseScenarioFile,
@@ -31,9 +38,9 @@ export {
 export {
   createKnowledgeBase,
   createFakeTools,
-  KNOWLEDGE_SEARCH,
-  searchResult,
   toCitation,
+  type RealToolSpec,
+  type ToolSpecLookup,
 } from "./fakes.js";
 export {
   DEFAULT_MODEL_CONTEXT_TOKENS,

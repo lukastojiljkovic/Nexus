@@ -8,10 +8,20 @@
  * the scenario declares `tasks.create` as a `write` with a `summary` and a
  * result, and this file turns that into an object the loop can call.
  *
- * **`knowledge.search` is backed by the fixtures.** A scenario does not repeat
- * its knowledge in the tool's result: the harness synthesises `knowledge.search`
- * from `scenario.knowledge`, highest score first, so the article a citation
- * names and the article the model reads cannot drift apart.
+ * **Knowledge is not a tool.** The loop retrieves before the model runs, as the
+ * app does, so `scenario.knowledge` reaches the turn through
+ * {@link createKnowledgeBase} and no scenario offers a search tool the app does
+ * not have.
+ *
+ * **A tool a caller has the real spec for wears it.** A scenario declares what
+ * a tool DOES; what the model is SHOWN — the description that says when to
+ * reach for it and the JSON schema of the fields it may send — is the app's, and
+ * a turn offered a name the app has must see the app's own. That table arrives
+ * as {@link ToolSpecLookup} from whoever can build the real registry (the real
+ * mode's runner, `scripts/assistant-eval.mjs`), because this directory cannot:
+ * importing the registry evaluates the whole database package. A name nobody
+ * hands in keeps the generic spec below, which is what every scenario's
+ * transcript was written against.
  */
 
 import type {
@@ -27,9 +37,6 @@ import type {
 } from "@nexus/core";
 
 import type { ScenarioCitation, ScenarioHit, ScenarioTool } from "./scenario.js";
-
-/** The name of the search tool, as the contract's own examples spell it. */
-export const KNOWLEDGE_SEARCH = "knowledge.search";
 
 /**
  * What a `write` or `network` tool returns when the user declines. The model
@@ -50,6 +57,15 @@ const PARAMETERS: Readonly<Record<string, unknown>> = {
   additionalProperties: true,
 };
 
+/** The description and schema a real tool declares, as the registry hands them over. */
+export interface RealToolSpec {
+  readonly description: AssistantText;
+  readonly parameters: Readonly<Record<string, unknown>>;
+}
+
+/** The real specs a caller has, by tool name. A name that is absent keeps the generic spec. */
+export type ToolSpecLookup = Readonly<Record<string, RealToolSpec>>;
+
 /** A scenario's citation as the contract's shape, with no key present holding `undefined`. */
 export function toCitation(citation: ScenarioCitation): Citation {
   return {
@@ -63,31 +79,12 @@ export function toCitation(citation: ScenarioCitation): Citation {
   };
 }
 
-/** The fixtures as a search returns them: highest score first, citations deduplicated in that order. */
-export function searchResult(hits: readonly ScenarioHit[]): ToolResult {
-  const ordered = [...hits].sort((left, right) => right.score - left.score);
-  const seen = new Set<string>();
-  const citations: Citation[] = [];
-  for (const hit of ordered) {
-    const key = `${hit.citation.kind}:${hit.citation.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    citations.push(toCitation(hit.citation));
-  }
-  return {
-    ok: true,
-    content: ordered.map((hit) => hit.text).join("\n\n"),
-    ...(citations.length === 0 ? {} : { citations }),
-  };
-}
-
 /**
  * A knowledge base that answers every query with the scenario's fixtures.
  *
  * Deliberately not a search: the evals measure what the agent does with the
  * passages it is given, and a fake ranker would put a second, unmeasured
- * retrieval quality between the fixture and the model. The query the model
- * actually sent is asserted through `toolsCalled` instead.
+ * retrieval quality between the fixture and the model.
  */
 export function createKnowledgeBase(hits: readonly ScenarioHit[]): KnowledgeBase {
   return {
@@ -119,12 +116,16 @@ function resultOf(tool: ScenarioTool): ToolResult {
   };
 }
 
-/** One tool the scenario declared, as the loop calls it. */
-export function createFakeTool(tool: ScenarioTool, hits: readonly ScenarioHit[]): Tool {
+/**
+ * One tool the scenario declared, as the loop calls it: the real description and
+ * schema when the caller has them, the scenario's own result in either case.
+ */
+export function createFakeTool(tool: ScenarioTool, specs: ToolSpecLookup = {}): Tool {
+  const spec = specs[tool.name];
   return {
     name: tool.name,
-    description: describe(tool.name),
-    parameters: PARAMETERS,
+    description: spec?.description ?? describe(tool.name),
+    parameters: spec?.parameters ?? PARAMETERS,
     effect: tool.effect,
     async run(_args: unknown, context: ToolContext): Promise<ToolResult> {
       // Only `write` and `network` ask: `navigate` moves the app's own view, and
@@ -138,7 +139,6 @@ export function createFakeTool(tool: ScenarioTool, hits: readonly ScenarioHit[])
         if (!approved) return { ok: false, content: tool.declined ?? DEFAULT_DECLINED };
       }
       if (tool.fail !== undefined) throw new Error(tool.fail);
-      if (tool.name === KNOWLEDGE_SEARCH) return searchResult(hits);
       return resultOf(tool);
     },
   };
@@ -154,7 +154,7 @@ export function createFakeTool(tool: ScenarioTool, hits: readonly ScenarioHit[])
  */
 export function createFakeTools(
   tools: readonly ScenarioTool[],
-  hits: readonly ScenarioHit[],
+  specs: ToolSpecLookup = {},
 ): readonly Tool[] {
-  return tools.map((tool) => createFakeTool(tool, hits));
+  return tools.map((tool) => createFakeTool(tool, specs));
 }

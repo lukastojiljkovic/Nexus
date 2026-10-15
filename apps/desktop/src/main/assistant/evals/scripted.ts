@@ -134,6 +134,18 @@ export const referenceRunAgentTurn: RunAgentTurn = async (input, emit) => {
     }
     citations = merged;
   };
+  // Retrieval runs before the model, as in the app's loop, and what it found
+  // is a source of the answer; the scripted model does not read the passages.
+  try {
+    const hits = await input.knowledge.search(
+      // 6 is the loop's KNOWLEDGE_HIT_LIMIT; this file imports types only from @nexus/core.
+      { text: input.user.content, limit: 6, locale: input.locale },
+      input.context.signal,
+    );
+    addCitations(hits.map((hit) => hit.citation));
+  } catch {
+    // A failed search leaves the turn without passages, as it does in the app.
+  }
 
   for (let step = 0; step < input.maxSteps; step += 1) {
     if (input.context.signal.aborted) {

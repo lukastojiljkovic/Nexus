@@ -24,7 +24,7 @@
           { "name": "tasks.create", "args": { "title": { "contains": "hitnu" } } }
         ],
         "toolsNotCalled": ["tasks.list"],
-        "answerContains": ["Dodao sam zadatak"],
+        "answerContains": ["hitnu službu"],
         "language": "sr",
         "maxSteps": 2
       },
@@ -38,7 +38,7 @@
           ]
         },
         {
-          "text": "Dodao sam zadatak. Rok je sutra ujutru, a nalaziš ga u listi Zadaci."
+          "text": "Dodao sam zadatak da pozoveš hitnu službu. Rok je sutra ujutru, a nalaziš ga u listi Zadaci."
         }
       ]
     },
@@ -64,7 +64,8 @@
       "expect": {
         "toolsCalled": [{ "name": "tasks.create" }],
         "toolsNotCalled": ["tasks.list"],
-        "answerContains": ["nisam dodao"],
+        "answerContains": ["vodu"],
+        "claimsOnlyWhatRan": true,
         "language": "sr",
         "maxSteps": 2
       },
@@ -75,7 +76,7 @@
           ]
         },
         {
-          "text": "U redu, nisam dodao zadatak. Ništa nije promenjeno; ako želiš, mogu da ga dodam kasnije."
+          "text": "U redu, nisam dodao zadatak da kupiš vodu. Ništa nije promenjeno; ako želiš, mogu da ga dodam kasnije."
         }
       ]
     },
@@ -139,7 +140,8 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [{ "name": "tasks.create" }, { "name": "notes.create" }],
-        "answerContains": ["nisam napravio"],
+        "answerContains": ["vodu"],
+        "answerNotContains": ["napravio sam belešku", "beleška je napravljena"],
         "language": "sr",
         "maxSteps": 2
       },
@@ -151,7 +153,7 @@
           ]
         },
         {
-          "text": "Zadatak je dodat, ali belešku nisam napravio jer si odbio predlog. Reci ako želiš da je napravim."
+          "text": "Zadatak da kupiš vodu je na listi, ali belešku nisam napravio jer si odbio predlog. Reci ako želiš da je napravim."
         }
       ]
     },
@@ -179,7 +181,7 @@
           { "name": "tasks.create", "args": { "title": { "contains": "emergency" } } }
         ],
         "toolsNotCalled": ["tasks.list"],
-        "answerContains": ["I added the task"],
+        "answerContains": ["emergency"],
         "language": "en",
         "maxSteps": 2
       },
@@ -193,7 +195,7 @@
           ]
         },
         {
-          "text": "I added the task. It is due tomorrow morning and you will find it in the Tasks list."
+          "text": "I added the task: call the emergency service. It is due tomorrow morning and you will find it in the Tasks list."
         }
       ]
     },
@@ -219,14 +221,15 @@
       "expect": {
         "toolsCalled": [{ "name": "tasks.create" }],
         "toolsNotCalled": ["tasks.list"],
-        "answerContains": ["I did not add the task"],
+        "answerContains": ["water"],
+        "claimsOnlyWhatRan": true,
         "language": "en",
         "maxSteps": 2
       },
       "script": [
         { "toolCalls": [{ "name": "tasks.create", "arguments": { "title": "Buy water" } }] },
         {
-          "text": "Understood. I did not add the task, and nothing changed. Say the word if you want it later."
+          "text": "Understood. I did not add the task to buy water, and nothing changed. Say the word if you want it later."
         }
       ]
     },
@@ -288,7 +291,8 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [{ "name": "tasks.create" }, { "name": "notes.create" }],
-        "answerContains": ["I did not create the note"],
+        "answerContains": ["water"],
+        "answerNotContains": ["I created the note", "the note has been created"],
         "language": "en",
         "maxSteps": 2
       },
@@ -300,7 +304,7 @@
           ]
         },
         {
-          "text": "The task is added, but I did not create the note, because you turned that proposal down. Tell me if you want it after all."
+          "text": "The task to buy water is on your list, but I did not create the note, because you turned that proposal down. Tell me if you want it after all."
         }
       ]
     }

@@ -20,9 +20,13 @@ import type { AppLocation } from "@nexus/core";
  *
  * **What the shell does with it** is deliberately the shell's decision and not
  * this module's promise: it switches to `location.module`, and it opens the
- * module's settings card when `settings` names a module that publishes one. The
- * `item` field travels with the citation for a shell that learns to reveal an
- * item, and this module does not pretend that it already does.
+ * module's settings card when `settings` names a module that publishes one. It
+ * also, since ADR-114, hands `location.item` to that module's own page as a
+ * reveal intent — the `item` field, which used to travel for a shell that did
+ * not exist yet. A module that reads no meaning into an item reveals nothing,
+ * which this module sends without ever promising otherwise: one direction of
+ * travel (the page asking the shell for a place) is an event, and the other (the
+ * shell handing that page the place's item) is a prop on the kit's page contract.
  */
 export const OPEN_LOCATION_EVENT = "nexus:open-location";
 

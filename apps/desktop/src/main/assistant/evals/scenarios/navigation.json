@@ -8,7 +8,6 @@
         { "role": "user", "content": "Gde da promenim šifru za otključavanje?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -208,7 +207,6 @@
         { "role": "user", "content": "Where do I change my passcode?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",

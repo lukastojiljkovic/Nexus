@@ -1,0 +1,183 @@
+{
+  "scenarios": [
+    {
+      "id": "field-france-en",
+      "title": "A fact the model knows without any source",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "What is the capital of France?" }],
+      "tools": [],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 1,
+      "expect": {
+        "answerContains": ["Paris"],
+        "language": "en",
+        "doesNotKnow": false,
+        "maxSteps": 1
+      },
+      "script": [{ "text": "Paris is the capital of France." }]
+    },
+    {
+      "id": "field-tasks-list-sr",
+      "title": "Pitanje o današnjim zadacima",
+      "locale": "sr",
+      "conversation": [{ "role": "user", "content": "Šta imam od zadataka za danas?" }],
+      "tools": [
+        {
+          "name": "tasks.list",
+          "effect": "read",
+          "content": "Zadaci (1):\n- 0192f0f0-0000-7000-8000-000000000001 Pozovi hitnu službu [todo, rok danas, lista Zadaci]"
+        },
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak.", "en": "I will add a task." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "tasks.list", "args": { "due": { "oneOf": ["today", "danas"] } } }
+        ],
+        "toolsNotCalled": ["tasks.create"],
+        "answerContains": ["hitnu"],
+        "language": "sr",
+        "script": "latin",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "due": "today" } }] },
+        {
+          "text": "Danas imaš jedan zadatak: pozovi hitnu službu. Rok je danas, a ništa drugo ne čeka do kraja dana."
+        }
+      ]
+    },
+    {
+      "id": "field-task-create-en",
+      "title": "A task added from a one-line request",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "Add a task: buy milk" }],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Kupi mleko“.", "en": "I will add the task “Buy milk”." },
+          "content": "Created task “Buy milk” (0192f0f0-0000-7000-8000-000000000002)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "tasks.create", "args": { "title": { "contains": "milk" } } }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.create", "arguments": { "title": "Buy milk" } }] },
+        {
+          "text": "I added the task to buy milk, and you will find it in the Inbox. There is no due date on it."
+        }
+      ]
+    },
+    {
+      "id": "field-task-create-fails-en",
+      "title": "A write that failed, and an answer that does not pretend otherwise",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "Add a task: buy milk" }],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": { "sr": "Dodaću zadatak „Kupi mleko“.", "en": "I will add the task “Buy milk”." },
+          "fail": "the task store is locked"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "tasks.create" }],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "tasks.create", "arguments": { "title": "Buy milk" } }] },
+        {
+          "text": "I could not add the task to buy milk: the task store is locked, so nothing was written. Unlock the profile and I will try again."
+        }
+      ]
+    },
+    {
+      "id": "field-tesla-en",
+      "title": "An English answer that cites a Cyrillic article",
+      "locale": "en",
+      "conversation": [{ "role": "user", "content": "Who was Nikola Tesla?" }],
+      "tools": [],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "wiki",
+            "id": "wiki-tesla-cyrillic",
+            "title": "Никола Тесла",
+            "locator": "Увод"
+          },
+          "text": "Никола Тесла (1856–1943) био је српски проналазач и инжењер, најпознатији по раду на наизменичној струји.",
+          "score": 0.92
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "cites": ["wiki-tesla-cyrillic"],
+        "answerContains": ["Tesla"],
+        "language": "en",
+        "script": "latin",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "text": "Nikola Tesla (1856–1943) was a Serbian inventor and engineer, best known for his work on alternating current. I have one source for this: the article „Никола Тесла“ in the wiki library."
+        }
+      ]
+    },
+    {
+      "id": "field-belgrade-sr",
+      "title": "Srpski odgovor sa ćiriličnog izvora",
+      "locale": "sr",
+      "conversation": [{ "role": "user", "content": "Šta znaš o Beogradu?" }],
+      "tools": [],
+      "knowledge": [
+        {
+          "citation": {
+            "kind": "wiki",
+            "id": "wiki-beograd-cirilica",
+            "title": "Београд",
+            "locator": "Увод"
+          },
+          "text": "Београд је главни град Србије и њен највећи град, на ушћу Саве у Дунав.",
+          "score": 0.93
+        }
+      ],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "cites": ["wiki-beograd-cirilica"],
+        "answerContains": ["Beograd"],
+        "language": "sr",
+        "script": "latin",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "text": "Beograd je glavni grad Srbije i njen najveći grad, a leži na Dunavu. To piše u članku „Београд“ iz wiki biblioteke."
+        }
+      ]
+    }
+  ]
+}

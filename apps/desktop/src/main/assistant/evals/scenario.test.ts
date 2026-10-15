@@ -214,6 +214,18 @@ describe("parseScenario", () => {
         draft["tools"] = [{ name: "app.open", effect: "navigate", navigateTo: { module: "settings", tab: "security" } }];
       }),
     ],
+    [
+      "a script that is neither of the two scripts",
+      broken((draft) => {
+        draft["expect"] = { script: "arabic" };
+      }),
+    ],
+    [
+      "a claimsOnlyWhatRan that is not true",
+      broken((draft) => {
+        draft["expect"] = { claimsOnlyWhatRan: false };
+      }),
+    ],
   ];
 
   for (const [what, value] of refusals) {
@@ -227,6 +239,17 @@ describe("parseScenario", () => {
     expect(() => parseScenario(value, "navigation.json")).toThrow(
       /navigation\.json\.locale must be one of sr, en/,
     );
+  });
+
+  it("reads the two expectations a packaged 2.0.3 run asked for", () => {
+    const scenario = parseScenario(
+      broken((draft) => {
+        draft["expect"] = { script: "latin", claimsOnlyWhatRan: true };
+      }),
+      "field-2026-10-15.json",
+    );
+    expect(scenario.expect.script).toBe("latin");
+    expect(scenario.expect.claimsOnlyWhatRan).toBe(true);
   });
 });
 
