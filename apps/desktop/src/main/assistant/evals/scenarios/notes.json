@@ -1,0 +1,123 @@
+{
+  "scenarios": [
+    {
+      "id": "notes-read-sr",
+      "title": "Čitanje beleške o kupovini",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Pročitaj mi belešku o kupovini." }
+      ],
+      "tools": [
+        { "name": "notes.search", "effect": "read" },
+        { "name": "notes.read", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "notes.search", "args": { "query": { "contains": "kupov" } } }
+        ],
+        "answerContains": ["mleko"],
+        "language": "sr",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notes.search", "arguments": { "query": "kupovina" } }] },
+        { "text": "Beleška o kupovini kaže da treba kupiti mleko i hleb." }
+      ]
+    },
+    {
+      "id": "notes-append-declined-sr",
+      "title": "Tekst nije dopisan kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Dopiši u belešku Kupovina da treba jaja." }
+      ],
+      "tools": [
+        { "name": "notes.search", "effect": "read" },
+        {
+          "name": "notes.append",
+          "effect": "write",
+          "summary": { "sr": "Dodaću tekst u belešku „Kupovina“.", "en": "I will append to the note “Kupovina”." },
+          "content": "Tekst je dodat u belešku „Kupovina“."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [{ "name": "notes.append" }],
+        "answerContains": ["Kupovina"],
+        "claimsOnlyWhatRan": true,
+        "language": "sr",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notes.search", "arguments": { "query": "Kupovina" } }] },
+        { "toolCalls": [{ "name": "notes.append", "arguments": { "id": "n1", "text": "Treba kupiti jaja." } }] },
+        { "text": "Nisam dopisao tekst u belešku Kupovina, jer si odbio. Ništa nije promenjeno." }
+      ]
+    },
+    {
+      "id": "notes-read-en",
+      "title": "Reading a note about groceries",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Read me the note about groceries." }
+      ],
+      "tools": [
+        { "name": "notes.search", "effect": "read" },
+        { "name": "notes.read", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "notes.search", "args": { "query": { "contains": "groc" } } }
+        ],
+        "answerContains": ["milk"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notes.search", "arguments": { "query": "groceries" } }] },
+        { "text": "The grocery note says to buy milk and bread." }
+      ]
+    },
+    {
+      "id": "notes-update-accepted-en",
+      "title": "Note text replaced after confirmation",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Replace the text of my Groceries note with just: milk and eggs." }
+      ],
+      "tools": [
+        { "name": "notes.search", "effect": "read" },
+        {
+          "name": "notes.update",
+          "effect": "write",
+          "summary": { "sr": "Izmeniću belešku „Kupovina“: zameniću ceo tekst.", "en": "I will change the note “Groceries”: replace its whole text." },
+          "content": "Done: Change the note “Groceries”: replace its whole text."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 3,
+      "expect": {
+        "toolsCalled": [
+          { "name": "notes.update", "args": { "body": { "contains": "eggs" } } }
+        ],
+        "answerContains": ["Groceries"],
+        "language": "en",
+        "maxSteps": 3
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notes.search", "arguments": { "query": "Groceries" } }] },
+        { "toolCalls": [{ "name": "notes.update", "arguments": { "id": "n1", "body": "milk and eggs" } }] },
+        { "text": "Done. The Groceries note now says only: milk and eggs." }
+      ]
+    }
+  ]
+}
