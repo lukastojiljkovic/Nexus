@@ -564,6 +564,7 @@
    that does not carry this page's prefix, so it landed in a single column and
    wrapped its own hint. */
 .tasks__fields > .tasks__reminders,
+.tasks__fields > .tasks__description,
 .tasks__fields > .tasks__attachments,
 .tasks__fields > .tasks__deps,
 .tasks__fields > .tasks__form-error {
@@ -1062,6 +1063,7 @@ button.tasks__cal-chip:active {
    text: waiting on something is a fact about the task, not a warning about it —
    nothing is refused, and a chip that shouted would say otherwise. */
 .tasks__tag-chip.nx-chip,
+.tasks__description-chip.nx-chip,
 .tasks__blocked-chip.nx-chip {
   background: transparent;
   border: 1px solid var(--nx-border);

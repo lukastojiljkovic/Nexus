@@ -84,42 +84,10 @@ const BRIDGE_TYPE = "NexusApi";
 export const ALLOWLIST = [
   {
     type: "NewTaskFields",
-    field: "description",
-    reason:
-      "TODO(reachable) — no TASK screen writes a description: the quick-add builds title, dates, " +
-      "list and ladder only, and the field is filled by main (applying a template) and by the " +
-      "exchange paths. TASK shows the description nowhere, so nothing here says whether it is a " +
-      "form field that is missing or a column the UI is done with.",
-  },
-  {
-    type: "NewTaskFields",
     field: "status",
     reason:
       "A new task is always `todo`: the store defaults it and TASK moves one afterwards through " +
       "`TaskFieldChanges.status`, which the panel does set.",
-  },
-  {
-    type: "TaskFieldChanges",
-    field: "description",
-    reason:
-      "TODO(reachable) — the same shape `reminderOffsets` was: declared, accepted by main, " +
-      "honoured by the store, and set by no screen, because TASK draws no description control " +
-      "and reads the field nowhere either.",
-  },
-  {
-    type: "EventFieldChanges",
-    field: "description",
-    reason:
-      "TODO(reachable) — CAL's event form has no description control, and the panel reads the " +
-      "field nowhere; only the create-time carry paths (`newEventFields`, `copyEventFields`) " +
-      "write it, so an event keeps whatever a template gave it and can never be edited.",
-  },
-  {
-    type: "EventFieldChanges",
-    field: "category",
-    reason:
-      "TODO(reachable) — as `EventFieldChanges.description`: nothing in CAL draws or edits a " +
-      "category; it travels only on the two create-time carry paths.",
   },
   {
     type: "ExamFieldChanges",

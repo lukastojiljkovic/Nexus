@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   ListRow,
   LoadingState,
   PageHeader,
+  TextArea,
   TextField,
 } from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
@@ -32,6 +33,7 @@ import type {
 } from "../../shared/ipc.js";
 import { CalendarMiniMonth } from "./CalendarMiniMonth.js";
 import { CalendarMonth, ForeignMark } from "./CalendarMonth.js";
+import { categorySuggestions, optionalText } from "./formFields.js";
 import { profileDisplayName } from "./profilePrefs.js";
 import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import type { TimedEventDragTarget } from "./CalendarTimeGrid.js";
@@ -251,6 +253,10 @@ interface EditedEventFields {
   /** Timed events only; null clears a stored end time (all-day never sends one). */
   endAt: string | null;
   location: string | null;
+  /** Null clears the stored notes, the same as `location`. */
+  description: string | null;
+  /** Null clears the stored category; the field suggests the ones already in use. */
+  category: string | null;
   recurrence: RecurrenceRule | null;
   /** Lead times in whole minutes (CAL-006); empty clears every reminder. */
   reminderOffsets: number[];
@@ -292,8 +298,9 @@ type PendingSeries =
  * occurrence is detached or a series restarted. Editing an existing event
  * normally leaves everything the form does not show alone, but these two flows
  * CREATE a row, so whatever the form cannot express has to be carried across
- * explicitly or it is lost: the description, the category, and the day span of
- * a multi-day all-day event (which has no end field in this form at all).
+ * explicitly or it is lost: the day span of a multi-day all-day event (which
+ * has no end field in this form at all). The notes and the category are fields
+ * of the form now, so they travel with the fields like the reminders do.
  */
 function newEventFields(
   fields: EditedEventFields,
@@ -310,10 +317,10 @@ function newEventFields(
     reminderOffsets: fields.reminderOffsets,
   };
   if (fields.location !== null) payload.location = fields.location;
+  if (fields.description !== null) payload.description = fields.description;
+  if (fields.category !== null) payload.category = fields.category;
   if (!fields.allDay && fields.endAt !== null) payload.endAt = fields.endAt;
   if (carry !== null) {
-    if (carry.description !== null) payload.description = carry.description;
-    if (carry.category !== null) payload.category = carry.category;
     if (fields.allDay && carry.endAt !== null) {
       const span = daysBetweenKeys(carry.startAt.slice(0, 10), carry.endAt.slice(0, 10));
       if (span > 0) payload.endAt = shiftDayKey(fields.date, span);
@@ -513,6 +520,9 @@ export function CalendarPage({
   // already somebody's answer.
   const [endTimeTouched, setEndTimeTouched] = useState(false);
   const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const categoryListId = useId();
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
@@ -657,6 +667,8 @@ export function CalendarPage({
     setEndTime("");
     setEndTimeTouched(false);
     setLocation("");
+    setDescription("");
+    setCategory("");
     setRecurrence(null);
     setReminderOffsets([]);
     setFormError(null);
@@ -692,6 +704,10 @@ export function CalendarPage({
     // answer, so moving the start of an existing event never rewrites it.
     setEndTimeTouched(true);
     setLocation(event.location ?? "");
+    // Notes and category belong to the stored row too, so they are read off the
+    // master, like the reminders below.
+    setDescription(master.description ?? "");
+    setCategory(master.category ?? "");
     setRecurrence(master.recurrence);
     // Reminders belong to the stored row, so they are read off the master —
     // the occurrence copy carries them, but the master is what a write reaches.
@@ -949,6 +965,8 @@ export function CalendarPage({
       // nulling whatever end DATE a multi-day all-day event might carry.
       endAt: !allDay && trimmedEndTime.length > 0 ? `${date}T${trimmedEndTime}` : null,
       location: trimmedLocation.length > 0 ? trimmedLocation : null,
+      description: optionalText(description),
+      category: optionalText(category),
       recurrence,
       reminderOffsets,
     };
@@ -968,6 +986,8 @@ export function CalendarPage({
           startAt: fields.startAt,
           allDay: fields.allDay,
           location: fields.location,
+          description: fields.description,
+          category: fields.category,
           recurrence: fields.recurrence,
           reminderOffsets: fields.reminderOffsets,
         };
@@ -1040,6 +1060,8 @@ export function CalendarPage({
         startAt: fields.allDay ? masterDay : `${masterDay}T${fields.time}`,
         allDay: fields.allDay,
         location: fields.location,
+        description: fields.description,
+        category: fields.category,
         recurrence: fields.recurrence,
         reminderOffsets: fields.reminderOffsets,
       };
@@ -1592,6 +1614,28 @@ export function CalendarPage({
               value={location}
               label={strings.calendar.locationLabel}
               onChange={(event) => setLocation(event.target.value)}
+            />
+            {/* The category is free text with suggestions, not a closed select:
+                CAL ships no category list, so a select would offer nothing on a
+                fresh profile and make the first category impossible to set. */}
+            <TextField
+              type="text"
+              list={categoryListId}
+              value={category}
+              label={strings.calendar.categoryLabel}
+              onChange={(event) => setCategory(event.target.value)}
+            />
+            <datalist id={categoryListId}>
+              {categorySuggestions(events ?? []).map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <TextArea
+              className="cal__notes"
+              label={strings.calendar.notesLabel}
+              rows={3}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
             />
             <Checkbox checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>
               {strings.calendar.allDay}

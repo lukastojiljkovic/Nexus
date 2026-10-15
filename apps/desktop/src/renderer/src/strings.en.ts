@@ -1265,6 +1265,10 @@ export const en = {
      */
     startDateLabel: "Starts",
     priorityLabel: "Priority",
+    descriptionLabel: "Description (optional)",
+    /** The row marker that a task carries a description; the text itself is read in the form. */
+    descriptionChip: "Description",
+    descriptionChipTitle: "The task has a description",
     save: "Save",
     cancel: "Cancel",
     /**
@@ -2399,6 +2403,8 @@ export const en = {
      * finance year field — an optional field says so in its own name.
      */
     locationLabel: "Location (optional)",
+    notesLabel: "Notes (optional)",
+    categoryLabel: "Category (optional)",
     allDay: "All day",
     add: "Add",
     save: "Save",

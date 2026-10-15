@@ -1279,6 +1279,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     startDateLabel: "Počinje",
     priorityLabel: "Prioritet",
+    descriptionLabel: "Opis (opciono)",
+    /** The row marker that a task carries a description; the text itself is read in the form. */
+    descriptionChip: "Opis",
+    descriptionChipTitle: "Zadatak ima opis",
     save: "Sačuvaj",
     cancel: "Otkaži",
     /**
@@ -2413,6 +2417,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * finance year field — an optional field says so in its own name.
      */
     locationLabel: "Mesto (opciono)",
+    notesLabel: "Beleške (opciono)",
+    categoryLabel: "Kategorija (opciono)",
     allDay: "Ceo dan",
     add: "Dodaj",
     save: "Sačuvaj",
