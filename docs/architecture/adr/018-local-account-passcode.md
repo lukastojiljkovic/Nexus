@@ -229,4 +229,5 @@ each run is a better test than an accumulating personal one anyway.
   and deliberately so; it is the only thing standing between a stolen laptop and
   an 8-character passcode.
 - The database is encrypted; the attachment blobs are not, until that follow-up
-  lands. Stating it here so it cannot be mistaken for an oversight.
+  lands. Stating it here so it cannot be mistaken for an oversight. **Closed by
+  [ADR-019](019-encrypted-blob-store.md) on 2026-07-26: the blobs are encrypted now.**

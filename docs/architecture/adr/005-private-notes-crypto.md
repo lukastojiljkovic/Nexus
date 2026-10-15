@@ -1,6 +1,13 @@
 # ADR-005 — Zero-Knowledge Crypto for Private Notes
 
-**Status:** accepted (draft pending founder sign-off) · 2026-07-05
+**Status:** accepted (draft pending founder sign-off) · 2026-07-05 ·
+**Superseded in part on 2026-10-15 by [ADR-057](057-private-notes-local.md)**:
+the library and AEAD choice (libsodium + XChaCha20-Poly1305) was replaced by the
+shipped primitives — WebCrypto AES-256-GCM with `hash-wasm` Argon2id. The key
+model this ADR sets out — a random DEK wrapped twice, a passphrase KEK and a
+Recovery Kit KEK, ciphertext at rest, unlocked keys in memory only — stands
+unchanged, as does the sync design, which is parked with the rest of the cloud
+phase (2026-10-08) and is not scheduled.
 **Drives:** PRIV PRD (all), decision #6 (Recovery Kit default + informed
 opt-out), decision #11 (web parity with caveat, auto-lock 5/2 min, 100 MB
 cap); SEC-ZK-01..06, SEC-CR-01/03/04.

@@ -209,6 +209,8 @@ immediate rather than a silently empty index.
   page with facets — the palette carries v1; both are additive over the same
   index.
 - **SRCH-009 search history** — the recent-items list covers the empty state.
+  **Shipped:** migration 050 (`050-search-history.ts`) and the `search:history*`
+  channels, recorded 2026-10-15.
 - **Fuzzy / typo tolerance.** Folding plus prefix matching absorbs most Serbian
   spelling variance; edit-distance ranking is a separate design.
 - **Index-size caps and LRU** (PRD 08 §7). Bodies are capped per entry; a

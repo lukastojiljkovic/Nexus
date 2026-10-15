@@ -59,11 +59,15 @@ crossed one.
 
 ## 2. Cryptography (SEC-CR)
 
-- **SEC-CR-01** Vetted libraries only: libsodium, platform WebCrypto, OS
-  keystores. No custom implementations of primitives or protocols.
-- **SEC-CR-02** Symmetric encryption is AEAD only: XChaCha20-Poly1305
-  (preferred) or AES-256-GCM.
-- **SEC-CR-03** Nonces unique per encryption (random 192-bit for XChaCha20);
+*Amended 2026-10-15 to name the primitives the code ships (ADR-019, ADR-057) and the forgotten-passcode route it has (ADR-018, [DEV-003](../deviations.md)).*
+
+- **SEC-CR-01** Vetted libraries only: platform WebCrypto, `hash-wasm` for
+  Argon2id, OS keystores, and libsodium in the parked sync packages. No custom
+  implementations of primitives or protocols.
+- **SEC-CR-02** Symmetric encryption is AEAD only: AES-256-GCM (the local
+  stores, ADR-019 and ADR-057) or XChaCha20-Poly1305 (the parked sync packages).
+- **SEC-CR-03** Nonces unique per encryption (random 96-bit for AES-256-GCM, `GCM_NONCE_BYTES` in
+  `packages/core/src/auth/blobCrypto.ts`);
   key+nonce reuse is a critical bug.
 - **SEC-CR-04** Password KDF: Argon2id with OWASP-current parameters (verify
   current; as of writing ≥ 19 MiB memory / 2 iterations minimum — prefer far
@@ -116,9 +120,10 @@ crossed one.
   macOS Keychain, libsecret on Linux).
 - **SEC-LOC-02** PIN attempts throttled with escalating delays; the attempt
   counter is bound to keystore-protected state so it cannot be trivially reset.
-- **SEC-LOC-03** Forgotten-PIN recovery exactly as specified in the notes: via
-  the OS device credential (BiometricPrompt/device PIN, Windows Hello). Never
-  security questions, never a backdoor code.
+- **SEC-LOC-03** Forgotten-PIN recovery is a one-time Recovery Kit code
+  (ADR-018); the OS device credential is deliberately not a route to the data
+  key ([DEV-003](../deviations.md)). Never security questions, never a backdoor
+  code.
 - **SEC-LOC-04** Local accounts generate **zero network traffic**. Enforced in
   code, asserted in automated tests.
 

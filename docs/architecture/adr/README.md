@@ -16,10 +16,10 @@ directory is the decision log behind it.
 | [002](002-sync-engine.md) | Sync & Conflict Resolution | Superseded on the choice of engine and backend; the rest stands | 2026-08-08 (accepted 2026-07-05) |
 | [003](003-backend-stack.md) | Backend Stack | Superseded — the backend is Supabase | 2026-08-08 (accepted 2026-07-05) |
 | [004](004-auth.md) | Authentication: Cloud & Local Accounts | Local accounts built as designed; the cloud half superseded (Supabase auth) | 2026-08-08 (accepted 2026-07-05) |
-| [005](005-private-notes-crypto.md) | Zero-Knowledge Crypto for Private Notes | Accepted (draft pending founder sign-off) | 2026-07-05 |
+| [005](005-private-notes-crypto.md) | Zero-Knowledge Crypto for Private Notes | Superseded in part by [ADR-057](057-private-notes-local.md) (library and AEAD); the key model stands | 2026-07-05 |
 | [006](006-code-sharing.md) | Code Sharing Across Electron / Web / Android | Accepted for desktop + web; Android carries a mandatory re-check at kickoff | 2026-07-05 |
-| [007](007-file-preview-pipeline.md) | File Preview Pipeline | Accepted (draft pending founder sign-off) | 2026-07-05 |
-| [008](008-feature-flags-and-plugins.md) | Module System, Feature Flags & the Plugin Path | Accepted (draft pending founder sign-off) | 2026-07-05 |
+| [007](007-file-preview-pipeline.md) | File Preview Pipeline | Superseded by [ADR-064](064-file-preview.md) (pipeline and engines); the sandbox rules stand | 2026-07-05 |
+| [008](008-feature-flags-and-plugins.md) | Module System, Feature Flags & the Plugin Path | Accepted (draft pending founder sign-off); decision #11 superseded by [ADR-093](093-navigation-groups.md) | 2026-07-05 |
 | [009](009-import-export-formats.md) | Import/Export Formats & Versioning | Accepted (draft pending founder sign-off) | 2026-07-05 |
 | [010](010-landing-page-stack.md) | Landing Page Stack | Superseded on the hosting target (Cloudflare Workers with static assets) | 2026-08-08 (accepted 2026-07-05) |
 | [011](011-canvas-engine-spikes.md) | Canvas Engine (Decision Deferred to Spikes) | Closed — resolved by ADR-079 (Excalidraw) | 2026-08-01 (protocol 2026-07-05) |
@@ -117,14 +117,15 @@ directory is the decision log behind it.
 | [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3 | 2026-10-10 |
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
 | [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
-| [108](108-kit-blobs.md) | Module attachments travel in the archive and count in the blob store | Accepted; extends ADR-090 §5 | 2026-10-10 |
-| [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
-| [109](109-astronomy.md) | The astronomy corner, assembled: four views, one clock, one place | Accepted | 2026-10-10 |
 | [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted; §8 amended by ADR-114 | 2026-10-10 |
+| [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
+| [108](108-kit-blobs.md) | Module attachments travel in the archive and count in the blob store | Accepted; extends ADR-090 §5 | 2026-10-10 |
+| [109](109-astronomy.md) | The astronomy corner, assembled: four views, one clock, one place | Accepted | 2026-10-10 |
 | [110](110-remembered-unlock.md) | „Traži pristupni kod": how often the app asks for the passcode | Accepted | 2026-10-10 |
 | [111](111-cards-module.md) | The Cards module on the kit: one shelf, nine engines, one worker (uses ADR-090, ADR-093) | Accepted | 2026-10-11 |
 | [112](112-assistant-tools-per-turn.md) | The assistant's tools per turn: what fits in the window, and a prompt that stops repeating them (uses ADR-095, ADR-104) | Accepted | 2026-10-14 |
 | [113](113-assistant-tiers-by-active-parameters.md) | The assistant's tiers are ordered by active parameters, and Gemma 4 E2B is the speed pick | Accepted; supersedes ADR-096 §4 in part | 2026-10-15 |
 | [114](114-item-intent-for-kit-pages.md) | A citation's item reaches a kit page: one held intent, and the wiki page that reveals it | Accepted; amends ADR-106 §8; amended by ADR-117 | 2026-10-15 |
+| 115 | Not used: no decision was recorded under this number | — | — |
 | [116](116-the-grammar-a-tool-call-decodes-under.md) | The grammar a tool call decodes under: optional properties that may be null, days as a format, and a refusal the model can act on (uses ADR-095, ADR-112) | Accepted | 2026-10-15 |
 | [117](117-assistant-acts-through-the-page.md) | The assistant acts through the page: an action a location carries, one queue per module, and tools for every area (amends ADR-114; uses ADR-106, ADR-114) | Accepted | 2026-10-15 |

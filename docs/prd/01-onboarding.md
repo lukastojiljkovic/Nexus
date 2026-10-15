@@ -77,6 +77,9 @@ visible):**
 - **ONB-009 (M)** Depth questions shall be owned by modules and asked at
   module first-open (max 2 per module); ONB provides the framework
   (question card UI, answer storage, mapping hooks).
+  *Amended 2026-10-15 (ADR-065 §5 reads this line as met by two idioms already in
+  the code: PRIV's status-driven first-entry setup and the asked-once flag
+  `appetite_asked`). The shared question card and its answer store are not built.*
 - **ONB-010 (M)** Questionnaire answers shall be stored locally; for local
   accounts they never leave the device (SEC-PRIV-02); for cloud accounts
   they sync as normal settings data.
