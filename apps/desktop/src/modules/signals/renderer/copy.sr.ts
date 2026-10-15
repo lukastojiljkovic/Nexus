@@ -19,11 +19,14 @@
 export const sr = {
   page: {
     subtitle:
-      "Morse, ASCII tabela, štimer i merač nivoa zvuka: mikrofon se otvara samo kad se alat pokrene.",
+      "Morse, ASCII tabela, NATO azbuka, Brajevo pismo, periodni sistem, štimer i merač nivoa zvuka: mikrofon se otvara samo kad se alat pokrene.",
   },
   tabs: {
     morse: "Morse",
     ascii: "ASCII",
+    nato: "NATO",
+    braille: "Brajevo pismo",
+    elements: "Periodni sistem",
     tuner: "Štimer",
     meter: "Merač zvuka",
   },
@@ -154,6 +157,47 @@ export const sr = {
     historyEmpty: "Još nema izmerenih sekundi.",
     historyCaption: "Prozor od {count} sekundi; linija je nivo, tanka crta je držani vrh.",
     peakRule: "držani vrh",
+  },
+  textCode: {
+    textLabel: "Tekst",
+    codeLabel: "Kod",
+    toCode: "U kod",
+    toText: "U tekst",
+    transliterated: "Nije poslato kako je napisano:",
+    unsupported: "Ne može da se pošalje:",
+    unknown: "Nepoznato u kodu:",
+  },
+  nato: {
+    title: "NATO azbuka",
+    hint: "Svako slovo je jedna reč, a cifre imaju svoje reči. Kosa crta razdvaja reči teksta. Pravopis je ICAO-ov: Alfa, Juliett.",
+  },
+  braille: {
+    title: "Brajevo pismo",
+    hint: "Osnovni zapis: slova, cifre i razmak. Veliko slovo ima tačku 6 ispred sebe, a brojevi počinju znakom za broj. Srpski brajev ima svoje ćelije za č, ć, š, ž i đ; ovde se šalju latinična slova.",
+  },
+  elements: {
+    title: "Periodni sistem",
+    hint: "Podaci su iz PubChem-a. Položaj je grupa i perioda; lantanoidi i aktinoidi su ispod tabele.",
+    nameNote: "Nazivi elemenata su na engleskom: srpski nazivi nisu uvršćeni u ovaj prikaz.",
+    symbol: "Simbol",
+    number: "Redni broj",
+    mass: "Atomska masa (u)",
+    group: "Grupa",
+    period: "Perioda",
+    category: "Kategorija",
+    noGroup: "nema grupe (f-blok)",
+    categories: {
+      "alkali-metal": "Alkalni metali",
+      "alkaline-earth-metal": "Zemnoalkalni metali",
+      "transition-metal": "Prelazni metali",
+      "post-transition-metal": "Postprelazni metali",
+      metalloid: "Metaloidi",
+      nonmetal: "Nemetali",
+      halogen: "Halogeni",
+      "noble-gas": "Plemeniti gasovi",
+      lanthanide: "Lantanoidi",
+      actinide: "Aktinoidi",
+    },
   },
   settings: {
     speedCaption: "Ove vrednosti su za ovaj računar i ne idu u rezervnu kopiju profila.",

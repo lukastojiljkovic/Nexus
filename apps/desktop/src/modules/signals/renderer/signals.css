@@ -296,3 +296,57 @@
   display: block;
 }
 
+/* The periodic table: the standard grid, eighteen columns, with the two f-block
+   rows beneath it. A tile's column and row are its position and are written
+   inline, the one thing a style attribute carries here. The grid has a floor
+   width so a narrow window scrolls it rather than squeezing the symbols. */
+.signals__elements {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  gap: var(--nx-space-1);
+  min-width: 42rem;
+}
+
+.signals__element {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--nx-space-1) 0;
+  border: 0.5px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-bg);
+  color: var(--nx-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.signals__element[aria-pressed="true"] {
+  border-color: var(--nx-accent);
+  color: var(--nx-accent);
+}
+
+.signals__element-number {
+  font-family: var(--nx-font-family-mono);
+  font-size: var(--nx-font-size-label);
+  color: var(--nx-text-subtle);
+}
+
+.signals__element-symbol {
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+.signals__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--nx-space-1) var(--nx-space-4);
+  margin: 0;
+}
+
+.signals__facts dt {
+  color: var(--nx-text-subtle);
+}
+
+.signals__facts dd {
+  margin: 0;
+}
+

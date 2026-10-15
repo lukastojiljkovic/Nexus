@@ -3055,6 +3055,41 @@ export {
 export type { OffGridDevice } from "./lab/offgrid.js";
 
 export { lampOnAt } from "./lab/lamps.js";
+export {
+  LITRES_PER_US_GALLON,
+  DRINKING_GALLONS_PER_PERSON_DAY,
+  MAX_DAYS,
+  MAX_PEOPLE,
+  MIN_DAYS,
+  MIN_PEOPLE,
+  WATER_GALLONS_PER_PERSON_DAY,
+  isRationCount,
+  rationPlan,
+} from "./lab/ration.js";
+export type { RationPlan } from "./lab/ration.js";
+export {
+  KIT72_DEFAULT_IDS,
+  MAX_KIT_ENTRIES,
+  MAX_KIT_TEXT_LENGTH,
+  addKitEntry,
+  defaultKit,
+  parseKit,
+  removeKitEntry,
+  toggleKitEntry,
+} from "./lab/kit72.js";
+export type { KitDefaultId, KitEntry } from "./lab/kit72.js";
+export { decodeNato, encodeNato, natoWordFor } from "./signals/nato.js";
+export type { NatoDecoding, NatoEncoding } from "./signals/nato.js";
+export {
+  BRAILLE_CAPITAL,
+  BRAILLE_NUMERIC,
+  BRAILLE_SPACE,
+  decodeBraille,
+  encodeBraille,
+} from "./signals/braille.js";
+export type { BrailleDecoding, BrailleEncoding } from "./signals/braille.js";
+export { ELEMENTS } from "./reference/periodicTable.js";
+export type { Element, ElementCategory } from "./reference/periodicTable.js";
 
 export {
   BATTERY_REPORT_FLAGS,
