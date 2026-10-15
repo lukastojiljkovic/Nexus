@@ -45,6 +45,7 @@ import { formatDashboardDate } from "./dateLabels.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { ModuleSettingsGear } from "./moduleSettingsGear.js";
 import { NotePopover } from "./notePopover.js";
+import type { CreatableModuleId } from "./searchCommands.js";
 import { strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 
@@ -660,6 +661,10 @@ export interface DashboardPageProps {
   onOpenModule: (id: string) => void;
   /** Opens one note (021-e's reveal intent) — what „Nedavne beleške"'s rows deep-link with. */
   onOpenNote: (noteId: string) => void;
+  /** The palette's quick-create, for „Brze radnje“'s buttons (021-e). */
+  onCreate: (moduleId: CreatableModuleId) => void;
+  /** The in-app quick capture, for „Brze radnje“'s capture button. */
+  onCapture: () => void;
 }
 
 /**
@@ -682,6 +687,8 @@ export function DashboardPage({
   enabledModules,
   onOpenModule,
   onOpenNote,
+  onCreate,
+  onCapture,
 }: DashboardPageProps) {
   const [layout, setLayout] = useState<DashboardWidgetInstance[] | null>(null);
   const [layoutFailed, setLayoutFailed] = useState(false);
@@ -1499,6 +1506,8 @@ export function DashboardPage({
                   config={entry.config}
                   onOpenModule={onOpenModule}
                   onOpenNote={onOpenNote}
+                  onCreate={onCreate}
+                  onCapture={onCapture}
                 />
                 {landed?.instanceId === entry.instanceId && (
                   <span

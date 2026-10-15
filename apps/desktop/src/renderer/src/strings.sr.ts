@@ -859,6 +859,38 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       title: "Tvoje stručne alatke",
       empty: "Nijedan paket još nije uključen",
     },
+    /**
+     * NTF's centre, as a card: the reminders that are waiting on the user. The
+     * rows are what the centre HOLDS — a reminder that has not fired yet is not
+     * in the ledger, so the card cannot list it.
+     */
+    reminders: {
+      title: "Podsetnici",
+      empty: "Nema podsetnika na čekanju",
+    },
+    /** The palette's own quick-creates, as buttons (`searchCommands.ts`); the labels are the palette's. */
+    quickActions: {
+      title: "Brze radnje",
+      capture: "Brzi unos",
+    },
+    /**
+     * Two small charts over the last seven days, from data the stores already
+     * hold: completed tasks (by the day they were completed) and focus time
+     * (by the day each session started). A day with nothing is a measured zero.
+     */
+    stats: {
+      title: "Statistika",
+      tasks: {
+        heading: "Završeni zadaci",
+        lead: "Završeni zadaci u poslednjih 7 dana",
+        empty: "Grafik se crta čim se u poslednjih 7 dana završi bar jedan zadatak.",
+      },
+      focus: {
+        heading: "Fokus",
+        lead: "Fokus u poslednjih 7 dana",
+        empty: "Grafik se crta čim se u poslednjih 7 dana zabeleži bar jedna sesija fokusa.",
+      },
+    },
     /** FIN slice d: what the subscriptions' rules say is coming — never a row, always the schedule. */
     renewals: {
       title: "Predstojeće naplate",

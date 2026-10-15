@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   capTodayGroups,
+  dailyTotals,
   expiringDocumentRows,
   horizonWindowDays,
+  recentDays,
+  reminderRows,
   upcomingTaskRows,
   urgentTaskRows,
 } from "./dashboardWidgetRows.js";
@@ -186,5 +189,108 @@ describe("capTodayGroups", () => {
     expect(
       capTodayGroups(Number.POSITIVE_INFINITY, groups.events, groups.birthdays, groups.tasks),
     ).toEqual(groups);
+  });
+});
+
+describe("reminderRows", () => {
+  /** A ledger row; every field the selector reads, nothing more. */
+  function notice(
+    id: string,
+    over: Partial<{
+      source: "task" | "event" | "security";
+      status: "delivered" | "snoozed" | "dismissed";
+      snoozedUntil: string | null;
+      deliveredAt: string;
+    }> = {},
+  ) {
+    return {
+      id,
+      source: "task" as const,
+      status: "delivered" as const,
+      snoozedUntil: null,
+      deliveredAt: "2026-07-31T09:00:00.000Z",
+      ...over,
+    };
+  }
+  const everySource = () => true;
+
+  it("orders the open rows by the instant each asks for attention, oldest first", () => {
+    const rows = reminderRows(
+      [
+        notice("late", { deliveredAt: "2026-07-31T12:00:00.000Z" }),
+        notice("early", { deliveredAt: "2026-07-30T08:00:00.000Z" }),
+        // A snoozed row is due when it wakes, not when it was first delivered.
+        notice("woke", {
+          status: "snoozed",
+          snoozedUntil: "2026-07-31T10:00:00.000Z",
+          deliveredAt: "2026-07-29T08:00:00.000Z",
+        }),
+      ],
+      everySource,
+      10,
+    );
+    expect(rows.map((row) => row.id)).toEqual(["early", "woke", "late"]);
+  });
+
+  it("leaves out dismissed rows, which are history, and sources whose module is off", () => {
+    const rows = reminderRows(
+      [
+        notice("open"),
+        notice("gone", { status: "dismissed" }),
+        notice("off", { source: "event" }),
+        notice("security", { source: "security" }),
+      ],
+      (source) => source !== "event",
+      10,
+    );
+    expect(rows.map((row) => row.id)).toEqual(["open", "security"]);
+  });
+
+  it("is empty when nothing is waiting, and caps the rows it keeps", () => {
+    expect(reminderRows([], everySource, 5)).toEqual([]);
+    expect(reminderRows([notice("a"), notice("b"), notice("c")], everySource, 2)).toHaveLength(2);
+  });
+});
+
+describe("recentDays and dailyTotals", () => {
+  const TODAY_WEEK = "2026-07-31";
+
+  it("names the seven local days ending today, oldest first", () => {
+    expect(recentDays(TODAY_WEEK, 7)).toEqual([
+      "2026-07-25",
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+    ]);
+  });
+
+  it("keeps a day with nothing in it as a measured zero, in its place in the series", () => {
+    // Only the 25th and the 31st have anything: the five days between are zeros,
+    // not missing numbers, and the series still has seven slots.
+    const days = recentDays(TODAY_WEEK, 7);
+    expect(
+      dailyTotals(days, [
+        { day: "2026-07-25", amount: 2 },
+        { day: "2026-07-25", amount: 1 },
+        { day: "2026-07-31", amount: 4 },
+      ]),
+    ).toEqual([3, 0, 0, 0, 0, 0, 4]);
+  });
+
+  it("ignores entries outside the window rather than folding them into an edge", () => {
+    const days = recentDays(TODAY_WEEK, 7);
+    expect(
+      dailyTotals(days, [
+        { day: "2026-07-24", amount: 9 },
+        { day: "2026-08-01", amount: 9 },
+      ]),
+    ).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it("is all zeros for a window with no entries, which is what draws the empty state", () => {
+    expect(dailyTotals(recentDays(TODAY_WEEK, 7), [])).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 });

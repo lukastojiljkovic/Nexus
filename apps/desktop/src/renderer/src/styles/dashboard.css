@@ -406,6 +406,20 @@
   max-width: 45%;
 }
 
+/* „Brze radnje“: the quick-create buttons, wrapped so a narrow card stacks them. */
+.dash__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* „Statistika“: the charts stack, each one a whole card wide. */
+.dash__stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
 /* Widget rows are read-only deep-links: a reset button wrapping a ListRow, so
    the whole row is a keyboard-focusable target into its module. */
 .dash__row {

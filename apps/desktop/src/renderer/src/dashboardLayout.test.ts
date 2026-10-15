@@ -80,6 +80,30 @@ describe("moveNeighbours", () => {
   });
 });
 
+describe("placing the reminders, quick-actions and stats cards", () => {
+  it("publishes each as a placeable card, with a size it accepts and a layout it can step through", () => {
+    const registry = createModuleRegistry();
+    const added = ["calendar:podsetnici", "tasks:brze-radnje", "tasks:statistika"];
+    for (const qualified of added) {
+      const contract = registry.findWidget(qualified);
+      expect(contract, qualified).toBeDefined();
+      // Placed at its medium preset when it takes one, as the gallery does.
+      expect(contract?.sizes, qualified).toContain("M");
+    }
+    // Stepping the reminders card down past the quick actions lands it between
+    // that card and the stats card — the same arithmetic as every other card.
+    const order = ["calendar:danas", ...added];
+    const pair = moveNeighbours(order, 1, 3);
+    expect(pair).toEqual({ beforeId: "tasks:statistika", afterId: null });
+    expect(pair && applied(order, "calendar:podsetnici", pair)).toEqual([
+      "calendar:danas",
+      "tasks:brze-radnje",
+      "tasks:statistika",
+      "calendar:podsetnici",
+    ]);
+  });
+});
+
 describe("lookupString", () => {
   it("resolves a dotted path to its text", () => {
     expect(lookupString({ a: { b: "text" } }, "a.b")).toBe("text");
