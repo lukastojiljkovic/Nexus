@@ -2,6 +2,7 @@ import type { ChatMessage, ToolSpec } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { createToolRegistry } from "../tools/index.js";
 import {
   TOOL_CALL_FENCE,
@@ -308,6 +309,7 @@ function realTools(): readonly ToolSpec[] {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    visibility: () => DEFAULT_SHELL_VISIBILITY,
     web: null,
   }).tools({ web: false });
 }

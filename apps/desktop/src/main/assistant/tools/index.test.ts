@@ -16,6 +16,7 @@ import {
 } from "@nexus/core";
 import type { Tool, ToolEffect, ToolRegistry, WebService } from "@nexus/core";
 import { createModuleRegistry } from "../../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { createToolRegistry, type ToolDeps } from "./index.js";
 
 /**
@@ -86,6 +87,7 @@ function registryWith(web: WebService | null = null): ToolRegistry {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    visibility: () => DEFAULT_SHELL_VISIBILITY,
     web,
   };
   return createToolRegistry(deps);
@@ -130,6 +132,7 @@ describe("createToolRegistry", () => {
       pantry: 2,
       reader: 1,
       recorder: 1,
+      search: 3,
       tasks: 4,
       timers: 2,
       wiki: 1,

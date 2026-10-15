@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Tool } from "@nexus/core";
 
 import { createModuleRegistry } from "../../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { createToolRegistry, type ToolDeps } from "../tools/index.js";
 import { loadScenarios } from "./harness.js";
 
@@ -66,6 +67,7 @@ function appTools(): readonly Tool[] {
     packs: { list: () => Promise.resolve([]) },
     timers: { startCountdown: refuse, listCountdowns: () => [] },
     modules: createModuleRegistry(),
+    visibility: () => DEFAULT_SHELL_VISIBILITY,
     web: { tools: () => WEB_TOOLS },
   };
   return createToolRegistry(deps).tools({ web: true });
