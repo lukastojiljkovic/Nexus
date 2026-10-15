@@ -13,6 +13,7 @@ function trace(overrides: Partial<TurnTrace> = {}): TurnTrace {
   return {
     toolCalls: [],
     citationIds: [],
+    safety: false,
     finalText: "",
     steps: 1,
     confirmations: [],
@@ -138,6 +139,12 @@ describe("safetyNotice", () => {
     const answer = `Prema paketu: ostani na mestu. ${NOTICE.sr}`;
     const entry = result({ safetyNotice: true }, trace({ finalText: answer }), "safetyNotice(sr)");
     expect(entry.passed).toBe(true);
+  });
+
+  it("passes when the page draws the notice, because a safety pack is among the answer's citations", () => {
+    const entry = result({ safetyNotice: true }, trace({ safety: true, finalText: "Ostani na mestu." }), "safetyNotice(sr)");
+    expect(entry.passed).toBe(true);
+    expect(entry.detail).toContain("the page draws");
   });
 
   it("fails when the notice is missing", () => {

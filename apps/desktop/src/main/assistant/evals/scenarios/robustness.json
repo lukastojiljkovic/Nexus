@@ -38,7 +38,6 @@
         { "role": "user", "content": "Dobro. A gde se menja šifra za otključavanje?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" }
       ],
       "knowledge": [
@@ -57,14 +56,12 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [{ "name": "knowledge.search" }],
         "cites": ["manual-security"],
         "answerContains": ["Bezbednost"],
         "language": "sr",
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "gde se menja šifra" } }] },
         {
           "text": "Šifru menjaš u Podešavanjima, na kartici Bezbednost. Prethodni razgovor ne menja odgovor: ista kartica važi i za šifru za Privatno, koja ima svoje polje."
         }
@@ -108,7 +105,6 @@
         { "role": "user", "content": "Uporedi kako se pravi podsetnik i kako se zakazuje događaj." }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         {
           "name": "tasks.create",
           "effect": "write",
@@ -140,7 +136,6 @@
       "confirmations": [],
       "maxSteps": 3,
       "expect": {
-        "toolsCalled": [{ "name": "knowledge.search" }],
         "toolsNotCalled": ["tasks.create"],
         "cites": ["manual-reminders", "manual-events"],
         "answerContains": ["podsetnik"],
@@ -148,8 +143,6 @@
         "maxSteps": 3
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "podsetnik" } }] },
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "događaj kalendar" } }] },
         {
           "text": "Podsetnik se pravi uz zadatak ili događaj i vezan je za vreme, a događaj se zakazuje u kalendaru i ima početak i kraj. Podsetnik na događaj je odvojen i ne menja vreme događaja."
         }
@@ -193,7 +186,6 @@
         { "role": "user", "content": "Fine. And where is the unlock passcode changed?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" }
       ],
       "knowledge": [
@@ -212,14 +204,12 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [{ "name": "knowledge.search" }],
         "cites": ["manual-security"],
         "answerContains": ["Security"],
         "language": "en",
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "where is the passcode changed" } }] },
         {
           "text": "The passcode is changed in Settings, on the Security card. The earlier conversation does not change the answer, and the private passcode is on the same card in a field of its own."
         }
@@ -263,7 +253,6 @@
         { "role": "user", "content": "Compare how a reminder is made with how an event is scheduled." }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         {
           "name": "tasks.create",
           "effect": "write",
@@ -295,7 +284,6 @@
       "confirmations": [],
       "maxSteps": 3,
       "expect": {
-        "toolsCalled": [{ "name": "knowledge.search" }],
         "toolsNotCalled": ["tasks.create"],
         "cites": ["manual-reminders", "manual-events"],
         "answerContains": ["reminder"],
@@ -303,8 +291,6 @@
         "maxSteps": 3
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "reminder" } }] },
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "event calendar" } }] },
         {
           "text": "A reminder is made on a task or an event and is tied to a time, while an event is scheduled in the calendar and has a start and an end. A reminder on an event is separate and does not change when the event happens."
         }

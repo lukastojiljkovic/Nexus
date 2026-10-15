@@ -118,7 +118,7 @@
       "title": "An English answer that cites a Cyrillic article",
       "locale": "en",
       "conversation": [{ "role": "user", "content": "Who was Nikola Tesla?" }],
-      "tools": [{ "name": "knowledge.search", "effect": "read" }],
+      "tools": [],
       "knowledge": [
         {
           "citation": {
@@ -142,9 +142,6 @@
       },
       "script": [
         {
-          "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "Nikola Tesla" } }]
-        },
-        {
           "text": "Nikola Tesla (1856–1943) was a Serbian inventor and engineer, best known for his work on alternating current. I have one source for this: the article „Никола Тесла“ in the wiki library."
         }
       ]
@@ -154,7 +151,7 @@
       "title": "Srpski odgovor sa ćiriličnog izvora",
       "locale": "sr",
       "conversation": [{ "role": "user", "content": "Šta znaš o Beogradu?" }],
-      "tools": [{ "name": "knowledge.search", "effect": "read" }],
+      "tools": [],
       "knowledge": [
         {
           "citation": {
@@ -177,7 +174,6 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "Beograd" } }] },
         {
           "text": "Beograd je glavni grad Srbije i njen najveći grad, a leži na Dunavu. To piše u članku „Београд“ iz wiki biblioteke."
         }

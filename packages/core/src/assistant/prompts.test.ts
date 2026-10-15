@@ -61,8 +61,10 @@ describe("buildSystemPrompt", () => {
     expect(built).toContain("The user wrote in Serbian (Latin script)");
     expect(built).toContain("[1]");
     expect(built).toContain("BEGIN UNTRUSTED DATA");
-    expect(built).toContain(SAFETY_NOTICE.sr);
-    expect(built).toContain(SAFETY_NOTICE.en);
+    // The page draws the safety notice; the prompt only tells the model not to.
+    expect(built).not.toContain(SAFETY_NOTICE.sr);
+    expect(built).not.toContain(SAFETY_NOTICE.en);
+    expect(built).toContain("The app shows its safety notice under such an answer: do not write one.");
     expect(built).toContain("at most 5 rounds");
     expect(built).toContain("Never invent a fact, a number");
   });
@@ -74,7 +76,6 @@ describe("buildSystemPrompt", () => {
     expect(built).toContain("the tool asks the user for permission");
     expect(built).toContain("Never invent a citation");
     expect(built).toContain("the app shows the user every citation you send");
-    expect(built).toContain("do not add the notice");
     expect(built).toContain("calling 112 is the first step");
   });
 
@@ -112,9 +113,10 @@ describe("buildSystemPrompt", () => {
     // for a 2-5B model, and this is the ceiling the size may not drift past
     // unnoticed. The old ceiling was 2700 beside a prompt of 2522 characters;
     // the grounding rule this brief fixes is 420 characters longer than the
-    // refusal it replaces, so the ceiling moves with it, and the longest of the
-    // four variants is 2891. The four are checked because the language line and
-    // the grounding line are both chosen per turn.
+    // refusal it replaces, so the ceiling moves with it. The longest of the four
+    // variants is 2809 since the safety notice left the prompt for the page. The
+    // four are checked because the language line and the grounding line are
+    // both chosen per turn.
     expect(prompt({ reply: SR_LATIN, passages: true, maxSteps: 6 }).length).toBeLessThan(3000);
     expect(prompt({ reply: SR_CYRILLIC, passages: true, maxSteps: 6 }).length).toBeLessThan(3000);
     expect(prompt({ reply: SR_LATIN, passages: false, maxSteps: 6 }).length).toBeLessThan(3000);
@@ -162,6 +164,19 @@ describe("buildSystemPrompt", () => {
     const built = prompt({ reply: EN, today: "2026-10-14", tools: [navigate, network], maxSteps: 3 });
     expect(built).toContain("- Tools that ask the user first: web.search");
     expect(built).toContain("- Tools that move the app's view: app.open");
+  });
+
+  it("says web search is unavailable unless a network tool is offered", () => {
+    const network: ToolSpec = {
+      name: "web.search",
+      description: { sr: "Traži na vebu.", en: "Searches the web." },
+      parameters: { type: "object" },
+      effect: "network",
+    };
+    const line = "- No web tool is offered this turn.";
+    expect(prompt({ reply: EN, tools: [TOOL], maxSteps: 3 })).toContain(line);
+    expect(prompt({ reply: EN, maxSteps: 3 })).toContain(line);
+    expect(prompt({ reply: EN, tools: [TOOL, network], maxSteps: 3 })).not.toContain(line);
   });
 
   it("says so when the turn carries no tools", () => {

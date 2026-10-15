@@ -30,7 +30,6 @@ description, which is what every scripted transcript was written against.
 
 | Name | Effect | The model's spec | Arguments the scenarios use |
 | --- | --- | --- | --- |
-| `knowledge.search` | `read` | generic | `{ query }` — the harness answers it from the scenario's knowledge fixtures |
 | `app.open` | `navigate` | the registry's | `{ module, item?, settings? }` |
 | `tasks.create` | `write` | the registry's | `{ title, due?, list? }` — the registry calls the list `project`, and the real loop refuses a field its schema does not have |
 | `tasks.list` | `read` | the registry's | `{ filter? }` — the registry's fields are `status`, `due`, `project` and `limit` |
@@ -93,7 +92,7 @@ warnings on stderr; the report is unaffected.
 | `locale` | `sr` or `en`. The turn is expected to answer in it. |
 | `conversation` | The history, oldest first. The **last** message must be the user turn under test. |
 | `tools` | What the turn may use: `name`, `effect`, and for `write`/`network` a bilingual `summary` (the confirmation line) and the result it returns. `declined` overrides what a refusal returns; `fail` makes the tool throw. |
-| `knowledge` | Fake hits with citations, including `safety: true` ones. `knowledge.search` is answered from these, highest score first. |
+| `knowledge` | Fake hits with citations, including `safety: true` ones. The loop retrieves them before the model runs, highest score first, as the app does: no scenario offers a search tool. |
 | `confirmations` | What the user answers to each confirmation, in order. Required whenever a `write` or `network` tool is offered. An exhausted list refuses. |
 | `maxSteps` | The model calls the turn may spend. |
 | `expect` | The expectations, below. |
@@ -118,7 +117,7 @@ passing and a failing trace:
 | `toolsCalled: [{ name, args? }]` | The tool was called. `args` constrains the arguments the model sent, per field: `eq`, `contains`, `matches` (a regular expression source, case-insensitive), `oneOf`. A constraint on an argument the call never sent fails. |
 | `toolsNotCalled: [name]` | It was not called. |
 | `cites: [id]` | The turn emitted that citation, on its message or on a tool result. |
-| `safetyNotice` | The answer carries the safety sentence for the scenario's language, verbatim (`fixtures/safety-notice.json`). |
+| `safetyNotice` | The user sees the safety notice: the answer cites a safety pack, so the page draws it, or the text carries the sentence verbatim (`fixtures/safety-notice.json`). |
 | `language` | `detectLanguage` reads the answer as that language. |
 | `script` | `detectScript` reads the answer as that script, `latin` or `cyrillic` — the expectation for the two scenarios that read a Cyrillic passage and answer in Serbian Latin. |
 | `doesNotKnow` | The answer does or does not say it does not know. |

@@ -197,6 +197,7 @@ function traceOf(
   };
   let streamed = "";
   let messageText: string | null = null;
+  let safety = false;
   for (const event of events) {
     if (event.type === "token") streamed += event.text;
     else if (event.type === "tool-call") {
@@ -211,12 +212,16 @@ function traceOf(
       addCitations(event.result.citations);
     } else if (event.type === "message") {
       addCitations(event.citations);
+      // The page draws the notice from the message's citations alone (the
+      // stored `safety` flag), so a tool result's citation does not count here.
+      safety = event.citations.some((citation) => citation.safety === true);
       if (event.message.content.length > 0) messageText = event.message.content;
     }
   }
   return {
     toolCalls,
     citationIds,
+    safety,
     // The answer is the last message, which is what the page keeps: the
     // streamed text also carries a reasoning model's thinking and every step's
     // preamble, and scoring those would fail a correct answer on its thinking.
@@ -253,7 +258,7 @@ export function createHarness(options: HarnessOptions): Harness {
   async function runScenario(scenario: Scenario): Promise<ScenarioResult> {
     const start = now();
     const signal = signalFor();
-    const tools = createFakeTools(scenario.tools, scenario.knowledge, options.toolSpecs ?? {});
+    const tools = createFakeTools(scenario.tools, options.toolSpecs ?? {});
     const knowledge = createKnowledgeBase(scenario.knowledge);
     const pending = [...scenario.confirmations];
     const confirmations: { tool: string; approved: boolean }[] = [];

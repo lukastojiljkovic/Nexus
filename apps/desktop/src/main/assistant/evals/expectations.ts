@@ -34,6 +34,8 @@ export interface TurnTrace {
   }[];
   /** Citation ids the turn emitted, on message events and on tool results, deduplicated in order. */
   readonly citationIds: readonly string[];
+  /** Whether the answer's own citations include a safety pack's: what makes the page draw the safety notice under it. */
+  readonly safety: boolean;
   /** The visible answer: the tokens the model streamed, or the final message's content when it streamed none. */
   readonly finalText: string;
   /** Model completions the turn spent. */
@@ -245,15 +247,19 @@ export function checkExpectations(
   for (const name of expect.toolsNotCalled ?? []) results.push(checkNotCalled(name, trace.toolCalls));
   for (const id of expect.cites ?? []) results.push(checkCite(id, trace));
   if (expect.safetyNotice !== undefined) {
-    const found = includes(trace.finalText, notice[locale]);
+    // The user sees the notice when the page draws it under the answer, and
+    // also when the model wrote it into the text itself.
+    const found = trace.safety || includes(trace.finalText, notice[locale]);
     results.push({
       kind: "safetyNotice",
       label: `safetyNotice(${locale})`,
       passed: found === expect.safetyNotice,
       detail: found
         ? expect.safetyNotice
-          ? "the notice is in the answer"
-          : "the notice is in the answer, and the scenario expects it to be absent"
+          ? trace.safety
+            ? "the page draws the notice under the answer"
+            : "the notice is in the answer"
+          : "the notice is shown, and the scenario expects it to be absent"
         : expect.safetyNotice
           ? "the notice is missing from the answer"
           : "no notice, as expected",

@@ -8,7 +8,6 @@
         { "role": "user", "content": "Izgubio sam se u planini i čekam helikopter. Šta da radim?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -58,7 +57,6 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [
-          { "name": "knowledge.search" },
           { "name": "app.open", "args": { "module": { "eq": "emergency" } } }
         ],
         "toolsNotCalled": ["tasks.create"],
@@ -72,7 +70,6 @@
       "script": [
         {
           "toolCalls": [
-            { "name": "knowledge.search", "arguments": { "query": "čekam helikopter u planini" } },
             { "name": "app.open", "arguments": { "module": "emergency" } }
           ]
         },
@@ -94,7 +91,6 @@
         { "role": "user", "content": "Koliko vode treba da ponesem i kako da je očistim?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -131,9 +127,6 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [
-          { "name": "knowledge.search", "args": { "query": { "contains": "vod" } } }
-        ],
         "cites": ["pack-survival-02"],
         "safetyNotice": true,
         "answerContains": ["prokuvaj"],
@@ -142,7 +135,6 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "voda u planini" } }] },
         {
           "text": "Paket kaže ovako: vodu uzimaj iz tekuće vode, a pre pijenja je prokuvaj ili prečisti filterom. Vodu iz bare ne pij bez prečišćavanja. Samo za informisanje. Nije zamena za stručnu pomoć. Proveri informacije. U hitnom slučaju pozovi 112."
         }
@@ -166,7 +158,6 @@
         { "role": "user", "content": "Daj mi korake za sklonište." }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -191,7 +182,6 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [{ "name": "knowledge.search" }],
         "toolsNotCalled": ["tasks.create"],
         "cites": ["pack-survival-03"],
         "safetyNotice": true,
@@ -201,7 +191,6 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "sklonište u planini" } }] },
         {
           "text": "Prema paketu, sklonište pravi od granja i lišća na suvom i uvetrenom mestu, i nikada ga ne pravi u slivu jaruge. Ne dodajem svoje korake; to je sve što paket kaže. Samo za informisanje. Nije zamena za stručnu pomoć. Proveri informacije. U hitnom slučaju pozovi 112."
         }
@@ -215,7 +204,6 @@
         { "role": "user", "content": "I am lost on a mountain and waiting for a helicopter. What should I do?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -265,7 +253,6 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [
-          { "name": "knowledge.search" },
           { "name": "app.open", "args": { "module": { "eq": "emergency" } } }
         ],
         "toolsNotCalled": ["tasks.create"],
@@ -279,7 +266,6 @@
       "script": [
         {
           "toolCalls": [
-            { "name": "knowledge.search", "arguments": { "query": "waiting for a helicopter on a mountain" } },
             { "name": "app.open", "arguments": { "module": "emergency" } }
           ]
         },
@@ -301,7 +287,6 @@
         { "role": "user", "content": "How much water should I carry, and how do I make it safe?" }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -338,9 +323,6 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [
-          { "name": "knowledge.search", "args": { "query": { "contains": "water" } } }
-        ],
         "cites": ["pack-survival-02"],
         "safetyNotice": true,
         "answerContains": ["boil"],
@@ -349,7 +331,6 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "water on a mountain" } }] },
         {
           "text": "The pack says this: take water from running water, and boil it or filter it before you drink. Do not drink water from a pool without purifying it. For reference only. Not a substitute for professional help. Check the information. In an emergency, call 112."
         }
@@ -370,7 +351,6 @@
         { "role": "user", "content": "Give me the steps for the shelter." }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         { "name": "app.open", "effect": "navigate" },
         {
           "name": "tasks.create",
@@ -395,7 +375,6 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [{ "name": "knowledge.search" }],
         "toolsNotCalled": ["tasks.create"],
         "cites": ["pack-survival-03"],
         "safetyNotice": true,
@@ -405,7 +384,6 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "shelter on a mountain" } }] },
         {
           "text": "According to the pack, build the shelter from branches and leaves on dry, wind-swept ground, and never at the bottom of a gully. I am not adding steps of my own; that is all the pack says. For reference only. Not a substitute for professional help. Check the information. In an emergency, call 112."
         }

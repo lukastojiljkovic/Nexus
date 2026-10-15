@@ -27,10 +27,12 @@
  * version, "the model got worse" and "the prompt changed" are
  * indistinguishable in a result table.
  *
- * Everything the prompt says that a user could read - the safety notice above
- * all - also exists as copy in both languages ({@link SAFETY_NOTICE}), because
- * the page draws it and the assistant is asked to quote it verbatim rather than
- * paraphrase it.
+ * **What the app can do for the model, the prompt does not ask of it.** The
+ * safety notice ({@link SAFETY_NOTICE}) is drawn by the page under every answer
+ * that cites a safety pack, verbatim and in the user's language, so the prompt
+ * tells the model not to write it: Gemma 4 E2B left it out of 7 of the 8
+ * safety scenarios when it was asked to quote it (the eval run of 2026-10-15),
+ * and a notice the app draws is never left out or paraphrased.
  */
 
 import type {
@@ -47,12 +49,13 @@ import type { ReplyLanguage } from "./language.js";
  * The prompt's name, bumped whenever the text below changes in a way a score
  * could notice. `assistant-<date>.<serial>`, so two runs of one day sort.
  */
-export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.2";
+export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.3";
 
 /**
- * The sentence an answer must carry when it draws on a pack whose
- * `notice` is `safety`. The user's brief fixes both halves word for word; a
- * paraphrase would be a second, weaker safety statement, so it is quoted.
+ * The sentence an answer carries when it draws on a pack whose `notice` is
+ * `safety`. The user's brief fixes both halves word for word; a paraphrase
+ * would be a second, weaker safety statement, so the page draws this text
+ * itself ({@link hasSafetyNotice}) rather than asking the model to quote it.
  */
 export const SAFETY_NOTICE: AssistantText = {
   sr: "Samo za informisanje. Nije zamena za stručnu pomoć. Proveri informacije. U hitnom slučaju pozovi 112.",
@@ -155,6 +158,11 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
         : toolGroups(options.tools).join("\n"),
       `- Call a tool when it answers the question; otherwise answer directly. You have at most ${options.maxSteps} rounds of tool calls this turn.`,
       `- Before a tool that writes, uses the network or moves the app's view, say in one line what it will change; the tool asks the user for permission, and a refusal is a normal result, not an error. Never repeat a refused call.`,
+      // Without this line a small model asked to "search the web" answers from
+      // memory as if it had: it cannot tell an absent tool from one it forgot.
+      ...(options.tools.some((tool) => tool.effect === "network")
+        ? []
+        : [`- No web tool is offered this turn. If the user asks you to search the internet, say that web search is not available now and is turned on in the assistant's settings.`]),
     ].join("\n"),
     [
       `# Citations`,
@@ -168,10 +176,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     ].join("\n"),
     [
       `# Safety`,
-      `- When the answer draws on a safety pack, keep to what the pack says, quote its words rather than paraphrase a safety instruction as your own, and add this notice, verbatim, in the answer's language:`,
-      `sr: ${SAFETY_NOTICE.sr}`,
-      `en: ${SAFETY_NOTICE.en}`,
-      `- Without a safety pack, do not add the notice.`,
+      `- When the answer draws on a safety pack, keep to what the pack says and quote its words rather than paraphrase a safety instruction as your own. The app shows its safety notice under such an answer: do not write one.`,
       `- The app's emergency card and a call to 112 come first: never say you replace them, and when there is a signal, say that calling 112 is the first step.`,
     ].join("\n"),
   ];

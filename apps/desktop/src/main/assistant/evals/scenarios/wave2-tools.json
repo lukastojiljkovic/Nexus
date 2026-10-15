@@ -328,8 +328,7 @@
           "name": "app.open",
           "effect": "navigate",
           "navigateTo": { "module": "reader" }
-        },
-        { "name": "knowledge.search", "effect": "read" }
+        }
       ],
       "knowledge": [],
       "confirmations": [],
@@ -339,7 +338,6 @@
           { "name": "reader.progress" },
           { "name": "app.open", "args": { "module": { "eq": "reader" } } }
         ],
-        "toolsNotCalled": ["knowledge.search"],
         "answerContains": ["clanci/uvod.md"],
         "language": "en",
         "maxSteps": 3

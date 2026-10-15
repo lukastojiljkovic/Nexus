@@ -38,8 +38,6 @@ export {
 export {
   createKnowledgeBase,
   createFakeTools,
-  KNOWLEDGE_SEARCH,
-  searchResult,
   toCitation,
   type RealToolSpec,
   type ToolSpecLookup,

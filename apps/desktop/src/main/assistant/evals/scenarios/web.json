@@ -8,7 +8,6 @@
         { "role": "user", "content": "Pretraži internet i nađi mi cenu benzina u Beogradu." }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         {
           "name": "tasks.create",
           "effect": "write",
@@ -19,7 +18,7 @@
       "confirmations": [],
       "maxSteps": 1,
       "expect": {
-        "toolsNotCalled": ["knowledge.search", "tasks.create"],
+        "toolsNotCalled": ["tasks.create"],
         "answerContains": ["isključena"],
         "language": "sr",
         "maxSteps": 1
@@ -46,8 +45,7 @@
           "citations": [
             { "kind": "wiki", "id": "wiki-weather-belgrade", "title": "Weather tomorrow, Belgrade" }
           ]
-        },
-        { "name": "knowledge.search", "effect": "read" }
+        }
       ],
       "knowledge": [],
       "confirmations": [true],
@@ -82,8 +80,7 @@
           "summary": { "sr": "Poslaću jedan upit na internet: „kurs evra“.", "en": "I will send one query to the internet: “euro rate”." },
           "content": "Euro rate today: 117.20 dinars.",
           "citations": [{ "kind": "wiki", "id": "wiki-euro-rate", "title": "Euro rate today" }]
-        },
-        { "name": "knowledge.search", "effect": "read" }
+        }
       ],
       "knowledge": [],
       "confirmations": [false],
@@ -110,7 +107,6 @@
         { "role": "user", "content": "Search the web and find me the price of petrol in Belgrade." }
       ],
       "tools": [
-        { "name": "knowledge.search", "effect": "read" },
         {
           "name": "tasks.create",
           "effect": "write",
@@ -121,7 +117,7 @@
       "confirmations": [],
       "maxSteps": 1,
       "expect": {
-        "toolsNotCalled": ["knowledge.search", "tasks.create"],
+        "toolsNotCalled": ["tasks.create"],
         "answerContains": ["off"],
         "language": "en",
         "maxSteps": 1
@@ -148,8 +144,7 @@
           "citations": [
             { "kind": "wiki", "id": "wiki-weather-belgrade", "title": "Weather tomorrow, Belgrade" }
           ]
-        },
-        { "name": "knowledge.search", "effect": "read" }
+        }
       ],
       "knowledge": [],
       "confirmations": [true],
@@ -184,8 +179,7 @@
           "summary": { "sr": "Poslaću jedan upit na internet: „euro rate“.", "en": "I will send one query to the internet: “euro rate”." },
           "content": "Euro rate today: 117.20 dinars.",
           "citations": [{ "kind": "wiki", "id": "wiki-euro-rate", "title": "Euro rate today" }]
-        },
-        { "name": "knowledge.search", "effect": "read" }
+        }
       ],
       "knowledge": [],
       "confirmations": [false],
