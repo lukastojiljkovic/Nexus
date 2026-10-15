@@ -3125,8 +3125,17 @@ export {
   renderKnowledgeBlock,
 } from "./assistant/prompts.js";
 export type { SystemPromptOptions } from "./assistant/prompts.js";
-export { contentWords, replyLanguage, transliterateToLatin } from "./assistant/language.js";
-export type { ReplyLanguage } from "./assistant/language.js";
+export {
+  contentWords,
+  detectAnswerLanguage,
+  detectAnswerScript,
+  replyLanguage,
+  transliterateToCyrillic,
+  transliterateToLatin,
+} from "./assistant/language.js";
+export type { AnswerLanguage, AnswerScript, ReplyLanguage } from "./assistant/language.js";
+export { claimsCompletion, verifyAnswer } from "./assistant/verify.js";
+export type { VerificationFinding, VerifiedCall, VerifyAnswerInput } from "./assistant/verify.js";
 export { MIN_SHARED_WORDS, filterAnswer } from "./assistant/citations.js";
 export type { AnswerCitations, FilteredAnswer } from "./assistant/citations.js";
 export {

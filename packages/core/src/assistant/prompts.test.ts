@@ -72,7 +72,7 @@ describe("buildSystemPrompt", () => {
   it("keeps a duty the old prompt carried: the refusal, the citation and the safety habits", () => {
     const built = prompt({ reply: EN, tools: [TOOL], maxSteps: 5 });
     expect(built).toContain("Never repeat a refused call");
-    expect(built).toContain("a refusal is a normal result, not an error");
+    expect(built).toContain("A refusal is a normal result, not an error");
     expect(built).toContain("the tool asks the user for permission");
     expect(built).toContain("Never invent a citation");
     expect(built).toContain("the app shows the user every citation you send");
@@ -114,13 +114,18 @@ describe("buildSystemPrompt", () => {
     // unnoticed. The old ceiling was 2700 beside a prompt of 2522 characters;
     // the grounding rule this brief fixes is 420 characters longer than the
     // refusal it replaces, so the ceiling moves with it. The longest of the four
-    // variants is 2809 since the safety notice left the prompt for the page. The
-    // four are checked because the language line and the grounding line are
-    // both chosen per turn.
-    expect(prompt({ reply: SR_LATIN, passages: true, maxSteps: 6 }).length).toBeLessThan(3000);
-    expect(prompt({ reply: SR_CYRILLIC, passages: true, maxSteps: 6 }).length).toBeLessThan(3000);
-    expect(prompt({ reply: SR_LATIN, passages: false, maxSteps: 6 }).length).toBeLessThan(3000);
-    expect(prompt({ reply: EN, passages: false, maxSteps: 6 }).length).toBeLessThan(3000);
+    // variants was 2809 since the safety notice left the prompt for the page. The
+    // tool-use rules of the answer-verification brief (the app asks, a described
+    // action is not done, a refusal is a normal result) add 359 characters: the
+    // longest variant is now 3168 when measured, 2809 + 359, within the 400 that
+    // brief allows. The ceiling is the old one plus that allowance, 3209, and a
+    // policy guard rather than a measurement; the four measured lengths are
+    // 3168, 3117, 3090 and 3056. The four are checked because the
+    // language line and the grounding line are both chosen per turn.
+    expect(prompt({ reply: SR_LATIN, passages: true, maxSteps: 6 }).length).toBeLessThanOrEqual(3209);
+    expect(prompt({ reply: SR_CYRILLIC, passages: true, maxSteps: 6 }).length).toBeLessThanOrEqual(3209);
+    expect(prompt({ reply: SR_LATIN, passages: false, maxSteps: 6 }).length).toBeLessThanOrEqual(3209);
+    expect(prompt({ reply: EN, passages: false, maxSteps: 6 }).length).toBeLessThanOrEqual(3209);
   });
 
   it("gives the model today's date with its weekday", () => {
@@ -177,6 +182,13 @@ describe("buildSystemPrompt", () => {
     expect(prompt({ reply: EN, tools: [TOOL], maxSteps: 3 })).toContain(line);
     expect(prompt({ reply: EN, maxSteps: 3 })).toContain(line);
     expect(prompt({ reply: EN, tools: [TOOL, network], maxSteps: 3 })).not.toContain(line);
+  });
+
+  it("says that the app asks, so the model calls the tool, and that a described action is not done", () => {
+    const built = prompt({ reply: EN, tools: [TOOL, WRITE_TOOL], maxSteps: 3 });
+    expect(built).toContain("the app asks the user in its own dialog, so do not ask in chat first");
+    expect(built).toContain("Describing an action is not doing it.");
+    expect(built).toContain("call the tool that opens it rather than offering to");
   });
 
   it("says so when the turn carries no tools", () => {

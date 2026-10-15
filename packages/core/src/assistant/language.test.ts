@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { contentWords, replyLanguage, transliterateToLatin } from "./language.js";
+import {
+  contentWords,
+  detectAnswerLanguage,
+  detectAnswerScript,
+  replyLanguage,
+  transliterateToCyrillic,
+  transliterateToLatin,
+} from "./language.js";
 
 /**
  * The reply's language and script, and the two things the loop does with the
@@ -120,5 +127,82 @@ describe("contentWords", () => {
   it("drops the words too short to be evidence", () => {
     expect(contentWords("na je od sa nije")).toEqual(["nije"]);
     expect(contentWords("Šta je to")).toEqual([]);
+  });
+});
+
+describe("transliterateToCyrillic", () => {
+  it("rewrites a whole word that carries a Serbian letter, and leaves the rest", () => {
+    expect(transliterateToCyrillic("Nikola Tesla je rođen u Smiljanu.")).toBe(
+      "Nikola Tesla je рођен u Smiljanu.",
+    );
+  });
+
+  it("rewrites the word a capital Serbian letter starts, with the capital", () => {
+    expect(transliterateToCyrillic("Čajnik je u kuhinji.")).toBe("Чајник je u kuhinji.");
+  });
+
+  it("never touches a code span, even one holding Serbian letters", () => {
+    expect(transliterateToCyrillic("Koristi `čuvaj` za šifru.")).toBe("Koristi `čuvaj` za шифру.");
+  });
+
+  it("never touches a URL, which a reader follows literally", () => {
+    expect(transliterateToCyrillic("Vidi https://sajt.rs/č za više.")).toBe(
+      "Vidi https://sajt.rs/č za више.",
+    );
+  });
+
+  it("never touches a dotted identifier such as a tool name", () => {
+    expect(transliterateToCyrillic("Pozovi tasks.create šta god.")).toBe(
+      "Pozovi tasks.create шта god.",
+    );
+  });
+
+  it("never touches a citation marker", () => {
+    expect(transliterateToCyrillic("Rođen je u Smiljanu [1].")).toBe("Рођен je u Smiljanu [1].");
+  });
+
+  it("leaves a Latin-only word such as a product name alone, beside a rewritten one", () => {
+    expect(transliterateToCyrillic("Otvori Wikipedia u šoli.")).toBe("Otvori Wikipedia u шоли.");
+  });
+
+  it("leaves a text with no Serbian letter exactly as it was", () => {
+    expect(transliterateToCyrillic("Nikola Tesla, 1856.")).toBe("Nikola Tesla, 1856.");
+  });
+});
+
+describe("detectAnswerLanguage", () => {
+  it("reads a Serbian answer from its letters or its words, Latin or Cyrillic", () => {
+    expect(detectAnswerLanguage("Nikola Tesla je rođen u Smiljanu.")).toBe("sr");
+    expect(detectAnswerLanguage("Nikola Tesla nije rodjen u Smiljanu.")).toBe("sr");
+    expect(detectAnswerLanguage("Никола Тесла је рођен у Смиљану.")).toBe("sr");
+  });
+
+  it("reads an English answer that quotes one Serbian title as English", () => {
+    expect(
+      detectAnswerLanguage('The pack is called "Preživljavanje" and it is here for you.'),
+    ).toBe("en");
+  });
+
+  it("does not judge a text with no evidence either way", () => {
+    expect(detectAnswerLanguage("112")).toBe("undetermined");
+    expect(detectAnswerLanguage("...")).toBe("undetermined");
+    expect(detectAnswerLanguage("Okay.")).toBe("undetermined");
+  });
+});
+
+describe("detectAnswerScript", () => {
+  it("reads the script from the share of letters that are Cyrillic", () => {
+    expect(detectAnswerScript("Nikola Tesla je rođen u Smiljanu.")).toBe("latin");
+    expect(detectAnswerScript("Никола Тесла је рођен у Смиљану.")).toBe("cyrillic");
+  });
+
+  it("reads one quoted Cyrillic title among Latin sentences as Latin", () => {
+    expect(detectAnswerScript("The article “Никола Тесла” says he was born in Smiljan.")).toBe(
+      "latin",
+    );
+  });
+
+  it("reads a text with no letters as Latin", () => {
+    expect(detectAnswerScript("112")).toBe("latin");
   });
 });
