@@ -354,6 +354,33 @@ describe("the loop's scripted conversations", () => {
     expect(of(events, "done")[0]?.stopReason).toBe("end");
   });
 
+  it("runs the tool with an empty optional string dropped from the arguments", async () => {
+    // Gemma 4 E2B's `tasks.create` with `"description": ""` - a call the schema
+    // would refuse for a property the model believed it had left out. What the
+    // tool is handed must be the tidied arguments, not the model's own.
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1 },
+        description: { type: "string", minLength: 1 },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "tasks.create", arguments: { title: "Kupi mleko", description: "" } },
+        ],
+      },
+      { text: "Dodato." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    expect(of(events, "tool-result")[0]?.result.ok).toBe(true);
+    expect(create.seen).toEqual([{ title: "Kupi mleko" }]);
+  });
+
   it("stops at the step limit, having run the last call it was asked for", async () => {
     const tasks = makeTool("tasks.list");
     const model = createScriptedModel([

@@ -8,7 +8,15 @@ import { packVersionDir, readInstalled } from "../../packs/registry.js";
 import type { RankedHit } from "./fusion.js";
 import { bundledManualPages, manualDocument } from "./manual.js";
 import { contentMarker, leadSection, parseMarkdownUnits, parsePage } from "./markup.js";
-import type { IndexedDocument, KnowledgeSource, ManualPage, SourceBatch, WikiSource } from "./types.js";
+import type {
+  IndexedDocument,
+  KnowledgeSource,
+  ManualPage,
+  SourceBatch,
+  WikiSource,
+  WikiTitle,
+} from "./types.js";
+import { comparableWords, contentWords } from "./zimWiki.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -57,6 +65,20 @@ export const MAX_INDEXED_CHARS = 200_000;
 
 /** How many wiki titles one query reads the lead of. See `types.ts` on why a whole encyclopaedia is never indexed. */
 export const WIKI_TITLE_LIMIT = 5;
+
+/**
+ * How many titles the wiki is asked for, before the relevance gate cuts the
+ * list to what an answer can cite.
+ *
+ * A POLICY CHOICE, and a multiple rather than a number of its own: a title index
+ * answers in its own byte order, which is not a relevance ranking, so the
+ * article that answers the question can sit a few places below a title that
+ * merely starts with one of its words. Three times the passages an answer cites
+ * is enough for the gate to have something to choose from, while what one
+ * question costs is bounded the same way everything else here is - the number of
+ * articles read for it.
+ */
+export const WIKI_CANDIDATE_LIMIT = WIKI_TITLE_LIMIT * 3;
 
 /** How much of a wiki article's lead one passage carries. */
 export const WIKI_LEAD_MAX_CHARS = 2_000;
@@ -531,13 +553,138 @@ export function wikiSource(): KnowledgeSource {
   };
 }
 
+/** One article the reader offered, once its lead has been read and before the question has judged it. */
+interface WikiCandidate {
+  readonly title: WikiTitle;
+  /** The lead, exactly as a citation would carry it. */
+  readonly passage: string;
+}
+
 /**
- * The wiki list for one query: the reader's best titles, each answered with the
- * lead of its article, in the reader's own order.
+ * The fewest letters a question word is matched by, and what a longer one loses
+ * off its end.
  *
- * The order is the ranking - there is no text search over wiki content, because
- * there is no wiki content in the index to search - so the list enters the fusion
- * as ranks, which is exactly what reciprocal rank fusion wants. An article the
+ * POLICY, not measurement. A Serbian question declines the noun a title names
+ * ("Francuske" against "Француска", "zadatke" against "Задатак") and no fixed
+ * rule separates a case ending from a word's own tail, so these two numbers are
+ * chosen to be wrong as rarely as possible: four letters is past the point where
+ * a stem is a syllable rather than a word, and a Serbian case ending is one or
+ * two letters. A word of four letters or fewer is matched as itself.
+ */
+const STEM_MIN_LETTERS = 4;
+const STEM_CUT_LETTERS = 2;
+
+/** What a question word is matched by: the word up to `STEM_MIN_LETTERS`, otherwise its end less `STEM_CUT_LETTERS`. */
+function questionStem(word: string): string {
+  const letters = [...word];
+  if (letters.length <= STEM_MIN_LETTERS) return word;
+  return letters.slice(0, Math.max(STEM_MIN_LETTERS, letters.length - STEM_CUT_LETTERS)).join("");
+}
+
+/**
+ * A title without a trailing parenthetical.
+ *
+ * "Задатак (филм)" is the FILM of that name, and "Француске краљице (филм)" the
+ * film about the queens: the bracket classifies the article rather than
+ * describing it, and no question asks for the classification. Only the trailing
+ * one goes, because that is where a title index puts it.
+ */
+function titleSubject(title: string): string {
+  return title.replace(/\s*\([^)]*\)\s*$/, "");
+}
+
+/**
+ * What a text carries of a question: one answer per word of the TEXT, and one
+ * per word of the QUESTION, both in their own order.
+ *
+ * Two shapes because the two are counted differently. The share is over the
+ * text's words - "how much of this title is the question about" - and the
+ * coverage over the question's - "how much of the question does this article
+ * carry" - and a question word that reaches both the title and the lead is still
+ * one word of the question.
+ */
+function carries(
+  text: string,
+  stems: readonly string[],
+): { readonly words: readonly boolean[]; readonly stems: readonly boolean[] } {
+  const words = comparableWords(text);
+  return {
+    words: words.map((word) => stems.some((stem) => word.startsWith(stem))),
+    stems: stems.map((stem) => words.some((word) => word.startsWith(stem))),
+  };
+}
+
+/**
+ * The candidates a question can be answered from, best first.
+ *
+ * **Why a gate at all.** A title index matches by prefix and cannot rank, so
+ * every hit is a title that STARTS with something the question contains: "Koje
+ * zadatke imam danas?" reaches Задатак, the film of the same name and a
+ * newspaper called Данас, none of which says anything about the user's own
+ * tasks. Offered as passages those are worse than nothing - they fill the
+ * citations with articles that do not bear on the question, and a Serbian
+ * library's Cyrillic prose is what a small model then copies, so the answer
+ * comes back in Cyrillic, which is not the script this app writes Serbian in.
+ *
+ * **Two tests, and both are needed.** A candidate must be NAMED by the question:
+ * one of the words of its title - without a trailing parenthetical - is reached
+ * by one of them. And it must CARRY enough of the question: at least
+ * `min(2, number of content words)` of the question's words are reached by its
+ * title or its lead. Together they are what separates an article about the thing
+ * asked for ("Француска") from one that merely begins with a word of the
+ * question ("Град"), and the minimum is two because one matched word is exactly
+ * what the reader already promised; a one-word question ("Šta je Beograd?") is
+ * the case where one is all there is.
+ *
+ * **What is compared, and in what shape.** The question's content words
+ * (`zimWiki.ts`'s tokenizer and stop words, so the gate reads the question the
+ * way the keys were built from it) against the words of the title and the lead,
+ * both transliterated to Latin and folded, so a Cyrillic title and the Latin
+ * question that asks for it meet as one word. A word is reached when it starts
+ * with the question word's stem, which is how a declined question reaches the
+ * nominative a title is written in.
+ *
+ * **The order is the ranking the reader could not do.** The share of the title
+ * the question names comes first, because a title IS the subject: "Никола
+ * Тесла" answers "Ko je bio Nikola Tesla?" more surely than a museum named after
+ * him does. Coverage comes second, and the reader's own order third - a stable
+ * sort, so two candidates the question reaches equally well stay in the order
+ * they were offered in. Cutting the list to the number of passages an answer can
+ * cite is the caller's business, not this function's.
+ */
+function relevant(candidates: readonly WikiCandidate[], query: string): readonly WikiCandidate[] {
+  const stems = contentWords(query).map(questionStem);
+  // A one-word question is the whole of some questions, so its floor is one.
+  const floor = Math.min(2, stems.length);
+  const scored: { readonly candidate: WikiCandidate; readonly share: number; readonly coverage: number }[] = [];
+
+  for (const candidate of candidates) {
+    const title = carries(titleSubject(candidate.title.title), stems);
+    const lead = carries(candidate.passage, stems);
+    // The words of the title a question word reaches, over the title's own
+    // length: a title every word of which the question names ranks above one it
+    // names half of, and none reached is a candidate the question does not name
+    // at all.
+    const named = title.words.filter(Boolean).length;
+    if (named === 0) continue;
+    const coverage = title.stems.filter((found, at) => found || lead.stems[at] === true).length;
+    if (coverage < floor) continue;
+    scored.push({ candidate, share: named / title.words.length, coverage });
+  }
+
+  return scored
+    .sort((left, right) => right.share - left.share || right.coverage - left.coverage)
+    .map((entry) => entry.candidate);
+}
+
+/**
+ * The wiki list for one query: the passages that bear on it, best first.
+ *
+ * There is no text search over wiki content, because there is no wiki content in
+ * the index to search - so the list enters the fusion as ranks, which is exactly
+ * what reciprocal rank fusion wants. The reader is asked for more titles than an
+ * answer can cite (`WIKI_CANDIDATE_LIMIT`), because it cannot rank them: the
+ * gate (`relevant`) then keeps the few that answer the question. An article the
  * reader lists but cannot read is skipped rather than cited as an empty passage.
  */
 export async function wikiHits(
@@ -545,8 +692,8 @@ export async function wikiHits(
   text: string,
   signal: AbortSignal,
 ): Promise<RankedHit[]> {
-  const titles = await wiki.searchTitles(text, WIKI_TITLE_LIMIT, signal);
-  const hits: RankedHit[] = [];
+  const titles = await wiki.searchTitles(text, WIKI_CANDIDATE_LIMIT, signal);
+  const candidates: WikiCandidate[] = [];
   for (const title of titles) {
     if (signal.aborted) break;
     const article = await wiki.readArticle(title.path, signal);
@@ -563,13 +710,16 @@ export async function wikiHits(
             .slice(0, WIKI_LEAD_MAX_CHARS)
             .trim());
     if (passage === "") continue;
-    hits.push({
-      key: `w:${title.path}`,
-      citation: { kind: "wiki", id: title.path, title: title.title, locator: "lead" },
-      text: passage,
-    });
+    candidates.push({ title, passage });
   }
-  return hits;
+
+  return relevant(candidates, text)
+    .slice(0, WIKI_TITLE_LIMIT)
+    .map((candidate) => ({
+      key: `w:${candidate.title.path}`,
+      citation: { kind: "wiki", id: candidate.title.path, title: candidate.title.title, locator: "lead" },
+      text: candidate.passage,
+    }));
 }
 
 // --- assembly -----------------------------------------------------------------

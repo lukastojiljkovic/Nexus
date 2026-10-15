@@ -394,27 +394,30 @@ describe("wikiHits", () => {
   it("reads the lead of the articles the reader offered, in the reader's order", async () => {
     const wiki = fakeWiki({
       titles: [
-        { path: "A/Hipothermia", title: "Hipothermia" },
-        { path: "A/Frostbite", title: "Frostbite" },
+        { path: "A/Hipotermija", title: "Hipotermija" },
+        { path: "A/Promrzline", title: "Promrzline" },
       ],
       articles: {
-        "A/Hipothermia": "# Hipothermia\n\nHipotermija je stanje niske telesne temperature.\n\n## Uzroci\n\nHladnoca.",
-        "A/Frostbite": "# Frostbite\n\nPromrzline su ostecenje tkiva.",
+        "A/Hipotermija":
+          "# Hipotermija\n\nHipotermija je stanje niske telesne temperature koje prati promrzline.\n\n## Uzroci\n\nHladnoca.",
+        "A/Promrzline": "# Promrzline\n\nPromrzline su ostecenje tkiva nastalo pri hipotermiji.",
       },
     });
 
-    const hits = await wikiHits(wiki, "hladno", NEVER);
+    // Both leads carry both of the question's words - which is what the gate
+    // asks of a candidate - so what comes back is the reader's own order.
+    const hits = await wikiHits(wiki, "Hipotermija i promrzline", NEVER);
 
     expect(hits).toEqual([
       {
-        key: "w:A/Hipothermia",
-        citation: { kind: "wiki", id: "A/Hipothermia", title: "Hipothermia", locator: "lead" },
-        text: "Hipotermija je stanje niske telesne temperature.",
+        key: "w:A/Hipotermija",
+        citation: { kind: "wiki", id: "A/Hipotermija", title: "Hipotermija", locator: "lead" },
+        text: "Hipotermija je stanje niske telesne temperature koje prati promrzline.",
       },
       {
-        key: "w:A/Frostbite",
-        citation: { kind: "wiki", id: "A/Frostbite", title: "Frostbite", locator: "lead" },
-        text: "Promrzline su ostecenje tkiva.",
+        key: "w:A/Promrzline",
+        citation: { kind: "wiki", id: "A/Promrzline", title: "Promrzline", locator: "lead" },
+        text: "Promrzline su ostecenje tkiva nastalo pri hipotermiji.",
       },
     ]);
   });
