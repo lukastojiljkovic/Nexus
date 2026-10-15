@@ -16,6 +16,7 @@ import {
   PageHeader,
   Select,
   StatBand,
+  TextArea,
   TextField,
 } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
@@ -84,6 +85,7 @@ import type {
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { localTodayKey } from "./examDates.js";
+import { optionalText } from "./formFields.js";
 import { shiftDay } from "./habitDone.js";
 import { collator, dateTimeFormat, numberFormat } from "./intl.js";
 import {
@@ -738,6 +740,19 @@ function taskChips({
 }: TaskChipsInput): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
+  // A marker only: the text itself is read in the form, so a row says that
+  // there is a description and nothing more.
+  if (task.description !== null) {
+    chips.push(
+      <Chip
+        key="description"
+        className="tasks__description-chip"
+        title={strings.tasks.descriptionChipTitle}
+      >
+        {strings.tasks.descriptionChip}
+      </Chip>,
+    );
+  }
   const rollUp = progressChip(children);
   if (rollUp !== null) chips.push(rollUp);
   const attachments = attachmentChip(attachmentCount);
@@ -1260,6 +1275,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
+  /** The task's notes (TASK-001), as typed; saved trimmed, and a blank box clears them. */
+  const [description, setDescription] = useState("");
   /** The quick-add phrase the user waved away, or null — see `activeQuickDate`. */
   const [dismissedPhrase, setDismissedPhrase] = useState<string | null>(null);
   /** The add/edit form's own save failing at the store/IPC boundary — the CalendarPage `formError` shape. */
@@ -1281,6 +1298,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     priority !== "none" ||
     recurrence !== null ||
     reminderOffsets.length > 0 ||
+    description.trim().length > 0 ||
     formSectionId !== null;
   /**
    * Every write OUTSIDE the live form and outside the rail/tag/dependency
@@ -2554,6 +2572,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setPriority("none");
     setRecurrence(null);
     setReminderOffsets([]);
+    setDescription("");
     setDismissedPhrase(null);
     // The rows themselves are cleared by the effect that watches `editingId`;
     // only the transient error is this function's to drop.
@@ -2590,6 +2609,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setPriority(task.priority);
     setRecurrence(task.recurrence);
     setReminderOffsets([...task.reminderOffsets]);
+    setDescription(task.description ?? "");
     // The heading the task currently sits under, so saving without touching the
     // select leaves it exactly where it is (`groupKeyOf`, for the same reason
     // the grouping uses it: a section this fetch does not know reads as the body).
@@ -2627,6 +2647,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // refuses a ladder without one, so it is read off the FIELD for exactly the
     // reason the rule above is — the chips are anchored to the field too.
     const ladder = isValidDayKey(dueDate) ? reminderOffsets : [];
+    // The notes ride the same save as the other fields: trimmed, and a blank box
+    // sends null, which is what clears a description on an edit.
+    const notes = optionalText(description);
     setSaving(true);
     try {
       if (editingId != null) {
@@ -2639,6 +2662,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           // An empty array is meaningful here: it clears whatever ladder the
           // task carried.
           reminderOffsets: ladder,
+          description: notes,
         };
         const edited = tasks?.find((task) => task.id === editingId) ?? null;
         replaceTask(await window.nexus.updateTask(profileId, editingId, changes));
@@ -2658,6 +2682,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         if (priority !== "none") fields.priority = priority;
         if (rule !== null) fields.recurrence = rule;
         if (ladder.length > 0) fields.reminderOffsets = ladder;
+        if (notes !== null) fields.description = notes;
         // A new task lands in the list the rail has selected, under the heading
         // the select names — the whole point of selecting one.
         if (selectedId !== null) fields.listId = selectedId;
@@ -4721,6 +4746,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                     <p className="nx-hint">{strings.tasks.reminders.needsDate}</p>
                   )}
                 </div>
+
+                {/* Opis (TASK-001) — plain text. No markdown renderer is among the
+                    desktop app's dependencies, and a textarea keeps the line breaks
+                    the user typed without one. */}
+                <TextArea
+                  className="tasks__description"
+                  label={strings.tasks.descriptionLabel}
+                  rows={3}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
 
                 {/* Prilozi (migration 024) — only while EDITING: an uncreated task
                     has no id to hang a file off, which is the same constraint the

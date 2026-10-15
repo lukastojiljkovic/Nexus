@@ -74,6 +74,11 @@
   flex: 1;
   min-width: 240px;
 }
+/* The notes box is the one full-width row of the event form; the fields beside
+   it wrap onto the rows around it as they always have. */
+.cal__notes {
+  flex-basis: 100%;
+}
 /* Reminder chip row — the event form's "Podsetnici" (CAL-006), the task form's
    "Podsetnik" (ADR-028) and the document form's own ladder (CAL-004) share this
    recipe outright, the way the house dialog is shared further down: one ladder
@@ -934,6 +939,13 @@ button.cal__month-more {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+/* An event's category, drawn after its title as plain text: CAL has no colour
+   for an event, so the category is a word, and a quieter one than the title. */
+.cal__month-bar-category {
+  flex: none;
+  opacity: 0.75;
+  white-space: nowrap;
 }
 /* A multi-day bar flattens the edge that continues into the next/previous
    row, so it reads as one uninterrupted span across week boundaries. */

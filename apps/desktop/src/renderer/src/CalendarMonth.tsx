@@ -131,6 +131,9 @@ export function renderBarContent(item: CalendarItem): ReactNode {
           <span className="cal__month-bar-label" title={label}>
             {label}
           </span>
+          {item.event.category !== null && (
+            <span className="cal__month-bar-category">{item.event.category}</span>
+          )}
         </>
       );
     case "foreign":
