@@ -35,11 +35,15 @@ Android has two credible paths and no forced answer today.
   keystore, windowing). Electron hardening per SEC-EL: contextIsolation on,
   nodeIntegration off, sandboxed renderers, typed IPC allowlist in preload,
   CSP in production builds.
-- **Shared packages are the law:** `core` (domain + contracts + sync),
-  `db` (schema/migrations), `crypto`, `ui` (design system + views engine),
-  `tokens` (Style Dictionary → CSS vars now, Compose/RN themes later).
-  Nothing in `apps/*` may own business logic — enforced in review; this
-  same discipline is the PLUG groundwork (ADR-008).
+- **Shared packages are the law:** `core` (domain + contracts + sync, and the
+  home of the crypto layer this ADR called a `crypto` package —
+  `packages/core/src/auth`), `db` (schema/migrations), `ui` (design system +
+  views engine), `tokens` (Style Dictionary → CSS vars now, Compose/RN themes
+  later). **Corrected 2026-10-15:** the `crypto` package named here was never
+  created; the primitives live in `core` beside the key chain, and
+  `packages/sync-crypto` carries the sync side (key wrapping, row AEAD, the
+  device-pairing handshake). Nothing in `apps/*` may own business logic —
+  enforced in review; this same discipline is the PLUG groundwork (ADR-008).
 - **Android default path: React Native + Expo** reusing `core`, `db`
   (op-sqlite), `crypto` (libsodium RN build), and `tokens`. **Kickoff
   gate:** before Android work starts, re-evaluate against native

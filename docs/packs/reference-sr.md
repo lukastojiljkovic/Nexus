@@ -1,118 +1,122 @@
-# Пакет: `reference-sr` — Устав Србије и Општа декларација (српски)
+# Pack: `reference-sr` — Constitution of Serbia and the Universal Declaration (Serbian)
 
-Пакет врсте `content` (ADR-091): књига чланака коју приказује читач. Гради га
-`scripts/packs/reference/build.mjs`, потписује га одржавалац release кључем
-(`scripts/pack-sign.mjs`) и нико други. Текстови су на српском; ћирилични
-извори остају ћирилицом.
+Pack of kind `content` (ADR-091): a book of articles that the reader displays. It
+is built by `scripts/packs/reference/build.mjs`, signed by the maintainer with the
+release key (`scripts/pack-sign.mjs`), and by nobody else. The texts are in
+Serbian; sources that are in Cyrillic stay in Cyrillic.
 
-## Шта пакет садржи
+## What the pack contains
 
-Два документа, 2 чланка, измерено 224 667 бајтова у фасцикли пакета (чланци и
-`content.json`; 219 KiB).
+Two documents, two articles, measured at 224 667 bytes in the pack folder (the
+articles and `content.json`; 219 KiB).
 
-| # | Идентификатор чланка | Документ | Извор | Лиценца |
-|---|---|---|---|---|
-| 01 | `01-udhr-sr` | Општа декларација о правима човека (Резолуција 217 А (III)) | Викизворник на српском | CC BY-SA 4.0; сам документ јавно добро (ST/AI/189/Add.9/Rev.2) |
-| 02 | `02-ustav-republike-srbije` | Устав Републике Србије | Уставни суд Републике Србије | званични текст — није ауторско дело (чл. 6 ЗАСП) |
+| # | Article id | Document | Source | Licence |
+| --- | --- | --- | --- | --- |
+| 01 | `01-udhr-sr` | Universal Declaration of Human Rights (*Opšta deklaracija o pravima čoveka*), General Assembly Resolution 217 A (III) | Wikisource in Serbian | CC BY-SA 4.0; the document itself is in the public domain (ST/AI/189/Add.9/Rev.2) |
+| 02 | `02-ustav-republike-srbije` | Constitution of the Republic of Serbia (*Ustav Republike Srbije*) | Constitutional Court of the Republic of Serbia | official text, not a copyright work (Art. 6 of the Serbian Copyright Act, ZASP) |
 
-`scripts/packs/reference/sources.reference-sr.json` је евиденција лиценци: за
-сваки документ URL са кога су бајтови преузети, канонски URL у реду „Извор”,
-датум преузимања, величина, SHA-256 бајтова из којих је пакет грађен, лиценца
-и реченица са стварне странице која ту лиценцу саопштава.
+`scripts/packs/reference/sources.reference-sr.json` is the licence register. For
+each document it records the URL the bytes were taken from, the canonical URL in
+the Source column, the download date, the size, the SHA-256 of the bytes the pack
+was built from, the licence, and the sentence from the source page that states
+that licence.
 
-Уз сваки законски текст стоје на врху три реда, како захтева правило овог
-таласа:
+Each statute carries three lines at its head, as this wave's rule requires:
 
 ```
 > Proveri izmene i dopune u Službenom glasniku.
-> Stanje na dan <датум грађења>.
-> Obuhvaćeni brojevi: <бројеви гласника>.
+> Stanje na dan <datum građenja>.
+> Obuhvaćeni brojevi: <brojevi glasnika>.
 ```
 
-Бројеви гласника се узимају из саме странице извора; за Устав то су
-„Сл. гласник РС” бр. 98/2006, бр. 115/2021 (одлука о проглашењу) и бр. 16/2022
-(Уставни закон, амандмани I–XXIX). Датум је дан када је пакет грађен, јер је
-то једина тврдња коју пакет може поштено да да: „тога дана текст је био овај”.
-Ако се Устав буде мењао, у табелу извора се додаје нови број и пакет се поново
-гради.
+In English: "Check the amendments and supplements in the Official Gazette",
+"Status on the day of the build <date>", and "Issues covered: <numbers>".
 
-## Шта свесно није у пакету
+The Gazette numbers are taken from the source page itself. For the Constitution
+they are *Službeni glasnik RS* nos. 98/2006, 115/2021 (the decision promulgating
+it) and 16/2022 (the Constitutional Law, amendments I–XXIX). The date is the day
+the pack was built, because it is the only claim the pack can honestly make: on
+that day the text was this. If the Constitution changes, a new number is added to
+the source table and the pack is rebuilt.
 
-**Пет закона које задатак тражи — Закон о раду, Закон о заштити потрошача,
-Закон о безбедности саобраћаја на путевима, Породични закон и Закон о
-обавезним односима — нису у пакету, јер њихов изворни текст из гласника није
-било могуће преузети као текст.** Правило задатка је да се закон изостави
-ако се оригинал из гласника не може преузети, и то је овде урађено. Разлог по
-извору:
+## What is deliberately not in the pack
 
-- **Правно-информациони систем (PIS)** је извор који задатак забрањује, а уз то
-  је и JavaScript апликација: обичан захтев враћа само љуску апликације, не
-  документ.
-- **Консолидовани текстови комерцијалних издавача (paragraf.rs и слични)** су
-  забрањени, а независни прегледач прописа (slglasnik.info) управо такав текст
-  преузима из PIS-а („Zvanični izvor: Pravno-informacioni sistem RS”).
-- **slglasnik.com**, издавач гласника, није доступан из овог окружења: TLS ланац
-  сајта није потпун (`unable to verify the first certificate`), па Node не може
-  да провери сертификат, а скрипта не сме да га игнорише.
-- **PDF-ови на сајтовима министарстава** који су прегледани јесу понекад
-  странице гласника („Zakon o socijalnoj zaštiti”, „Сл. гласник РС” бр. 24/2011),
-  али за тражене законе су то или `docx` извози база (назив типа
-  `24_2005-3, 61_2005-69` је PIS-ово означавање) или преписи са воденим знаком
-  paragraf.rs-а. Ниједан од њих није извор из гласника.
+**Five laws the task asked for — the Labour Act, the Consumer Protection Act, the
+Road Traffic Safety Act, the Family Act and the Act on Obligations — are not in the
+pack, because their original text from the Gazette could not be downloaded as
+text.** The task's rule is that a law is left out when its original cannot be
+downloaded from the Gazette, and that is what was done. The reason, per source:
 
-Исти проверани гласнички PDF („Zakon o socijalnoj zaštiti”, „Сл. гласник РС”
-бр. 24/2011) користи се као **фикстура** за тестове конвертора: то је стварна
-страница гласника са Указом о проглашењу, у ћирилици, са текстуалним слојем.
+- **Pravno-informacioni sistem (PIS)** is the source the task forbids, and it is a
+  JavaScript application as well: a plain request returns only the application
+  shell, not the document.
+- **Consolidated texts from commercial publishers (paragraf.rs and similar)** are
+  forbidden, and an independent regulation browser (slglasnik.info) takes exactly
+  such text from PIS ("Official source: Pravno-informacioni sistem RS").
+- **slglasnik.com**, the Gazette's publisher, cannot be reached from this
+  environment: its TLS chain is incomplete (`unable to verify the first
+  certificate`), so Node cannot verify the certificate, and the script must not
+  ignore that.
+- **PDFs on ministry websites** that were inspected are sometimes Gazette pages
+  (for example *Zakon o socijalnoj zaštiti*, *Službeni glasnik RS* no. 24/2011),
+  but for the requested laws they are either `docx` exports from a database (a
+  name such as `24_2005-3, 61_2005-69` is PIS's own labelling) or copies bearing
+  the paragraf.rs watermark. None of them is a source from the Gazette.
 
-**Ништа није спајано у пречишћени текст.** Ни пакет ни било који алат не
-састављају закон од оригинала и измена; у пакет улази само текст онако како га
-извор објављује.
+The same verified Gazette PDF (*Zakon o socijalnoj zaštiti*, *Službeni glasnik RS*
+no. 24/2011) serves as a **fixture** for the converter tests: it is a real Gazette
+page with the promulgation decree, in Cyrillic, with a text layer.
 
-## Како се пакет поново гради
+**Nothing is merged into a consolidated text.** Neither the pack nor any tool
+assembles a law from the original and its amendments. The pack contains the text
+as the source publishes it.
+
+## How the pack is rebuilt
 
 ```bash
 node scripts/packs/reference/build.mjs --id reference-sr
 ```
 
-- Преузима изворе у `~\.nexus-pack-cache\reference-sr\` и поново користи већ
-  преузето; `--refresh` поново преузима.
-- Пише фасциклу пакета у `~\.nexus-packs\reference-sr\` и метаподатке за
-  потписивање у `~\.nexus-packs\reference-sr.meta.json`.
-- Поново пише `scripts/packs/reference/sources.reference-sr.json`.
-- `--fixtures` поново кроји фикстуре тестова у
-  `scripts/packs/reference/fixtures/` из истих бајтова.
+- Downloads the sources into `~\.nexus-pack-cache\reference-sr\` and reuses what
+  is already there; `--refresh` downloads them again.
+- Writes the pack folder to `~\.nexus-packs\reference-sr\` and the signing metadata
+  to `~\.nexus-packs\reference-sr.meta.json`.
+- Rewrites `scripts/packs/reference/sources.reference-sr.json`.
+- `--fixtures` regenerates the test fixtures in `scripts/packs/reference/fixtures/`
+  from the same bytes.
 
 ```bash
 node scripts/pack-sign.mjs --dir "~\.nexus-packs\reference-sr" \
   --meta "~\.nexus-packs\reference-sr.meta.json" --key <private-key.pem>
 ```
 
-## Како се пакет држи поштеним
+## How the pack is kept honest
 
-Исте четири провере као и у енглеском пакету заустављају грађење уместо да
-произведу пакет који неко мора накнадно да примети као неисправан:
+The same four checks as in the English pack stop the build, rather than producing
+a pack that someone would later have to notice was wrong:
 
-1. **Верност текста (fidelity).** За сваки чланак, Markdown без обележја и са
-   нормализованим размацима мора да буде једнак тексту дела извора из кога је
-   претворен, нормализованом на исти начин.
-2. **Покривеност.** Сваки пасус, наслов, ставка листе и ћелија табеле изабраног
-   дела мора да се појави у чланку — чита их други, равнији пролаз кроз
-   структуру, што хвата селектор који је испустио пасус.
-3. **Селектори морају да ухвате нешто.** Контејнер, селектор опреме странице
-   или гранични маркер који не ухвати ништа обара грађење.
-4. **Извор без доказа о лиценци није извор.**
+1. **Fidelity.** For each article, the Markdown with its markup removed and the
+   whitespace normalised must equal the text of the part of the source it was
+   converted from, normalised the same way.
+2. **Coverage.** Every paragraph, heading, list item and table cell of the selected
+   part must appear in the article. A second, flatter pass over the structure reads
+   them, which catches a selector that dropped a paragraph.
+3. **Selectors must catch something.** A container, page-furniture selector or
+   boundary marker that catches nothing fails the build.
+4. **A source without licence evidence is not a source.**
 
-`scripts/packs/reference/convert.test.mjs`, `fidelity.test.mjs` и
-`pack.test.mjs` (46 тестова) возе исти код преко фикстура кројених из ових
-извора: страница УН-а, датотека Службеног листа ЕУ и акт из гласника.
+`scripts/packs/reference/convert.test.mjs`, `fidelity.test.mjs` and `pack.test.mjs`
+(47 tests, run on 2026-10-15) run the same code over fixtures cut from these
+sources: a UN page, an EU Official Journal file and a Gazette act.
 
-## Измерено
+## Measured
 
-Грађење од 10. 10. 2026. на овом рачунару: 2 чланка, 2 улаза у садржају,
-224 667 бајтова чланака и `content.json` (219 KiB); `content.json` 904 бајта;
-метаподаци 1 420 бајтова; евиденција лиценци 3 432 бајта. Устав 205 851 бајт,
-Декларација 17 912 бајтова.
+A build on 10 October 2026 on this machine: 2 articles, 2 entries in the table of
+contents, 224 667 bytes of articles and `content.json` (219 KiB); `content.json`
+904 bytes; metadata 1 420 bytes; licence register 3 432 bytes. The Constitution
+205 851 bytes, the Declaration 17 912 bytes. The pack folder is not on this machine
+today, so these are the figures of that build, not a fresh measurement.
 
-Лиценца пакета: **CC BY-SA 4.0**, са приписивањем у `pack.json` које именује
-Уставни суд Републике Србије (званични текст), Викизворник на српском и
-Уједињене нације. Званични текстови остају званични текстови и у пакету.
+Pack licence: **CC BY-SA 4.0**, with attribution in `pack.json` that names the
+Constitutional Court of the Republic of Serbia (the official text), Wikisource in
+Serbian and the United Nations. Official texts remain official texts in the pack.
