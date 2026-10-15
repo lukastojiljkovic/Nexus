@@ -31,6 +31,14 @@
  * (`budget.ts` refuses a request that cannot fit), `model-failed`, `step-limit`,
  * or the user's own abort.
  *
+ * **A refusal is remembered for the rest of the turn.** A tool that has to ask
+ * (`write`, `network`: `ToolContext.confirm`) would otherwise have the user
+ * answer one question twice, because a local model repeats the call it was just
+ * refused often enough to be worth guarding against. The loop keeps those "no"s
+ * (`refusals.ts`): a repeat of a refused call is answered without running the
+ * tool and without asking again. A call with other arguments is a new question
+ * and is asked normally, and the memory is gone by the next user message.
+ *
  * **A tool call is never lost to the step limit.** The limit counts MODEL calls;
  * a final call that still asks for tools has those tools run and its results
  * emitted, and then the turn stops with `step-limit`. Discarding a call the
@@ -54,6 +62,7 @@ import {
 } from "./budget.js";
 import { createFenceBoundary, fenceUntrusted, isFenced } from "./fence.js";
 import { buildSystemPrompt } from "./prompts.js";
+import { createRefusalMemory } from "./refusals.js";
 import { validateToolArguments } from "./schema.js";
 import { parseToolCalls } from "./toolCalls.js";
 import {
@@ -63,6 +72,7 @@ import {
   toolSpecTokens,
 } from "./toolChoice.js";
 import type { MeasuredUsage } from "./budget.js";
+import type { RefusalMemory } from "./refusals.js";
 import type {
   AgentEvent,
   ChatMessage,
@@ -132,6 +142,8 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     const nextCallId = options.newCallId ?? ((): string => `call_${(sequence += 1)}`);
 
     const citations = new CitationList();
+    // One turn, one memory of what the user refused: see `refusals.ts`.
+    const refusals = createRefusalMemory();
     let hits: readonly KnowledgeHit[] = [];
     try {
       const found = await input.knowledge.search(
@@ -296,7 +308,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
 
       pending.push({ role: "assistant", content: text, toolCalls: calls });
       for (const call of calls) emit({ type: "tool-call", call });
-      const outcome = await runToolCalls(calls, offeredTools, input.context, emit);
+      const outcome = await runToolCalls(calls, offeredTools, input.context, emit, refusals);
       if (outcome.aborted) {
         stopped();
         return;
@@ -352,14 +364,19 @@ type ToolOutcome =
  *
  * Parallel because two reads have no reason to queue; ordered because a page
  * (and a test) should not see the results of a step reshuffled by whichever
- * tool was faster. A refusal is not here at all: `ToolContext.confirm` is the
- * tool's own question, and the tool decides what a „no" means.
+ * tool was faster. A refusal is the tool's own business: `ToolContext.confirm`
+ * is its question, and the tool decides what the answer means for its result.
+ *
+ * The one thing this adds to that is the turn's memory of the refusals already
+ * given (`refusals.ts`): a call the user has said no to is answered here, because
+ * running the tool would ask them the same question a second time.
  */
 async function runToolCalls(
   calls: readonly ToolCall[],
   tools: readonly Tool[],
   context: ToolContext,
   emit: (event: AgentEvent) => void,
+  refusals: RefusalMemory,
 ): Promise<ToolOutcome> {
   const names = tools.map((tool) => tool.name);
   const settled = await Promise.all(
@@ -376,6 +393,13 @@ async function runToolCalls(
           },
         };
       }
+      // Before the schema check, because a call in this memory matched its
+      // schema when the user was asked about it: what the model has to hear now
+      // is that the question was answered, not that its arguments look odd.
+      const declined = refusals.alreadyDeclined(call);
+      if (declined !== undefined) {
+        return { aborted: false, entry: { call, result: declined } };
+      }
       const check = validateToolArguments(tool.parameters, call.arguments);
       if (!check.ok) {
         return {
@@ -389,7 +413,7 @@ async function runToolCalls(
         };
       }
       try {
-        const result = await tool.run(check.value, context);
+        const result = await tool.run(check.value, refusals.contextFor(call, context));
         if (context.signal.aborted) {
           return { aborted: true, entry: { call, result } };
         }

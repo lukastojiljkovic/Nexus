@@ -12,6 +12,7 @@ function result(overrides: Partial<ScenarioResult> & Pick<ScenarioResult, "id">)
     tokens: { prompt: 10, completion: 2, estimated: false },
     durationMs: 1,
     finalText: "",
+    confirmations: [],
     expectations: [],
     ...overrides,
   };

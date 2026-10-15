@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { runAgentTurn } from "@nexus/core";
+
 import { createHarness } from "./harness.js";
 import { parseScenario, type Scenario } from "./scenario.js";
 import { createScriptedModel, referenceRunAgentTurn, type ScriptedModel } from "./scripted.js";
@@ -125,6 +127,52 @@ describe("createHarness", () => {
     expect(capture.model?.requests[1]?.messages.at(-1)?.content).toBe(
       "Korisnik je odbio. Nista nije promenjeno.",
     );
+  });
+
+  it("asks once when the model repeats a call the user refused, through the real loop", async () => {
+    // The one scenario the scripted mode cannot score: `scripted.ts` is a
+    // stand-in that implements none of the loop's own rules, so the real loop
+    // runs here, and the harness's own `confirm` is what counts the questions.
+    const capture: { model?: ScriptedModel } = {};
+    const result = await createHarness({
+      runAgentTurn,
+      modelFor: (current) => {
+        const model = createScriptedModel(current.script);
+        capture.model = model;
+        return model;
+      },
+    }).runScenario(
+      scenario({
+        conversation: [{ role: "user", content: "Dodaj zadatak da kupim vodu." }],
+        tools: [
+          {
+            name: "tasks.create",
+            effect: "write",
+            summary: { sr: "Dodaću zadatak „Kupi vodu“.", en: "I will add the task “Buy water”." },
+            content: "Task created: Kupi vodu.",
+          },
+        ],
+        confirmations: [false],
+        maxSteps: 3,
+        expect: {
+          toolsCalled: [{ name: "tasks.create", args: { title: { eq: "Kupi vodu" } } }],
+          answerContains: ["nisam dodao"],
+          language: "sr",
+          maxSteps: 3,
+        },
+        script: [
+          { toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+          { toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+          { text: "U redu, nisam dodao zadatak. Ništa nije promenjeno." },
+        ],
+      }),
+    );
+
+    expect(result.passed).toBe(true);
+    expect(result.confirmations).toEqual([{ tool: "tasks.create", approved: false }]);
+    // The repeat never reached the tool: the model reads the loop's own answer
+    // to it, and not the refusal sentence a second run would have produced.
+    expect(capture.model?.requests[2]?.messages.at(-1)?.content).toContain("already refused");
   });
 
   it("recovers from a tool that throws, and hands the failure to the model", async () => {
