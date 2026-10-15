@@ -1423,7 +1423,7 @@ function CollectionManager({
         </Button>
       </form>
       {collections.length === 0 ? (
-        <p className="nx-hint">{copy.collections.empty}</p>
+        <EmptyState variant="inline" title={copy.collections.empty} />
       ) : (
         <div className="cookbook__list">
           {collections.map((shelf) => (
