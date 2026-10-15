@@ -202,6 +202,7 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
           conversationId: thread.conversation.id,
           text: trimmed,
           workflowId,
+          location: null,
         });
         cursor.current = 0;
         turnEvents.current = [];

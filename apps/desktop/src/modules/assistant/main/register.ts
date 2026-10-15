@@ -62,6 +62,9 @@ import {
   TurnUnknownError,
 } from "./turns.js";
 
+/** The shape of a module id (`shared/manifest.ts`): what `send`'s `location` must look like. */
+const MODULE_ID = /^[a-z][a-z0-9-]{0,39}$/;
+
 /**
  * THE ASSISTANT in the main process (ADR-106): its handlers, its turn engine,
  * its confirmations, its archive section and the lifetime of the services it
@@ -439,6 +442,10 @@ export function register(host: ModuleHostSurface): void {
       throw new Error('Invalid IPC payload: "text" must not be blank.');
     }
     const workflowId = call.as.asNullableString(payload.workflowId, "workflowId");
+    // A module id or nothing: it is written into the system prompt, so anything
+    // that is not an id's shape is dropped rather than quoted to the model.
+    const location = call.as.asNullableString(payload.location, "location");
+    const page = location !== null && MODULE_ID.test(location) ? location : null;
     const workflow = workflowId === null ? null : (findWorkflow(workflowId) ?? null);
     if (workflowId !== null && workflow === null) {
       throw new Error(`There is no assistant workflow named "${workflowId}".`);
@@ -508,6 +515,7 @@ export function register(host: ModuleHostSurface): void {
       },
       maxSteps: DEFAULT_MAX_STEPS,
       today: localDay(services().now()),
+      ...(page === null ? {} : { location: page }),
     };
 
     // Unawaited: the page polls. The failure of a whole turn is caught here and

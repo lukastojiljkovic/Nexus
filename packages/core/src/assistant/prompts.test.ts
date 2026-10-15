@@ -132,6 +132,14 @@ describe("buildSystemPrompt", () => {
     expect(prompt({ today: "2026-10-14", maxSteps: 2 })).toContain("Today is Wednesday, 2026-10-14.");
   });
 
+  it("names the page open beside the assistant, and only when there is one", () => {
+    // A docked turn only: the four ceilings above are the assistant's own page.
+    expect(prompt({ maxSteps: 2, location: "canvas" })).toContain(
+      'The user has the canvas page open: "this" and "here" mean that page.',
+    );
+    expect(prompt({ maxSteps: 2 })).not.toContain("page open:");
+  });
+
   it("names the offered tools, grouped by what they do to the app", () => {
     const built = prompt({ reply: EN, tools: [TOOL, WRITE_TOOL], maxSteps: 3 });
     expect(built).toContain("You reach the app only through the tools offered with this message.");

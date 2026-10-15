@@ -262,6 +262,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       tools: offered,
       maxSteps: input.maxSteps,
       today: input.today,
+      ...(input.location === undefined ? {} : { location: input.location }),
     });
     // The loop owns the system prompt, so a system message that arrived in the
     // history would be a second, invisible instruction set beside it.

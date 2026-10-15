@@ -49,7 +49,7 @@ import type { ReplyLanguage } from "./language.js";
  * The prompt's name, bumped whenever the text below changes in a way a score
  * could notice. `assistant-<date>.<serial>`, so two runs of one day sort.
  */
-export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.4";
+export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.5";
 
 /**
  * The sentence an answer carries when it draws on a pack whose `notice` is
@@ -82,6 +82,8 @@ export interface SystemPromptOptions {
   readonly maxSteps: number;
   /** The user's local day, `YYYY-MM-DD`. A model has no clock, and a task due „tomorrow" needs one. */
   readonly today: string;
+  /** The module whose page is open beside the assistant, if any (`AgentTurnInput.location`). */
+  readonly location?: string;
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
@@ -138,6 +140,9 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     [
       `You are the assistant built into the Nexus app, running on the user's own computer: offline unless the user turned on web search, with no account elsewhere. Prompt version ${SYSTEM_PROMPT_VERSION}.`,
       `Today is ${dayWithWeekday(options.today)}. Work out relative days ("tomorrow", "next Monday") from it, and give a tool a day as YYYY-MM-DD.`,
+      ...(options.location === undefined
+        ? []
+        : [`The user has the ${options.location} page open: "this" and "here" mean that page.`]),
     ].join("\n"),
     [
       `# Language`,
