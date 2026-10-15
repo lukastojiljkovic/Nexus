@@ -1224,6 +1224,14 @@ export type {
   RecipeUnitSystem,
 } from "./cookbook/recipeStore.js";
 
+// --- COOK collections (migration 095) ----------------------------------------
+//
+// The shelves a recipe may sit on. Its own store, beside `RecipeStore`, because
+// a shelf is not a recipe's field: it has its own rows, its own CRUD and its own
+// pack seed.
+export { CollectionStore } from "./cookbook/collectionStore.js";
+export type { CollectionWithRecipes } from "./cookbook/collectionStore.js";
+
 // --- MINI-APPS (migration 083) -----------------------------------------------
 //
 // ONE store over ONE table, because the nine small tools' kept state is one

@@ -72,6 +72,14 @@
   gap: var(--nx-space-2);
 }
 
+/* A recipe's shelves, and the shelf manager's name-and-buttons rows. */
+.cookbook__shelves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: flex-end;
+}
+
 /* The servings stepper: a numeric box beside two bare buttons, so the controls
    line up at the end (`check:rows`). */
 .cookbook__servings {

@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   EmptyState,
   Icon,
   ListRow,
@@ -25,6 +26,7 @@ import { numberFormat } from "../../../renderer/src/intl.js";
 import { useFocusTrap } from "../../../renderer/src/useFocusTrap.js";
 import { manifest } from "../shared/manifest.js";
 import type {
+  CollectionView,
   CookbookView,
   FoodSuggestionView,
   NutritionView,
@@ -75,6 +77,9 @@ import "./cookbook.css";
  * says which read failed and what to try — never a raw exception.
  */
 
+/** One mutation: the API call, answering with the list view every mutation answers with. */
+type CookbookAction = (api: typeof window.nexus.modules.cookbook) => Promise<CookbookView>;
+
 export default function CookbookPage({ profileId }: ModulePageProps) {
   const [view, setView] = useState<CookbookView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +92,8 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   const [editing, setEditing] = useState<null | { id: string | null }>(null);
   const [cooking, setCooking] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** The shelf the list is filtered to, or null for every recipe. */
+  const [shelf, setShelf] = useState<string | null>(null);
 
   /**
    * One read of the list, into state. Every mutation answers with the same
@@ -94,9 +101,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
    * was told, never what it hoped.
    */
   const run = useCallback(
-    async (
-      action: (api: typeof window.nexus.modules.cookbook) => Promise<CookbookView>,
-    ): Promise<void> => {
+    async (action: CookbookAction): Promise<void> => {
       try {
         setView(await action(window.nexus.modules.cookbook));
         setError(null);
@@ -178,7 +183,12 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   }
 
   const recipes = view?.recipes ?? [];
-  const shown = hits ?? recipes;
+  // A shelf that no longer exists (deleted in another window) filters nothing,
+  // rather than hiding every recipe behind a name the list no longer offers.
+  const shelfIds = view?.collections.find((candidate) => candidate.id === shelf)?.recipeIds;
+  const shown = (hits ?? recipes).filter(
+    (recipe) => shelfIds === undefined || shelfIds.includes(recipe.id),
+  );
 
   return (
     <div className="cookbook">
@@ -208,6 +218,20 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
               onChange={(event) => void search(event.target.value)}
             />
             <p className="nx-hint">{copy.list.searchHint}</p>
+            {view.collections.length > 0 && (
+              <Select
+                label={copy.collections.filter}
+                value={shelf ?? ""}
+                onChange={(event) => setShelf(event.target.value === "" ? null : event.target.value)}
+              >
+                <option value="">{copy.collections.all}</option>
+                {view.collections.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+              </Select>
+            )}
             {recipes.length === 0 ? (
               <EmptyState
                 variant="inline"
@@ -215,7 +239,9 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
                 description={copy.list.emptyBody}
               />
             ) : shown.length === 0 ? (
-              <p className="nx-hint">{copy.list.noResults}</p>
+              <p className="nx-hint">
+                {shelfIds === undefined ? copy.list.noResults : copy.collections.emptyShelf}
+              </p>
             ) : (
               <div className="cookbook__list">
                 {shown.map((recipe) => (
@@ -278,6 +304,17 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
                 onEdit={() => setEditing({ id: detail.id })}
                 onDelete={() => setDeleting(true)}
                 onClose={() => setDetail(null)}
+                collections={view.collections}
+                onShelf={(collectionId, member) =>
+                  void run((api) =>
+                    api.setInCollection({
+                      profileId,
+                      collectionId,
+                      recipeId: detail.id,
+                      member,
+                    }),
+                  )
+                }
                 onPhoto={() =>
                   void run(async (api) => {
                     const next = await api.attachPhoto({ profileId, id: detail.id });
@@ -307,7 +344,17 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
             </>
           )}
 
-          <Packs profileId={profileId} onSaved={(id) => void open(id)} />
+          <CollectionManager profileId={profileId} collections={view.collections} onRun={run} />
+
+          <Packs
+            profileId={profileId}
+            onSaved={(id) => {
+              // A copied pack recipe lands on its pack's shelf, which the list
+              // must show: the open is not enough.
+              void refresh();
+              void open(id);
+            }}
+          />
         </>
       )}
 
@@ -358,6 +405,8 @@ function RecipeDetail({
   onClose,
   onPhoto,
   onRemovePhoto,
+  collections,
+  onShelf,
 }: {
   recipe: RecipeView;
   servings: number;
@@ -368,9 +417,13 @@ function RecipeDetail({
   onClose: () => void;
   onPhoto: () => void;
   onRemovePhoto: () => void;
+  collections: readonly CollectionView[];
+  onShelf: (collectionId: string, member: boolean) => void;
 }) {
   const factor = factorFor(recipe, servings);
   const total = timeOf(recipe);
+  const onThese = collections.filter((shelf) => shelf.recipeIds.includes(recipe.id));
+  const notOnThese = collections.filter((shelf) => !shelf.recipeIds.includes(recipe.id));
 
   return (
     <Card className="cookbook__card" title={copy.detail.title}>
@@ -388,6 +441,39 @@ function RecipeDetail({
             {tag}
           </Chip>
         ))}
+      </div>
+
+      <div className="cookbook__shelves">
+        {onThese.map((shelf) => (
+          <Chip key={shelf.id} variant="data">
+            {shelf.name}
+            <Button
+              size="sm"
+              variant="quiet"
+              aria-label={`${copy.collections.remove}: ${shelf.name}`}
+              onClick={() => onShelf(shelf.id, false)}
+            >
+              ×
+            </Button>
+          </Chip>
+        ))}
+        {notOnThese.length > 0 && (
+          <Select
+            label={copy.collections.addTo}
+            layout="inline"
+            value=""
+            onChange={(event) => {
+              if (event.target.value !== "") onShelf(event.target.value, true);
+            }}
+          >
+            <option value="">{copy.collections.choose}</option>
+            {notOnThese.map((shelf) => (
+              <option key={shelf.id} value={shelf.id}>
+                {shelf.name}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <div className="cookbook__servings">
@@ -1293,6 +1379,113 @@ function minuteOf(text: string): number | null {
   const value = Number(trimmed);
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.min(10_080, Math.round(value));
+}
+
+// --- Zbirke -------------------------------------------------------------------
+
+/**
+ * The manage view for the shelves: create one, rename one, delete one. A shelf
+ * goes through the kit's confirm dialog, because the one fact a person needs
+ * before answering is that the recipes on it stay.
+ */
+function CollectionManager({
+  profileId,
+  collections,
+  onRun,
+}: {
+  profileId: string;
+  collections: readonly CollectionView[];
+  onRun: (action: CookbookAction) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState<CollectionView | null>(null);
+
+  return (
+    <Card className="cookbook__card" title={copy.collections.title}>
+      <p className="nx-hint">{copy.collections.intro}</p>
+      <form
+        className="cookbook__shelves"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const name = draft.trim();
+          if (name === "") return;
+          setDraft("");
+          void onRun((api) => api.createCollection({ profileId, name }));
+        }}
+      >
+        <TextField
+          label={copy.collections.newName}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <Button type="submit" variant="primary">
+          {copy.collections.create}
+        </Button>
+      </form>
+      {collections.length === 0 ? (
+        <p className="nx-hint">{copy.collections.empty}</p>
+      ) : (
+        <div className="cookbook__list">
+          {collections.map((shelf) => (
+            <ShelfRow
+              key={shelf.id}
+              name={shelf.name}
+              onRename={(name) =>
+                void onRun((api) => api.renameCollection({ profileId, id: shelf.id, name }))
+              }
+              onDelete={() => setPending(shelf)}
+            />
+          ))}
+        </div>
+      )}
+      {pending !== null && (
+        <ConfirmDialog
+          title={copy.collections.deleteTitle}
+          name={pending.name}
+          question={copy.collections.deleteQuestion}
+          confirmLabel={copy.confirm.confirm}
+          cancelLabel={copy.confirm.cancel}
+          destructive
+          onCancel={() => setPending(null)}
+          onConfirm={() => {
+            const id = pending.id;
+            setPending(null);
+            void onRun((api) => api.removeCollection({ profileId, id }));
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** One shelf's name, editable in place; the draft is a copy, so a rename is one explicit save. */
+function ShelfRow({
+  name,
+  onRename,
+  onDelete,
+}: {
+  name: string;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const [text, setText] = useState(name);
+  const trimmed = text.trim();
+
+  return (
+    <div className="cookbook__shelves">
+      <TextField
+        label={copy.collections.name}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+      />
+      <Button size="sm" disabled={trimmed === "" || trimmed === name} onClick={() => onRename(trimmed)}>
+        {copy.collections.rename}
+      </Button>
+      <Button size="sm" variant="danger" onClick={onDelete}>
+        {copy.collections.delete}
+      </Button>
+    </div>
+  );
 }
 
 // --- Potvrda brisanja ---------------------------------------------------------
