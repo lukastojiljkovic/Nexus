@@ -346,12 +346,125 @@ describe("the loop's scripted conversations", () => {
     ]);
     const events = await turn({ model, tools: [create] });
 
-    expect(of(events, "tool-result")[0]?.result.ok).toBe(false);
-    expect(of(events, "tool-result")[0]?.result.content).toBe(
-      "Invalid arguments for tasks.create: /title: expected string, got number. Call it again with arguments that match its schema.",
+    const result = of(events, "tool-result")[0]?.result;
+    expect(result?.ok).toBe(false);
+    // The finding names the field, what the schema expects of every field is
+    // read off the schema itself, and the failed call is NOT repeated: a small
+    // model copies a call that sits in its context back verbatim.
+    expect(result?.content).toBe(
+      "Invalid arguments for tasks.create: /title: expected string, got number. Its arguments are: title (required): text. Call it again with the corrected arguments, or tell the user what is missing.",
     );
+    expect(result?.content).not.toContain("7");
     expect(create.seen).toEqual([]);
     expect(of(events, "done")[0]?.stopReason).toBe("end");
+  });
+
+  it("drops an optional argument the model left empty, and runs the call", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1 },
+        description: { type: "string", description: "Anything else about it." },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          {
+            id: "c1",
+            name: "tasks.create",
+            arguments: { title: "Kupi vodu", description: "" },
+          },
+        ],
+      },
+      { text: "Dodato." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    // `description: ""` is what a model writes when the grammar forces the key
+    // and it has nothing to say, and an empty optional string is not a value
+    // the tool asked for: the call runs, without the key.
+    expect(of(events, "tool-result")[0]?.result.ok).toBe(true);
+    expect(create.seen).toEqual([{ title: "Kupi vodu" }]);
+  });
+
+  it("resolves a day word in a day field against the turn's own date", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1 },
+        due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          {
+            id: "c1",
+            name: "tasks.create",
+            arguments: { title: "Kupi vodu", due: "tomorrow" },
+          },
+        ],
+      },
+      { text: "Dodato." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    // `turn` pins today at 2026-10-14.
+    expect(of(events, "tool-result")[0]?.result.ok).toBe(true);
+    expect(create.seen).toEqual([{ title: "Kupi vodu", due: "2026-10-15" }]);
+  });
+
+  it("answers a tool's second refusal by name, and does not run its third call", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: { title: { type: "string", minLength: 1 } },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const wrong = { title: 7 };
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: wrong }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: wrong }] },
+      { toolCalls: [{ id: "c3", name: "tasks.create", arguments: wrong }] },
+      { text: "Nisam ga dodao." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    const twice =
+      "tasks.create failed twice this turn. Do not call it again: tell the user it was not done and why.";
+    const results = of(events, "tool-result").map((event) => event.result.content);
+    expect(results).toHaveLength(3);
+    expect(results[0]).toContain("Invalid arguments for tasks.create:");
+    expect(results[1]).toBe(twice);
+    // The third call is answered without being read, and never runs.
+    expect(results[2]).toBe(twice);
+    expect(create.seen).toEqual([]);
+    expect(model.requests).toHaveLength(4);
+    expect(of(events, "done")[0]?.stopReason).toBe("end");
+  });
+
+  it("counts refusals per tool, so one tool's refusal does not silence another", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: { title: { type: "string", minLength: 1 } },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const list = makeTool("tasks.list", { ok: true, content: "two tasks" });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: 7 } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.list", arguments: {} }] },
+      { text: "Evo." },
+    ]);
+    const events = await turn({ model, tools: [create, list] });
+
+    expect(of(events, "tool-result")[1]?.result.ok).toBe(true);
+    expect(list.seen).toEqual([{}]);
   });
 
   it("stops at the step limit, having run the last call it was asked for", async () => {

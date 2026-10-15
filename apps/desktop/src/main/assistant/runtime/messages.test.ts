@@ -1,12 +1,15 @@
 import type { ChatMessage, ToolSpec } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
+import { createModuleRegistry } from "../../../shared/modules.js";
+import { createToolRegistry } from "../tools/index.js";
 import {
   TOOL_CALL_FENCE,
   chatHistoryFrom,
   createFenceFilter,
   fallbackToolsBlock,
   functionsFrom,
+  grammarSchemaFor,
   parsedCall,
   stopReasonFrom,
   toolCallIdFor,
@@ -108,12 +111,255 @@ describe("chatHistoryFrom", () => {
 });
 
 describe("functionsFrom", () => {
-  it("gives the model the English description and the schema it was given", () => {
+  it("gives the model the English description and the schema it decodes under", () => {
     const functions = functionsFrom([TOOL]);
     expect(functions["tasks.create"]?.description).toBe("Creates a task");
+    // The grammar copy, not the tool's own schema — the same document here,
+    // because a required string has nothing to translate.
     expect(functions["tasks.create"]?.params).toEqual(TOOL.parameters);
   });
 });
+
+/**
+ * The grammar a tool call decodes under.
+ *
+ * node-llama-cpp compiles a function's `params` into GBNF and forces every key
+ * in `properties` — its own `types.d.ts` says „`required` is always set to all
+ * keys in `properties`, and setting it has no effect" — so an optional property
+ * handed over unchanged is one the model MUST fill, and the value a small model
+ * writes for a field it has nothing to say about is `""`. The second gap is a
+ * `pattern`: the grammar's string schema knows `minLength`, `maxLength` and
+ * `format`, and no regular expression, so a day spelled as a pattern would let
+ * the model write „tomorrow" there.
+ */
+describe("grammarSchemaFor", () => {
+  const DAY = "^\\d{4}-\\d{2}-\\d{2}$";
+
+  it("hands an optional property to the grammar as a choice with null", () => {
+    expect(
+      grammarSchemaFor({
+        type: "object",
+        properties: { note: { type: "string", description: "A note." } },
+        required: [],
+        additionalProperties: false,
+      }),
+    ).toEqual({
+      type: "object",
+      properties: {
+        // The library's own guidance for an optional value, with the
+        // description moved where the model reads it.
+        note: {
+          oneOf: [{ type: "string" }, { type: "null" }],
+          description: "A note. Null when not given.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    });
+  });
+
+  it("leaves a required property exactly as the tool declared it", () => {
+    expect(
+      grammarSchemaFor({
+        type: "object",
+        properties: { title: { type: "string", description: "What it is." } },
+        required: ["title"],
+        additionalProperties: false,
+      }),
+    ).toEqual({
+      type: "object",
+      properties: { title: { type: "string", description: "What it is." } },
+      required: ["title"],
+      additionalProperties: false,
+    });
+  });
+
+  it("reads a day spelled as a pattern as the format the grammar knows", () => {
+    expect(grammarSchemaFor({ type: "string", pattern: DAY, description: "The day." })).toEqual({
+      type: "string",
+      format: "date",
+      description: "The day.",
+    });
+    // A day that may also be cleared (`tasks.reschedule.due`) keeps both
+    // branches, and an optional property built on it adds no third one.
+    expect(grammarSchemaFor({ type: ["string", "null"], pattern: DAY })).toEqual({
+      oneOf: [{ type: "string", format: "date" }, { type: "null" }],
+    });
+    expect(
+      grammarSchemaFor({
+        type: "object",
+        properties: { due: { type: ["string", "null"], pattern: DAY, description: "The new day." } },
+        required: [],
+        additionalProperties: false,
+      }),
+    ).toEqual({
+      type: "object",
+      properties: {
+        due: {
+          oneOf: [{ type: "string", format: "date" }, { type: "null" }],
+          description: "The new day. Null when not given.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    });
+  });
+
+  it("drops a pattern the grammar cannot express, and keeps the rest", () => {
+    expect(
+      grammarSchemaFor({
+        type: "string",
+        pattern: "^[A-Za-z]{3}$",
+        maxLength: 3,
+        description: "A currency.",
+      }),
+    ).toEqual({ type: "string", maxLength: 3, description: "A currency." });
+  });
+
+  it("descends into nested objects and into the objects of an array", () => {
+    expect(
+      grammarSchemaFor({
+        type: "object",
+        properties: {
+          task: {
+            type: "object",
+            properties: { note: { type: "string", description: "A note." } },
+            additionalProperties: false,
+          },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { due: { type: "string", pattern: DAY } },
+              required: ["due"],
+              additionalProperties: false,
+            },
+            description: "The items.",
+          },
+        },
+        required: ["task", "items"],
+        additionalProperties: false,
+      }),
+    ).toEqual({
+      type: "object",
+      properties: {
+        task: {
+          type: "object",
+          properties: {
+            note: {
+              oneOf: [{ type: "string" }, { type: "null" }],
+              description: "A note. Null when not given.",
+            },
+          },
+          additionalProperties: false,
+        },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { due: { type: "string", format: "date" } },
+            required: ["due"],
+            additionalProperties: false,
+          },
+          description: "The items.",
+        },
+      },
+      required: ["task", "items"],
+      additionalProperties: false,
+    });
+  });
+
+  it("does not change the schema it was given", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        due: { type: "string", pattern: DAY, description: "The day." },
+        note: { type: "string" },
+      },
+      required: ["due"],
+      additionalProperties: false,
+    };
+    const before = JSON.stringify(schema);
+    grammarSchemaFor(schema);
+    expect(JSON.stringify(schema)).toBe(before);
+  });
+});
+
+/**
+ * The real registry, built from the fakes its own test builds it from.
+ *
+ * Reading a tool's schema needs no database: `parameters` is a declaration and
+ * nothing here calls `run`, so the store seam is a stub that refuses to be used
+ * rather than the temporary profile database `tools/index.test.ts` keeps open
+ * for the calls it makes.
+ */
+function realTools(): readonly ToolSpec[] {
+  return createToolRegistry({
+    profileDb: () => {
+      throw new Error("The grammar test never opens a profile database.");
+    },
+    now: () => 0,
+    search: () => Promise.resolve([]),
+    packs: { list: () => Promise.resolve([]) },
+    timers: {
+      startCountdown: () => {
+        throw new Error("The grammar test never starts a countdown.");
+      },
+      listCountdowns: () => [],
+    },
+    modules: createModuleRegistry(),
+    web: null,
+  }).tools({ web: false });
+}
+
+/**
+ * Every tool the app ships, under the grammar: a schema this translation
+ * mishandled would be a call the model decodes wrongly, tool by tool and
+ * invisible until a user meets it.
+ */
+describe("the grammar of every tool the registry declares", () => {
+  it("leaves no pattern behind, and makes every optional property nullable", () => {
+    const tools = realTools();
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      walkGrammar(grammarSchemaFor(tool.parameters), tool.name);
+    }
+  });
+});
+
+/**
+ * A converted schema, walked node by node: no `pattern` survives anywhere, and
+ * every property an object does not require is a choice with null in it.
+ */
+function walkGrammar(node: Record<string, unknown>, path: string): void {
+  expect(Object.hasOwn(node, "pattern"), `${path}.pattern`).toBe(false);
+  const branches = node["oneOf"];
+  if (Array.isArray(branches)) {
+    branches.forEach((branch, index) => {
+      if (isNode(branch)) walkGrammar(branch, `${path}/${index}`);
+    });
+  }
+  const items = node["items"];
+  if (isNode(items)) walkGrammar(items, `${path}/items`);
+  const properties = node["properties"];
+  if (!isNode(properties)) return;
+  const required = Array.isArray(node["required"]) ? node["required"] : [];
+  for (const [name, property] of Object.entries(properties)) {
+    if (!isNode(property)) continue;
+    if (!required.includes(name)) {
+      const ways = property["oneOf"];
+      const nullable =
+        Array.isArray(ways) &&
+        ways.some((way) => isNode(way) && way["type"] === "null");
+      expect(nullable, `${path}/${name} must be able to be null`).toBe(true);
+    }
+    walkGrammar(property, `${path}/${name}`);
+  }
+}
+
+function isNode(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 describe("stop reasons and call ids", () => {
   it("maps llama.cpp's four endings onto the contract's", () => {
