@@ -259,7 +259,7 @@ interface SendPayload {
   /** One of `ASSISTANT_WORKFLOWS`' ids, or `null` for a free question. */
   workflowId: string | null;
   /** The module whose page is open beside the assistant, or `null` on its own page. */
-  location: string | null;
+  location?: string | null;
 }
 
 interface PollPayload {

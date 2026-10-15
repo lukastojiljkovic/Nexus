@@ -444,7 +444,8 @@ export function register(host: ModuleHostSurface): void {
     const workflowId = call.as.asNullableString(payload.workflowId, "workflowId");
     // A module id or nothing: it is written into the system prompt, so anything
     // that is not an id's shape is dropped rather than quoted to the model.
-    const location = call.as.asNullableString(payload.location, "location");
+    const location =
+      payload.location === undefined ? null : call.as.asNullableString(payload.location, "location");
     const page = location !== null && MODULE_ID.test(location) ? location : null;
     const workflow = workflowId === null ? null : (findWorkflow(workflowId) ?? null);
     if (workflowId !== null && workflow === null) {
