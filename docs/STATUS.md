@@ -915,11 +915,10 @@ and the app is finished where it is.**
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
   it reports a number nothing could be verified against. The Gentoo ebuild is
-  still `nexus-bin-1.5.0`, four releases behind: its `SRC_URI` points at this
-  repository's releases and resolves for the tag it names, but the committed
-  ebuild installs the 2026-10-08 release. Bumping it means renaming the ebuild, regenerating
+  `nexus-bin-2.0.3`, and its `Manifest` digests the published 2.0.3 tarball.
+  Each release still needs its own bump: rename the ebuild, regenerate
   `Manifest` from the published tarball (never from a local build) and
-  re-checking `metadata.xml`. It has still not been run through portage
+  re-check `metadata.xml`. It has still not been run through portage
   (`apps/desktop/build/gentoo/README.md`).
 - **`check:licences` fails every bump of a packaged dependency, by
   construction.** Dependabot cannot regenerate a generated artifact, so the
@@ -1286,10 +1285,10 @@ old number produces a file with the same name reporting the same version from
 there", which 1.1.0 already cost once.
 
 Tagging is settled: `v1.4.0` was the first tag and release (2026-10-05), and
-the six tags since then are the releases §4 lists. The Gentoo ebuild's
+the five tags since then are the releases §4 lists. The Gentoo ebuild's
 `SRC_URI` points at this repository's releases
 (`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), so it resolves
-for every tag. Its `Manifest` digests the tarball of the 2026-10-08 release, so a bump has to
+for every tag. Its `Manifest` digests the published 2.0.3 tarball, so each bump has to
 regenerate it from the published tarball, never from a local build:
 `dist.mjs` refuses a Linux target from a Windows host, since the native SQLite
 module is built for the host it runs on.
