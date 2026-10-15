@@ -1,7 +1,10 @@
 # ADR-106 — The assistant module: the kit's first stateful, networked, streaming surface
 
 **Status:** accepted (2026-10-10) · **Owner:** the `assistant` run · **Amends**
-nothing; it joins the eight parts ADR-095 built to a page.
+nothing; it joins the eight parts ADR-095 built to a page. **§8 amended** by
+[ADR-114](114-item-intent-for-kit-pages.md): the `item` a location carries is now
+acted on — the shell holds it for the page of the module the location named, and
+the wiki page reveals the article its citation came from.
 
 ## 1. What this decides
 
@@ -123,6 +126,14 @@ knowing it.
 means a per-module intent (`PendingIntent`), and inventing one per module from this
 side would be guessing at shapes other modules own. The listener is where that lands
 when it is built.
+
+*Amended 2026-10-15.* It landed, and the guess this section refused is the shape
+it did NOT have to make: the shell keeps the ITEM (`location.item`, opaque to it)
+and hands it to the page of the module the location named, through one optional
+prop pair on the kit's page contract. `PendingIntent` gained no arm — it is closed
+over the compiled-in pages' payload types — and the item is read by the module
+that understands it, which for `wiki` means opening the article the citation came
+from. See [ADR-114](114-item-intent-for-kit-pages.md).
 
 ## 9. Group and copy
 

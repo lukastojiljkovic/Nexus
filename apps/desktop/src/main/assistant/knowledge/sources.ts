@@ -565,7 +565,18 @@ export async function wikiHits(
     if (passage === "") continue;
     hits.push({
       key: `w:${title.path}`,
-      citation: { kind: "wiki", id: title.path, title: title.title, locator: "lead" },
+      citation: {
+        kind: "wiki",
+        id: title.path,
+        title: title.title,
+        locator: "lead",
+        // A citation is a place as well as a name, and this one can BE the
+        // place: `title.path` is `<library id>/<entry path>` (`zimWiki.ts`),
+        // which is the shape the wiki page's own search results carry — so the
+        // item the page is handed is the pair its `read` op takes, and opening
+        // the citation opens the article the passage was read from (ADR-114).
+        location: { module: "wiki", item: title.path },
+      },
       text: passage,
     });
   }

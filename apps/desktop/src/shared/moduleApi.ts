@@ -113,13 +113,38 @@ export interface ModuleApis {}
 export type NexusModules = ModuleApis;
 
 /**
+ * What a LOCATION asks a kit module's page to reveal (ADR-114).
+ *
+ * ONE arm, and the payload is the ITEM the location named rather than a field
+ * per module: the shell cannot know what a module's own ids look like, and a
+ * shell that guessed them would hold a second opinion about another module's
+ * shapes. Reading the item is the module's own job, exactly as reading its own
+ * ids on its own page is.
+ */
+export interface ModulePageIntent {
+  readonly kind: "reveal";
+  readonly item: string;
+}
+
+/**
  * What a kit module's page is given.
  *
- * ONE prop, because the shell is what knows the shell: the profile the page
- * stands in. Everything else a page needs it asks main for, through its own
- * contract - which is the whole reason it does not need the shell to hand it
- * stores, a registry or a set of enabled modules.
+ * `profileId` is the one thing only the shell knows: the profile the page stands
+ * in. Everything else a page needs it asks main for, through its own contract -
+ * which is the whole reason it does not need the shell to hand it stores, a
+ * registry or a set of enabled modules.
+ *
+ * The `intent` pair is the second thing only the shell knows: the place the page
+ * was opened from, if any. It is a VALUE the shell holds in state rather than an
+ * event, so a page that mounts long after the request still sees it; the page
+ * reports it consumed through `onIntentHandled`, which is what keeps a later,
+ * ordinary visit from revealing it again. Both members are optional, and a module
+ * that reads neither behaves exactly as it did before they existed.
  */
 export interface ModulePageProps {
   readonly profileId: string;
+  /** The item a location asked this page to reveal, or `null`/absent when nothing did. */
+  readonly intent?: ModulePageIntent | null;
+  /** Reports that `intent` above has been acted on, so the shell can clear it. */
+  readonly onIntentHandled?: () => void;
 }

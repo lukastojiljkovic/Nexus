@@ -408,15 +408,49 @@ describe("wikiHits", () => {
     expect(hits).toEqual([
       {
         key: "w:A/Hipothermia",
-        citation: { kind: "wiki", id: "A/Hipothermia", title: "Hipothermia", locator: "lead" },
+        citation: {
+          kind: "wiki",
+          id: "A/Hipothermia",
+          title: "Hipothermia",
+          locator: "lead",
+          location: { module: "wiki", item: "A/Hipothermia" },
+        },
         text: "Hipotermija je stanje niske telesne temperature.",
       },
       {
         key: "w:A/Frostbite",
-        citation: { kind: "wiki", id: "A/Frostbite", title: "Frostbite", locator: "lead" },
+        citation: {
+          kind: "wiki",
+          id: "A/Frostbite",
+          title: "Frostbite",
+          locator: "lead",
+          location: { module: "wiki", item: "A/Frostbite" },
+        },
         text: "Promrzline su ostecenje tkiva.",
       },
     ]);
+  });
+
+  it("cites the article at the place the wiki page opens it from", async () => {
+    const wiki = fakeWiki({
+      titles: [{ path: "wikipedia-sr-mini/A/Nikola_Tesla", title: "Nikola Tesla" }],
+      articles: {
+        "wikipedia-sr-mini/A/Nikola_Tesla": "# Nikola Tesla\n\nTesla je bio pronalazac.",
+      },
+    });
+
+    const [hit] = await wikiHits(wiki, "Tesla", NEVER);
+
+    // The item is `<library id>/<entry path>` — the reader's own `WikiTitle.path`
+    // (`zimWiki.ts`), which is what the wiki page's reveal splits at its first
+    // slash, and the library id it names is the one the reader searched
+    // (ADR-114). It is also the citation's id: one path, two readings, so the
+    // passage and the page can never name different articles.
+    expect(hit?.citation.location).toEqual({
+      module: "wiki",
+      item: "wikipedia-sr-mini/A/Nikola_Tesla",
+    });
+    expect(hit?.citation.id).toBe("wikipedia-sr-mini/A/Nikola_Tesla");
   });
 
   it("skips a title whose article is not there rather than citing an empty passage", async () => {

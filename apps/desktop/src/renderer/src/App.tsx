@@ -112,6 +112,7 @@ import {
   type ShellVisibility,
 } from "../../shared/moduleVisibility.js";
 import { DRAWER_MODULES } from "./toolCatalogue.js";
+import { holdItemIntent, intentForPage, type HeldItemIntent } from "./moduleKit/itemIntent.js";
 import { hasModulePage } from "./moduleKit/pages.js";
 import { KitModulePage } from "./moduleKit/ModulePage.js";
 import { ProfileAvatar } from "./profileAvatar.js";
@@ -290,6 +291,21 @@ export function App() {
   // via onIntentHandled (`clearIntent`), so a later return to that module
   // never re-fires the same intent.
   const [pending, setPending] = useState<PendingIntent | null>(null);
+  /**
+   * The item one `nexus:open-location` request named, held until the module's
+   * own page reports it consumed (ADR-114).
+   *
+   * A second state beside `pending` above, and deliberately not another arm of
+   * it: that union is closed over the compiled-in pages' own payload types, so an
+   * arm whose module could be any string would leave every
+   * `pending?.module === "electronics"` beside it narrowed to two shapes at once.
+   * This one has a single shape — `location.item`, opaque to the shell. The rule
+   * is `pending`'s rule all the same: at most one is held, it is a VALUE rather
+   * than an event (a kit page arrives in its own chunk, so the page it is for may
+   * not be mounted when the request arrives), and it is cleared when that page
+   * says it was acted on.
+   */
+  const [pendingItem, setPendingItem] = useState<HeldItemIntent | null>(null);
   /**
    * The module card a gear asked „Podešavanja" to open at
    * (`moduleSettingsGear.tsx`). The page consumes it on the mount the press
@@ -882,6 +898,8 @@ export function App() {
       // consume it and call onIntentHandled — clear it here instead, or it
       // would sit pending forever.
       setPending((current) => (current?.module === activeId ? null : current));
+      // The held item goes with it, for the same reason and by the same rule.
+      setPendingItem((current) => (current?.module === activeId ? null : current));
     }
   }, [activeId, visibleIds]);
 
@@ -923,6 +941,10 @@ export function App() {
   // unrelated App re-render would retrigger that effect for nothing.
   const clearIntent = useCallback(() => setPending(null), []);
 
+  // The held item's half of the same rule, and stable for the same reason: a kit
+  // page lists it in its own intent-effect's dependency array.
+  const clearPendingItem = useCallback(() => setPendingItem(null), []);
+
   /** Sets the pending intent and switches to the module that owns it — the one place both happen together. */
   function dispatchIntent(next: PendingIntent): void {
     setPending(next);
@@ -945,25 +967,35 @@ export function App() {
   const clearSettingsTarget = useCallback(() => setSettingsTarget(null), []);
 
   /**
-   * THE KIT'S ONE CROSS-MODULE JUMP (ADR-106). A kit module is handed its
-   * `profileId` and nothing else (ADR-090), so a module whose page names a place
-   * in the app — the assistant's citations do — asks the shell for it on the
-   * window, under the name `modules/assistant/renderer/location.ts` spells. The
-   * request rides here rather than through main because which page is shown is
-   * THIS component's state, and main has no business knowing which page is on
-   * screen.
+   * THE KIT'S ONE CROSS-MODULE JUMP (ADR-106, extended by ADR-114). A kit
+   * module's page is handed its `profileId` and nothing else (ADR-090), so a
+   * module whose page names a place in the app — the assistant's citations do —
+   * asks the shell for it on the window, under the name
+   * `modules/assistant/renderer/location.ts` spells. The request rides here
+   * rather than through main because which page is shown is THIS component's
+   * state, and main has no business knowing which page is on screen.
    *
    * The mapping is deliberately shallow and deliberately the shell's own: the
-   * module is shown, and a `settings` name that matches a module publishing a
-   * card opens that card. An `item` travels with the request for a shell that
-   * learns to reveal one; this listener does not invent an intent per module.
+   * module is shown, a `settings` name that matches a module publishing a card
+   * opens that card, and an `item` is held for that module's page as its intent
+   * (`moduleKit/itemIntent.ts`). What the shell does NOT do is invent an intent
+   * per module: an item is opaque here, and only the module that named it — the
+   * one whose page is drawn below — knows what it means.
    */
   useEffect(() => {
     const handler = (event: Event): void => {
-      const detail = (event as CustomEvent<{ module?: unknown; settings?: unknown }>).detail;
+      const detail = (
+        event as CustomEvent<{ module?: unknown; settings?: unknown; item?: unknown }>
+      ).detail;
       const moduleId = detail?.module;
       if (typeof moduleId !== "string" || moduleId === "") return;
       setActiveId(moduleId);
+      // An item is HELD rather than announced (ADR-114): the request's own
+      // module gets it as its page's intent, and `intentForPage` below is what
+      // decides that — including for a page that mounts after this moment. A
+      // request naming no item drops whatever was held, because a location that
+      // does not name a place is not one this shell may still be holding.
+      setPendingItem(holdItemIntent(moduleId, detail?.item));
       const settings = detail?.settings;
       if (typeof settings === "string" && moduleSettingsCardIds(registry).has(settings)) {
         setSettingsTarget(settings);
@@ -2218,7 +2250,19 @@ export function App() {
                 // folder brings, loaded lazily and handed the profile it stands
                 // in. Adding a module is a folder; adding a branch here would be
                 // the twenty-way conflict the kit exists to end.
-                <KitModulePage key={activeProfile.id} id={shownId} profileId={activeProfile.id} />
+                //
+                // The intent pair is `intentForPage`'s answer — the item the
+                // shell is holding, and ONLY if it was this module a location
+                // named (ADR-114). A page that never asked for one, and a
+                // module that ignores the prop, are handed `null` and behave
+                // exactly as they did before it existed.
+                <KitModulePage
+                  key={activeProfile.id}
+                  id={shownId}
+                  profileId={activeProfile.id}
+                  intent={intentForPage(pendingItem, shownId)}
+                  onIntentHandled={clearPendingItem}
+                />
               ) : (
                 <ModulePage id={shownId} />
               )}

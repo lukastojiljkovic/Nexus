@@ -120,8 +120,9 @@ directory is the decision log behind it.
 | [108](108-kit-blobs.md) | Module attachments travel in the archive and count in the blob store | Accepted; extends ADR-090 §5 | 2026-10-10 |
 | [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
 | [109](109-astronomy.md) | The astronomy corner, assembled: four views, one clock, one place | Accepted | 2026-10-10 |
-| [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted | 2026-10-10 |
+| [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted; §8 amended by ADR-114 | 2026-10-10 |
 | [110](110-remembered-unlock.md) | „Traži pristupni kod": how often the app asks for the passcode | Accepted | 2026-10-10 |
 | [111](111-cards-module.md) | The Cards module on the kit: one shelf, nine engines, one worker (uses ADR-090, ADR-093) | Accepted | 2026-10-11 |
 | [112](112-assistant-tools-per-turn.md) | The assistant's tools per turn: what fits in the window, and a prompt that stops repeating them (uses ADR-095, ADR-104) | Accepted | 2026-10-14 |
 | [113](113-assistant-tiers-by-active-parameters.md) | The assistant's tiers are ordered by active parameters, and Gemma 4 E2B is the speed pick | Accepted; supersedes ADR-096 §4 in part | 2026-10-15 |
+| [114](114-item-intent-for-kit-pages.md) | A citation's item reaches a kit page: one held intent, and the wiki page that reveals it | Accepted; amends ADR-106 §8 | 2026-10-15 |
