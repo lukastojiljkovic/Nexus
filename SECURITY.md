@@ -1,20 +1,19 @@
 # Security policy
 
 Nexus is a desktop application that keeps your data on your own device,
-encrypted at rest, and contacts nothing unless you allow it to check for updates
-of Nexus itself. There is no server to compromise and none to defend. Security
-reports are welcome and are taken seriously.
+encrypted at rest, and makes no network call of any kind unless you choose a
+mode that allows one. There is no server to compromise and none to defend.
+Security reports are welcome and are taken seriously.
 
 ## Supported versions
 
-The current release line is **1.5.x**. The latest release is supported, and so
-is the release before it for as long as it is the previous minor.
+The current release line is **2.0.x**. The latest release is supported, and
+nothing earlier is.
 
 | Version | Supported |
 | --- | --- |
-| `1.5.x` (latest release) | Yes |
-| `1.4.x` (previous minor) | Yes |
-| 1.3.x and earlier | No — no release line before 1.4 has been published |
+| `2.0.x` (latest release) | Yes |
+| Everything before 2.0 | No |
 | `main` (development) | Not supported, but fixes land here first |
 
 ## Reporting a vulnerability
@@ -48,7 +47,7 @@ did, what happened, and a proof of concept if you have one. A report that says
   cross-profile reads, and a validator that can be walked past.
 - **File handling** — preview of untrusted documents, attachment storage, and
   archive import/export parsing.
-- **The network boundary** — the two network modes, the request allowlist, the
+- **The network boundary** — the three network modes, the request allowlist, the
   resolver block, and anything that would let a build in **Offline only** open
   a connection.
 - **The update channel** — the pinned hosts, the release-asset URL check, the
@@ -99,7 +98,7 @@ beside the executable.
 
 ### The network boundary
 
-There are two modes, chosen once for the device, and the default is the strong
+There are three modes, chosen once for the device, and the default is the strong
 one.
 
 **Offline only** installs four independent layers: every request whose scheme is
@@ -111,10 +110,19 @@ cannot be lifted at runtime, and that is why a mode change requires a restart.
 **Offline + update checks** admits exactly three `https` hosts — `api.github.com`,
 `github.com` and `release-assets.githubusercontent.com` — matched exactly, with
 no wildcard and no subdomain rule, for the release API and the release download
-URLs it names. That session is the only network client a shipped build can
-reach: the cloud path has one of its own — the single `net.fetch` call site in
-`apps/desktop/src/main/sync/electronFetch.ts`, which `check:egress` pins there —
-and it is unreachable while cloud is off (see the last section).
+URLs it names.
+
+**Downloads** admits everything the update check admits, and in addition the
+hosts the content you choose to fetch is served from, matched exactly over
+`https`:
+
+- `opds.library.kiwix.org`, `lb.download.kiwix.org` and `mirror.download.kiwix.org`
+  — the Kiwix catalogue and its files;
+- `huggingface.co` and `us.aws.cdn.hf.co` — model search and the model files.
+
+Nothing is fetched until you ask for it. The assistant's web search is a
+separate switch on top of a connected mode, off until you turn it on, and it
+asks before every request.
 
 ### Update verification
 
@@ -140,18 +148,6 @@ each release, and the build carries a GitHub build-provenance attestation, so
 and workflow produced a binary. Code signing is deliberately not done yet, which
 is why Windows warns on first run; that is a known limitation of the release,
 not a property of the code.
-
-### Sync, cloud and the web app are on hold
-
-The sync and cloud work — `packages/sync-*`, `apps/desktop/src/main/sync/` and
-the Supabase migrations under `supabase/` — still exists in the tree and is
-still built and tested, but it is **on hold since 2026-10-08, off by default and
-not shipped as a feature**: no screen in this build can turn it on, no hosted
-backend exists, and the app is not distributed with a project configured for
-one. Those modules and the server migrations are not part of the threat model
-above because they are not reachable in the shipped product; a report about them
-is still welcome, since the code is meant to be correct the day it is turned
-back on.
 
 ## What to expect
 

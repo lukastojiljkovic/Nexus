@@ -15,36 +15,21 @@ implementation**, same standing as the security baseline.
 
 ## System context
 
-One product, four surfaces, two account modes:
+One product, one surface:
 
 - **Desktop** (Windows/macOS/Linux): Electron + React — **built**; the only
-  surface today.
-- **Web app**: the same React renderer — *in progress*. `apps/web` exists as a
-  shell (the desktop's rail rendered by the same components, plus a typed
-  `NexusApi` proxy that throws until something connects it); everything behind
-  that proxy is unwritten. Target is **Cloudflare Workers with static assets**.
-  See [ADR-084](adr/084-web-readiness.md) for what the renderer already
-  satisfies and what it does not.
-- **Android** (after desktop + web, decision #9): adapted, not reduced —
-  *unbuilt*.
+  surface the app ships.
 - **Landing/marketing site**: fully independent deployable — *unbuilt*.
 
-Local accounts never contact a server (SEC-PRIV-02) — **built, and today still
-the only account mode a user can reach**. Cloud accounts add sync, sharing and
-backup as an enhancement, never a dependency; local SQLite is the source of
-truth on every client, and the server is a relay and authority for sync, auth
-and blob storage. Private notes cross the wire only as ciphertext (SEC-ZK).
-
-**The server half is now built and executed** — fourteen Supabase migrations
-against a real Postgres 17, an RLS wall proved by 165 pgTAP assertions in CI,
-three Edge Functions, and the PostgREST wire measured rather than assumed. What
-does not exist is the *client* path that would let a user switch any of it on.
-**Cloud stays off by default and switchable off entirely, structurally** — the
-local-only path must not be able to reach the network, and `check:egress` is one
-of the four layers holding that. ADR-089 adds a device-level **network mode** on
-top: **Offline only** (the default) is that path unchanged, and **Offline +
-update checks** is the one mode in which a dedicated, non-persistent session may
-reach three pinned GitHub hosts to update the app. See `../STATUS.md` §2 and §3.
+Accounts are local. They never contact a server (SEC-PRIV-02) — **built**, and
+the only account mode. Local SQLite is the source of truth, and nothing leaves
+the device unless the user turns on a network mode. The local-only path must not
+be able to reach the network, and `check:egress` is one of the four layers
+holding that. ADR-089 adds a device-level **network mode** on top: **Offline
+only** (the default) is that path unchanged; **Offline + update checks** lets a
+dedicated, non-persistent session reach three pinned GitHub hosts to update the
+app; **Downloads** adds the content the user chooses to fetch from the hosts
+listed in `apps/desktop/src/main/net/offline.ts`. See `../STATUS.md` §2 and §3.
 
 ## Decision index
 
@@ -62,17 +47,30 @@ What exists today:
 nexus/
 ├── apps/
 │   ├── desktop/          # Electron shell — main, preload, renderer; owns the database
-│   ├── web/              # Web shell — the same renderer, served from a Worker (ADR-084)
 │   └── gallery/          # Component gallery — design review only, not shipped
 ├── packages/
 │   ├── core/             # Domain logic, module registry, contracts, views engine (platform-free)
 │   ├── db/               # Schema, forward-only migrations, per-module stores (Node + SQLite)
 │   ├── ui/               # Design system components (React)
-│   └── tokens/           # Design tokens — the only place a raw colour may appear
+│   ├── tokens/           # Design tokens — the only place a raw colour may appear
+│   ├── sync/             # Collection map, change journal, merge
+│   ├── sync-crypto/      # Key hierarchy, wrapping, pairing transcript
+│   ├── sync-engine/      # One sync round: sweep, pull, push
+│   ├── sync-port/        # The injected crypto seam, so no package hardcodes a primitive
+│   └── sync-transport/   # The wire — PostgREST and Broadcast, no keys, no origin
 ├── .github/workflows/    # ci.yml (verify); security, codeql, scorecard, release, pages
 ├── site/                 # The project website, published by pages.yml
 └── docs/                 # Specification, ADRs, journal, status, security, design, research, prompts
 ```
+
+**The five `sync-*` packages are code kept on hold.** They were
+written and tested before Nexus settled on staying offline on 2026-10-08, and
+**nothing here is built into the app**: no screen reaches them, no release
+carries a backend project, and no work on them is planned. They stay in the tree
+because they are correct and tested, and because the data model and the conflict
+reasoning behind them outlive the decision that paused them. The desktop app
+still resolves `@nexus/sync` and its four siblings, so they are built and
+type-checked with everything else, but the shipped product never calls one.
 
 Directories the original draft anticipated and which **do not exist**:
 `apps/landing`, `packages/crypto`, `packages/interchange`,
@@ -115,8 +113,8 @@ script stays the authority because it alone covers CSS and HTML.
 
 - **CI:** GitHub Actions. `ci.yml` runs one `verify` job on `ubuntu-latest` —
   install with `--frozen-lockfile` (SEC-SC-02), then the static gates, build,
-  typecheck, lint and the test suites, and last the pgTAP, wire and Edge Function
-  suites against a local Supabase stack. It sets `ELECTRON_SKIP_BINARY_DOWNLOAD`
+  typecheck, lint and the test suites, and last the suites of the on-hold sync
+  packages. It sets `ELECTRON_SKIP_BINARY_DOWNLOAD`
   and never launches Electron, so the smoke run and the packaged-build checks
   happen on a host rather than in CI. `security.yml` adds the gitleaks secret
   scan and the dependency audit; `codeql.yml`, `scorecard.yml` and
@@ -132,10 +130,6 @@ script stays the authority because it alone covers CSS and HTML.
   platform and architecture, with no ABI in the key, so one `.node` serves both
   Vitest and Electron and nothing has to be flipped between them. Electron is on
   **^44**.
-- **Web:** *unbuilt.* COOP/COEP headers are required for SQLite-WASM OPFS
-  (ADR-001), which is a hosting constraint the target must satisfy — see
-  [ADR-084](adr/084-web-readiness.md).
-- **Backend:** *unbuilt.*
 
 ## Testing strategy
 
@@ -144,8 +138,6 @@ script stays the authority because it alone covers CSS and HTML.
 - **End-to-end:** the desktop `smoke` script — build, launch Electron, exercise
   the real IPC surface against a real database, print `SMOKE OK`. It is the only
   E2E harness; Playwright was never adopted.
-- **Contract (OpenAPI golden files), backend tests, sync soak tests:** *unbuilt*,
-  because the surfaces they test do not exist.
 - **Performance gates:** *unbuilt.* The budgets below are recorded targets, and
   **nothing measures them** — no reference dataset, no CI assertion. Treat any
   claim that the app meets them as unverified until a harness exists.
@@ -156,8 +148,6 @@ script stays the authority because it alone covers CSS and HTML.
   hardware; warm start < 1 s.
 - Dashboard render with 12 widgets: **< 300 ms** (DASH acceptance).
 - Search-as-you-type first results: **< 100 ms** at 10k items (SRCH).
-- Sync catch-up after a day offline (≤ 1k changed rows): **< 5 s** visible
-  convergence.
 - Base memory (desktop, idle, Essentials modules): **< 400 MB**.
 
 One number *is* known, and it is not in this list. Measured on the 2026-08-06
@@ -168,8 +158,8 @@ flatters us: every one of them comes from a *dependency's* own dynamic imports
 (mermaid's diagram modules, Excalidraw, cytoscape, KaTeX). Nexus's own renderer
 contains **exactly one** `import()` — the third-party licences file behind a
 Settings card. Every page, every module, every dialog is in the entry chunk.
-Route-level splitting is open work ([ADR-084](adr/084-web-readiness.md)) and is
-the single biggest lever on first paint in a browser.
+Route-level splitting is open work and is the single biggest lever on first
+paint.
 
 ## PRD friction (flagged, not silently absorbed)
 
@@ -200,22 +190,22 @@ the single biggest lever on first paint in a browser.
 ## Ranked technical risks
 
 1. **Sync integration complexity** (ADR-002): two sync planes (rows + Yjs)
-   plus ciphertext blobs; mitigated by soak tests, PowerSync doing the hard
-   row-sync part, and keep-both conflict UX for documents.
-2. **ZK crypto UX on web** (ADR-005): served-code trust caveat is real;
-   mitigated by strict CSP + SRI, documented caveat (founder-approved), and
-   desktop as the flagship.
+   plus ciphertext blobs. The engine is written here — `@nexus/sync-engine`'s
+   round over `@nexus/sync`, the envelope in `@nexus/sync-crypto` and
+   `@nexus/sync-transport`'s PostgREST wire (ADR-002 is superseded on the
+   engine and backend) — so the row plane is ours rather than a dependency's.
+   Mitigated by soak tests and keep-both conflict UX for documents.
 3. **Canvas engine unknown** (ADR-011): decision deliberately deferred to
    spikes; risk contained by timebox and by CANV being S-tier.
-4. **Android reuse bet** (ADR-006): React Native path assumed but gated;
-   worst case is a native Kotlin rewrite of UI over the same backend/sync
-   protocol.
-5. **Electron footprint & perf discipline** (ADR-001/006): budgets in CI
+4. **Electron footprint & perf discipline** (ADR-001/006): budgets in CI
    from day one; virtualized lists mandatory in views engine.
-6. **Bus factor = 1 + ops load** (ADR-003): Go is new to the founder
-   (founder revision, risk accepted); mitigated by the thin backend scope,
-   the auth-code review discipline in ADR-003, Postgres as the boring
-   core, managed-service escape hatches, and runbooks in `docs/`.
-7. **PowerSync FSL dependency** (ADR-002): fair-source license, converts to
-   Apache-2.0 after 2 years per release; non-compete clause irrelevant to
-   Nexus (we don't sell sync). Fallback documented in the ADR.
+5. **Bus factor = 1 + ops load** (ADR-003): Go is new to the founder
+   (founder revision, risk accepted); mitigated by the small scope, the
+   auth-code review discipline in ADR-003, and runbooks in `docs/`.
+6. **A paused subsystem nobody exercises** (ADR-002, STATUS §4.4): the
+   `sync-*` packages are on hold, built and tested against a local database
+   stack but unreachable in the shipped product. The cost is not the code but
+   the drift: the durable parts stay green in a suite no user runs, and the
+   first real connection would meet a cold server boot that nothing in the
+   transport reads as a retryable failure. Accepted while the hold lasts, and
+   recorded where the work is (`STATUS.md`).

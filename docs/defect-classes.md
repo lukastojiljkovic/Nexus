@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **twenty-six** `check:` scripts and **one hundred and forty-nine** classes
+> **thirty** `check:` scripts and **one hundred and forty-nine** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips

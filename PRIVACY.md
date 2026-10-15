@@ -172,7 +172,7 @@ provider you chose; those services handle that under their own privacy policies.
 If you are in the EU or in Serbia, the remedies you have over the data on your
 device are the ones your local law gives you over your own equipment.
 
-Nexus is not "in the cloud", and there is no Nexus service to sign into.
+Nexus has no account server, and there is no Nexus service to sign into.
 Should Nexus ever offer an online service, this document will name the
 controller, the hosting region and the retention window **before** that release,
 not after.

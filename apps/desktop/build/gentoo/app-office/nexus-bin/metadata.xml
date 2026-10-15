@@ -9,8 +9,9 @@
 		Nexus is an offline-first desktop workspace: tasks, calendar, notes,
 		documents, study, habits, fitness and finance in one encrypted
 		local database. Everything is stored on the device in SQLCipher-
-		encrypted SQLite; cloud sync is opt-in and end-to-end encrypted, and
-		a build that has never had it enabled makes no network calls at all.
+		encrypted SQLite. Network use is a mode of the whole device and the
+		default is Offline only, in which the app makes no network call of
+		any kind.
 
 		This package installs the prebuilt x86_64 Electron bundle — portage
 		does not rebuild Chromium from the application source.
