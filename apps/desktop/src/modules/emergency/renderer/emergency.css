@@ -331,3 +331,58 @@
   color: var(--nx-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* The preparedness pair under the card: the calculator and the kit list, one column
+   on a narrow window and two where there is room for both. */
+.emergency__prep {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--nx-layout-field-min), 1fr));
+  gap: var(--nx-space-4);
+  align-items: start;
+}
+
+.emergency__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+/* Form rows that end on the baseline of their button, as the Signals tabs do. */
+.emergency__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+  align-items: end;
+}
+
+.emergency__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--nx-space-1) var(--nx-space-4);
+  margin: 0;
+}
+
+.emergency__facts dt {
+  color: var(--nx-text-subtle);
+}
+
+.emergency__facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.emergency__kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.emergency__kit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}

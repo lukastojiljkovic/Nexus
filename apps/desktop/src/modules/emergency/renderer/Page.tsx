@@ -9,6 +9,8 @@ import { MODULE_NAME, manifest } from "../shared/manifest.js";
 import { CardForm } from "./CardForm.js";
 import { CardView } from "./CardView.js";
 import { ContactsEditor } from "./ContactsEditor.js";
+import { KitCard } from "./KitCard.js";
+import { RationCard } from "./RationCard.js";
 import { cardFormOf, emptyCardForm, type EmergencyRun } from "./card.js";
 import { copy } from "./copy.js";
 import { iconName } from "./icon.js";
@@ -201,6 +203,12 @@ export default function EmergencyPage({ profileId }: ModulePageProps) {
           {notice !== null && <p className="nx-hint">{notice}</p>}
           <CardView model={model} title={MODULE_NAME} />
         </>
+      )}
+      {view !== null && !editing && (
+        <section className="emergency__prep">
+          <RationCard />
+          <KitCard profileId={profileId} />
+        </section>
       )}
     </div>
   );
