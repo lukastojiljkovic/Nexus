@@ -65,6 +65,7 @@ import type {
 } from "node-llama-cpp";
 
 import type { HardwareReading } from "./hardware.js";
+import type { CatalogueSampling } from "./catalogue.js";
 import {
   chatHistoryFrom,
   createFenceFilter,
@@ -137,6 +138,12 @@ export interface LoadChatOptions {
   readonly capabilities: readonly ModelCapability[];
   readonly modelPath: string;
   readonly contextTokens: number;
+  /** The most context this load may use, in tokens; the catalogue's `contextCap`. */
+  readonly contextCap?: number;
+  /** The most tokens one answer may spend reasoning; the catalogue's `thoughtTokens`. */
+  readonly thoughtTokens?: number;
+  /** This model's own sampling; the catalogue's `sampling`. */
+  readonly sampling?: CatalogueSampling;
   readonly gpuLayers: number | "auto";
   readonly threads: number;
 }
@@ -182,6 +189,23 @@ export interface LlamaEngine {
   embedder(id: string): Embedder;
 }
 
+/**
+ * What the engine may be told about the world, and the one thing it is: HOW THE
+ * LIBRARY IS REACHED.
+ *
+ * `node-llama-cpp` is loaded lazily and through a real `import()` (see
+ * `librarySpecifier`), and the seam exists because of what this file is
+ * responsible for rather than what the library is: one model at a time, a fresh
+ * sequence per turn, the wrapper's own capabilities, the context it was loaded
+ * with. Every one of those is provable with a stand-in library and a `*.test.ts`
+ * beside this file, and provable no other way — a GGUF is gigabytes and this
+ * repository has none. The app passes nothing, so production always gets the
+ * real library.
+ */
+export interface EngineDeps {
+  readonly library?: () => Promise<typeof import("node-llama-cpp")>;
+}
+
 interface LoadedChat {
   readonly id: string;
   readonly info: LoadedModelInfo;
@@ -199,6 +223,16 @@ interface LoadedChat {
   readonly sequence: LlamaContextSequence;
   readonly chat: LlamaChat;
   readonly wrapper: ChatWrapper;
+  /**
+   * The per-model policy the load request carried (`contextCap`, `thoughtTokens`,
+   * `sampling`). It lives here rather than on the request because it is a
+   * property of the LOADED MODEL: the loop sends `messages`, `tools` and a token
+   * ceiling per completion and knows nothing about how a model samples.
+   */
+  readonly policy: {
+    readonly thoughtTokens?: number;
+    readonly sampling?: CatalogueSampling;
+  };
 }
 
 interface LoadedEmbedder {
@@ -208,7 +242,12 @@ interface LoadedEmbedder {
   readonly dimensions: number;
 }
 
-/** The context the runtime loads a chat model with. `recommend.ts` sizes its estimates at the same one. */
+/**
+ * The context the runtime loads a chat model with, when the entry states no cap
+ * of its own. `recommend.ts` sizes its estimates at the same one, and a
+ * catalogue entry that sets a `contextCap` above this is an entry whose `fit`
+ * has to be measured again: the arithmetic there was built on this figure.
+ */
 export const LOAD_CONTEXT_TOKENS = 8192;
 
 /**
@@ -220,16 +259,17 @@ export const LOAD_CONTEXT_TOKENS = 8192;
  * that starts two gets an `EngineError` with `refused`, which is the honest
  * answer to a caller's bug rather than a silent interleaving.
  */
-export function createLlamaEngine(sink: EngineSink): LlamaEngine {
+export function createLlamaEngine(sink: EngineSink, deps: EngineDeps = {}): LlamaEngine {
   let llamaPromise: Promise<Llama> | null = null;
   let loadedChat: LoadedChat | null = null;
   let loadedEmbedder: LoadedEmbedder | null = null;
   let runningCall: number | null = null;
   let controller: AbortController | null = null;
   let adapterCalls = 0;
+  const loadLibrary = deps.library ?? llamaCpp;
 
   async function llama(): Promise<Llama> {
-    llamaPromise ??= createLlama(sink);
+    llamaPromise ??= createLlama(sink, loadLibrary);
     return await llamaPromise;
   }
 
@@ -271,29 +311,36 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
     const instance = await llama();
     const model = await instance.loadModel({ modelPath: options.modelPath, gpuLayers: options.gpuLayers });
     try {
-      const contextSize = loadedContextTokens(options.contextTokens);
+      const contextSize = loadedContextTokens(options.contextTokens, options.contextCap);
       const context = await model.createContext({ contextSize, threads: options.threads });
       const sequence = context.getSequence();
-      const { LlamaChat } = await llamaCpp();
+      const { LlamaChat } = await loadLibrary();
       const chat = new LlamaChat({ contextSequence: sequence });
       const wrapper = chat.chatWrapper;
+      const functionCalling = wrapperSupportsFunctions(wrapper) ? "native" : "text";
       loadedChat = {
         id: options.id,
         info: {
           id: options.id,
           title: options.title,
-          capabilities: options.capabilities,
+          capabilities: capabilitiesOf(options.capabilities, functionCalling),
           contextTokens: contextSize,
+          wrapper: wrapper.wrapperName,
+          functionCalling,
         },
         model,
         context,
         sequence,
         chat,
         wrapper,
+        policy: {
+          ...(options.thoughtTokens === undefined ? {} : { thoughtTokens: options.thoughtTokens }),
+          ...(options.sampling === undefined ? {} : { sampling: options.sampling }),
+        },
       };
       sink.log?.(
         `assistant runtime: "${options.id}" loaded with the ${wrapper.wrapperName} chat wrapper ` +
-          `(${wrapperSupportsFunctions(wrapper) ? "function calling" : "text fallback"}), context ` +
+          `(${functionCalling === "native" ? "function calling" : "text fallback"}), context ` +
           `${String(contextSize)} tokens, ${String(model.gpuLayers)} layers on the GPU`,
       );
       return loadedChat.info;
@@ -343,9 +390,18 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
     const running = new AbortController();
     controller = running;
     runningCall = callId;
+
+    // THE SEQUENCE STARTS EMPTY. The model is loaded once and reused now, so
+    // without this the previous turn's tokens would still sit in the context's
+    // KV cache in front of a new conversation's first message — and the loop's
+    // request, which carries the whole conversation it assembled, would be
+    // answered with whatever else happened to be in the same window.
+    await loaded.sequence.clearHistory();
+
     const meterBefore = loaded.sequence.tokenMeter.getState();
     const supportsFunctions = wrapperSupportsFunctions(loaded.wrapper);
     const filter = supportsFunctions ? null : createFenceFilter();
+    const sampling = loaded.policy.sampling ?? {};
     // ONE token sink per call: main's channel by default (the worker posts an
     // event per chunk) and the caller's own callback when a caller in this
     // process asked for one, so an answer is never delivered twice.
@@ -373,13 +429,24 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
 
       const response = await loaded.chat.generateResponse(history, {
         ...(functions === undefined ? {} : { functions, documentFunctionParams: true }),
-        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
-        // Half of the answer's tokens may go to reasoning. node-llama-cpp's own
-        // default is half the CONTEXT, so a reasoning model (Qwen3.5 opens with
-        // a `thought`) spent the whole answer thinking and stopped at `length`.
+        // The entry's own sampling, unless the request names a temperature: a
+        // caller that sets one (the eval's determinism runs, the smoke test) is
+        // asking for that temperature rather than for the model's tuned one.
+        ...(request.temperature === undefined
+          ? samplingOptions(sampling)
+          : { ...samplingOptions(sampling), temperature: request.temperature }),
+        // Half of the answer's tokens may go to reasoning, unless the entry
+        // states a budget of its own. node-llama-cpp's own default is half the
+        // CONTEXT, so a reasoning model (Qwen3.5 opens with a `thought`) spent
+        // the whole answer thinking and stopped at `length`.
         ...(request.maxTokens === undefined
           ? {}
-          : { maxTokens: request.maxTokens, budgets: { thoughtTokens: Math.floor(request.maxTokens / 2) } }),
+          : {
+              maxTokens: request.maxTokens,
+              budgets: {
+                thoughtTokens: loaded.policy.thoughtTokens ?? Math.floor(request.maxTokens / 2),
+              },
+            }),
         signal: running.signal,
         stopOnAbortSignal: true,
         // `onResponseChunk` rather than `onTextChunk`: the latter carries only the
@@ -558,8 +625,8 @@ export function createLlamaEngine(sink: EngineSink): LlamaEngine {
  * node-llama-cpp's own pre-load test cannot run in this process (the patch in
  * `patches/` says why), so a load error is the only verdict there is.
  */
-async function createLlama(sink: EngineSink): Promise<Llama> {
-  const { getLlama, getLlamaGpuTypes, LlamaLogLevel } = await llamaCpp();
+async function createLlama(sink: EngineSink, loadLibrary: () => Promise<typeof import("node-llama-cpp")>): Promise<Llama> {
+  const { getLlama, getLlamaGpuTypes, LlamaLogLevel } = await loadLibrary();
   let gpu: "cuda" | "vulkan" | "metal" | false = false;
   try {
     const supported = await getLlamaGpuTypes("supported");
@@ -579,14 +646,59 @@ async function createLlama(sink: EngineSink): Promise<Llama> {
 }
 
 /**
- * The context a model is loaded with: the runtime's own figure, never more than
- * the model was trained for.
+ * The context a model is loaded with: the entry's cap when it states one,
+ * otherwise the runtime's own figure, and never more than the model was trained
+ * for.
  *
  * `contextTokens: 0` means "not known" — a search result, whose header nobody has
- * read yet — and is answered with the runtime's default rather than with zero.
+ * read yet — and is answered with the cap, or with the runtime's default when
+ * there is none, rather than with zero.
  */
-function loadedContextTokens(contextTokens: number): number {
-  return contextTokens > 0 ? Math.min(contextTokens, LOAD_CONTEXT_TOKENS) : LOAD_CONTEXT_TOKENS;
+function loadedContextTokens(contextTokens: number, cap?: number): number {
+  const ceiling = cap ?? LOAD_CONTEXT_TOKENS;
+  return contextTokens > 0 ? Math.min(contextTokens, ceiling) : ceiling;
+}
+
+/**
+ * A model's own sampling, as the library's generation options.
+ *
+ * Only the fields the entry actually states are passed: node-llama-cpp's own
+ * defaults are what a model gets until somebody measures what it wants, and a
+ * value written in here that no measurement produced would be exactly the guess
+ * the per-entry block exists to avoid.
+ */
+function samplingOptions(sampling: CatalogueSampling): {
+  readonly temperature?: number;
+  readonly topP?: number;
+  readonly topK?: number;
+  readonly repeatPenalty?: { readonly penalty: number };
+} {
+  return {
+    ...(sampling.temperature === undefined ? {} : { temperature: sampling.temperature }),
+    ...(sampling.topP === undefined ? {} : { topP: sampling.topP }),
+    ...(sampling.topK === undefined ? {} : { topK: sampling.topK }),
+    ...(sampling.repeatPenalty === undefined ? {} : { repeatPenalty: { penalty: sampling.repeatPenalty } }),
+  };
+}
+
+/**
+ * The capabilities the loop sees, as the WRAPPER decides them.
+ *
+ * `tools` is the one capability this runtime can know better than the entry that
+ * asked for it: whether a model's own template can be driven with `functions` is
+ * a fact about the resolved wrapper, and the entry's list is a claim written by
+ * whoever curated it. So the wrapper's answer wins in both directions, an entry
+ * that claims no `tools` gets them when its template supports them and a `tools`
+ * claim on a template the library cannot drive with `functions` is dropped
+ * rather than left standing. What the fallback does is unaffected: it is what
+ * `complete` uses whenever the wrapper cannot call functions.
+ */
+function capabilitiesOf(
+  given: readonly ModelCapability[],
+  functionCalling: LoadedModelInfo["functionCalling"],
+): readonly ModelCapability[] {
+  const others = given.filter((capability) => capability !== "tools");
+  return functionCalling === "native" ? [...others, "tools"] : others;
 }
 
 /**

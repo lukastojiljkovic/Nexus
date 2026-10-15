@@ -71,6 +71,10 @@ export function createScriptedModel(
     title: options.title ?? "Scripted transcript",
     capabilities: ["chat", "tools"],
     contextTokens: options.contextTokens ?? DEFAULT_MODEL_CONTEXT_TOKENS,
+    // A transcript is not a model file and has no chat template: it answers with
+    // the calls a step names, which is the contract's own path.
+    wrapper: "scripted",
+    functionCalling: "native",
   };
   return {
     info,

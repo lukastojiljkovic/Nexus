@@ -24,6 +24,11 @@
  *   - **One chat model and one embedder.** The worker enforces it where it can
  *     (it owns the memory), and the host remembers which ids those are so that a
  *     `remove` and a `loadChat` cannot disagree about it.
+ *   - **A model that is already loaded is not loaded again.** `loadChat` runs on
+ *     every turn (`register.ts`), and reading sixteen gigabytes from disk and
+ *     building a fresh context for a model that is sitting in memory is the cost
+ *     this host removes: a load whose request is the one that put the resident
+ *     model there is answered from memory, without a message to the worker.
  */
 
 import type {
@@ -112,7 +117,16 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
     { readonly resolve: (event: HostEvent) => void; readonly reject: (error: RuntimeError) => void }
   >();
   const streaming = new Map<number, (text: string) => void>();
-  let loadedChat: string | null = null;
+  /**
+   * The chat model the worker holds, and the load request that put it there.
+   *
+   * The request is kept rather than just the id because "the same model" is not
+   * enough to answer a load from memory: the entry's context cap, its thought
+   * budget, its sampling and the GPU-layer setting all decide what the loaded
+   * model IS, and a changed one of those is a different model to run. See
+   * `loadChatModel` for why the key is the request rather than a list of fields.
+   */
+  let loadedChat: { readonly key: string; readonly info: LoadedModelInfo } | null = null;
   let loadedEmbedder: string | null = null;
 
   function ensurePort(): WorkerPort {
@@ -201,22 +215,42 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
 
   async function loadChatModel(id: string, signal: AbortSignal): Promise<ChatModel> {
     const entry = requireInstalled(id);
-    const path = pathOf(entry);
     const profile = await hardwareOnce();
-    const event = await send((seq) => ({
-      v: PROTOCOL_VERSION,
-      kind: "load-chat",
-      seq,
+    // The body of the load, built once: it is what is sent, and it is what the
+    // resident model is remembered BY. A key that is the request itself cannot
+    // drift from the request the way a hand-kept list of fields can: a field
+    // added to a load is a field added to its identity, with nothing new to
+    // remember and no way to answer from memory with the wrong model.
+    const load = {
       id: entry.id,
-      modelPath: path,
+      modelPath: pathOf(entry),
       contextTokens: entry.contextTokens > 0 ? entry.contextTokens : 0,
+      ...(entry.contextCap === undefined ? {} : { contextCap: entry.contextCap }),
+      ...(entry.thoughtTokens === undefined ? {} : { thoughtTokens: entry.thoughtTokens }),
+      ...(entry.sampling === undefined ? {} : { sampling: entry.sampling }),
       gpuLayers: deps.gpuLayers?.() ?? "auto",
       threads: profile.cpuThreads,
       title: entry.title,
       capabilities: entry.capabilities,
-    }));
+    };
+    const key = JSON.stringify(load);
+    const resident = loadedChat;
+    if (resident !== null && resident.key === key) {
+      if (signal.aborted) {
+        // Nothing was read from disk for this call, so there is nothing to give
+        // back: the decision is honoured by refusing the load, and the loop that
+        // asked for it sees the same signal before its first model call.
+        throw new RuntimeError("aborted", "The turn was aborted before the model was used.");
+      }
+      return chatModelOf(resident.info);
+    }
+    // Whatever was resident is being replaced, or is about to be disposed by a
+    // load that then fails. Either way this host must not answer a later load
+    // from a request that no longer describes what the worker holds.
+    loadedChat = null;
+    const event = await send((seq) => ({ v: PROTOCOL_VERSION, kind: "load-chat", seq, ...load }));
     if (event.kind !== "loaded") throw new RuntimeError("worker", "The model host did not answer with a model.");
-    loadedChat = entry.id;
+    loadedChat = { key, info: event.info };
     if (signal.aborted) {
       // The load itself is not interruptible — llama.cpp reads and maps gigabytes
       // and offers no cancel for that — so the user's decision is honoured at the
@@ -382,7 +416,7 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
     },
 
     async remove(id: string): Promise<void> {
-      if (loadedChat === id || loadedEmbedder === id) await unloadAll();
+      if (loadedChat?.info.id === id || loadedEmbedder === id) await unloadAll();
       removeModel(models, id);
     },
 
