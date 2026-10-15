@@ -14,7 +14,7 @@
           "summary": { "sr": "Zakazaću „Kontrola kod zubara“ za petak u 10.", "en": "I will schedule “Dentist check-up” for Friday at 10." },
           "content": "Event created: Kontrola kod zubara, Friday 10:00."
         },
-        { "name": "calendar.list", "effect": "read" }
+        { "name": "calendar.events", "effect": "read" }
       ],
       "knowledge": [],
       "confirmations": [true],
@@ -23,8 +23,8 @@
         "toolsCalled": [
           { "name": "calendar.create", "args": { "title": { "contains": "zubar" } } }
         ],
-        "toolsNotCalled": ["calendar.list"],
-        "answerContains": ["Zakazao sam"],
+        "toolsNotCalled": ["calendar.events"],
+        "answerContains": ["zubar"],
         "language": "sr",
         "maxSteps": 2
       },
@@ -56,15 +56,16 @@
           "summary": { "sr": "Zakazaću „Sastanak sa Markom“ za sredu u 14.", "en": "I will schedule “Meeting with Marko” for Wednesday at 14." },
           "content": "Event created: Sastanak sa Markom, Wednesday 14:00."
         },
-        { "name": "calendar.list", "effect": "read" }
+        { "name": "calendar.events", "effect": "read" }
       ],
       "knowledge": [],
       "confirmations": [false],
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [{ "name": "calendar.create" }],
-        "toolsNotCalled": ["calendar.list"],
-        "answerContains": ["Nisam zakazao"],
+        "toolsNotCalled": ["calendar.events"],
+        "answerContains": ["Marko"],
+        "claimsOnlyWhatRan": true,
         "language": "sr",
         "maxSteps": 2
       },
@@ -75,7 +76,7 @@
           ]
         },
         {
-          "text": "Nisam zakazao termin, jer si predlog odbio. Ništa nije upisano u kalendar."
+          "text": "Nisam zakazao sastanak sa Markom, jer si predlog odbio. Ništa nije upisano u kalendar."
         }
       ]
     },
@@ -87,7 +88,7 @@
         { "role": "user", "content": "Šta imam u kalendaru ove nedelje?" }
       ],
       "tools": [
-        { "name": "calendar.list", "effect": "read" },
+        { "name": "calendar.events", "effect": "read" },
         {
           "name": "calendar.create",
           "effect": "write",
@@ -98,14 +99,14 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [{ "name": "calendar.list" }],
+        "toolsCalled": [{ "name": "calendar.events" }],
         "toolsNotCalled": ["calendar.create"],
         "answerContains": ["petak"],
         "language": "sr",
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "calendar.list", "arguments": {} }] },
+        { "toolCalls": [{ "name": "calendar.events", "arguments": { "from": "2026-10-12", "to": "2026-10-18" } }] },
         {
           "text": "Ove nedelje imaš jedan događaj: u petak u 10 kontrola kod zubara. Ostatak nedelje je slobodan."
         }
@@ -125,7 +126,7 @@
           "summary": { "sr": "Zakazaću „Kontrola kod zubara“ za petak u 10.", "en": "I will schedule “Dentist check-up” for Friday at 10." },
           "content": "Event created: Dentist check-up, Friday 10:00."
         },
-        { "name": "calendar.list", "effect": "read" }
+        { "name": "calendar.events", "effect": "read" }
       ],
       "knowledge": [],
       "confirmations": [true],
@@ -134,8 +135,8 @@
         "toolsCalled": [
           { "name": "calendar.create", "args": { "title": { "contains": "dentist" } } }
         ],
-        "toolsNotCalled": ["calendar.list"],
-        "answerContains": ["I scheduled"],
+        "toolsNotCalled": ["calendar.events"],
+        "answerContains": ["dentist"],
         "language": "en",
         "maxSteps": 2
       },
@@ -167,15 +168,16 @@
           "summary": { "sr": "Zakazaću „Sastanak sa Markom“ za sredu u 14.", "en": "I will schedule “Meeting with Marko” for Wednesday at 14." },
           "content": "Event created: Meeting with Marko, Wednesday 14:00."
         },
-        { "name": "calendar.list", "effect": "read" }
+        { "name": "calendar.events", "effect": "read" }
       ],
       "knowledge": [],
       "confirmations": [false],
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [{ "name": "calendar.create" }],
-        "toolsNotCalled": ["calendar.list"],
-        "answerContains": ["Nothing was written"],
+        "toolsNotCalled": ["calendar.events"],
+        "answerContains": ["Marko"],
+        "claimsOnlyWhatRan": true,
         "language": "en",
         "maxSteps": 2
       },
@@ -185,7 +187,7 @@
             { "name": "calendar.create", "arguments": { "title": "Meeting with Marko", "start": "2026-10-14T14:00" } }
           ]
         },
-        { "text": "I did not schedule it. Nothing was written to your calendar." }
+        { "text": "I did not schedule the meeting with Marko: nothing was written to your calendar." }
       ]
     },
     {
@@ -194,7 +196,7 @@
       "locale": "en",
       "conversation": [{ "role": "user", "content": "What is in my calendar this week?" }],
       "tools": [
-        { "name": "calendar.list", "effect": "read" },
+        { "name": "calendar.events", "effect": "read" },
         {
           "name": "calendar.create",
           "effect": "write",
@@ -205,14 +207,14 @@
       "confirmations": [],
       "maxSteps": 2,
       "expect": {
-        "toolsCalled": [{ "name": "calendar.list" }],
+        "toolsCalled": [{ "name": "calendar.events" }],
         "toolsNotCalled": ["calendar.create"],
         "answerContains": ["Friday"],
         "language": "en",
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "calendar.list", "arguments": {} }] },
+        { "toolCalls": [{ "name": "calendar.events", "arguments": { "from": "2026-10-12", "to": "2026-10-18" } }] },
         {
           "text": "You have one event this week: the dentist check-up on Friday at 10. The rest of the week is clear."
         }

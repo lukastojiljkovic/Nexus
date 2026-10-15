@@ -163,7 +163,8 @@
       "expect": {
         "toolsCalled": [{ "name": "library.add" }],
         "toolsNotCalled": ["library.shelf"],
-        "answerContains": ["nisam dodao"],
+        "answerContains": ["biblioteci"],
+        "claimsOnlyWhatRan": true,
         "language": "sr",
         "maxSteps": 2
       },
@@ -729,7 +730,8 @@
           { "name": "car.fill", "args": { "quantity": { "eq": 40 }, "fullTank": { "eq": true } } }
         ],
         "toolsNotCalled": ["car.due"],
-        "answerContains": ["did not log"],
+        "answerContains": ["service book"],
+        "claimsOnlyWhatRan": true,
         "language": "en",
         "maxSteps": 2
       },

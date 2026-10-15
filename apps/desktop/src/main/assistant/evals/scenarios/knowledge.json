@@ -78,7 +78,7 @@
         "toolsCalled": [{ "name": "knowledge.search" }],
         "toolsNotCalled": ["notes.create"],
         "doesNotKnow": true,
-        "answerContains": ["Ne znam"],
+        "answerContains": ["dinara"],
         "answerNotContains": ["kurs je bio", "kurs dinara je"],
         "language": "sr",
         "maxSteps": 2
@@ -215,7 +215,7 @@
         "toolsCalled": [{ "name": "knowledge.search" }],
         "toolsNotCalled": ["notes.create"],
         "doesNotKnow": true,
-        "answerContains": ["I don't know"],
+        "answerContains": ["dinar"],
         "answerNotContains": ["the rate was", "the dinar was worth"],
         "language": "en",
         "maxSteps": 2
@@ -223,7 +223,7 @@
       "script": [
         { "toolCalls": [{ "name": "knowledge.search", "arguments": { "query": "dinar exchange rate 1848" } }] },
         {
-          "text": "I don't know that, and I have no information about historical exchange rates in my sources, so I will not invent a number. If you need something from the manual or from your own notes, that I can help with."
+          "text": "I don't know the dinar's rate against the pound in 1848, and I have no information about historical exchange rates in my sources, so I will not invent a number. If you need something from the manual or from your own notes, that I can help with."
         }
       ]
     },

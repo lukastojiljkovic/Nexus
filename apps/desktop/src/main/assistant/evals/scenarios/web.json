@@ -90,14 +90,15 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [{ "name": "web.search" }],
-        "answerContains": ["Nisam pretražio"],
+        "answerContains": ["evra"],
+        "claimsOnlyWhatRan": true,
         "language": "sr",
         "maxSteps": 2
       },
       "script": [
         { "toolCalls": [{ "name": "web.search", "arguments": { "query": "kurs evra" } }] },
         {
-          "text": "Nisam pretražio internet, jer si predlog odbio. Ništa nije poslato sa ovog uređaja; reci ako želiš da ipak potražim."
+          "text": "Nisam pretražio internet, jer si predlog odbio, pa nemam kurs evra iz mreže. Ništa nije poslato sa ovog uređaja; reci ako želiš da ipak potražim."
         }
       ]
     },
@@ -191,14 +192,15 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [{ "name": "web.search" }],
-        "answerContains": ["I did not search"],
+        "answerContains": ["euro"],
+        "claimsOnlyWhatRan": true,
         "language": "en",
         "maxSteps": 2
       },
       "script": [
         { "toolCalls": [{ "name": "web.search", "arguments": { "query": "euro rate" } }] },
         {
-          "text": "I did not search the web, because you turned the proposal down. Nothing left this machine. Say so if you want me to look after all."
+          "text": "I did not search the web for the euro rate, because you turned the proposal down. Nothing left this machine. Say so if you want me to look after all."
         }
       ]
     }

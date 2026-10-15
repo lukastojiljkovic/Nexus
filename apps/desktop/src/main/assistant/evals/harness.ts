@@ -29,7 +29,7 @@ import type {
 } from "@nexus/core";
 
 import { checkExpectations, type ExpectationResult, type SafetyNotice, type TurnTrace } from "./expectations.js";
-import { createFakeTools, createKnowledgeBase } from "./fakes.js";
+import { createFakeTools, createKnowledgeBase, type ToolSpecLookup } from "./fakes.js";
 import { parseScenarioFile, ScenarioError, type Scenario } from "./scenario.js";
 import type { ScriptedModel } from "./scripted.js";
 import { localDay } from "../tools/support.js";
@@ -50,6 +50,8 @@ export interface ScenarioResult {
   };
   readonly durationMs: number;
   readonly finalText: string;
+  /** Every tool call the turn emitted, in order, with whether its result says it worked. */
+  readonly calls: TurnTrace["toolCalls"];
   readonly expectations: readonly ExpectationResult[];
   /** Set when the loop itself threw — the scenario fails, and the message says how. */
   readonly error?: string;
@@ -86,6 +88,13 @@ export interface HarnessOptions {
   readonly timeoutMs?: number;
   /** The profile a `ToolContext` reports. A scenario is not tied to a real profile. */
   readonly profileId?: string;
+  /**
+   * The real descriptions and schemas the app's registry has, by tool name. A
+   * caller that can build the registry hands them in; without them every fake
+   * tool keeps the scenario's generic spec, which is what the scripted suite
+   * runs on — see `fakes.ts`.
+   */
+  readonly toolSpecs?: ToolSpecLookup;
 }
 
 let noticeCache: SafetyNotice | null = null;
@@ -172,7 +181,8 @@ function traceOf(
   confirmations: TurnTrace["confirmations"],
   counter: ModelCounter,
 ): TurnTrace {
-  const toolCalls: { name: string; arguments: unknown }[] = [];
+  const toolCalls: { name: string; arguments: unknown; ok: boolean }[] = [];
+  const callIndexes = new Map<string, number>();
   const citationIds: string[] = [];
   const seen = new Set<string>();
   const addCitations = (citations: readonly { readonly kind: string; readonly id: string }[] | undefined): void => {
@@ -188,8 +198,14 @@ function traceOf(
   for (const event of events) {
     if (event.type === "token") streamed += event.text;
     else if (event.type === "tool-call") {
-      toolCalls.push({ name: event.call.name, arguments: event.call.arguments });
+      // A call starts as one that has not been answered: the result event
+      // beside it is what says it ran, and a turn aborted between the two
+      // leaves it `false` rather than silently crediting it.
+      callIndexes.set(event.call.id, toolCalls.length);
+      toolCalls.push({ name: event.call.name, arguments: event.call.arguments, ok: false });
     } else if (event.type === "tool-result") {
+      const answered = toolCalls[callIndexes.get(event.callId) ?? -1];
+      if (answered !== undefined) answered.ok = event.result.ok;
       addCitations(event.result.citations);
     } else if (event.type === "message") {
       addCitations(event.citations);
@@ -199,7 +215,10 @@ function traceOf(
   return {
     toolCalls,
     citationIds,
-    finalText: streamed.length > 0 ? streamed : messageText ?? "",
+    // The answer is the last message, which is what the page keeps: the
+    // streamed text also carries a reasoning model's thinking and every step's
+    // preamble, and scoring those would fail a correct answer on its thinking.
+    finalText: messageText ?? streamed,
     steps: counter.steps,
     confirmations,
   };
@@ -232,7 +251,7 @@ export function createHarness(options: HarnessOptions): Harness {
   async function runScenario(scenario: Scenario): Promise<ScenarioResult> {
     const start = now();
     const signal = signalFor();
-    const tools = createFakeTools(scenario.tools, scenario.knowledge);
+    const tools = createFakeTools(scenario.tools, scenario.knowledge, options.toolSpecs ?? {});
     const knowledge = createKnowledgeBase(scenario.knowledge);
     const pending = [...scenario.confirmations];
     const confirmations: { tool: string; approved: boolean }[] = [];
@@ -287,6 +306,7 @@ export function createHarness(options: HarnessOptions): Harness {
       tokens: { prompt: counter.prompt, completion: counter.completion, estimated: counter.estimated },
       durationMs: Math.max(0, Math.round(now() - start)),
       finalText: trace.finalText,
+      calls: trace.toolCalls,
       expectations,
       ...(error === undefined ? {} : { error }),
     };

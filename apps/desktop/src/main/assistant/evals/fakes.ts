@@ -12,6 +12,16 @@
  * its knowledge in the tool's result: the harness synthesises `knowledge.search`
  * from `scenario.knowledge`, highest score first, so the article a citation
  * names and the article the model reads cannot drift apart.
+ *
+ * **A tool a caller has the real spec for wears it.** A scenario declares what
+ * a tool DOES; what the model is SHOWN — the description that says when to
+ * reach for it and the JSON schema of the fields it may send — is the app's, and
+ * a turn offered a name the app has must see the app's own. That table arrives
+ * as {@link ToolSpecLookup} from whoever can build the real registry (the real
+ * mode's runner, `scripts/assistant-eval.mjs`), because this directory cannot:
+ * importing the registry evaluates the whole database package. A name nobody
+ * hands in keeps the generic spec below, which is what every scenario's
+ * transcript was written against.
  */
 
 import type {
@@ -49,6 +59,15 @@ const PARAMETERS: Readonly<Record<string, unknown>> = {
   type: "object",
   additionalProperties: true,
 };
+
+/** The description and schema a real tool declares, as the registry hands them over. */
+export interface RealToolSpec {
+  readonly description: AssistantText;
+  readonly parameters: Readonly<Record<string, unknown>>;
+}
+
+/** The real specs a caller has, by tool name. A name that is absent keeps the generic spec. */
+export type ToolSpecLookup = Readonly<Record<string, RealToolSpec>>;
 
 /** A scenario's citation as the contract's shape, with no key present holding `undefined`. */
 export function toCitation(citation: ScenarioCitation): Citation {
@@ -119,12 +138,20 @@ function resultOf(tool: ScenarioTool): ToolResult {
   };
 }
 
-/** One tool the scenario declared, as the loop calls it. */
-export function createFakeTool(tool: ScenarioTool, hits: readonly ScenarioHit[]): Tool {
+/**
+ * One tool the scenario declared, as the loop calls it: the real description and
+ * schema when the caller has them, the scenario's own result in either case.
+ */
+export function createFakeTool(
+  tool: ScenarioTool,
+  hits: readonly ScenarioHit[],
+  specs: ToolSpecLookup = {},
+): Tool {
+  const spec = specs[tool.name];
   return {
     name: tool.name,
-    description: describe(tool.name),
-    parameters: PARAMETERS,
+    description: spec?.description ?? describe(tool.name),
+    parameters: spec?.parameters ?? PARAMETERS,
     effect: tool.effect,
     async run(_args: unknown, context: ToolContext): Promise<ToolResult> {
       // Only `write` and `network` ask: `navigate` moves the app's own view, and
@@ -155,6 +182,7 @@ export function createFakeTool(tool: ScenarioTool, hits: readonly ScenarioHit[])
 export function createFakeTools(
   tools: readonly ScenarioTool[],
   hits: readonly ScenarioHit[],
+  specs: ToolSpecLookup = {},
 ): readonly Tool[] {
-  return tools.map((tool) => createFakeTool(tool, hits));
+  return tools.map((tool) => createFakeTool(tool, hits, specs));
 }

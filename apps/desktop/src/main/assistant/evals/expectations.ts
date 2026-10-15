@@ -15,12 +15,23 @@
 
 import type { AssistantLocale } from "@nexus/core";
 
-import { detectDoesNotKnow, detectLanguage } from "./language.js";
+import { claimsCompletion, detectDoesNotKnow, detectLanguage, detectScript } from "./language.js";
+import type { ReplyScript } from "./language.js";
 import type { ArgumentConstraint, ScenarioExpectation, ToolCallExpectation } from "./scenario.js";
 
 /** What the harness saw a turn do. The checkers read nothing else. */
 export interface TurnTrace {
-  readonly toolCalls: readonly { readonly name: string; readonly arguments: unknown }[];
+  /**
+   * Every call the loop emitted, in order, with what its result said. `false`
+   * is a refusal, a failure, or a call whose result never arrived (an aborted
+   * turn); in all three the call did not do anything, which is the only thing
+   * the checkers below read it for.
+   */
+  readonly toolCalls: readonly {
+    readonly name: string;
+    readonly arguments: unknown;
+    readonly ok: boolean;
+  }[];
   /** Citation ids the turn emitted, on message events and on tool results, deduplicated in order. */
   readonly citationIds: readonly string[];
   /** The visible answer: the tokens the model streamed, or the final message's content when it streamed none. */
@@ -156,6 +167,46 @@ function checkLanguage(locale: AssistantLocale, trace: TurnTrace): ExpectationRe
   };
 }
 
+function checkScript(script: ReplyScript, trace: TurnTrace): ExpectationResult {
+  const reading = detectScript(trace.finalText);
+  return {
+    kind: "script",
+    label: `script(${script})`,
+    passed: reading === script,
+    detail: reading === script ? `read as ${reading}` : `read as ${reading}, expected ${script}`,
+  };
+}
+
+/**
+ * The claim check: when a tool was called and no call of that tool ever
+ * succeeded, the answer must not say the thing was done.
+ *
+ * **Why the tool names and not the words.** The list behind
+ * {@link claimsCompletion} is per language and cannot say WHICH tool a sentence
+ * is about, so a turn that both failed one write and made another is not
+ * checked at all: its answer legitimately claims the write that did run. The
+ * README names that limit beside the others.
+ */
+function checkClaimsOnlyWhatRan(trace: TurnTrace): ExpectationResult {
+  const succeeded = new Set(trace.toolCalls.filter((call) => call.ok).map((call) => call.name));
+  const unfinished = [
+    ...new Set(trace.toolCalls.filter((call) => !call.ok).map((call) => call.name)),
+  ].filter((name) => !succeeded.has(name));
+  const claimed = claimsCompletion(trace.finalText);
+  const passed = unfinished.length === 0 || !claimed;
+  return {
+    kind: "claimsOnlyWhatRan",
+    label: "claimsOnlyWhatRan",
+    passed,
+    detail:
+      unfinished.length === 0
+        ? "nothing was refused or failed"
+        : claimed
+          ? `the answer claims a write that did not run: ${unfinished.join(", ")}`
+          : `nothing claimed beyond what ran: ${unfinished.join(", ")}`,
+  };
+}
+
 function checkDoesNotKnow(expected: boolean, trace: TurnTrace): ExpectationResult {
   const reading = detectDoesNotKnow(trace.finalText);
   const detail = reading
@@ -179,8 +230,9 @@ function checkMaxSteps(budget: number, trace: TurnTrace): ExpectationResult {
 
 /**
  * Every expectation a scenario declares, in a fixed order: tools, citations,
- * the notice, the text, the language, the gap, the budget. The order is the
- * report's, so two runs of one scenario print the same column.
+ * the notice, the text, the claim, the language and the script, the gap, the
+ * budget. The order is the report's, so two runs of one scenario print the same
+ * column.
  */
 export function checkExpectations(
   expect: ScenarioExpectation,
@@ -225,7 +277,9 @@ export function checkExpectations(
       detail: found ? "present in the answer, and the scenario forbids it" : "absent, as expected",
     });
   }
+  if (expect.claimsOnlyWhatRan === true) results.push(checkClaimsOnlyWhatRan(trace));
   if (expect.language !== undefined) results.push(checkLanguage(expect.language, trace));
+  if (expect.script !== undefined) results.push(checkScript(expect.script, trace));
   if (expect.doesNotKnow !== undefined) results.push(checkDoesNotKnow(expect.doesNotKnow, trace));
   if (expect.maxSteps !== undefined) results.push(checkMaxSteps(expect.maxSteps, trace));
   return results;
