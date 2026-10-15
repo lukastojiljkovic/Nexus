@@ -54,7 +54,10 @@ Note actions: pin, move, tag, share (→ SHARE, cloud), "Vizuelizuj na canvas"
   (mapping UI on first use); editing the note text updates the card.
 - **NOTE-007 (M)** "Vizuelizuj na canvas": generate a board of note-mirror
   cards per heading/section with wiki-links as arrows (canvas research §4);
-  the result stays live-linked.
+  the result stays live-linked. *Built 2026-10-15 as a static diagram:
+  headings are boxes in a tree and wiki-links are arrows to the linked notes
+  (`packages/core/src/canvas/noteOutline.ts`); the boxes are not live
+  note-mirror cards, so the result is not live-linked.*
 - **NOTE-008 (M)** Version history per note (CRDT snapshots): browse and
   restore prior versions; restore creates a new version (never destructive).
 - **NOTE-009 (M)** Note templates (sastanak, recept, dnevnik, predmet...)

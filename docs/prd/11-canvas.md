@@ -56,7 +56,10 @@ in-place (popover editor).
   deleting the note marks the card broken with recovery options.
 - **CANV-005 (M)** Auto-visualize (NOTE-007 counterpart): headings→cards,
   wiki-links→connectors, layout algorithm (tidy grid/tree); result is a
-  normal editable board; regeneration offers merge or new board.
+  normal editable board; regeneration offers merge or new board. *Built
+  2026-10-15: headings→boxes, wiki-links→arrows, tree layout, a normal
+  editable board. Regeneration makes a new board each time; there is no
+  merge.*
 - **CANV-006 (M)** Boards are CRDT documents (Yjs object map; per-property
   LWW semantics per sync research); version history with browse/restore
   (snapshot-based, doubles as compaction).

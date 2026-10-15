@@ -1806,6 +1806,8 @@ export const en = {
     duplicate: "Duplicate",
     duplicateError: "Duplicating the note failed. Try again.",
     duplicateTooLarge: "The note is too large to duplicate in one go.",
+    visualize: "Visualize on canvas",
+    visualizeError: "The note could not be drawn on a canvas. Try again.",
     undo: "Undo",
     dismiss: "Dismiss",
     loadError: "Notes cannot be loaded right now. Try again later.",
