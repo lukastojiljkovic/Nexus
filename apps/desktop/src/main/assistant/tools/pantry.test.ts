@@ -198,6 +198,58 @@ describe("pantry.add", () => {
     expect(store().listItems()).toEqual([]);
   });
 
+  it("adds a bare purchase to the row it names, in the English name of a Serbian staple", async () => {
+    const milk = store().createItem({ name: "Mleko", quantity: 1, unit: "l", category: "food", locationId: null }, NOW_ISO);
+    const recorder = contextFor("en", true);
+    const result = await toolOf("pantry.add").run(
+      { name: "milk", quantity: 2, unit: "l" },
+      recorder.context,
+    );
+
+    expect(recorder.confirms).toEqual([
+      { tool: "pantry.add", summary: "Add “Mleko” to the pantry, 2 l (Food)", effect: "write" },
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      content: `Added to the pantry: “Mleko” (${milk.id}).`,
+      navigateTo: { module: "pantry" },
+    });
+    const rows = store().listItems();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: milk.id, name: "Mleko", quantity: 3 });
+  });
+
+  it("matches a name case- and diacritic-insensitively, and only in the same unit", async () => {
+    const cheese = store().createItem({ name: "Sir", quantity: 1, unit: "kg", category: "food", locationId: null }, NOW_ISO);
+    const contexts = contextFor("sr", true).context;
+
+    // A different unit is a different stock: a new row, not a sum of kilos and pieces.
+    await toolOf("pantry.add").run({ name: "sir", quantity: 2, unit: "pcs" }, contexts);
+    expect(store().listItems().map((row) => [row.name, row.unit, row.quantity])).toEqual([
+      ["sir", "pcs", 2],
+      ["Sir", "kg", 1],
+    ]);
+
+    // The same name in the same unit, with the diacritics left out, is the row.
+    const result = await toolOf("pantry.add").run({ name: "SIR", quantity: 0.5, unit: "kg" }, contexts);
+    expect(result).toEqual({
+      ok: true,
+      content: `Dodato u ostavu: „Sir“ (${cheese.id}).`,
+      navigateTo: { module: "pantry" },
+    });
+    expect(store().listItems().find((row) => row.id === cheese.id)).toMatchObject({ quantity: 1.5 });
+  });
+
+  it("writes a new row when the call names a shelf, since a row holds one batch's details", async () => {
+    store().createItem({ name: "Mleko", quantity: 1, unit: "l", category: "food", locationId: null }, NOW_ISO);
+    store().createLocation({ name: "Frižider" }, NOW_ISO);
+    await toolOf("pantry.add").run(
+      { name: "milk", quantity: 1, unit: "l", location: "frizider" },
+      contextFor("en", true).context,
+    );
+    expect(store().listItems()).toHaveLength(2);
+  });
+
   it("refuses a quantity no pantry row may carry", async () => {
     const result = await toolOf("pantry.add").run(
       { name: "Mleko", quantity: 1_000_001, unit: "l" },

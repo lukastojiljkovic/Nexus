@@ -321,6 +321,15 @@ export function pantryTools(deps: PantryToolDeps): readonly Tool[] {
           throw new Error('"useWithinDays" needs an "opened" day beside it.');
         }
 
+        // A bare purchase of something the pantry already holds adds to that
+        // row. A call that names a shelf, an expiry or a minimum is a new batch
+        // with details of its own, and a row holds one of each, so it stays a row.
+        const bare = [args.category, args.expiry, args.location, args.minQuantity, args.opened, args.useWithinDays]
+          .every((value) => value === undefined);
+        const stock = bare
+          ? deps.profileDb(context.profileId, (db, id) => findStock(new PantryStore(db, id).listItems(), name, unit))
+          : undefined;
+
         const declined = await confirmOrDecline(
           context,
           "pantry.add",
@@ -328,7 +337,7 @@ export function pantryTools(deps: PantryToolDeps): readonly Tool[] {
           phrase(
             context.locale,
             ADD_SUMMARY,
-            name,
+            stock?.name ?? name,
             quantityText(context.locale, quantity, unit),
             text(context.locale, CATEGORY_WORDS[category]),
           ),
@@ -337,6 +346,9 @@ export function pantryTools(deps: PantryToolDeps): readonly Tool[] {
 
         const created = deps.profileDb(context.profileId, (db, id) => {
           const store = new PantryStore(db, id);
+          if (stock !== undefined) {
+            return store.changeQuantity(stock.id, quantity, "bought", new Date(deps.now()).toISOString());
+          }
           const location = locationName === undefined ? null : resolveLocation(store.listLocations(), locationName, context.locale);
           return store.createItem(
             {
@@ -426,5 +438,34 @@ function resolveLocation(
     );
   }
   return match.id;
+}
+
+/**
+ * The English names of the commonest staples, folded, mapped to the folded
+ * Serbian name the pantry usually holds them under. A short lexicon so that
+ * "milk" finds "Mleko"; a name not listed matches only its own folded spelling.
+ */
+const STAPLE_ALIASES: ReadonlyMap<string, string> = new Map([
+  ["milk", "mleko"],
+  ["bread", "hleb"],
+  ["eggs", "jaja"],
+  ["cheese", "sir"],
+  ["butter", "maslac"],
+  ["rice", "pirinac"],
+  ["sugar", "secer"],
+]);
+
+/** The key two spellings of one pantry item share: the folded name, or the staple's Serbian name. */
+function stockKey(name: string): string {
+  const folded = foldSearchText(name.trim());
+  return STAPLE_ALIASES.get(folded) ?? folded;
+}
+
+/** The live row a purchase of `name` in `unit` adds to, if there is one. */
+function findStock(items: readonly PantryItem[], name: string, unit: PantryUnit): PantryItem | undefined {
+  const key = stockKey(name);
+  return items.find(
+    (item) => item.archivedAt === null && item.unit === unit && stockKey(item.name) === key,
+  );
 }
 
