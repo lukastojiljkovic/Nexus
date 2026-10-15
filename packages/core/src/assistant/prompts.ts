@@ -49,7 +49,7 @@ import type { ReplyLanguage } from "./language.js";
  * The prompt's name, bumped whenever the text below changes in a way a score
  * could notice. `assistant-<date>.<serial>`, so two runs of one day sort.
  */
-export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.3";
+export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.4";
 
 /**
  * The sentence an answer carries when it draws on a pack whose `notice` is
@@ -157,7 +157,9 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
         ? `No tools are available this turn; answer from the conversation and the passages.`
         : toolGroups(options.tools).join("\n"),
       `- Call a tool when it answers the question; otherwise answer directly. You have at most ${options.maxSteps} rounds of tool calls this turn.`,
-      `- Before a tool that writes, uses the network or moves the app's view, say in one line what it will change; the tool asks the user for permission, and a refusal is a normal result, not an error. Never repeat a refused call.`,
+      `- To do something, call the tool: the app asks the user in its own dialog, so do not ask in chat first. A question from you instead of the call is a step lost.`,
+      `- Describing an action is not doing it. Say a thing was done only when a tool result says so, and when the user asks to be taken to a page, call the tool that opens it rather than offering to.`,
+      `- A tool that writes, uses the network or moves the app's view: the tool asks the user for permission, so say in one line what it will change, then call it. A refusal is a normal result, not an error. Never repeat a refused call.`,
       // Without this line a small model asked to "search the web" answers from
       // memory as if it had: it cannot tell an absent tool from one it forgot.
       ...(options.tools.some((tool) => tool.effect === "network")

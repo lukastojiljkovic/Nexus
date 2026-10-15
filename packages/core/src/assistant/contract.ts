@@ -263,12 +263,43 @@ export interface TextToSpeech {
 
 // --- the agent loop ------------------------------------------------------------
 
+/**
+ * What the loop's own check said about an answer, and what the loop did about
+ * it, on the `message` event that carries the turn's answer (`verify.ts`).
+ *
+ * The page draws the answer either way; this exists so the evals and a reader
+ * can count how many turns needed the app's help, and so a later page can mark
+ * an answer it re-asked for. Absent on a preamble (a step that calls tools) and
+ * on an answer nothing was found in, because "no findings" and "not checked"
+ * are the same fact.
+ */
+export interface AnswerVerification {
+  /** What was wrong, in the order `verifyAnswer` reports it. */
+  readonly findings: readonly AnswerVerificationFinding[];
+  /** How many corrective re-asks the loop spent on this answer. At most one. */
+  readonly corrected: number;
+  /** Whether the script was rewritten without asking the model (`language.ts`). */
+  readonly transliterated: boolean;
+}
+
+/** One finding's kind, as a page or a report reads it. The sentence lives in `verify.ts`. */
+export type AnswerVerificationFinding =
+  | "completion-claim"
+  | "language"
+  | "script";
+
 /** What one turn of the agent emits, in order, for the page to draw. */
 export type AgentEvent =
   | { readonly type: "token"; readonly text: string }
   | { readonly type: "tool-call"; readonly call: ToolCall }
   | { readonly type: "tool-result"; readonly callId: string; readonly result: ToolResult }
-  | { readonly type: "message"; readonly message: ChatMessage; readonly citations: readonly Citation[] }
+  | {
+      readonly type: "message";
+      readonly message: ChatMessage;
+      readonly citations: readonly Citation[];
+      /** Set on the answer when the loop's own check had something to say about it. */
+      readonly verification?: AnswerVerification;
+    }
   | {
       readonly type: "error";
       readonly code: AgentErrorCode;
