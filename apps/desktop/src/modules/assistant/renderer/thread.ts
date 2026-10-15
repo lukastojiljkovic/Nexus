@@ -1,15 +1,18 @@
 import type { AppLocation, Citation } from "@nexus/core";
 import type { AssistantMessageView } from "../shared/ipc.js";
+import { copy } from "./copy.js";
 
 /**
  * THE THREAD'S PURE LOGIC: how a list of stored messages becomes what the page
- * draws, and where a citation takes the user.
+ * draws, what one line of tool activity says, and where a citation takes the
+ * user.
  *
- * **Why this is a file of its own.** Both halves are rules rather than layout,
- * and both are the kind of rule that is easy to get subtly wrong: which
- * messages fold into one quiet block of tool activity, and whether a citation is
- * a place in the app, an address on the web, or neither. Neither needs React to
- * be stated, so both are stated here and tested without rendering anything.
+ * **Why this is a file of its own.** These are rules rather than layout, and
+ * they are the kind that is easy to get subtly wrong: which messages fold into
+ * one quiet block of tool activity, what a line of that block claims happened,
+ * and whether a citation is a place in the app, an address on the web, or
+ * neither. None of them needs React to be stated, so all of them are stated
+ * here and tested without rendering anything.
  *
  * **Tool activity is grouped, and a message is a boundary.** A turn's tool calls
  * and their results are a run of rows a person reads as one aside - "it looked
@@ -150,12 +153,53 @@ export function groupThread(messages: readonly AssistantMessageView[]): ThreadIt
     line({
       id: message.id,
       name: message.toolCallId === null ? null : (names.get(message.toolCallId) ?? null),
-      ok: true,
+      ok: message.ok,
       text: firstLine(message.text),
     });
   }
   flush();
   return items;
+}
+
+/** How far one tool line got: no result yet, a result, or a result that says nothing happened. */
+export type ToolLineState = "running" | "done" | "failed";
+
+/** One tool line as the page draws it: the action in the user's words, how far it got, and what it said. */
+export interface ToolLineView {
+  readonly label: string;
+  readonly state: ToolLineState;
+  /** The tool's own text - the sentence that says why, when there is one. */
+  readonly detail: string;
+}
+
+/**
+ * One tool line, as the page draws it.
+ *
+ * **Why the label is looked up rather than printed.** `tasks.create` is the
+ * model's address for a tool, not a person's word for what happened: a receipt
+ * that said it would make the reader learn the registry first. The names the
+ * registry declares are mapped to short labels in this module's own copy
+ * (`toolLabels.test.ts` pins the map against the registry), and a name the map
+ * does not know is drawn as it stands - a tool this build cannot name is still a
+ * tool that ran.
+ *
+ * **Why the state is the page's word and never the tool's text.** A tool's own
+ * sentence says why it did nothing (the user declined, an argument the schema
+ * refused); what it cannot say is whether anything HAPPENED, which is the whole
+ * reason this surface states the outcome itself instead of trusting the model's
+ * sentence about it.
+ */
+export function toolLineView(line: ThreadToolLine): ToolLineView {
+  // Read at call time and widened once: a tool name is a value the model wrote,
+  // not one of the map's own keys - so only an OWN key counts, or a call named
+  // `constructor` would draw Object's function as its label.
+  const labels: Readonly<Record<string, string>> = copy.thread.tools.labels;
+  const known = line.name !== null && Object.hasOwn(labels, line.name);
+  return {
+    label: line.name === null ? copy.thread.tools.unnamed : known ? (labels[line.name] ?? line.name) : line.name,
+    state: line.ok === null ? "running" : line.ok ? "done" : "failed",
+    detail: line.text,
+  };
 }
 
 /** Where clicking a citation takes the user. */

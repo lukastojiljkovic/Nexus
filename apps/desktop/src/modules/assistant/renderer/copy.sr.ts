@@ -40,7 +40,63 @@ export const sr = {
       "Asistent poznaje tvoje beleške, zadatke, događaje i priručnik same aplikacije, i odgovara bez interneta. Izaberi razgovor ili napiši pitanje ispod.",
     thinking: "Razmišljam…",
     stopped: "Zaustavljeno.",
-    tools: "Alatke",
+    /**
+     * Red o alatkama: šta je alatka radila i dokle je stigla. Naziv alatke je
+     * adresa koju model izgovara (`tasks.create`), a ne reč kojom čovek čita
+     * svoj račun, pa se svaka imenuje svojom radnjom.
+     */
+    tools: {
+      /** Radnja svake alatke koju registar ima, pod imenom koje registar deklariše (`main/assistant/tools/*.ts`). */
+      labels: {
+        "app.open": "Otvaranje stranice",
+        "app.modules": "Čitanje spiska modula",
+        "app.search": "Pretraga aplikacije",
+        "calculator.history": "Čitanje istorije kalkulatora",
+        "calendar.create": "Dodavanje događaja",
+        "calendar.events": "Čitanje događaja",
+        "car.due": "Čitanje šta dospeva na automobilu",
+        "car.fill": "Beleženje sipanja",
+        "cookbook.recipe": "Čitanje recepta",
+        "cookbook.search": "Pretraga recepata",
+        "culture.plan": "Dodavanje plana",
+        "culture.programme": "Čitanje programa",
+        "emergency.card": "Čitanje kartice za hitne slučajeve",
+        "habits.checkin": "Beleženje navike",
+        "habits.today": "Čitanje današnjih navika",
+        "lab.logs": "Čitanje dnevnika laboratorije",
+        "lab.readings": "Čitanje očitavanja",
+        "library.add": "Dodavanje u biblioteku",
+        "library.shelf": "Čitanje biblioteke",
+        "maps.pins": "Čitanje tačaka na mapi",
+        "miniapps.kept": "Čitanje šta pamte mini aplikacije",
+        "notes.append": "Dodavanje u belešku",
+        "notes.create": "Dodavanje beleške",
+        "notes.read": "Čitanje beleške",
+        "notes.search": "Pretraga beležaka",
+        "packs.list": "Čitanje instaliranih paketa",
+        "pantry.add": "Dodavanje u ostavu",
+        "pantry.expiring": "Čitanje šta ističe",
+        "reader.progress": "Čitanje napretka čitanja",
+        "recorder.list": "Čitanje snimaka",
+        "tasks.complete": "Završavanje zadatka",
+        "tasks.create": "Dodavanje zadatka",
+        "tasks.list": "Čitanje zadataka",
+        "tasks.reschedule": "Premeštanje zadatka",
+        "timers.list": "Čitanje tajmera",
+        "timers.start": "Pokretanje tajmera",
+        "web.read": "Čitanje web stranice",
+        "web.search": "Pretraga weba",
+        "wiki.recent": "Čitanje istorije referenci",
+      },
+      /** Alatka kojoj se poziv više ne nalazi u razgovoru: imena nema, pa se imenuje ovako. */
+      unnamed: "Alatka",
+      /** Dokle je poziv stigao, jednom rečju. */
+      states: {
+        running: "u toku",
+        done: "urađeno",
+        failed: "nije urađeno",
+      },
+    },
   },
   composer: {
     placeholder: "Pitanje ili nalog",

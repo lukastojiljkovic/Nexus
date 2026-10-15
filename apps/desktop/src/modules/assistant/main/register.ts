@@ -175,6 +175,12 @@ export function register(host: ModuleHostSurface): void {
       citations: message.citations,
       toolCalls: message.toolCalls,
       toolCallId: message.toolCallId,
+      // A tool ROW always states an outcome, even where the row itself does not
+      // (`ok` is migration 93's column): a row written before that column was
+      // read as a tool that did the thing, which is what the page showed for it
+      // all along. `null` stays for the other roles, which have no result yet -
+      // a request for calls is the row that has none.
+      ok: message.role === "tool" ? (message.ok ?? true) : null,
       safety: message.safety,
       createdAt: message.createdAt,
     };
@@ -372,6 +378,10 @@ export function register(host: ModuleHostSurface): void {
         role: "tool",
         text: event.result.content,
         toolCallId: event.callId,
+        // The tool's own verdict of itself, on the column migration 93 added: an
+        // outcome stored beside the text rather than inside it, so no reader has
+        // to parse the tool's words to learn what happened.
+        ok: event.result.ok,
         citations: event.result.citations ?? [],
       });
     }

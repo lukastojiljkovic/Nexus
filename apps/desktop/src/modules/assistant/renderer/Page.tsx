@@ -5,6 +5,7 @@ import {
   Card,
   ConfirmDialog,
   EmptyState,
+  Icon,
   ListRow,
   LoadingState,
   PageHeader,
@@ -23,7 +24,14 @@ import type {
 import { copy } from "./copy.js";
 import { openAppLocation, openWebAddress } from "./location.js";
 import { ModelPanel } from "./ModelPanel.js";
-import { citationTarget, groupThread, numberedCitations, type ThreadItem } from "./thread.js";
+import {
+  citationTarget,
+  groupThread,
+  numberedCitations,
+  toolLineView,
+  type ThreadItem,
+  type ThreadToolLine,
+} from "./thread.js";
 import "./assistant.css";
 
 /**
@@ -54,8 +62,11 @@ import "./assistant.css";
 interface LiveTurn {
   readonly turnId: string;
   text: string;
-  /** One line per tool call and per result, as they happen. */
-  readonly tools: { id: string; name: string; text: string }[];
+  /**
+   * One line per tool call and per result, as they happen - the shape
+   * `toolLineView` reads, written mutably here because the events fill it in.
+   */
+  readonly tools: { id: string; name: string; ok: boolean | null; text: string }[];
 }
 
 export default function AssistantPage({ profileId }: ModulePageProps) {
@@ -207,11 +218,22 @@ export default function AssistantPage({ profileId }: ModulePageProps) {
               current.text += event.text;
               setLive({ ...current });
             } else if (event.type === "tool-call") {
-              current.tools.push({ id: event.call.id, name: event.call.name, text: "" });
+              // No result yet: `ok: null` is the line saying the tool is running.
+              current.tools.push({
+                id: event.call.id,
+                name: event.call.name,
+                ok: null,
+                text: "",
+              });
               setLive({ ...current });
             } else if (event.type === "tool-result") {
               const line = current.tools.find((tool) => tool.id === event.callId);
-              if (line !== undefined) line.text = event.result.content.slice(0, 120);
+              if (line !== undefined) {
+                line.text = event.result.content.slice(0, 120);
+                // The tool's own verdict, kept so a live line reads exactly as
+                // the saved one it becomes a moment later.
+                line.ok = event.result.ok;
+              }
               setLive({ ...current });
             } else if (event.type === "confirm") {
               setConfirm({ requestId: event.requestId, summary: event.summary });
@@ -521,14 +543,7 @@ function Thread({
     <div className="asst__thread">
       {items.map((item) =>
         item.kind === "tools" ? (
-          <div key={item.id} className="asst__tools">
-            {item.lines.map((line) => (
-              <p key={line.id} className="nx-hint">
-                {line.name === null ? copy.thread.tools : `${copy.thread.tools}: ${line.name}`}
-                {line.text === "" ? "" : ` — ${line.text}`}
-              </p>
-            ))}
-          </div>
+          <ToolLines key={item.id} lines={item.lines} />
         ) : (
           <div
             key={item.id}
@@ -545,19 +560,44 @@ function Thread({
 
       {live !== null && (
         <div className="asst__msg">
-          {live.tools.length > 0 && (
-            <div className="asst__tools">
-              {live.tools.map((line) => (
-                <p key={line.id} className="nx-hint">
-                  {`${copy.thread.tools}: ${line.name}`}
-                  {line.text === "" ? "" : ` — ${line.text}`}
-                </p>
-              ))}
-            </div>
-          )}
+          {live.tools.length > 0 && <ToolLines lines={live.tools} />}
           <p className="asst__text">{live.text === "" ? copy.thread.thinking : live.text}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * One run of tool activity: a line per call, with the outcome stated by the app.
+ *
+ * **The line is the receipt; the answer is commentary on it.** A small model
+ * that says „I added the task" after a call that failed is the failure this
+ * component exists for, and no prompt fixes it: the page knows whether the tool
+ * acted (`ThreadToolLine.ok`), so the page says so itself. Everything the tools
+ * did stays a quiet aside - the one line that did nothing is the one that
+ * stands out, in words and a glyph as well as in the problem colour, which is
+ * how this design system states a state that must not be carried by colour
+ * alone.
+ */
+function ToolLines({ lines }: { readonly lines: readonly ThreadToolLine[] }) {
+  return (
+    <div className="asst__tools">
+      {lines.map((line) => {
+        const view = toolLineView(line);
+        const failed = view.state === "failed";
+        return (
+          <p key={line.id} className={failed ? "nx-hint asst__tool-failed" : "nx-hint"}>
+            {failed && (
+              <span className="asst__tool-mark" aria-hidden="true">
+                <Icon name="warning" size={13} />
+              </span>
+            )}
+            {`${view.label} — ${copy.thread.tools.states[view.state]}`}
+            {view.detail === "" ? "" : ` — ${view.detail}`}
+          </p>
+        );
+      })}
     </div>
   );
 }
