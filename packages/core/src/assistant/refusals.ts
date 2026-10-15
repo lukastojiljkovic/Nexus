@@ -21,11 +21,11 @@
  * request; the next user message may change the user's mind, so the tool asks
  * again there.
  *
- * **A "yes" is not remembered.** Only a refusal is recorded, so a repeated call
- * the user approved is a fresh request they still decide. What IS shared is the
- * question itself: two identical calls in one model step run in parallel, and
- * they park on ONE `confirm`, so the user is asked once and both calls take that
- * answer - if it was "yes", both run, exactly as two identical calls always did.
+ * **A "yes" is never shared.** Only a refusal is recorded, so a repeated call
+ * the user approved is a fresh request they still decide. Two identical calls in
+ * one model step run in parallel and park on ONE question: a "no" answers both,
+ * but a "yes" authorises only the call that asked, and the other asks for itself
+ * - one approval never runs a write twice.
  */
 
 import type { ConfirmRequest, ToolCall, ToolContext, ToolResult } from "./contract.js";
@@ -43,20 +43,22 @@ export function createRefusalMemory(): RefusalMemory {
   /** The questions in flight, so two identical parallel calls ask once. Cleared as each one is answered. */
   const asking = new Map<string, Promise<boolean>>();
 
-  function ask(key: string, context: ToolContext, request: ConfirmRequest): Promise<boolean> {
+  async function confirmOnce(key: string, context: ToolContext, request: ConfirmRequest): Promise<boolean> {
+    const approved = await context.confirm(request);
+    if (!approved) refused.add(key);
+    return approved;
+  }
+
+  async function ask(key: string, context: ToolContext, request: ConfirmRequest): Promise<boolean> {
     const pending = asking.get(key);
-    if (pending !== undefined) return pending;
-    const question = (async (): Promise<boolean> => {
-      try {
-        const approved = await context.confirm(request);
-        if (!approved) refused.add(key);
-        return approved;
-      } finally {
-        asking.delete(key);
-      }
-    })();
+    if (pending !== undefined) {
+      // A "no" answers every identical call; a "yes" authorises the one call
+      // that asked, so this one asks for itself.
+      return (await pending) ? await confirmOnce(key, context, request) : false;
+    }
+    const question = confirmOnce(key, context, request).finally(() => asking.delete(key));
     asking.set(key, question);
-    return question;
+    return await question;
   }
 
   return {

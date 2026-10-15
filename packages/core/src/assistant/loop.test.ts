@@ -511,7 +511,7 @@ describe("the loop's scripted conversations", () => {
     ]);
   });
 
-  it("runs both identical calls of one step when the single question was answered yes", async () => {
+  it("asks the second identical call of one step for itself when the first was answered yes", async () => {
     const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
     const model = createScriptedModel([
       {
@@ -526,15 +526,17 @@ describe("the loop's scripted conversations", () => {
     const events = await turn({
       model,
       tools: [create],
+      // Yes to the first question, no to the second.
       confirm: async (request) => {
         asked.push(request);
-        return true;
+        return asked.length === 1;
       },
     });
 
-    expect(asked).toHaveLength(1);
-    expect(create.seen).toEqual([{ title: "Kupi vodu" }, { title: "Kupi vodu" }]);
-    expect(of(events, "tool-result").map((event) => event.result.ok)).toEqual([true, true]);
+    // One approval runs one write: the twin asked for itself and was refused.
+    expect(asked).toHaveLength(2);
+    expect(create.seen).toEqual([{ title: "Kupi vodu" }]);
+    expect(of(events, "tool-result").map((event) => event.result.ok)).toEqual([true, false]);
   });
 
   it("asks again on the next turn, because a refusal belongs to one turn", async () => {
