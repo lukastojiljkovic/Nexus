@@ -119,6 +119,7 @@ describe("createToolRegistry", () => {
       car: 2,
       cookbook: 2,
       culture: 2,
+      electronics: 13,
       emergency: 1,
       habits: 2,
       lab: 2,

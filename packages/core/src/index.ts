@@ -1078,6 +1078,28 @@ export {
   COMPONENT_CATALOGUE,
   componentsOfKind,
 } from "./electronics/catalogue.js";
+// The palette's search, and the assistant's component lookup, read one answer.
+export { filterComponents, matchesComponentQuery } from "./electronics/search.js";
+export {
+  findComponent,
+  findPin,
+  gridCell,
+  parseComponentValue,
+  planBuild,
+  splitEnd,
+  wireColourFor,
+} from "./electronics/build.js";
+export type {
+  BuildInput,
+  BuildPartInput,
+  BuildPlan,
+  BuildProblem,
+  BuildResult,
+  BuildWireInput,
+  PlannedEnd,
+  PlannedPart,
+  PlannedWire,
+} from "./electronics/build.js";
 export {
   circuitProblems,
   MAX_PART_COORDINATE,

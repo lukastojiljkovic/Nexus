@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { filterComponents } from "@nexus/core";
 import type { ComponentDef } from "@nexus/core";
 import { TextField } from "@nexus/ui";
 
-import { filterComponents, groupComponentsByKind } from "./elecCatalogue.js";
+import { groupComponentsByKind } from "./elecCatalogue.js";
 import { componentName, componentSummary } from "./elecLocale.js";
 import { countUnit, lookup, strings } from "./strings.js";
 // The drawer's own number formatter, imported rather than restated: it follows
