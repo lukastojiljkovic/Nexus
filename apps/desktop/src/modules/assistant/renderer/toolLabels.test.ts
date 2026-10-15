@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Tool, WebService } from "@nexus/core";
 import { createToolRegistry, type ToolDeps } from "../../../main/assistant/tools/index.js";
 import { createModuleRegistry } from "../../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { en } from "./copy.en.js";
 import { sr } from "./copy.sr.js";
 
@@ -51,6 +52,7 @@ function toolNames(): readonly string[] {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    visibility: () => DEFAULT_SHELL_VISIBILITY,
     web: webService(),
   };
   return createToolRegistry(deps)

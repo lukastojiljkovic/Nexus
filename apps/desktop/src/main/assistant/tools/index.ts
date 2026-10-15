@@ -61,6 +61,7 @@
 
 import type { Tool, ToolRegistry, WebService } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
+import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
 import { appTools, type ModuleLookup } from "./app.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
@@ -110,6 +111,8 @@ export interface ToolDeps {
   readonly timers: TimerHost;
   /** The app's module registry (`createModuleRegistry`), for navigation. */
   readonly modules: ModuleLookup;
+  /** The device's module visibility (ADR-101), for the hidden tag `app.modules` prints. */
+  readonly visibility: () => ShellVisibility;
   /** The web service, or `null` in a build without one. Its tools appear only when the user turned web search on. */
   readonly web: WebService | null;
 }
@@ -124,7 +127,12 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
    * fresh function identity per turn for no reason.
    */
   const appLevel: readonly Tool[] = [
-    ...appTools({ modules: deps.modules, search: deps.search }),
+    ...appTools({
+      modules: deps.modules,
+      search: deps.search,
+      profileDb: deps.profileDb,
+      visibility: deps.visibility,
+    }),
     ...taskTools({ profileDb: deps.profileDb, now: deps.now }),
     ...calendarTools({ profileDb: deps.profileDb }),
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),

@@ -1,0 +1,128 @@
+{
+  "scenarios": [
+    {
+      "id": "search-history-sr",
+      "title": "Šta je nedavno traženo",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta sam to nedavno tražio u pretrazi?" }
+      ],
+      "tools": [
+        {
+          "name": "search.history",
+          "effect": "read",
+          "content": "Zapamćene pretrage (2), najnovija prva:\n- zadaci\n- voda"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "search.history" }],
+        "answerContains": ["zadaci", "voda"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "search.history", "arguments": {} }] },
+        { "text": "Nedavno si tražio „zadaci“ i „voda“, najnovije prvo je „zadaci“." }
+      ]
+    },
+    {
+      "id": "search-forget-sr-accepted",
+      "title": "Pretraga zaboravljena posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Zaboravi pretragu „voda“." }
+      ],
+      "tools": [
+        {
+          "name": "search.forget",
+          "effect": "write",
+          "summary": {
+            "sr": "Zaboraviću pretragu „voda“.",
+            "en": "I will forget the search “voda”."
+          },
+          "content": "Pretraga „voda“ je zaboravljena."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "search.forget", "args": { "query": { "eq": "voda" } } }
+        ],
+        "answerContains": ["voda"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "search.forget", "arguments": { "query": "voda" } }] },
+        { "text": "Pretraga „voda“ je zaboravljena, a ostale pretrage ostaju sačuvane." }
+      ]
+    },
+    {
+      "id": "search-rebuild-en-accepted",
+      "title": "Search index rebuilt after confirmation",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Search cannot find a note I know exists. Rebuild the search index." }
+      ],
+      "tools": [
+        {
+          "name": "search.rebuild",
+          "effect": "write",
+          "summary": {
+            "sr": "Obnoviću indeks pretrage za celu aplikaciju.",
+            "en": "I will rebuild the search index for the whole app."
+          },
+          "content": "The search index was rebuilt."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "search.rebuild" }],
+        "answerContains": ["rebuilt"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "search.rebuild", "arguments": {} }] },
+        { "text": "The search index was rebuilt, so try the search again." }
+      ]
+    },
+    {
+      "id": "search-app-search-en",
+      "title": "Where a note is, through the global search",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Where did I write down the dentist appointment?" }
+      ],
+      "tools": [
+        {
+          "name": "app.search",
+          "effect": "read",
+          "content": "Results (1) for “dentist”:\n- note n1: Dentist appointment — call on Monday"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "app.search", "args": { "query": { "contains": "dentist" } } }
+        ],
+        "answerContains": ["Dentist appointment"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "app.search", "arguments": { "query": "dentist" } }] },
+        { "text": "It is in your notes under “Dentist appointment”, where you wrote to call on Monday." }
+      ]
+    }
+  ]
+}
