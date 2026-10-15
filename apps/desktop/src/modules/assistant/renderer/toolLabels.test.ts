@@ -53,6 +53,8 @@ function toolNames(): readonly string[] {
     },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
+    userData: () => "",
+    appVersion: () => "",
     web: webService(),
   };
   return createToolRegistry(deps)

@@ -164,6 +164,8 @@ export class AssistantProfile {
       timers: this.timers,
       modules: this.services.modules,
       visibility: () => resolveShellVisibility(this.services.userData()),
+      userData: () => this.services.userData(),
+      appVersion: () => this.services.appVersion(),
       web: this.webService(),
     });
     return this.toolRegistry.tools({ web });

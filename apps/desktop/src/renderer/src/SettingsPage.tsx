@@ -108,6 +108,8 @@ import { ProfileAvatar } from "./profileAvatar.js";
 import { ProPackList } from "./ProPacks.js";
 import { ModuleVisibilityCard } from "./ModuleVisibilityCard.js";
 import { visibleModuleSet, type ShellVisibility } from "../../shared/moduleVisibility.js";
+import type { ModulePageIntent } from "../../shared/moduleApi.js";
+import { parseDevicePreference, type DevicePreferenceKey } from "../../shared/devicePreferences.js";
 import { resolveModuleSelection } from "../../shared/onboardingPresets.js";
 import { heardTrades, planReasonLines } from "./profilePlanCopy.js";
 import { clearStoredSignals, readStoredSignals } from "./signalPrefs.js";
@@ -5433,6 +5435,14 @@ export interface SettingsPageProps {
    */
   moduleVisibility: ShellVisibility;
   onModuleVisibilityChanged: (next: ShellVisibility) => void;
+  /**
+   * The next queued intent for this page (`moduleKit/itemIntent.ts`). The
+   * assistant's `set-preference` arrives through it, and the page applies it with
+   * the setter its own control uses. Every intent is reported handled, as a kit
+   * page reports its own.
+   */
+  intent?: ModulePageIntent | null;
+  onIntentHandled?: () => void;
 }
 
 /**
@@ -5492,6 +5502,8 @@ export function SettingsPage({
   onTargetHandled,
   moduleVisibility,
   onModuleVisibilityChanged,
+  intent,
+  onIntentHandled,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -5554,6 +5566,57 @@ export function SettingsPage({
       console.error("Nexus: failed to apply notification preset:", error);
     }
   }
+
+  // The four device controls the assistant can also change. Each is the one
+  // function its row calls, so a change made by the assistant and one made by
+  // hand cannot leave the page's state and its storage disagreeing.
+  function changeLanguage(next: Locale): void {
+    persistLocale(next);
+    applyLocale(next);
+    reportLocaleToMain(next);
+    setLocale(next);
+    onLocaleChanged();
+  }
+
+  function changeAccent(id: AccentId): void {
+    persistAccent(profileId, id);
+    setAccent(id);
+  }
+
+  function changeWeekStart(option: WeekStartPreference): void {
+    persistWeekStart(option);
+    setWeekStart(option);
+  }
+
+  function changeClock(next: ClockPreference): void {
+    persistClock(next);
+    setClock(next);
+  }
+
+  /**
+   * One setter per allowed key, typed so that a key added to
+   * `DEVICE_PREFERENCE_VALUES` without its setter is a compile error here.
+   */
+  const devicePreferenceSetters: Record<DevicePreferenceKey, (value: string) => void> = {
+    theme: (value) => onPreferenceChange(value as ThemePreference),
+    accent: (value) => changeAccent(value as AccentId),
+    language: (value) => changeLanguage(value as Locale),
+    "week-start": (value) => changeWeekStart(value as WeekStartPreference),
+    clock: (value) => changeClock(value as ClockPreference),
+    "auto-lock": (value) => onAutoLockChange(Number(value) as AutoLockMinutes),
+  };
+
+  // An intent is consumed on the render that first hands it over: the queue gives
+  // the same object until it moves, so the effect is keyed on the intent alone,
+  // and a second run would report the next request handled too.
+  useEffect(() => {
+    if (intent?.kind === "action" && intent.action === "set-preference") {
+      const change = parseDevicePreference(intent.payload);
+      if (change !== null) devicePreferenceSetters[change.key](change.value);
+    }
+    if (intent !== null && intent !== undefined) onIntentHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, onIntentHandled]);
 
   /**
    * SET §5. A card's reset clears exactly ITS OWN keys — each enumerated in
@@ -6042,14 +6105,7 @@ export function SettingsPage({
                 layout="inline"
                 className="set__select"
                 value={locale}
-                onChange={(event) => {
-                  const next = event.target.value as Locale;
-                  persistLocale(next);
-                  applyLocale(next);
-                  reportLocaleToMain(next);
-                  setLocale(next);
-                  onLocaleChanged();
-                }}
+                onChange={(event) => changeLanguage(event.target.value as Locale)}
               >
                 {availableLocales().map((code) => (
                   <option key={code} value={code}>
@@ -6095,10 +6151,7 @@ export function SettingsPage({
                       title={name}
                       aria-label={name}
                       style={{ background: `var(--nx-swatch-${id})` }}
-                      onClick={() => {
-                        persistAccent(profileId, id);
-                        setAccent(id);
-                      }}
+                      onClick={() => changeAccent(id)}
                     />
                   );
                 })}
@@ -6121,10 +6174,7 @@ export function SettingsPage({
                     size="sm"
                     variant={weekStart === option ? "primary" : "ghost"}
                     aria-pressed={weekStart === option}
-                    onClick={() => {
-                      persistWeekStart(option);
-                      setWeekStart(option);
-                    }}
+                    onClick={() => changeWeekStart(option)}
                   >
                     {a.weekStartOptions[option]}
                   </Button>
@@ -6164,11 +6214,7 @@ export function SettingsPage({
                 layout="inline"
                 className="set__select"
                 value={clock}
-                onChange={(event) => {
-                  const next = event.target.value as ClockPreference;
-                  persistClock(next);
-                  setClock(next);
-                }}
+                onChange={(event) => changeClock(event.target.value as ClockPreference)}
               >
                 {CLOCK_PREFERENCES.map((option) => (
                   <option key={option} value={option}>

@@ -88,6 +88,8 @@ function registryWith(web: WebService | null = null): ToolRegistry {
     },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
+    userData: () => tmpdir(),
+    appVersion: () => "0.0.0-test",
     web,
   };
   return createToolRegistry(deps);
@@ -136,6 +138,7 @@ describe("createToolRegistry", () => {
       reader: 1,
       recorder: 1,
       search: 3,
+      settings: 6,
       tasks: 4,
       timers: 2,
       wiki: 1,

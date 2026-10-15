@@ -59,10 +59,10 @@
  * the harness relies on, the deps, an eval scenario, and the count line.
  */
 
-import type { Tool, ToolRegistry, WebService } from "@nexus/core";
+import type { ModuleRegistry, Tool, ToolRegistry, WebService } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
-import { appTools, type ModuleLookup } from "./app.js";
+import { appTools } from "./app.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
 import { canvasTools } from "./canvas.js";
@@ -82,6 +82,7 @@ import { packTools, type PacksLookup } from "./packs.js";
 import { pantryTools } from "./pantry.js";
 import { readerTools } from "./reader.js";
 import { recorderTools } from "./recorder.js";
+import { settingsTools } from "./settings.js";
 import { taskTools } from "./tasks.js";
 import { timerTools, type TimerHost } from "./timers.js";
 import { wikiTools } from "./wiki.js";
@@ -112,10 +113,14 @@ export interface ToolDeps {
   readonly packs: PacksLookup;
   /** The TIMERS module's start/list, which also arms main's clock. */
   readonly timers: TimerHost;
-  /** The app's module registry (`createModuleRegistry`), for navigation. */
-  readonly modules: ModuleLookup;
+  /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
+  readonly modules: ModuleRegistry;
   /** The device's module visibility (ADR-101), for the hidden tag `app.modules` prints. */
   readonly visibility: () => ShellVisibility;
+  /** The `userData` folder, where the device's module arrangement and web settings are kept. */
+  readonly userData: () => string;
+  /** The release running now (`app.getVersion()`), for the Settings read. */
+  readonly appVersion: () => string;
   /** The web service, or `null` in a build without one. Its tools appear only when the user turned web search on. */
   readonly web: WebService | null;
 }
@@ -146,6 +151,13 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...emergencyTools({ profileDb: deps.profileDb }),
     ...electronicsTools({ profileDb: deps.profileDb, now: deps.now }),
     ...financeTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...settingsTools({
+      profileDb: deps.profileDb,
+      now: deps.now,
+      userData: deps.userData,
+      appVersion: deps.appVersion,
+      modules: deps.modules,
+    }),
     // The wave-1 kit modules, in the order their manifests sort: library,
     // culture, car, pantry, cookbook, recorder, calculator, reader, wiki, maps,
     // lab, miniapps.

@@ -310,6 +310,8 @@ function realTools(): readonly ToolSpec[] {
     },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
+    userData: () => "",
+    appVersion: () => "",
     web: null,
   }).tools({ web: false });
 }

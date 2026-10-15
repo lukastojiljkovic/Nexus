@@ -1,0 +1,150 @@
+{
+  "scenarios": [
+    {
+      "id": "settings-notifications-read-sr",
+      "title": "Koja obaveštenja su uključena",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koja obaveštenja imam uključena?" }
+      ],
+      "tools": [
+        {
+          "name": "settings.read",
+          "effect": "read",
+          "content": "Odlaganje podrazumevano: 10m. Jutarnji sat: 08:00.\nUključeni izvori: document, exam, event, task, subscription, habit.\nIsključeni izvori: nijedan."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "settings.read", "args": { "section": { "eq": "notifications" } } }
+        ],
+        "answerContains": ["zadatk"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "settings.read", "arguments": { "section": "notifications" } }
+          ]
+        },
+        {
+          "text": "Uključeni su podsetnici za dokumente, ispite, događaje, zadatke, pretplate i navike. Ništa nije isključeno."
+        }
+      ]
+    },
+    {
+      "id": "settings-notifications-write-sr",
+      "title": "Isključivanje podsetnika za navike",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Isključi mi podsetnike za navike, više ne želim da me podsećaš na njih." }
+      ],
+      "tools": [
+        {
+          "name": "settings.reminders",
+          "effect": "write",
+          "summary": { "sr": "Promeni obaveštenja: isključi podsetnike za „Navika“.", "en": "Change notifications: turn reminders for “Habit” off." },
+          "content": "Obaveštenja su promenjena: isključi podsetnike za „Navika“."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "settings.reminders", "args": { "source": { "eq": "habit" }, "enabled": { "eq": false } } }
+        ],
+        "answerContains": ["navik"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "settings.reminders", "arguments": { "source": "habit", "enabled": false } }
+          ]
+        },
+        {
+          "text": "Isključio sam podsetnike za navike. Ostala obaveštenja su i dalje uključena."
+        }
+      ]
+    },
+    {
+      "id": "settings-assistant-read-en",
+      "title": "Which model the assistant is using",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Which model are you using right now?" }
+      ],
+      "tools": [
+        {
+          "name": "settings.read",
+          "effect": "read",
+          "content": "Model: the “Balance” tier.\nWeb search: off."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "settings.read", "args": { "section": { "eq": "assistant" } } }
+        ],
+        "answerContains": ["Balance"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "settings.read", "arguments": { "section": "assistant" } }
+          ]
+        },
+        {
+          "text": "I am on the Balance tier, and web search is off."
+        }
+      ]
+    },
+    {
+      "id": "settings-appearance-write-en",
+      "title": "Switching to the night theme",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Switch to the night theme, please." }
+      ],
+      "tools": [
+        {
+          "name": "settings.preference",
+          "effect": "write",
+          "summary": { "sr": "Promeni temu na „noc“", "en": "Change the theme to “noc”" },
+          "content": "Change: the theme is “noc” on the Settings page."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "settings.preference", "args": { "key": { "eq": "theme" }, "value": { "eq": "noc" } } }
+        ],
+        "answerContains": ["night"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "settings.preference", "arguments": { "key": "theme", "value": "noc" } }
+          ]
+        },
+        {
+          "text": "I'll switch the theme to night on the Settings page."
+        }
+      ]
+    }
+  ]
+}

@@ -68,6 +68,8 @@ function appTools(): readonly Tool[] {
     timers: { startCountdown: refuse, listCountdowns: () => [] },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
+    userData: refuse,
+    appVersion: refuse,
     web: { tools: () => WEB_TOOLS },
   };
   return createToolRegistry(deps).tools({ web: true });
