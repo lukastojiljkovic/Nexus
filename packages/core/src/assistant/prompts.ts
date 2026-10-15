@@ -1,13 +1,20 @@
 /**
  * The system prompt, and the knowledge block that rides beside it.
  *
- * The prompt is written in English, and its most load-bearing line is the
- * reply-language rule: the assistant answers in the language the user writes
- * in, and its fixed strings exist in both of the app's locales. Keeping the
- * instructions in one language means a prompt change is one edit rather than
- * two that drift, and models handle an English instruction with a Serbian
- * answer without difficulty (a Serbian instruction, for a Serbian answer, is
- * the same prompt with worse typography rules).
+ * The prompt is written in English, and its most load-bearing line is the reply
+ * language: the assistant answers in the language and the script the LOOP
+ * decided (`language.ts`), and its fixed strings exist in both of the app's
+ * locales. Keeping the instructions in one language means a prompt change is
+ * one edit rather than two that drift, and models handle an English instruction
+ * with a Serbian answer without difficulty (a Serbian instruction, for a Serbian
+ * answer, is the same prompt with worse typography rules).
+ *
+ * **The line is a fact, not a rule.** "Answer in the language the user writes
+ * in" is a rule a 2-5B model breaks the moment the passages beside it are in the
+ * other script; "the user wrote in English" is a fact it has nothing to weigh.
+ * The same sentence closes the knowledge block (`renderKnowledgeBlock`), because
+ * a small model weighs the most recent text most and the block is where the
+ * passages in the wrong script are.
  *
  * **The text is written for the 2-5B models the app ships with.** Short
  * imperative lines, one rule per line, and no explanation: a small model
@@ -27,7 +34,6 @@
  */
 
 import type {
-  AssistantLocale,
   AssistantText,
   Citation,
   KnowledgeHit,
@@ -35,12 +41,13 @@ import type {
   ToolSpec,
 } from "./contract.js";
 import { fenceUntrusted } from "./fence.js";
+import type { ReplyLanguage } from "./language.js";
 
 /**
  * The prompt's name, bumped whenever the text below changes in a way a score
  * could notice. `assistant-<date>.<serial>`, so two runs of one day sort.
  */
-export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.1";
+export const SYSTEM_PROMPT_VERSION = "assistant-2026-10-15.2";
 
 /**
  * The sentence an answer must carry when it draws on a pack whose
@@ -53,8 +60,14 @@ export const SAFETY_NOTICE: AssistantText = {
 };
 
 export interface SystemPromptOptions {
-  /** The language the app is showing; the fallback for an ambiguous user message. */
-  readonly locale: AssistantLocale;
+  /** The language and script the loop decided this turn's reply is written in. */
+  readonly reply: ReplyLanguage;
+  /**
+   * Whether this turn's request carries a knowledge block. It decides which
+   * grounding line the Rules block states (`groundingRule`), and the loop knows
+   * the answer before it builds the prompt because retrieval runs first.
+   */
+  readonly passages: boolean;
   /**
    * The tools this turn may use, exactly the ones the model is offered. Only
    * their NAMES are named here: the runtime documents each tool itself
@@ -70,6 +83,44 @@ export interface SystemPromptOptions {
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
+/**
+ * The one sentence that tells the model which language and script to answer in.
+ *
+ * Both sentences name the OTHER language's script as something to be ignored,
+ * which is the failure this line exists for: the passages are what the model
+ * reads last before it writes, and a Serbian Wikipedia is in Cyrillic.
+ */
+export function replyLanguageLine(reply: ReplyLanguage): string {
+  if (reply.language === "en") {
+    return "- The user wrote in English. Answer in English, even when the passages or the tool results are in Serbian.";
+  }
+  if (reply.script === "cyrillic") {
+    return "- The user wrote in Serbian (Cyrillic script). Answer in Serbian, in the Cyrillic script.";
+  }
+  return "- The user wrote in Serbian (Latin script). Answer in Serbian, in the Latin script with full diacritics, even when a passage is in Cyrillic.";
+}
+
+/**
+ * The grounding rule for a turn: whether it has passages to answer from, then
+ * what general knowledge may and may not be used for.
+ *
+ * The rule replaces a blanket refusal ("when the knowledge has nothing on the
+ * question, say you do not know and stop there") that made a small model refuse
+ * a question it could answer - "what is the capital of France" came back as "I do
+ * not know the capital of France based on the information provided". The two
+ * halves are separate because they are separate facts: what this turn retrieved
+ * is a property of the retrieval, and what may be answered from memory is a
+ * property of the question.
+ */
+function groundingRule(passages: boolean): readonly string[] {
+  return [
+    passages
+      ? "- Answer from the numbered passages and cite them. If they do not answer the question, say so in one sentence, then follow the next rule."
+      : "- No passage from the user's library matches this question.",
+    "- You may answer a question of general knowledge (a capital, a well-known person, what a word means) from what you know: say once that it is general knowledge and not from the user's library, and cite nothing for it. Never give a number or a date from memory: only from a passage or a tool. For health, medicine, law, money and safety, answer only from a passage or a tool, and otherwise say you do not know.",
+  ];
+}
+
 /** „Wednesday, 2026-10-14": the day with its weekday, read in UTC so the machine's zone cannot move it. */
 function dayWithWeekday(day: string): string {
   const weekday = WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()];
@@ -78,7 +129,6 @@ function dayWithWeekday(day: string): string {
 
 /** The system prompt for one turn: fixed text, plus the tools this turn carries. */
 export function buildSystemPrompt(options: SystemPromptOptions): string {
-  const fallback = options.locale === "sr" ? "Serbian (Latin script)" : "English";
   const blocks: string[] = [
     // Who it is and when it is: a model has no clock, and a task due "tomorrow"
     // needs one.
@@ -88,15 +138,14 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     ].join("\n"),
     [
       `# Language`,
-      `- Answer in the language the user writes in: Serbian (Latin script, full diacritics) or English.`,
-      `- If it is unclear, answer in ${fallback}, the language the app shows right now.`,
+      replyLanguageLine(options.reply),
     ].join("\n"),
     [
       // Never inventing stands before the tools: "a tool told me" is the one
       // place a number the model does not know may come from.
       `# Rules`,
       `- Never invent a fact, a number, a statistic, a name, a date, a rule or a source. Every number comes from a passage or a tool.`,
-      `- When the knowledge has nothing on the question, say you do not know or that the knowledge does not cover it, and stop there.`,
+      ...groundingRule(options.passages),
     ].join("\n"),
     [
       `# Tools`,
@@ -164,10 +213,17 @@ function toolGroups(tools: readonly ToolSpec[]): readonly string[] {
  * block: a model told "here are zero passages" reads an absence as a finding.
  * The block also carries the citation RULE, because this is the only place the
  * model is told what a number in brackets means.
+ *
+ * The block is FOLLOWED by the reply-language line, because a small model
+ * weighs the most recent text most: the passages are the last thing it reads
+ * before it answers, and the Serbian Wikipedia's passages are Cyrillic whatever
+ * language the question was asked in. The line sits after the fence, not inside
+ * it: inside, it would be data the prompt tells the model never to obey.
  */
 export function renderKnowledgeBlock(
   hits: readonly KnowledgeHit[],
   boundary: string,
+  reply?: ReplyLanguage,
 ): string | null {
   if (hits.length === 0) return null;
   const passages = hits.map((hit, index) => {
@@ -181,7 +237,8 @@ export function renderKnowledgeBlock(
     `Numbered passages. Cite one by its number in brackets, [1], right after the sentence that draws on it.`,
     ...passages,
   ].join("\n\n");
-  return fenceUntrusted(body, { label: "KNOWLEDGE", boundary });
+  const fenced = fenceUntrusted(body, { label: "KNOWLEDGE", boundary });
+  return reply === undefined ? fenced : `${fenced}\n\n${replyLanguageLine(reply)}`;
 }
 
 /**

@@ -234,6 +234,24 @@ describe("planContext", () => {
     expect(result.messages[1]?.content).not.toContain("Druga");
   });
 
+  it("drops knowledge from the END of the list, so a passage that survives keeps its number", () => {
+    // The answer's `[2]` has to mean the same passage at every step of a turn:
+    // the numbers the model reads are the positions in this list, and a cull
+    // that took a passage out of the MIDDLE would renumber every passage after
+    // it - the answer's markers would then point at the wrong sources.
+    const hits = [hit("n1", "Prva", "prvi", 0.9), hit("n2", "Druga", "drugi", 0.7), hit("n3", "Treca", "treci", 0.5)];
+    const one = plan({ ceiling: 10000, knowledge: [hits[0]!], pending: [user("cccc")] });
+    expect(one.ok).toBe(true);
+    if (!one.ok) return;
+    const result = plan({ ceiling: one.estimatedTokens, knowledge: hits });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.droppedKnowledge).toBe(2);
+    expect(result.knowledge.map((entry) => entry.citation.id)).toEqual(["n1"]);
+    expect(result.messages[1]?.content).toContain("[1] Prva (note)");
+    expect(result.messages[1]?.content).not.toContain("[2]");
+  });
+
   it("refuses rather than sending a request that cannot hold the prompt and the question", () => {
     const result = plan({ ceiling: 5, history: [user("aaaa")], pending: [user("abcdefghij")] });
     // The history goes first (8 + 16 + 15 = 39), and what is left is the system

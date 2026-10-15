@@ -3125,6 +3125,10 @@ export {
   renderKnowledgeBlock,
 } from "./assistant/prompts.js";
 export type { SystemPromptOptions } from "./assistant/prompts.js";
+export { contentWords, replyLanguage, transliterateToLatin } from "./assistant/language.js";
+export type { ReplyLanguage } from "./assistant/language.js";
+export { MIN_SHARED_WORDS, filterAnswer } from "./assistant/citations.js";
+export type { AnswerCitations, FilteredAnswer } from "./assistant/citations.js";
 export {
   CORE_TOOLS,
   MAX_TOOLS_PER_TURN,

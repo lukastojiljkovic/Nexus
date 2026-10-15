@@ -37,6 +37,15 @@
  * model already made would drop a write the user had confirmed, and the page
  * would draw a request with no answer.
  *
+ * **The last step carries the sources, and the reply's script is the loop's.**
+ * A step that calls tools is not an answer, so its `message` event carries no
+ * citations; the step that calls nothing is the answer, and the event that
+ * carries it is emitted after the whole turn - because the sources are decided
+ * by the answer and by the results of every call the turn made
+ * (`citations.ts`). The text itself streams as it arrives, transliterated to the
+ * script `language.ts` decided, and the stored answer is transliterated the same
+ * way, so the draft a page shows and the message it replaces are one text.
+ *
  * **Stop reasons are the model's, with two exceptions.** `length` and `end` pass
  * through as reported; a turn cut short by the step limit or by a request that
  * cannot fit reports `length`, because those are the two cases where the answer
@@ -52,7 +61,9 @@ import {
   createToolEstimator,
   planContext,
 } from "./budget.js";
+import { filterAnswer } from "./citations.js";
 import { createFenceBoundary, fenceUntrusted, isFenced } from "./fence.js";
+import { replyLanguage, transliterateToLatin } from "./language.js";
 import { buildSystemPrompt } from "./prompts.js";
 import { validateToolArguments } from "./schema.js";
 import { parseToolCalls } from "./toolCalls.js";
@@ -131,7 +142,24 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     let sequence = 0;
     const nextCallId = options.newCallId ?? ((): string => `call_${(sequence += 1)}`);
 
-    const citations = new CitationList();
+    /**
+     * The sources this turn collected, ready for the answer's filter
+     * (`citations.ts`). The passages and the tool citations are kept apart
+     * because they are chosen by different rules: a passage is a source when
+     * the answer cites it or shares words with it, and a tool citation stands
+     * on its own once its result said `ok`.
+     */
+    const passageCitations: KnowledgeHit[] = [];
+    const toolCitations: Citation[] = [];
+    // The reply's language and script, decided here rather than asked of the
+    // model (`language.ts`): the prompt states it as a fact, and a Latin answer
+    // is transliterated on the way out.
+    const reply = replyLanguage(input.user.content, input.locale);
+    const { script } = reply;
+    const latin = (text: string): string =>
+      script === "latin" ? transliterateToLatin(text) : text;
+    /** The turn's final answer: its text, held until the sources are settled. */
+    let answer: string | null = null;
     let hits: readonly KnowledgeHit[] = [];
     try {
       const found = await input.knowledge.search(
@@ -177,7 +205,10 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     const fixedTokens = offered.reduce((sum, spec) => sum + toolSpecTokens(spec), 0);
     const offeredCharacters = offered.reduce((sum, spec) => sum + toolSpecCharacters(spec), 0);
     const system = buildSystemPrompt({
-      locale: input.locale,
+      reply,
+      // What the Rules block says about grounding is a fact about this turn:
+      // retrieval already ran, so the loop knows whether there is a block.
+      passages: hits.length > 0,
       tools: offered,
       maxSteps: input.maxSteps,
       today: input.today,
@@ -218,6 +249,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         ceiling,
         fixedTokens,
         boundary,
+        reply,
         estimate: createEstimator(input.locale, measured),
         estimateTool: createToolEstimator(input.locale, measured),
       });
@@ -229,7 +261,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       if (!counted) {
         // Only the hits that survived the FIRST fit are sources of this answer:
         // a passage the model never read cannot be what it cites.
-        for (const hit of plan.knowledge) citations.add(hit.citation);
+        passageCitations.push(...plan.knowledge);
         counted = true;
       }
 
@@ -239,7 +271,9 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
           { messages: plan.messages, tools: offered, maxTokens: reserve },
           signal,
           (text) => {
-            emit({ type: "token", text });
+            // What a page draws as the answer arrives, transliterated like the
+            // message that replaces it (`language.ts` pins the two agreeing).
+            emit({ type: "token", text: latin(text) });
           },
         );
       } catch (error) {
@@ -280,16 +314,26 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         recovered !== null && recovered.calls.length > 0 ? recovered.text : result.text;
 
       if (text.trim().length > 0) {
-        emit({
-          type: "message",
-          message:
-            calls.length > 0
-              ? { role: "assistant", content: text, toolCalls: calls }
-              : { role: "assistant", content: text },
-          citations: citations.all(),
-        });
+        if (calls.length > 0) {
+          // A step that answers AND calls tools is not an answer: what it says
+          // is the preamble to the calls ("let me look"), and no source belongs
+          // beside it. The sources are what the ANSWER draws on, and the answer
+          // is the step that calls nothing.
+          emit({
+            type: "message",
+            message: { role: "assistant", content: latin(text), toolCalls: calls },
+            citations: [],
+          });
+        } else {
+          // The final answer. Its TEXT streams below as it arrives; the event
+          // that carries it waits for the whole turn, because a citation is
+          // decided by the answer and by the citations of any result the turn
+          // has not received yet.
+          answer = text;
+        }
       }
       if (calls.length === 0) {
+        emitAnswer(answer ?? "", passageCitations, toolCitations, latin, emit);
         finish(result.stopReason === "length" ? "length" : "end");
         return;
       }
@@ -303,7 +347,11 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       }
       for (const entry of outcome.entries) {
         emit({ type: "tool-result", callId: entry.call.id, result: entry.result });
-        for (const citation of entry.result.citations ?? []) citations.add(citation);
+        // A result that failed is not a source: a tool that refused, threw, or
+        // was called by a name the turn does not have contributed nothing the
+        // answer may be shown with. A result that said `ok` did, whether or not
+        // the answer cites it (`contract.ts`: a tool names its own source).
+        if (entry.result.ok) toolCitations.push(...(entry.result.citations ?? []));
         // What the PAGE draws is the result itself; what the MODEL reads is the
         // same text fenced and labelled as data (`fence.ts`).
         pending.push({
@@ -437,6 +485,33 @@ function requestCharacters(messages: readonly ChatMessage[]): number {
   return total;
 }
 
+/**
+ * The turn's answer, as the page draws it: the text in the decided script, and
+ * the sources it may be shown with.
+ *
+ * The text is transliterated here as well as token by token above, because a
+ * stored answer and a streamed one have to be the same text - and because a
+ * script the loop decided is enforced rather than requested (`language.ts`).
+ * The text the citations are filtered against is the transliterated one, so a
+ * Cyrillic answer and a Latin passage meet each other in one script.
+ */
+function emitAnswer(
+  text: string,
+  passages: readonly KnowledgeHit[],
+  tools: readonly Citation[],
+  latin: (text: string) => string,
+  emit: (event: AgentEvent) => void,
+): void {
+  const content = latin(text);
+  if (content.trim().length === 0) return;
+  const filtered = filterAnswer(content, { passages, tools });
+  emit({
+    type: "message",
+    message: { role: "assistant", content: filtered.text },
+    citations: filtered.citations,
+  });
+}
+
 /** The user messages of the history, newest first: what the tool chooser reads as context. */
 function earlierUserMessages(history: readonly ChatMessage[]): readonly string[] {
   const texts: string[] = [];
@@ -458,23 +533,3 @@ function recentToolNames(history: readonly ChatMessage[]): readonly string[] {
   return names;
 }
 
-/**
- * The citations one turn collected, in the order they arrived and without
- * repeating one: a hit injected once and a tool that returned the same page
- * twice are one source, and the page shows the list.
- */
-class CitationList {
-  private readonly seen = new Set<string>();
-  private readonly list: Citation[] = [];
-
-  add(citation: Citation): void {
-    const key = [citation.kind, citation.id, citation.locator ?? "", citation.packId ?? ""].join("|");
-    if (this.seen.has(key)) return;
-    this.seen.add(key);
-    this.list.push(citation);
-  }
-
-  all(): readonly Citation[] {
-    return this.list;
-  }
-}
