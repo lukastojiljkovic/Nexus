@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { Citation } from "@nexus/core";
 import type { AssistantMessageView } from "../shared/ipc.js";
-import { TOOL_LINE_CHARS, citationTarget, firstLine, groupThread } from "./thread.js";
+import {
+  CITATION_LOCATOR_SEPARATOR,
+  TOOL_LINE_CHARS,
+  citationTarget,
+  firstLine,
+  groupThread,
+  numberedCitations,
+} from "./thread.js";
 
 /**
  * THE THREAD'S TWO RULES (ADR-106): how tool activity folds, and where a
@@ -156,5 +164,29 @@ describe("firstLine", () => {
     const cut = firstLine(long);
     expect(cut.length).toBe(TOOL_LINE_CHARS + 1);
     expect(cut.endsWith("…")).toBe(true);
+  });
+});
+
+describe("numberedCitations", () => {
+  it("numbers the sources in the list's own order, which is the order the answer cites them in", () => {
+    const citations: Citation[] = [
+      { kind: "wiki", id: "a", title: "Nikola Tesla" },
+      { kind: "note", id: "b", title: "Beleška", locator: "Rani život" },
+    ];
+    expect(numberedCitations(citations).map(({ number, label }) => ({ number, label }))).toEqual([
+      { number: 1, label: "Nikola Tesla" },
+      { number: 2, label: `Beleška${CITATION_LOCATOR_SEPARATOR}Rani život` },
+    ]);
+  });
+
+  it("separates the title from the locator with the one character the page always used", () => {
+    expect(CITATION_LOCATOR_SEPARATOR).toBe(" \u2014 ");
+    expect(numberedCitations([{ kind: "task", id: "t", title: "Kupi vodu" }])[0]?.label).toBe(
+      "Kupi vodu",
+    );
+  });
+
+  it("is empty for an answer with no sources", () => {
+    expect(numberedCitations([])).toEqual([]);
   });
 });

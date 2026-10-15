@@ -1845,8 +1845,12 @@ function periodEndsSentence(
  * Karadžić's Cyrillic azbuka and Ljudevit Gaj's Latin abeceda two scripts for
  * one language since both were fixed. Thirty pairs, a fact about the language
  * rather than a table a standards body maintains, so it does not go stale.
+ *
+ * Exported, and the only copy: the assistant enforces a chosen Latin script by
+ * transliterating an answer itself (`assistant/language.ts`), and a second table
+ * beside this one is a second place for the same pair to be spelled differently.
  */
-const CYRILLIC_TO_LATIN: readonly (readonly [string, string])[] = [
+export const CYRILLIC_TO_LATIN: readonly (readonly [string, string])[] = [
   ["а", "a"],
   ["б", "b"],
   ["в", "v"],

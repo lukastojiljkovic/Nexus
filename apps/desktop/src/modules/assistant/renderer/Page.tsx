@@ -23,7 +23,7 @@ import type {
 import { copy } from "./copy.js";
 import { openAppLocation, openWebAddress } from "./location.js";
 import { ModelPanel } from "./ModelPanel.js";
-import { citationTarget, groupThread, type ThreadItem } from "./thread.js";
+import { citationTarget, groupThread, numberedCitations, type ThreadItem } from "./thread.js";
 import "./assistant.css";
 
 /**
@@ -562,15 +562,20 @@ function Thread({
   );
 }
 
-/** The sources under one answer, as links where there is somewhere to go. */
+/**
+ * The sources under one answer, as links where there is somewhere to go.
+ *
+ * Each is prefixed with the number the answer's own markers use (`[1]`), so a
+ * sentence that says `[2]` can be matched to the passage under it - which is
+ * the whole point of showing sources at all. The numbers are the positions in
+ * the list main built from the answer's own citations (`thread.ts`).
+ */
 function Citations({ citations }: { readonly citations: readonly Citation[] }) {
   return (
     <div className="asst__citations">
       <span className="nx-eyebrow">{copy.citations.sources}</span>
-      {citations.map((citation) => {
+      {numberedCitations(citations).map(({ citation, number, label }) => {
         const target = citationTarget(citation);
-        const label =
-          citation.locator === undefined ? citation.title : `${citation.title} — ${citation.locator}`;
         if (target.kind === "app") {
           return (
             <Button
@@ -579,7 +584,7 @@ function Citations({ citations }: { readonly citations: readonly Citation[] }) {
               variant="quiet"
               onClick={() => openAppLocation(target.location)}
             >
-              {label}
+              {`[${number}] ${label}`}
             </Button>
           );
         }
@@ -591,13 +596,13 @@ function Citations({ citations }: { readonly citations: readonly Citation[] }) {
               variant="quiet"
               onClick={() => void openWebAddress(target.url)}
             >
-              {label}
+              {`[${number}] ${label}`}
             </Button>
           );
         }
         return (
           <span key={`${citation.kind}:${citation.id}`} className="nx-hint">
-            {label}
+            {`[${number}] ${label}`}
           </span>
         );
       })}

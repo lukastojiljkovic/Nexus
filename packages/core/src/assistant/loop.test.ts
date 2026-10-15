@@ -649,7 +649,7 @@ describe("the loop's scripted conversations", () => {
 
   it("carries a knowledge hit's citation into the message, and fences the passage", async () => {
     const knowledge = makeKnowledge([hit("n1", "Vodu trazi nizvodno.")]);
-    const model = createScriptedModel([{ text: "Nizvodno." }]);
+    const model = createScriptedModel([{ text: "Vodu trazi nizvodno." }]);
     const events = await turn({ model, knowledge, user: { role: "user", content: "Gde je voda" } });
 
     expect(of(events, "message")[0]?.citations).toEqual([
@@ -668,7 +668,7 @@ describe("the loop's scripted conversations", () => {
 
   it("marks a safety citation, from a passage and from a tool alike", async () => {
     const knowledge = makeKnowledge([
-      hit("p1", "Pozovi 112.", { kind: "pack", safety: true, packId: "survival" }),
+      hit("p1", "Pozovi 112. Hitna pomoc dolazi brzo.", { kind: "pack", safety: true, packId: "survival" }),
     ]);
     const emergency = makeTool("app.open", {
       ok: true,
@@ -677,11 +677,13 @@ describe("the loop's scripted conversations", () => {
     });
     const model = createScriptedModel([
       { toolCalls: [{ id: "c1", name: "app.open", arguments: {} }] },
-      { text: "Pozovi 112." },
+      { text: "Pozovi 112, hitna pomoc." },
     ]);
     const events = await turn({ model, knowledge, tools: [emergency] });
 
     const citations = of(events, "message")[0]?.citations ?? [];
+    // Both stand, and the cited passage stands before the tool that was called:
+    // the answer's own source comes first, whatever order the turn met them in.
     expect(citations.map((citation) => citation.safety)).toEqual([true, true]);
     expect(citations[0]?.packId).toBe("survival");
     expect(citations[1]?.id).toBe("emergency");
@@ -818,6 +820,9 @@ describe("the loop's scripted conversations", () => {
       content: "Provericu.",
       toolCalls: [{ id: "c1", name: "tasks.list", arguments: {} }],
     });
+    // The preamble is not the answer, so it carries no source: the answer is the
+    // step that calls nothing, and the sources are what it draws on.
+    expect(preamble?.citations).toEqual([]);
     expect(of(events, "message")).toHaveLength(2);
   });
 
@@ -828,6 +833,143 @@ describe("the loop's scripted conversations", () => {
 
     expect(types(events)).toEqual(["token", "token", "message", "done"]);
     expect(model.requests[0]?.messages.map((entry) => entry.role)).toEqual(["system", "user"]);
+  });
+
+  it("answers in English, in the Latin script, when the user wrote English and the passages are Cyrillic", async () => {
+    const knowledge = makeKnowledge([hit("tesla", "Никола Тесла је рођен у Смиљану.")]);
+    const model = createScriptedModel([
+      {
+        text: "Никола Тесла је рођен у Смиљану.",
+        tokens: ["Никола", " Тесла", " је рођен", " у Смиљану."],
+      },
+    ]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Who was Nikola Tesla?" },
+    });
+
+    // The prompt states the decided language as a fact, and the block closes
+    // with the same line.
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      "The user wrote in English. Answer in English",
+    );
+    expect(model.requests[0]?.messages[1]?.content).toContain("The user wrote in English.");
+    // The script is ENFORCED: every streamed chunk is Latin, and the message the
+    // page stores carries the same text.
+    const streamed = of(events, "token").map((event) => event.text);
+    expect(streamed.join("")).toBe("Nikola Tesla je rođen u Smiljanu.");
+    expect(of(events, "message")[0]?.message.content).toBe("Nikola Tesla je rođen u Smiljanu.");
+    // The passage's own Cyrillic is what the answer was transliterated TO share
+    // words with, so it is what the answer is shown with.
+    expect(of(events, "message")[0]?.citations.map((citation) => citation.id)).toEqual(["tesla"]);
+  });
+
+  it("leaves a Cyrillic answer alone when the user wrote Cyrillic", async () => {
+    const model = createScriptedModel([
+      { text: "Здраво, ту сам.", tokens: ["Здраво,", " ту сам."] },
+    ]);
+    const events = await turn({
+      model,
+      user: { role: "user", content: "Шта имам од задатака за данас?" },
+    });
+
+    expect(of(events, "token").map((event) => event.text).join("")).toBe("Здраво, ту сам.");
+    expect(of(events, "message")[0]?.message.content).toBe("Здраво, ту сам.");
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      "The user wrote in Serbian (Cyrillic script)",
+    );
+  });
+
+  it("lists only the passage the answer cites, renumbered, and drops the unrelated ones", async () => {
+    const knowledge = makeKnowledge([
+      hit("dan", "Дана је женско име.", { title: "Дана" }),
+      hit("imam", "Имам је реч која значи поседовање.", { title: "Имам" }),
+      hit("zadatak", "Задатак је посао који треба обавити.", { title: "Задатак" }),
+      hit("film", "Задатак (филм) је филм из 2007.", { title: "Задатак (филм)" }),
+      hit("novine", "Данас (новине) су дневне новине.", { title: "Данас (новине)" }),
+    ]);
+    const model = createScriptedModel([
+      { text: "Задатак је посао који треба обавити [3]." },
+    ]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Šta imam od zadataka za danas?" },
+    });
+
+    const answer = of(events, "message")[0];
+    // The question was Serbian in the Latin script, so the answer is whatever
+    // the model wrote, in Latin: the Cyrillic passages do not move either half
+    // of the decision.
+    expect(answer?.message.content).toBe("Zadatak je posao koji treba obaviti [1].");
+    expect(answer?.citations.map((citation) => citation.title)).toEqual(["Задатак"]);
+  });
+
+  it("keeps the passage an uncited answer shares words with, and drops the rest", async () => {
+    const knowledge = makeKnowledge([
+      hit("tesla", "Никола Тесла је рођен у Смиљану и умро у Њујорку.", { title: "Никола Тесла" }),
+      hit("novine", "Данас (новине) су дневне новине.", { title: "Данас (новине)" }),
+    ]);
+    const model = createScriptedModel([{ text: "Nikola Tesla je rodjen u Smiljanu." }]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Who was Nikola Tesla?" },
+    });
+
+    const answer = of(events, "message")[0];
+    expect(answer?.citations.map((citation) => citation.title)).toEqual(["Никола Тесла"]);
+    // The answer cites nothing, so there is no marker to rewrite.
+    expect(answer?.message.content).toBe("Nikola Tesla je rodjen u Smiljanu.");
+  });
+
+  it("contributes no citation from a tool result that failed", async () => {
+    const refused = makeTool("app.open", {
+      ok: false,
+      content: "the user refused",
+      citations: [{ kind: "note", id: "nope", title: "Ne sme se pojaviti" }],
+    });
+    const listed = makeTool("tasks.list", {
+      ok: true,
+      content: "two tasks",
+      citations: [{ kind: "task", id: "t1", title: "Kupi vodu" }],
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "app.open", arguments: {} },
+          { id: "c2", name: "tasks.list", arguments: {} },
+        ],
+      },
+      { text: "Dva zadatka." },
+    ]);
+    const events = await turn({ model, tools: [refused, listed] });
+
+    expect(of(events, "message")[0]?.citations.map((citation) => citation.id)).toEqual(["t1"]);
+    expect(of(events, "message")[0]?.citations.some((citation) => citation.id === "nope")).toBe(false);
+  });
+
+  it("chooses the grounding rule from what retrieval returned", async () => {
+    const english = createScriptedModel([{ text: "Paris is the capital of France." }]);
+    await turn({ model: english, user: { role: "user", content: "What is the capital of France?" } });
+    expect(english.requests[0]?.messages[0]?.content).toContain(
+      "No passage from the user's library matches this question.",
+    );
+    expect(english.requests[0]?.messages[0]?.content).not.toContain("Answer from the numbered passages");
+
+    const withPassages = createScriptedModel([{ text: "Vodu trazi nizvodno." }]);
+    await turn({
+      model: withPassages,
+      knowledge: makeKnowledge([hit("n1", "Vodu trazi nizvodno.")]),
+      user: { role: "user", content: "Gde je voda" },
+    });
+    expect(withPassages.requests[0]?.messages[0]?.content).toContain(
+      "Answer from the numbered passages and cite them.",
+    );
+    expect(withPassages.requests[0]?.messages[0]?.content).not.toContain(
+      "No passage from the user's library",
+    );
   });
 
   it("fences a tool result that arrived in the history, and does not fence it twice", async () => {

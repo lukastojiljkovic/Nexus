@@ -54,6 +54,39 @@ export type ThreadItem = ThreadMessageItem | ThreadToolItem;
 /** How much of a tool result the one-line row shows. Enough to see what it found, short enough to stay one line. */
 export const TOOL_LINE_CHARS = 160;
 
+/** What divides a citation's title from its locator: „Nikola Tesla — Rani život". */
+export const CITATION_LOCATOR_SEPARATOR = " \u2014 ";
+
+/** One source under an answer, and the number the answer's own markers use. */
+export interface NumberedCitation {
+  readonly citation: Citation;
+  /** 1-based, and the position in the answer's citation list: `[1]` is the first source drawn. */
+  readonly number: number;
+  /** The number and the link's own label, as the page draws them. */
+  readonly label: string;
+}
+
+/**
+ * The sources of one answer, each with the number the answer's markers use.
+ *
+ * The list main stores is already the answer's own list, in order
+ * (`assistant/citations.ts`), so the number here is the position and nothing
+ * has to be looked up: a marker rewritten to `[2]` points at the second entry
+ * by construction, and a reader who sees one in the text finds it under the
+ * answer. Without a number the list is a set of links with no way to tell which
+ * passage a sentence came from.
+ */
+export function numberedCitations(citations: readonly Citation[]): readonly NumberedCitation[] {
+  return citations.map((citation, index) => ({
+    citation,
+    number: index + 1,
+    label:
+      citation.locator === undefined
+        ? citation.title
+        : `${citation.title}${CITATION_LOCATOR_SEPARATOR}${citation.locator}`,
+  }));
+}
+
 /**
  * The thread's items: messages in order, with each run of tool activity folded
  * into one item.
