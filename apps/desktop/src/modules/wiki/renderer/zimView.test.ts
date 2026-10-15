@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { entryLabel, formatBytes, localeTag, progressPercent } from "./zimView.js";
+import { entryLabel, formatBytes, itemTarget, localeTag, progressPercent } from "./zimView.js";
 
 /**
  * The page's pure half.
@@ -39,5 +39,20 @@ describe("the wiki page's formatters", () => {
   it("gives Intl the Latin-script tag for Serbian", () => {
     expect(localeTag("sr")).toBe("sr-Latn");
     expect(localeTag("en")).toBe("en");
+  });
+
+  it("splits a citation's item at its first slash, which is the library", () => {
+    expect(itemTarget("wikipedia-sr-mini/A/Nikola_Tesla")).toEqual({
+      libraryId: "wikipedia-sr-mini",
+      zimPath: "A/Nikola_Tesla",
+    });
+    // A path's own slashes are the entry's: only the first one is the boundary.
+    expect(itemTarget("wikibooks-be/I/m/pix.png")?.zimPath).toBe("I/m/pix.png");
+    // An item that names no entry gets a `null` rather than a read of a library
+    // that cannot be spelled, and the page reports that as its own not-found.
+    expect(itemTarget("")).toBeNull();
+    expect(itemTarget("wikipedia-sr-mini")).toBeNull();
+    expect(itemTarget("/A/Kafa")).toBeNull();
+    expect(itemTarget("wikipedia-sr-mini/")).toBeNull();
   });
 });

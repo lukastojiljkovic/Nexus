@@ -105,11 +105,15 @@ describe("AssistantProfile", () => {
 
     const hits = await knowledge.search({ text: "hipotermija", limit: 5, locale: "sr" }, NEVER);
 
+    // The location rides the whole way: this is the citation the assistant page
+    // draws, and the item is what its module's page is handed to reveal when
+    // somebody clicks it (ADR-114).
     expect(hits.map((hit) => hit.citation)).toContainEqual({
       kind: "wiki",
       id: "A/Hipotermija",
       title: "Hipotermija",
       locator: "lead",
+      location: { module: "wiki", item: "A/Hipotermija" },
     });
     expect(hits.find((hit) => hit.citation.kind === "wiki")?.text).toBe(
       "Hipotermija je stanje niske telesne temperature.",

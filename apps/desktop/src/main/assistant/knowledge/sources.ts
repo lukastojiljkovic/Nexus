@@ -717,7 +717,18 @@ export async function wikiHits(
     .slice(0, WIKI_TITLE_LIMIT)
     .map((candidate) => ({
       key: `w:${candidate.title.path}`,
-      citation: { kind: "wiki", id: candidate.title.path, title: candidate.title.title, locator: "lead" },
+      citation: {
+        kind: "wiki",
+        id: candidate.title.path,
+        title: candidate.title.title,
+        locator: "lead",
+        // A citation is a place as well as a name, and this one can BE the
+        // place: `title.path` is `<library id>/<entry path>` (`zimWiki.ts`),
+        // which is the shape the wiki page's own search results carry - so the
+        // item the page is handed is the pair its `read` op takes, and opening
+        // the citation opens the article the passage was read from (ADR-114).
+        location: { module: "wiki", item: candidate.title.path },
+      },
       text: candidate.passage,
     }));
 }

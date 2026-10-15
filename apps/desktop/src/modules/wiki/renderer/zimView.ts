@@ -51,3 +51,25 @@ export function progressPercent(receivedBytes: number, totalBytes: number): numb
 export function entryLabel(title: string, zimPath: string): string {
   return title === "" ? zimPath : title;
 }
+
+/**
+ * The entry one item names, as the two halves a `read` takes, or `null` when it
+ * names none.
+ *
+ * The shape is the reader's own: `WikiTitle.path` is
+ * `<library id>/<entry path>` (`main/assistant/knowledge/zimWiki.ts`), and so is
+ * the `item` a citation carries (ADR-114). A library id is kebab-case with no
+ * `/` in it, so the FIRST slash is the boundary and everything after it — slashes
+ * included — is the entry's own path. An item with no boundary, or with either
+ * half empty, names no entry at all: `null` rather than a read of a library that
+ * cannot be spelled.
+ */
+export function itemTarget(
+  item: string,
+): { readonly libraryId: string; readonly zimPath: string } | null {
+  const boundary = item.indexOf("/");
+  if (boundary <= 0) return null;
+  const libraryId = item.slice(0, boundary);
+  const zimPath = item.slice(boundary + 1);
+  return zimPath === "" ? null : { libraryId, zimPath };
+}

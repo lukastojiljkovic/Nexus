@@ -411,15 +411,49 @@ describe("wikiHits", () => {
     expect(hits).toEqual([
       {
         key: "w:A/Hipotermija",
-        citation: { kind: "wiki", id: "A/Hipotermija", title: "Hipotermija", locator: "lead" },
+        citation: {
+          kind: "wiki",
+          id: "A/Hipotermija",
+          title: "Hipotermija",
+          locator: "lead",
+          location: { module: "wiki", item: "A/Hipotermija" },
+        },
         text: "Hipotermija je stanje niske telesne temperature koje prati promrzline.",
       },
       {
         key: "w:A/Promrzline",
-        citation: { kind: "wiki", id: "A/Promrzline", title: "Promrzline", locator: "lead" },
+        citation: {
+          kind: "wiki",
+          id: "A/Promrzline",
+          title: "Promrzline",
+          locator: "lead",
+          location: { module: "wiki", item: "A/Promrzline" },
+        },
         text: "Promrzline su ostecenje tkiva nastalo pri hipotermiji.",
       },
     ]);
+  });
+
+  it("cites the article at the place the wiki page opens it from", async () => {
+    const wiki = fakeWiki({
+      titles: [{ path: "wikipedia-sr-mini/A/Nikola_Tesla", title: "Nikola Tesla" }],
+      articles: {
+        "wikipedia-sr-mini/A/Nikola_Tesla": "# Nikola Tesla\n\nTesla je bio pronalazac.",
+      },
+    });
+
+    const [hit] = await wikiHits(wiki, "Tesla", NEVER);
+
+    // The item is `<library id>/<entry path>` — the reader's own `WikiTitle.path`
+    // (`zimWiki.ts`), which is what the wiki page's reveal splits at its first
+    // slash, and the library id it names is the one the reader searched
+    // (ADR-114). It is also the citation's id: one path, two readings, so the
+    // passage and the page can never name different articles.
+    expect(hit?.citation.location).toEqual({
+      module: "wiki",
+      item: "wikipedia-sr-mini/A/Nikola_Tesla",
+    });
+    expect(hit?.citation.id).toBe("wikipedia-sr-mini/A/Nikola_Tesla");
   });
 
   it("skips a title whose article is not there rather than citing an empty passage", async () => {

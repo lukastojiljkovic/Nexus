@@ -26,7 +26,7 @@ import type {
   WikiView,
 } from "../shared/ipc.js";
 import { copy } from "./copy.js";
-import { entryLabel, formatBytes, localeTag, progressPercent } from "./zimView.js";
+import { entryLabel, formatBytes, itemTarget, localeTag, progressPercent } from "./zimView.js";
 import "./wiki.css";
 
 /**
@@ -61,7 +61,7 @@ import "./wiki.css";
  * is also why nothing here needs a push channel the kit does not have.
  */
 
-export default function WikiPage({ profileId }: ModulePageProps) {
+export default function WikiPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<WikiView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [article, setArticle] = useState<WikiArticleView | null>(null);
@@ -174,6 +174,30 @@ export default function WikiPage({ profileId }: ModulePageProps) {
     },
     [profileId],
   );
+
+  /**
+   * A citation the assistant drew names an entry of an installed library — its
+   * item is `<library id>/<entry path>`, the shape a search hit's `zimPath`
+   * rides beside — and the shell hands it here when this page is opened from one
+   * (ADR-114). The reveal is the search result's own `open`, so the article is
+   * read through `read`: a library that has been removed since the answer was
+   * written, and an entry that is not in the file, both answer `article: null`
+   * and land on the page's existing `not-found` problem — which is also what an
+   * item that names no entry at all gets, rather than a read of a library that
+   * cannot be spelled.
+   *
+   * It is an EFFECT over the prop rather than a listener, and that is the point:
+   * the shell holds an intent as state until this page reports it consumed, so a
+   * page that mounts a moment after the citation was clicked still sees it, and
+   * a second click is a new value that reveals the entry again.
+   */
+  useEffect(() => {
+    if (!intent) return;
+    const target = itemTarget(intent.item);
+    if (target === null) setError(copy.problem["not-found"]);
+    else void open(target.libraryId, target.zimPath);
+    onIntentHandled?.();
+  }, [intent, onIntentHandled, open]);
 
   /** Escape closes the frame, and only while nothing is being typed into. */
   useEffect(() => {
