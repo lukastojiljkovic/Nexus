@@ -127,7 +127,7 @@ describe("createToolRegistry", () => {
       library: 2,
       maps: 1,
       miniapps: 1,
-      notes: 4,
+      notes: 18,
       packs: 1,
       pantry: 2,
       reader: 1,
