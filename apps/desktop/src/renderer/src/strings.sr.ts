@@ -1858,6 +1858,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     duplicate: "Dupliraj",
     duplicateError: "Dupliranje beleške nije uspelo. Pokušaj ponovo.",
     duplicateTooLarge: "Beleška je prevelika da bi se duplirala odjednom.",
+    visualize: "Vizuelizuj na tabli",
+    visualizeError: "Belešku nije bilo moguće nacrtati na tabli. Pokušaj ponovo.",
     undo: "Vrati",
     dismiss: "Zatvori",
     loadError: "Beleške se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",

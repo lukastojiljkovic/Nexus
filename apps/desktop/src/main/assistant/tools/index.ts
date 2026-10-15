@@ -65,6 +65,7 @@ import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
 import { appTools, type ModuleLookup } from "./app.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
+import { canvasTools } from "./canvas.js";
 import { carTools } from "./car.js";
 import { cookbookTools } from "./cookbook.js";
 import { cultureTools } from "./culture.js";
@@ -135,6 +136,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     }),
     ...taskTools({ profileDb: deps.profileDb, now: deps.now }),
     ...calendarTools({ profileDb: deps.profileDb }),
+    ...canvasTools({ profileDb: deps.profileDb, now: deps.now }),
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),
     ...habitTools({ profileDb: deps.profileDb, now: deps.now }),
     ...timerTools({ timers: deps.timers }),

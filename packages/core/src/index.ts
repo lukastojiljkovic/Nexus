@@ -194,6 +194,34 @@ export {
   parseCanvasRef,
 } from "./canvas/canvasRef.js";
 export type { CanvasRef, CanvasRefKind } from "./canvas/canvasRef.js";
+// The sketch an assistant describes and the app lays out (`canvasSketch.ts`),
+// and a note's outline drawn as one (`noteOutline.ts`, NOTE-007).
+export {
+  CANVAS_SKETCH_LAYOUTS,
+  CANVAS_SKETCH_SHAPES,
+  CANVAS_SKETCH_TONES,
+  MAX_CANVAS_SKETCH_NODES,
+  parseCanvasSketch,
+  positionCanvasSketch,
+} from "./canvas/canvasSketch.js";
+export type {
+  CanvasSketch,
+  CanvasSketchArrow,
+  CanvasSketchBox,
+  CanvasSketchEdge,
+  CanvasSketchLayout,
+  CanvasSketchNode,
+  CanvasSketchShape,
+  CanvasSketchTone,
+  PositionedCanvasSketch,
+} from "./canvas/canvasSketch.js";
+export {
+  MAX_OUTLINE_HEADINGS,
+  MAX_OUTLINE_LINKS,
+  noteOutlineItems,
+  noteOutlineSketch,
+} from "./canvas/noteOutline.js";
+export type { NoteOutlineItem } from "./canvas/noteOutline.js";
 
 // --- FIT (the nutrition and training module, migration 058) -----------------
 //

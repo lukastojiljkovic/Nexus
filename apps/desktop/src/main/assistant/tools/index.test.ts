@@ -118,6 +118,7 @@ describe("createToolRegistry", () => {
       app: 3,
       calculator: 1,
       calendar: 2,
+      canvas: 7,
       car: 2,
       cookbook: 2,
       culture: 2,

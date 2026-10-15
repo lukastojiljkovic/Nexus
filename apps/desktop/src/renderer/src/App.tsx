@@ -68,6 +68,7 @@ import type { NotesIntent } from "./NotesPage.js";
 import type { StudyIntent } from "./StudyPage.js";
 import type { FinanceIntent } from "./FinancePage.js";
 import type { ElecIntent } from "./ElectronicsPage.js";
+import { canvasIntentOf, type CanvasIntent } from "./canvasIntent.js";
 import type { ToolsIntent } from "./ToolsPage.js";
 import {
   CalendarPage,
@@ -155,6 +156,7 @@ type PendingIntent =
   | { module: "study"; intent: StudyIntent }
   | { module: "finance"; intent: FinanceIntent }
   | { module: "electronics"; intent: ElecIntent }
+  | { module: "canvas"; intent: CanvasIntent }
   // The finder stands on BOTH drawer pages and searches both drawers at once, so
   // a result in the other one has to be able to send a tool across — one arm
   // carrying both page ids, because the two pages are one component and the
@@ -1059,6 +1061,11 @@ export function App() {
         setItemIntents((current) =>
           enqueueIntent(current, moduleId, { item: detail?.item, action: detail?.action }),
         );
+      } else if (moduleId === "canvas") {
+        // The board and, for the assistant, the sketch or card it asked for
+        // (`canvasIntent.ts`): the page applies it to the scene it owns.
+        const intent = canvasIntentOf({ item: detail?.item, action: detail?.action });
+        if (intent !== null) setPending({ module: "canvas", intent });
       } else {
         const reveal = compiledInReveal(moduleId, detail?.item);
         if (reveal !== null) setPending(reveal);
@@ -2256,19 +2263,20 @@ export function App() {
                   packEditor={{ profileId: activeProfile.id, onFlagsChanged: setFlags }}
                 />
               ) : shownId === "canvas" && activeProfile ? (
-                // No `intent` pair, and that is still true in slice c: CANV
-                // publishes no quick-create command (`searchCommands.ts`'s
-                // `CreatableModuleId` is untouched — a board is made on the page,
-                // from a name) and nothing deep-links INTO a board. The two props
-                // it does take are both outbound — `theme`, because the embedded
-                // editor's ~209 CSS variables are scoped to `.excalidraw` and never
-                // see `<html data-theme>`, and `onOpenRef`, because a card is a
-                // pointer and following one is a cross-module intent App owns.
+                // `intent` is what a location asked of the page: a board to open,
+                // and for the assistant a sketch or a card to put on it
+                // (`canvasIntent.ts`). The page owns the scene, so it applies that
+                // itself and reports it handled. `theme` is outbound because the
+                // embedded editor's ~209 CSS variables are scoped to `.excalidraw`
+                // and never see `<html data-theme>`, and `onOpenRef` because a card
+                // is a pointer and following one is a cross-module intent App owns.
                 <CanvasPage
                   key={activeProfile.id}
                   profileId={activeProfile.id}
                   theme={theme}
                   onOpenRef={openCanvasRef}
+                  intent={pending?.module === "canvas" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
                 />
               ) : shownId === "electronics" && activeProfile ? (
                 // No `theme`: the bench is our own SVG over our own tokens, so it
