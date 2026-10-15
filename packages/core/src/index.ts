@@ -583,6 +583,12 @@ export {
   suggestCsvFinanceMapping,
   translateCsvFinance,
 } from "./imex/csvFinance.js";
+export {
+  decimalLiteral,
+  formatMinorUnits,
+  minorUnitsFromText,
+  moneyFormatOptions,
+} from "./finance/money.js";
 export type {
   CsvFinanceAmountFormat,
   CsvFinanceAmountReading,

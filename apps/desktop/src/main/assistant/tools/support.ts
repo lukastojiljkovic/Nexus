@@ -110,7 +110,13 @@ function dateTimeFormat(
   return created;
 }
 
-function numberFormat(
+/**
+ * A memoised number formatter in the locale's own conventions. Exported for
+ * the tools that format through `@nexus/core`'s helpers: this file must stay
+ * free of value imports from core, because the scripted eval loads it under
+ * Node's strip-only TypeScript.
+ */
+export function numberFormat(
   locale: AssistantLocale,
   options: Intl.NumberFormatOptions,
 ): Intl.NumberFormat {
