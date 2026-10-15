@@ -29,7 +29,64 @@ export const en: typeof sr = {
       "The assistant knows your notes, tasks, events and the app's own manual, and answers with no internet. Pick a conversation, or type a question below.",
     thinking: "Thinking…",
     stopped: "Stopped.",
-    tools: "Tools",
+    /**
+     * The line of tool activity: what the tool was doing, and how far it got. A
+     * tool's own name is the address the model speaks (`tasks.create`), not a
+     * word somebody reads their own receipt in, so each one is named by its
+     * action.
+     */
+    tools: {
+      /** What each of the registry's tools does, under the name the registry declares it by. */
+      labels: {
+        "app.open": "Open a page",
+        "app.modules": "Read the module list",
+        "app.search": "Search the app",
+        "calculator.history": "Read the calculator history",
+        "calendar.create": "Add an event",
+        "calendar.events": "Read events",
+        "car.due": "Read what is due on the car",
+        "car.fill": "Log a fill-up",
+        "cookbook.recipe": "Read a recipe",
+        "cookbook.search": "Search recipes",
+        "culture.plan": "Add a plan",
+        "culture.programme": "Read the programme",
+        "emergency.card": "Read the emergency card",
+        "habits.checkin": "Record a habit",
+        "habits.today": "Read today's habits",
+        "lab.logs": "Read the Lab's logs",
+        "lab.readings": "Read sensor readings",
+        "library.add": "Add to the library",
+        "library.shelf": "Read the library",
+        "maps.pins": "Read the map pins",
+        "miniapps.kept": "Read what the mini apps keep",
+        "notes.append": "Add to a note",
+        "notes.create": "Add a note",
+        "notes.read": "Read a note",
+        "notes.search": "Search notes",
+        "packs.list": "Read the installed packs",
+        "pantry.add": "Add to the pantry",
+        "pantry.expiring": "Read what is expiring",
+        "reader.progress": "Read the reading progress",
+        "recorder.list": "Read the recordings",
+        "tasks.complete": "Complete a task",
+        "tasks.create": "Add a task",
+        "tasks.list": "Read tasks",
+        "tasks.reschedule": "Reschedule a task",
+        "timers.list": "Read the timers",
+        "timers.start": "Start a timer",
+        "web.read": "Read a web page",
+        "web.search": "Search the web",
+        "wiki.recent": "Read the reference history",
+      },
+      /** A tool whose call the thread no longer holds: no name to print, so it is named this. */
+      unnamed: "A tool",
+      /** How far a call got, in one word. */
+      states: {
+        running: "running",
+        done: "done",
+        failed: "not done",
+      },
+    },
   },
   composer: {
     placeholder: "A question or an instruction",

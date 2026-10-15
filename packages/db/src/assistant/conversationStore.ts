@@ -19,10 +19,11 @@ type DatabaseHandle = Database.Database;
  * **What this store is.** The threads a person had with the local assistant:
  * a title, the two instants a list sorts and shows by, the model that last
  * answered, and the messages - the user's own words, the assistant's replies,
- * the citations each reply drew on and the tool calls it asked for. It writes to
- * the profile's encrypted database, scoped by `profile_id`, like every store in
- * this package, and it is the module's only arm of the archive (`exportData` /
- * `importData`), so a restored profile gets its threads back.
+ * the citations each reply drew on, the tool calls it asked for and whether each
+ * of those tools did the thing (migration 93's `ok`). It writes to the profile's
+ * encrypted database, scoped by `profile_id`, like every store in this package,
+ * and it is the module's only arm of the archive (`exportData` / `importData`),
+ * so a restored profile gets its threads back.
  *
  * **Why the store owns the validation.** The renderer is untrusted (SEC-EL-02)
  * and an archive is a file somebody may have edited, so every value is read
@@ -123,6 +124,13 @@ export interface AssistantMessage {
   citations: Citation[];
   toolCalls: ToolCall[] | null;
   toolCallId: string | null;
+  /**
+   * On a tool message: whether the tool did the thing it was asked to, or
+   * `undefined` when the row records no outcome at all - every row written
+   * before migration 93's column existed. Absent on every other role, which has
+   * no outcome to record.
+   */
+  ok?: boolean;
   /** True when one of `citations` came from a `notice: "safety"` pack. */
   safety: boolean;
   createdAt: string;
@@ -138,6 +146,8 @@ export interface AssistantMessageInput {
   readonly citations?: readonly Citation[];
   readonly toolCalls?: readonly ToolCall[];
   readonly toolCallId?: string;
+  /** On a tool message: whether it did the thing. Absent means "no outcome recorded". */
+  readonly ok?: boolean;
 }
 
 /** The module's own profile preferences. */
@@ -159,6 +169,12 @@ export interface ExportedAssistantMessage {
   readonly citations: readonly Citation[];
   readonly toolCalls?: readonly ToolCall[];
   readonly toolCallId?: string;
+  /**
+   * On a tool message: whether it did the thing, absent when the archive was
+   * written before migration 93 - which `parseAssistantExport` accepts, and
+   * which `importData` writes as NULL.
+   */
+  readonly ok?: boolean;
   readonly createdAt: string;
 }
 
@@ -197,6 +213,7 @@ interface MessageRow {
   citations_json: string;
   tool_calls_json: string | null;
   tool_call_id: string | null;
+  ok: number | null;
   safety: number;
   created_at: string;
 }
@@ -359,6 +376,21 @@ function asModelId(value: unknown, field: string): string | null {
   return asOptionalText(value, field, MAX_ID_LENGTH);
 }
 
+/** A tool result's outcome: `true`, `false`, or `undefined` where none is recorded. */
+function asToolOutcome(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") {
+    throw new AssistantValidationError(`Assistant data: "${field}" must be a boolean.`);
+  }
+  return value;
+}
+
+/** One message's outcome as the column keeps it: `1`/`0` where one was recorded, NULL where none was. */
+function okColumn(message: { readonly ok?: boolean }): number | null {
+  if (message.ok === undefined) return null;
+  return message.ok ? 1 : 0;
+}
+
 /** One message, read whole: what a row and an archive entry both have to be. */
 function asMessageInput(value: unknown, field: string): AssistantMessageInput {
   const record = asRecord(value, field);
@@ -369,6 +401,7 @@ function asMessageInput(value: unknown, field: string): AssistantMessageInput {
     citations?: Citation[];
     toolCalls?: ToolCall[];
     toolCallId?: string;
+    ok?: boolean;
   } = {
     role,
     text: asMessageText(record["text"], `${field}.text`),
@@ -380,6 +413,8 @@ function asMessageInput(value: unknown, field: string): AssistantMessageInput {
   }
   const toolCallId = asOptionalText(record["toolCallId"], `${field}.toolCallId`, MAX_ID_LENGTH);
   if (toolCallId !== null) message.toolCallId = toolCallId;
+  const ok = asToolOutcome(record["ok"], `${field}.ok`);
+  if (ok !== undefined) message.ok = ok;
   // The two halves of a tool exchange, refused where they cannot be true: only an
   // assistant message asks for calls, and only a tool message answers one. A row
   // that carried the wrong half would replay into a request the model could not
@@ -393,6 +428,12 @@ function asMessageInput(value: unknown, field: string): AssistantMessageInput {
     throw new AssistantValidationError(
       `Assistant data: "${field}.toolCallId" is required on a tool message.`,
     );
+  }
+  // An outcome is the same kind of half: only a tool result HAS one, so a row
+  // that named one elsewhere would be a claim its reader has to decide to
+  // ignore (migration 93).
+  if (role !== "tool" && message.ok !== undefined) {
+    throw new AssistantValidationError(`Assistant data: "${field}.ok" belongs on a tool message.`);
   }
   return message;
 }
@@ -413,6 +454,7 @@ function asExportedConversation(value: unknown, field: string): ExportedAssistan
         citations: message.citations ?? [],
         ...(message.toolCalls === undefined ? {} : { toolCalls: message.toolCalls }),
         ...(message.toolCallId === undefined ? {} : { toolCallId: message.toolCallId }),
+        ...(message.ok === undefined ? {} : { ok: message.ok }),
         createdAt: at,
       };
     },
@@ -555,7 +597,7 @@ export class ConversationStore {
     const rows = this.db
       .prepare(
         `SELECT id, profile_id, conversation_id, ordinal, role, text, citations_json,
-                tool_calls_json, tool_call_id, safety, created_at
+                tool_calls_json, tool_call_id, ok, safety, created_at
            FROM assistant_messages
           WHERE profile_id = ? AND conversation_id = ?
           ORDER BY ordinal ASC`,
@@ -606,8 +648,8 @@ export class ConversationStore {
       const insert = this.db.prepare(
         `INSERT INTO assistant_messages
            (id, profile_id, conversation_id, ordinal, role, text, citations_json,
-            tool_calls_json, tool_call_id, safety, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            tool_calls_json, tool_call_id, ok, safety, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       read.forEach((message, index) => {
         const citations = message.citations ?? [];
@@ -629,6 +671,7 @@ export class ConversationStore {
           citationsJson,
           toolCallsJson,
           message.toolCallId ?? null,
+          okColumn(message),
           citations.some((citation) => citation.safety === true) ? 1 : 0,
           stamp,
         );
@@ -734,6 +777,7 @@ export class ConversationStore {
         citations: message.citations,
         ...(message.toolCalls === null ? {} : { toolCalls: message.toolCalls }),
         ...(message.toolCallId === null ? {} : { toolCallId: message.toolCallId }),
+        ...(message.ok === undefined ? {} : { ok: message.ok }),
         createdAt: message.createdAt,
       })),
     }));
@@ -798,8 +842,8 @@ export class ConversationStore {
             .prepare(
               `INSERT INTO assistant_messages
                  (id, profile_id, conversation_id, ordinal, role, text, citations_json,
-                  tool_calls_json, tool_call_id, safety, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  tool_calls_json, tool_call_id, ok, safety, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               uuidv7(),
@@ -811,6 +855,7 @@ export class ConversationStore {
               citationsJson,
               toolCallsJson,
               message.toolCallId ?? null,
+              okColumn(message),
               message.citations.some((citation) => citation.safety === true) ? 1 : 0,
               message.createdAt,
             );
@@ -859,6 +904,7 @@ export class ConversationStore {
       citations,
       toolCalls,
       toolCallId: row.tool_call_id,
+      ...(row.ok === null ? {} : { ok: row.ok === 1 }),
       safety: row.safety === 1,
       createdAt: row.created_at,
     };

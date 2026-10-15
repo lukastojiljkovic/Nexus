@@ -158,6 +158,110 @@ describe("ConversationStore", () => {
     expect(messages[2]?.citations).toEqual([MANUAL_CITATION]);
   });
 
+  it("records a tool's outcome in migration 93's column, and reads back all three states", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    const conversation = store.createConversation("Alatke", NOW);
+    // The column migration 93 adds, on the table migration 91 created: nullable,
+    // because "no outcome recorded" is a state a row can be in.
+    const columns = (
+      db.raw.prepare("PRAGMA table_info(assistant_messages)").all() as {
+        name: string;
+        type: string;
+        notnull: number;
+      }[]
+    )
+      .map((column) => ({ name: column.name, type: column.type, notnull: column.notnull }))
+      .filter((column) => column.name === "ok");
+    expect(columns).toEqual([{ name: "ok", type: "INTEGER", notnull: 0 }]);
+
+    store.appendTurn(
+      conversation.id,
+      [
+        {
+          role: "assistant",
+          text: "",
+          toolCalls: [{ id: "call_1", name: "tasks.create", arguments: {} }],
+        },
+        { role: "tool", text: "Napravljen zadatak.", toolCallId: "call_1", ok: true },
+        { role: "tool", text: "Nema tog zadatka.", toolCallId: "call_2", ok: false },
+        // A tool row with no outcome of its own: every row written before the
+        // column existed, and a caller that did not record one.
+        { role: "tool", text: "Bez ishoda.", toolCallId: "call_3" },
+      ],
+      null,
+      NOW,
+    );
+
+    const messages = store.listMessages(conversation.id);
+    expect(messages.map((message) => message.ok)).toEqual([
+      undefined,
+      true,
+      false,
+      undefined,
+    ]);
+    // And the column holds this schema's own boolean - 1, 0 - with NULL for the
+    // two rows the question does not belong to.
+    const rows = db.raw
+      .prepare("SELECT ordinal, ok FROM assistant_messages ORDER BY ordinal")
+      .all() as { ordinal: number; ok: number | null }[];
+    expect(rows).toEqual([
+      { ordinal: 0, ok: null },
+      { ordinal: 1, ok: 1 },
+      { ordinal: 2, ok: 0 },
+      { ordinal: 3, ok: null },
+    ]);
+  });
+
+  it("refuses an outcome that is not a boolean, and one on a message that is not a tool result", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    const conversation = store.createConversation("Alatke", NOW);
+    expect(() =>
+      store.appendTurn(
+        conversation.id,
+        [{ role: "tool", text: "Rezultat.", toolCallId: "call_1", ok: "yes" as never }],
+        null,
+        NOW,
+      ),
+    ).toThrow(AssistantValidationError);
+    expect(() =>
+      store.appendTurn(
+        conversation.id,
+        [{ role: "assistant", text: "Odgovor.", ok: true }],
+        null,
+        NOW,
+      ),
+    ).toThrow(AssistantValidationError);
+    // A refused turn writes nothing at all.
+    expect(store.listMessages(conversation.id)).toEqual([]);
+
+    // The archive reader makes the same refusal, for a section somebody edited by
+    // hand, and names the field it is about.
+    expect(() =>
+      parseAssistantExport({
+        version: ASSISTANT_EXPORT_VERSION,
+        defaultTier: "balance",
+        conversations: [
+          {
+            title: "Staro",
+            modelId: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+            messages: [
+              {
+                role: "tool",
+                text: "Rezultat.",
+                citations: [],
+                toolCallId: "call_1",
+                createdAt: NOW,
+                ok: "yes",
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('Assistant data: "conversations[0].messages[0].ok" must be a boolean.');
+  });
+
   it("orders the list newest first and renames one thread without touching the rest", () => {
     const store = new ConversationStore(db.raw, createProfile());
     const first = store.createConversation("Prvi", NOW);
@@ -337,6 +441,78 @@ describe("ConversationStore", () => {
     ]);
     // Re-minted ids: a conversation's key is this database's own.
     expect(thread?.id).not.toBe(conversation.id);
+  });
+
+  it("carries a tool's outcome through an export and back, and takes an export written before it", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    const conversation = store.createConversation("Alatke", NOW);
+    store.appendTurn(
+      conversation.id,
+      [
+        {
+          role: "assistant",
+          text: "",
+          toolCalls: [{ id: "call_1", name: "tasks.create", arguments: { title: "" } }],
+        },
+        {
+          role: "tool",
+          text: "Neuspešno: naslov je obavezan.",
+          toolCallId: "call_1",
+          ok: false,
+        },
+      ],
+      null,
+      NOW,
+    );
+
+    const parsed = parseAssistantExport(JSON.parse(JSON.stringify(store.exportData())) as unknown);
+    expect(parsed.conversations[0]?.messages[1]).toEqual({
+      role: "tool",
+      text: "Neuspešno: naslov je obavezan.",
+      citations: [],
+      toolCallId: "call_1",
+      ok: false,
+      createdAt: NOW,
+    });
+
+    const restored = new ConversationStore(other.raw, createProfile(other));
+    restored.importData(parsed, LATER);
+    const [thread] = restored.listConversations();
+    expect(restored.listMessages(thread?.id ?? "").map((message) => message.ok)).toEqual([
+      undefined,
+      false,
+    ]);
+
+    // An archive written before migration 93 carries no such field at all, which
+    // is the same "no outcome recorded" every row of that age holds: accepted on
+    // the way in, and read as a tool that was done (`main/register.ts`).
+    const old = parseAssistantExport({
+      version: ASSISTANT_EXPORT_VERSION,
+      defaultTier: "balance",
+      conversations: [
+        {
+          title: "Staro",
+          modelId: null,
+          createdAt: NOW,
+          updatedAt: NOW,
+          messages: [
+            {
+              role: "tool",
+              text: "Otvoreno.",
+              citations: [],
+              toolCallId: "call_1",
+              createdAt: NOW,
+            },
+          ],
+        },
+      ],
+    });
+    expect(old.conversations[0]?.messages[0]?.ok).toBeUndefined();
+    restored.importData(old, LATER);
+    const [older] = restored.listConversations();
+    expect(restored.listMessages(older?.id ?? "").map((message) => message.ok)).toEqual([
+      undefined,
+    ]);
   });
 
   it("resets a profile to nothing when the archive names no assistant section", () => {

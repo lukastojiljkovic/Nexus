@@ -1,12 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { applyLocale } from "../../../renderer/src/strings.js";
 import type { AssistantMessageView } from "../shared/ipc.js";
-import { TOOL_LINE_CHARS, citationTarget, firstLine, groupThread } from "./thread.js";
+import {
+  TOOL_LINE_CHARS,
+  citationTarget,
+  firstLine,
+  groupThread,
+  toolLineView,
+  type ThreadToolLine,
+} from "./thread.js";
 
 /**
- * THE THREAD'S TWO RULES (ADR-106): how tool activity folds, and where a
- * citation goes. Both are pure, so both are pinned here with the values they
- * produce rather than with "it rendered".
+ * THE THREAD'S RULES (ADR-106): how tool activity folds, what one line of it
+ * claims happened, and where a citation goes. All pure, so all pinned here with
+ * the values they produce rather than with "it rendered".
  */
+
+// `toolLineView` reads the module's live copy, so the cases below switch it and
+// put it back - the pantry page's rule, for the same reason.
+afterEach(() => {
+  applyLocale("sr");
+});
 
 let seq = 0;
 function message(partial: Partial<AssistantMessageView> & Pick<AssistantMessageView, "role">): AssistantMessageView {
@@ -17,6 +31,7 @@ function message(partial: Partial<AssistantMessageView> & Pick<AssistantMessageV
     citations: [],
     toolCalls: null,
     toolCallId: null,
+    ok: null,
     safety: false,
     createdAt: "2026-06-01T08:00:00.000Z",
     ...partial,
@@ -35,12 +50,22 @@ describe("groupThread", () => {
         role: "assistant",
         toolCalls: [{ id: "call_1", name: "tasks.list", arguments: {} }],
       }),
-      message({ role: "tool", text: "3 otvorena zadatka.", toolCallId: "call_1" }),
+      message({ role: "tool", text: "3 otvorena zadatka.", toolCallId: "call_1", ok: true }),
       message({
         role: "assistant",
         toolCalls: [{ id: "call_2", name: "tasks.create", arguments: {} }],
       }),
-      message({ role: "tool", text: "Napravljen zadatak.", toolCallId: "call_2" }),
+      message({ role: "tool", text: "Napravljen zadatak.", toolCallId: "call_2", ok: true }),
+      message({
+        role: "assistant",
+        toolCalls: [{ id: "call_3", name: "tasks.complete", arguments: {} }],
+      }),
+      message({
+        role: "tool",
+        text: "Neuspešno: nema aktivnog zadatka sa tim id-jem.",
+        toolCallId: "call_3",
+        ok: false,
+      }),
       message({ role: "assistant", text: "Zapisao sam „Plati račun“." }),
     ]);
     expect(items.map((item) => item.kind)).toEqual(["message", "message", "tools", "message"]);
@@ -54,6 +79,12 @@ describe("groupThread", () => {
       { name: "tasks.list", ok: true, text: "3 otvorena zadatka." },
       { name: "tasks.create", ok: null, text: "" },
       { name: "tasks.create", ok: true, text: "Napravljen zadatak." },
+      { name: "tasks.complete", ok: null, text: "" },
+      {
+        name: "tasks.complete",
+        ok: false,
+        text: "Neuspešno: nema aktivnog zadatka sa tim id-jem.",
+      },
     ]);
   });
 
@@ -63,8 +94,8 @@ describe("groupThread", () => {
         role: "assistant",
         toolCalls: [{ id: "call_9", name: "app.open", arguments: {} }],
       }),
-      message({ role: "tool", text: "Otvoreno.", toolCallId: "call_9" }),
-      message({ role: "tool", text: "Bez poziva.", toolCallId: "call_404" }),
+      message({ role: "tool", text: "Otvoreno.", toolCallId: "call_9", ok: true }),
+      message({ role: "tool", text: "Bez poziva.", toolCallId: "call_404", ok: true }),
     ]);
     expect(items).toHaveLength(1);
     const [tools] = items;
@@ -85,10 +116,66 @@ describe("groupThread", () => {
 
   it("keeps a user message out of a tool run and flushes what came before it", () => {
     const items = groupThread([
-      message({ role: "tool", text: "rezultat", toolCallId: "c" }),
+      message({ role: "tool", text: "rezultat", toolCallId: "c", ok: false }),
       message({ role: "user", text: "i sada?" }),
     ]);
     expect(items.map((item) => item.kind)).toEqual(["tools", "message"]);
+  });
+});
+
+describe("toolLineView", () => {
+  const line = (partial: Partial<ThreadToolLine> & Pick<ThreadToolLine, "id">): ThreadToolLine => ({
+    name: null,
+    ok: null,
+    text: "",
+    ...partial,
+  });
+
+  it("reads a call with no result yet as the tool running", () => {
+    expect(toolLineView(line({ id: "c1", name: "tasks.create", ok: null }))).toEqual({
+      label: "Dodavanje zadatka",
+      state: "running",
+      detail: "",
+    });
+  });
+
+  it("reads a result that was done as done, and keeps what the tool answered", () => {
+    expect(
+      toolLineView(
+        line({ id: "c1", name: "tasks.create", ok: true, text: "Napravljen zadatak." }),
+      ),
+    ).toEqual({ label: "Dodavanje zadatka", state: "done", detail: "Napravljen zadatak." });
+  });
+
+  it("reads a result that did nothing as failed, with the tool's own words beside it", () => {
+    expect(
+      toolLineView(
+        line({ id: "c1", name: "tasks.list", ok: false, text: "Neuspešno: nema zadataka." }),
+      ),
+    ).toEqual({
+      label: "Čitanje zadataka",
+      state: "failed",
+      detail: "Neuspešno: nema zadataka.",
+    });
+  });
+
+  it("draws a name the map does not know as it stands, and a nameless result as a tool", () => {
+    // Both are a tool this build cannot name: a name from another build, and a
+    // result whose call the thread no longer holds.
+    expect(toolLineView(line({ id: "c1", name: "ghost.tool", ok: true })).label).toBe("ghost.tool");
+    expect(toolLineView(line({ id: "c2", ok: true, text: "Nešto." })).label).toBe("Alatka");
+  });
+
+  it("reads only the map's own labels, so a name like `constructor` is drawn as it stands", () => {
+    expect(toolLineView(line({ id: "c1", name: "constructor", ok: false })).label).toBe("constructor");
+    expect(toolLineView(line({ id: "c2", name: "__proto__", ok: false })).label).toBe("__proto__");
+  });
+
+  it("says the same thing in English", () => {
+    applyLocale("en");
+    expect(
+      toolLineView(line({ id: "c1", name: "tasks.create", ok: false, text: "Failed: no title." })),
+    ).toEqual({ label: "Add a task", state: "failed", detail: "Failed: no title." });
   });
 });
 

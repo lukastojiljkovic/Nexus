@@ -8,6 +8,7 @@ import {
   type ModelEntry,
   type ModelHost,
   type ModelRecommendation,
+  type ScriptedChatModel,
 } from "@nexus/core";
 import { NexusDatabase, TaskListStore, openDatabase, uuidv7 } from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
@@ -128,6 +129,8 @@ let voiceDisposals = 0;
 let voiceTranscript = "Zdravo iz mikrofona.";
 /** The transcript the next `loadChat` answers with. */
 let script: Parameters<typeof createScriptedModel>[0] = [];
+/** The last model loaded, so a test can read what the loop asked it (`ScriptedChatModel.requests`). */
+let lastModel: ScriptedChatModel | null = null;
 
 /**
  * The worker's host, faked at the seam `services.ts` hands over.
@@ -199,11 +202,12 @@ function fakeHost(): ModelHost {
       // every turn ended `context-full` before the model was asked anything,
       // and the tests below passed or failed for a reason none of them named.
       const entry = installedEntries.find((candidate) => candidate.id === id);
-      return createScriptedModel(script, {
+      lastModel = createScriptedModel(script, {
         id,
         title: entry?.title ?? id,
         contextTokens: entry?.contextTokens ?? ENTRY.contextTokens,
       });
+      return lastModel;
     },
     async loadEmbedder() {
       throw new Error("this machine has no embedding model");
@@ -277,6 +281,7 @@ beforeEach(() => {
   voiceDisposals = 0;
   voiceTranscript = "Zdravo iz mikrofona.";
   script = [];
+  lastModel = null;
 });
 
 afterEach(() => {
@@ -640,6 +645,106 @@ describe("the assistant module through the kit", () => {
     expect(thread.messages[1]?.toolCalls?.map((call) => call.id)).toEqual(["call_1"]);
     expect(thread.messages[2]?.toolCallId).toBe("call_1");
   }, 30_000);
+
+  it("stores a tool that did NOT act on the tool row's own column, beside its own words", async () => {
+    const host = harness();
+    // `tasks.complete` with an id no task has: the tool runs, finds nothing and
+    // answers with its own sentence - while the model says it did the thing,
+    // which is the failure the page states the outcome for.
+    script = [
+      { toolCalls: [{ id: "call_1", name: "tasks.complete", arguments: { id: "nema-me" } }] },
+      { text: "Označio sam zadatak kao završen." },
+    ];
+    const created = (await host.dispatch("assistant:createConversation", TRUSTED, {
+      profileId,
+      title: "Razgovor",
+    })) as { conversations: { id: string }[] };
+    const conversationId = created.conversations[0]?.id ?? "";
+    const started = (await host.dispatch("assistant:send", TRUSTED, {
+      profileId,
+      conversationId,
+      text: "Završi zadatak nema-me.",
+      workflowId: null,
+    })) as { turnId: string };
+    const finished = await pollUntil(host, started.turnId, (events) =>
+      events.some((entry) => entry.event.type === "done"),
+    );
+    const thread = finished.thread as {
+      messages: { role: string; text: string; ok: boolean | null }[];
+    };
+
+    // The row the store keeps: the outcome on its own column (migration 93), and
+    // the text exactly as the tool wrote it - the outcome does not ride on the
+    // text, so nothing that reads the row has to know a mark to read the words.
+    const stored = db.raw
+      .prepare(
+        "SELECT text, ok FROM assistant_messages WHERE conversation_id = ? AND role = 'tool'",
+      )
+      .get(conversationId) as { text: string; ok: number | null };
+    expect(stored.ok).toBe(0);
+    // The tool's own sentence from the row's FIRST character: an outcome that
+    // rode on the text would sit in front of this sentence.
+    expect(stored.text).toMatch(
+      /^(Neuspešno|Failed): (Ne postoji aktivan zadatak|No active task has the id)/,
+    );
+
+    // And the thread the page draws: not done, the tool's own sentence - and the
+    // row that ASKED for the tool states nothing, because a call has no outcome
+    // until it has one.
+    expect(thread.messages[2]?.ok).toBe(false);
+    expect(thread.messages[2]?.text).toBe(stored.text);
+    expect(thread.messages[1]?.ok).toBeNull();
+
+    // A later turn replays the conversation: the model reads the tool's own
+    // words, unchanged, and never the outcome the page needed.
+    script = [{ text: "Ništa nije promenjeno." }];
+    const again = (await host.dispatch("assistant:send", TRUSTED, {
+      profileId,
+      conversationId,
+      text: "i sada?",
+      workflowId: null,
+    })) as { turnId: string };
+    await pollUntil(host, again.turnId, (events) =>
+      events.some((entry) => entry.event.type === "done"),
+    );
+    const replayed = lastModel?.requests
+      .at(-1)
+      ?.messages.find((message) => message.role === "tool");
+    const toolText = thread.messages[2]?.text ?? "";
+    expect(toolText).not.toBe("");
+    // The loop fences a replayed result as data (`fenceUntrusted`), so the
+    // sentence arrives wrapped and otherwise untouched: the tool's words, and
+    // nothing this module added to them.
+    expect(replayed?.content).toContain(toolText);
+  }, 30_000);
+
+  it("reads a tool row saved before the outcome column as a tool that was done", async () => {
+    const host = harness();
+    const created = (await host.dispatch("assistant:createConversation", TRUSTED, {
+      profileId,
+      title: "Razgovor",
+    })) as { conversations: { id: string }[] };
+    const conversationId = created.conversations[0]?.id ?? "";
+    // Exactly the row migration 93 left behind: a tool result written before the
+    // column existed, whose `ok` is therefore NULL.
+    db.raw
+      .prepare(
+        `INSERT INTO assistant_messages
+           (id, profile_id, conversation_id, ordinal, role, text, citations_json,
+            tool_calls_json, tool_call_id, ok, safety, created_at)
+         VALUES (?, ?, ?, 0, 'tool', ?, '[]', NULL, 'call_1', NULL, 0, ?)`,
+      )
+      .run(uuidv7(), profileId, conversationId, "Otvoreno.", new Date(NOW).toISOString());
+
+    const thread = (await host.dispatch("assistant:open", TRUSTED, {
+      profileId,
+      conversationId,
+    })) as { messages: { role: string; text: string; ok: boolean | null }[] };
+    // A row with no outcome recorded is a tool that did the thing, which is what
+    // the page showed for every one of them until the column arrived.
+    expect(thread.messages[0]?.ok).toBe(true);
+    expect(thread.messages[0]?.text).toBe("Otvoreno.");
+  });
 
   it("refuses a second turn while one runs, and a refusal is a normal result", async () => {
     const host = harness();
