@@ -1,6 +1,14 @@
 import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type FoodMacros, foldSearchText, isRecipeLicenceId, parseFoodRef } from "@nexus/core";
+import {
+  type CookbookCollection,
+  type FoodMacros,
+  MAX_COLLECTION_NAME_LENGTH,
+  foldSearchText,
+  isRecipeLicenceId,
+  parseFoodRef,
+} from "@nexus/core";
+import type { CollectionStore } from "@nexus/db";
 import { packVersionDir, readInstalled } from "../../../main/packs/registry.js";
 import type { PackManifest } from "../../../main/packs/manifest.js";
 import { packPathProblem } from "../../../main/packs/paths.js";
@@ -116,9 +124,15 @@ export interface InstalledDataset {
   readonly dir: string;
 }
 
-/** A `dataset` pack that carries recipes, read and validated. */
+/**
+ * A `dataset` pack that carries recipes, read and validated.
+ *
+ * `collection` is the shelf the pack's recipes belong on, from the recipes file's
+ * own `collection` key, or null when the pack declares none.
+ */
 export interface RecipesDataset extends InstalledDataset {
   readonly recipes: readonly PackRecipe[];
+  readonly collection: string | null;
 }
 
 /** A `dataset` pack that carries foods, read and validated. */
@@ -165,7 +179,11 @@ export function readRecipesDataset(dataset: InstalledDataset): RecipesDataset | 
   const path = datasetFile(dataset.manifest, RECIPES_FILE_NAME);
   if (path === null) return null;
   const value = readDatasetJson(dataset.dir, path, dataset.manifest.id);
-  return { ...dataset, recipes: parseRecipesLayout(value, dataset.manifest.id) };
+  return {
+    ...dataset,
+    recipes: parseRecipesLayout(value, dataset.manifest.id),
+    collection: parseRecipesCollection(value, dataset.manifest.id),
+  };
 }
 
 /** One pack's foods, or null when this pack carries no foods file. */
@@ -383,6 +401,37 @@ export function parseRecipesLayout(value: unknown, packId = "recipes.json"): Pac
       },
     };
   });
+}
+
+/**
+ * The shelf a recipes file declares for its recipes, or null when it declares
+ * none. Optional, and checked the way every other name in the layout is: a
+ * declared name that is blank or too long is refused, not dropped.
+ */
+export function parseRecipesCollection(value: unknown, packId = "recipes.json"): string | null {
+  const record = asRecord(value, packId, "<root>");
+  requireLayout(record, packId);
+  const declared = record["collection"];
+  return declared === undefined
+    ? null
+    : asText(declared, packId, "collection", MAX_COLLECTION_NAME_LENGTH);
+}
+
+/**
+ * Puts a pack's recipes on the shelf the pack declares, creating that shelf on
+ * the first call and finding it on every later one (`CollectionStore.seed`).
+ *
+ * Called once per copied recipe, so it answers the shelf for the caller to add
+ * the copy to, and null when the pack declares no shelf and there is nothing to
+ * add it to.
+ */
+export function seedPackShelf(
+  shelves: CollectionStore,
+  pack: RecipesDataset,
+  now: string,
+): CookbookCollection | null {
+  if (pack.collection === null) return null;
+  return shelves.seed(pack.manifest.id, pack.collection, now);
 }
 
 /** The layout number, checked before any other field is believed. */

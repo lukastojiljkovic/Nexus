@@ -1843,6 +1843,14 @@ describe("RestoreStore", () => {
       //    that list, because a kit module may not edit `@nexus/sync`.
       "cookbook_settings",
       "cookbook_food_matches",
+      //  - cookbook_collections / cookbook_collection_recipes (migration 095):
+      //    the COOKBOOK's shelves, exempt on the sequencing terms the recipe
+      //    tables above carry. The archive does not carry shelves yet (see
+      //    migration 095), so a restore neither writes nor wipes them. The
+      //    memberships go with the recipes `RecipeStore.importData` replaces,
+      //    through the foreign key, so no shelf can name a recipe it no longer has.
+      "cookbook_collections",
+      "cookbook_collection_recipes",
       // The MINI-APPS module's one table (migration 083). A kit module's tables
       // are NOT in `RESTORE_WIPE_TABLES` for the TIMERS reason stated above:
       // that list is derived into `@nexus/sync`'s collection map, and this

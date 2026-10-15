@@ -121,6 +121,13 @@ export interface FoodMatchView {
   readonly gramsPerUnit: number | null;
 }
 
+/** One shelf the user made, or a pack seeded, with the ids of the live recipes on it. */
+export interface CollectionView {
+  readonly id: string;
+  readonly name: string;
+  readonly recipeIds: readonly string[];
+}
+
 /** Everything one read of the LIST answers with, and what every mutation answers with too. */
 export interface CookbookView {
   /** By title, sr-Latn, the way a person reads them (`Intl.Collator(["sr-Latn", "sr"])`, in the store). */
@@ -130,6 +137,8 @@ export interface CookbookView {
   readonly settings: CookbookSettingsView;
   /** By name, folded — the ingredient links the user has made. */
   readonly foodMatches: readonly FoodMatchView[];
+  /** By name, sr-Latn — the shelves the page filters by and manages. */
+  readonly collections: readonly CollectionView[];
 }
 
 /** An ingredient line as the editor hands it back: the parsed fields AND the raw line. */
@@ -281,6 +290,29 @@ interface UpdatePayload {
   patch: RecipePatch;
 }
 
+interface CollectionNamePayload {
+  profileId: string;
+  name: string;
+}
+
+interface RenameCollectionPayload extends CollectionNamePayload {
+  id: string;
+}
+
+/** One shelf of this profile, by its own id. */
+interface CollectionPayload {
+  profileId: string;
+  id: string;
+}
+
+/** Putting a recipe on a shelf, or taking it off: `member` says which. */
+interface CollectionMemberPayload {
+  profileId: string;
+  collectionId: string;
+  recipeId: string;
+  member: boolean;
+}
+
 interface UnitSystemPayload {
   profileId: string;
   unitSystem: CookbookUnitSystem;
@@ -373,6 +405,10 @@ type CookbookOps = {
   update: { request: UpdatePayload; response: CookbookView };
   remove: { request: RecipePayload; response: CookbookView };
   setUnitSystem: { request: UnitSystemPayload; response: CookbookView };
+  createCollection: { request: CollectionNamePayload; response: CookbookView };
+  renameCollection: { request: RenameCollectionPayload; response: CookbookView };
+  removeCollection: { request: CollectionPayload; response: CookbookView };
+  setInCollection: { request: CollectionMemberPayload; response: CookbookView };
   search: { request: SearchPayload; response: RecipeSummaryView[] };
   listRecipesPacks: { request: ListPayload; response: RecipesPackView[] };
   browsePack: { request: BrowsePackPayload; response: PackRecipeSummaryView[] };
@@ -406,6 +442,10 @@ export const contract = defineModuleContract<"cookbook", CookbookOps>("cookbook"
   "update",
   "remove",
   "setUnitSystem",
+  "createCollection",
+  "renameCollection",
+  "removeCollection",
+  "setInCollection",
   "search",
   "listRecipesPacks",
   "browsePack",

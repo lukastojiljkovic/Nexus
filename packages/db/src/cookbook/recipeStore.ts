@@ -1567,7 +1567,7 @@ function resolveFoodMatch(input: FoodMatchInput): Pick<
 }
 
 /** Trimmed, 1..`max` — a field that must say something. */
-function validateText(value: string, field: string, max: number): string {
+export function validateText(value: string, field: string, max: number): string {
   const trimmed = typeof value === "string" ? value.trim() : "";
   if (trimmed.length === 0 || trimmed.length > max) {
     throw new RecipeValidationError(`"${field}" must be 1-${max} characters after trimming.`);
@@ -1659,7 +1659,7 @@ function validateId(value: unknown, field: string): string {
   return value;
 }
 
-function validateNow(value: string): string {
+export function validateNow(value: string): string {
   if (!isDateTime(value)) {
     throw new RecipeValidationError('"now" must be an ISO-8601 date-time.');
   }

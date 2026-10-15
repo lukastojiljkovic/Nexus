@@ -51,6 +51,37 @@ export const RECIPE_SOURCES = ["own", "imported"] as const;
 export type RecipeSource = (typeof RECIPE_SOURCES)[number];
 
 /**
+ * How long a collection's name may be — the module's one shelf vocabulary, and
+ * deliberately its own number rather than a recipe title's: a shelf is read in a
+ * filter row beside every other shelf, and a name that filled a title's bound
+ * would leave no room for the recipes it holds to be seen.
+ */
+export const MAX_COLLECTION_NAME_LENGTH = 60;
+
+/**
+ * One shelf of a profile's cookbook: a name the user made, and — when a content
+ * pack seeded it — the id of that pack.
+ *
+ * **Why `sourcePack` exists rather than a second kind of collection.** A shelf a
+ * pack creates is a normal shelf from the moment it lands: the user may rename
+ * it, add their own recipes to it and delete it. But the pack's own recipes
+ * arrive one copy at a time, and every one of them after the first has to find
+ * the SAME shelf rather than make another one — so the id of the pack that made
+ * it is kept on the row. It is not a second vocabulary and nothing branches on
+ * it except that lookup; it is the one fact that makes „seed once" a property of
+ * the schema rather than of a caller's memory.
+ */
+export interface CookbookCollection {
+  readonly id: string;
+  readonly profileId: string;
+  readonly name: string;
+  /** The pack whose recipes asked for this shelf, or null for one the user made. */
+  readonly sourcePack: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
  * The identifier a work with no licence to cite is recorded under. Not an SPDX
  * identifier — SPDX has no term for a work whose copyright has simply expired,
  * and the module's own name for it is honest about being the module's own.

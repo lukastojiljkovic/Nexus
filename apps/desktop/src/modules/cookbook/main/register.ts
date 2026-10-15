@@ -1,4 +1,5 @@
 import {
+  MAX_COLLECTION_NAME_LENGTH,
   type CookbookCourse,
   type FoodMacros,
   type FoodRef,
@@ -12,6 +13,7 @@ import {
   searchFoods,
 } from "@nexus/core";
 import {
+  CollectionStore,
   MAX_INGREDIENT_GROUP_LENGTH,
   MAX_INGREDIENT_NAME_LENGTH,
   MAX_INGREDIENT_PREPARATION_LENGTH,
@@ -42,6 +44,7 @@ import {
 import type { ModuleCall, ModuleHostSurface } from "../../../main/moduleIpc.js";
 import {
   contract,
+  type CollectionView,
   type CookbookView,
   type FoodSuggestionView,
   type FoodsPackView,
@@ -58,6 +61,7 @@ import {
   loadRecipesPacks,
   loadFoodsPacks,
   searchPackRecipes,
+  seedPackShelf,
   type FoodsDataset,
   type PackFood,
   type PackRecipe,
@@ -160,6 +164,10 @@ export function register(host: ModuleHostSurface): void {
     return bearer.profileDb(profileId, (db, id) => new RecipeStore(db, id));
   }
 
+  function shelves(bearer: StoreBearer, profileId: string): CollectionStore {
+    return bearer.profileDb(profileId, (db, id) => new CollectionStore(db, id));
+  }
+
   /** The installed packs, or null when this build was never configured with them (see `configureCookbook`). */
   function packs(): CookbookRuntime | null {
     return runtime;
@@ -236,6 +244,9 @@ export function register(host: ModuleHostSurface): void {
     const recipes = store(bearer, profileId);
     const rows = recipes.list();
     return {
+      collections: shelves(bearer, profileId).list().map(
+        (shelf): CollectionView => ({ id: shelf.id, name: shelf.name, recipeIds: [...shelf.recipeIds] }),
+      ),
       recipes: rows.map(summaryOf),
       tags: tagsOf(rows),
       settings: recipes.settings(),
@@ -591,6 +602,42 @@ export function register(host: ModuleHostSurface): void {
     return viewOf(call, profileId);
   });
 
+  ctx.handle("createCollection", (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    shelves(call, profileId).create(
+      call.as.asCappedChars(call.as.asNonEmptyString(payload.name, "name"), "name", MAX_COLLECTION_NAME_LENGTH),
+      instant(call.now()),
+    );
+    return viewOf(call, profileId);
+  });
+
+  ctx.handle("renameCollection", (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    shelves(call, profileId).rename(
+      call.as.asId(payload.id, "id"),
+      call.as.asCappedChars(call.as.asNonEmptyString(payload.name, "name"), "name", MAX_COLLECTION_NAME_LENGTH),
+      instant(call.now()),
+    );
+    return viewOf(call, profileId);
+  });
+
+  ctx.handle("removeCollection", (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    shelves(call, profileId).remove(call.as.asId(payload.id, "id"));
+    return viewOf(call, profileId);
+  });
+
+  ctx.handle("setInCollection", (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    shelves(call, profileId).setMember(
+      call.as.asId(payload.collectionId, "collectionId"),
+      call.as.asId(payload.recipeId, "recipeId"),
+      call.as.asBoolean(payload.member, "member"),
+      instant(call.now()),
+    );
+    return viewOf(call, profileId);
+  });
+
   ctx.handle("search", (payload, call) => {
     const profileId = call.as.asId(payload.profileId, "profileId");
     const query = call.as.asCappedChars(call.as.asString(payload.query, "query"), "query", 120);
@@ -626,7 +673,11 @@ export function register(host: ModuleHostSurface): void {
     const recipe = requirePackRecipe(call, pack, payload.id);
     const recipes = store(call, profileId);
     const copy = packRecipeInput(pack, recipe);
-    const created = recipes.create(copy, instant(call.now()));
+    const now = instant(call.now());
+    const created = recipes.create(copy, now);
+    const collections = shelves(call, profileId);
+    const shelf = seedPackShelf(collections, pack, now);
+    if (shelf !== null) collections.setMember(shelf.id, created.id, true, now);
     return { view: viewOf(call, profileId), recipeId: created.id };
   });
 

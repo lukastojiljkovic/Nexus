@@ -35,11 +35,22 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 93 (whether a tool call did the thing), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(93);
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
-      Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
+  it("is at version 95 (the cookbook's collections), ascending and never duplicated", () => {
+    expect(LATEST_VERSION).toBe(95);
+
+    // Ascending, and deliberately NOT gap-free. Migrations are written one per
+    // branch and merged in whatever order they finish, so a number now lands a
+    // day after the one above it (094 is another run's, 095 is this one's).
+    // `runMigrations` applies by `version`, which a gap does not disturb, and the
+    // failure the old shape caught is the one this keeps: two branches taking the
+    // same number, or a migration edited into an earlier position than a shipped
+    // one.
+    const versions = MIGRATIONS.map((migration) => migration.version);
+    const ascending = versions.every(
+      (version, index) => index === 0 || versions[index - 1]! < version,
     );
+    expect(ascending).toBe(true);
+    expect(new Set(versions).size).toBe(versions.length);
   });
 });
 
@@ -9882,6 +9893,152 @@ describe("migration 081 — the card-game tables", () => {
       }[]
     ).map((row) => row.name);
     expect(triggers.filter((name) => name.startsWith("cardgame_"))).toEqual([]);
+    raw.close();
+  });
+});
+
+describe("migration 095 — the cookbook's collections", () => {
+  const T = "2026-06-01T08:00:00.000Z";
+
+  /** A database with one profile and one recipe, opened the way `openDatabase` opens one. */
+  function open(name: string): Database.Database {
+    const raw = new Database(join(dir, name));
+    prepareConnection(raw);
+    runMigrations(raw);
+    raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run("p1", "personal", "P", T);
+    raw
+      .prepare(
+        `INSERT INTO cookbook_recipes
+           (id, profile_id, title, course, servings, source, created_at, updated_at)
+         VALUES ('r1', 'p1', 'Sarma', 'main', 4, 'own', ?, ?)`,
+      )
+      .run(T, T);
+    return raw;
+  }
+
+  function insertCollection(
+    raw: Database.Database,
+    id: string,
+    name: string,
+    sourcePack: string | null = null,
+  ): void {
+    raw
+      .prepare(
+        `INSERT INTO cookbook_collections (id, profile_id, name, source_pack, created_at, updated_at)
+         VALUES (?, 'p1', ?, ?, ?, ?)`,
+      )
+      .run(id, name, sourcePack, T, T);
+  }
+
+  function insertMember(raw: Database.Database, collectionId: string, recipeId: string): void {
+    raw
+      .prepare(
+        `INSERT INTO cookbook_collection_recipes (collection_id, recipe_id, created_at)
+         VALUES (?, ?, ?)`,
+      )
+      .run(collectionId, recipeId, T);
+  }
+
+  it("creates the two tables and stamps the latest user_version on a fresh database", () => {
+    const db = openDatabase({ path: join(dir, "095-fresh.db") });
+    const names = tableNames(db);
+    expect(names).toContain("cookbook_collections");
+    expect(names).toContain("cookbook_collection_recipes");
+    expect(db.raw.pragma("user_version", { simple: true })).toBe(LATEST_VERSION);
+    db.close();
+  });
+
+  it("creates the shelf's list index and the recipe's own-shelves lookup", () => {
+    const db = openDatabase({ path: join(dir, "095-indexes.db") });
+    const indexes = (
+      db.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(indexes).toContain("cookbook_collections_profile");
+    expect(indexes).toContain("cookbook_collections_source_pack");
+    expect(indexes).toContain("cookbook_collection_recipes_recipe");
+    db.close();
+  });
+
+  it("holds a name and an optional pack id, and refuses a name nothing could read", () => {
+    const raw = open("095-name.db");
+    insertCollection(raw, "c1", "Zimnica");
+    insertCollection(raw, "c2", "Konzervisanje", "recipes-preserving");
+    expect(
+      raw.prepare("SELECT name, source_pack FROM cookbook_collections ORDER BY id").all(),
+    ).toEqual([
+      { name: "Zimnica", source_pack: null },
+      { name: "Konzervisanje", source_pack: "recipes-preserving" },
+    ]);
+
+    expect(() => insertCollection(raw, "c3", "")).toThrow(/CHECK/);
+    expect(() => insertCollection(raw, "c4", "n".repeat(61))).toThrow(/CHECK/);
+    expect(() => insertCollection(raw, "c5", "Zimnica", "")).toThrow(/CHECK/);
+    raw.close();
+  });
+
+  it("takes one seeded shelf per pack per profile, and any number of the user's own", () => {
+    const raw = open("095-unique-source.db");
+    insertCollection(raw, "c1", "Konzervisanje", "recipes-preserving");
+    // A second shelf from the same pack is exactly what a re-install must not
+    // make, and the index is where that is decided.
+    expect(() => insertCollection(raw, "c2", "Zimnica", "recipes-preserving")).toThrow(/UNIQUE/);
+    insertCollection(raw, "c3", "Zimnica");
+    insertCollection(raw, "c4", "Zimnica");
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_collections").get()).toEqual({ n: 3 });
+    raw.close();
+  });
+
+  it("takes a recipe on the same shelf once and on several shelves at once", () => {
+    const raw = open("095-membership.db");
+    insertCollection(raw, "c1", "Zimnica");
+    insertCollection(raw, "c2", "Lagano");
+    insertMember(raw, "c1", "r1");
+    insertMember(raw, "c2", "r1");
+    expect(() => insertMember(raw, "c1", "r1")).toThrow(/UNIQUE|PRIMARY/);
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_collection_recipes").get()).toEqual({
+      n: 2,
+    });
+    raw.close();
+  });
+
+  it("takes the memberships and leaves the recipes when a collection goes", () => {
+    const raw = open("095-shelf-only.db");
+    insertCollection(raw, "c1", "Zimnica");
+    insertMember(raw, "c1", "r1");
+    raw.prepare("DELETE FROM cookbook_collections WHERE id = 'c1'").run();
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_collection_recipes").get()).toEqual({
+      n: 0,
+    });
+    // The brief's own sentence, as a property of the schema: the shelf goes, the
+    // recipes do not.
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_recipes").get()).toEqual({ n: 1 });
+    raw.close();
+  });
+
+  it("takes every shelf a profile owned, and its memberships, with the profile", () => {
+    const raw = open("095-profile-cascade.db");
+    insertCollection(raw, "c1", "Zimnica");
+    insertMember(raw, "c1", "r1");
+    raw.prepare("DELETE FROM profiles WHERE id = 'p1'").run();
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_collections").get()).toEqual({ n: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS n FROM cookbook_collection_recipes").get()).toEqual({
+      n: 0,
+    });
+    raw.close();
+  });
+
+  it("carries no journal trigger, because sync is on hold and these tables are not synced", () => {
+    const raw = open("095-journal.db");
+    const triggers = (
+      raw.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as {
+        name: string;
+      }[]
+    ).map((row) => row.name);
+    expect(triggers.filter((name) => name.startsWith("cookbook_"))).toEqual([]);
     raw.close();
   });
 });

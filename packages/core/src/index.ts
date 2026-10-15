@@ -1732,11 +1732,13 @@ export { buildShoppingList } from "./cookbook/shopping.js";
 export type { ShoppingLine } from "./cookbook/shopping.js";
 export {
   COOKBOOK_COURSES,
+  MAX_COLLECTION_NAME_LENGTH,
   PUBLIC_DOMAIN_LICENCE_ID,
   RECIPE_SOURCES,
   isRecipeLicenceId,
 } from "./cookbook/recipe.js";
 export type {
+  CookbookCollection,
   CookbookCourse,
   RecipeLicence,
   RecipeSource,
