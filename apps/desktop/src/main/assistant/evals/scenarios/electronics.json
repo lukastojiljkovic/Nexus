@@ -1,0 +1,163 @@
+{
+  "scenarios": [
+    {
+      "id": "electronics-open-sr",
+      "title": "Šta je u kolu, na srpskom",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta je sve povezano u kolu Meteo?" }
+      ],
+      "tools": [
+        {
+          "name": "electronics.open",
+          "effect": "read",
+          "content": "Kolo „Meteo“ (id-1): delova 2, veza 3.\nDelovi:\n- Arduino UNO R3: Arduino UNO R3 (arduino-uno)\n- DHT1: DHT22 (AM2302) (dht22)\nVeze:\n- DHT1.DATA — Arduino UNO R3.D2 (id-2)"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "electronics.open", "args": { "circuit": { "contains": "Meteo" } } }
+        ],
+        "answerContains": ["DHT22", "D2"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "electronics.open", "arguments": { "circuit": "Meteo" } }] },
+        {
+          "text": "U kolu Meteo je DHT22 povezan na Arduino UNO: podatke šalje na pin D2, a napajanje i masa idu na ploču."
+        }
+      ]
+    },
+    {
+      "id": "electronics-build-sr",
+      "title": "Sastavljanje kola iz jednog opisa, na srpskom",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Sastavi mi kolo Meteo: Arduino UNO, DHT22 na pinu D2, napajanje sa 5V i masa na GND." }
+      ],
+      "tools": [
+        {
+          "name": "electronics.build",
+          "effect": "write",
+          "summary": {
+            "sr": "Sastavi kolo „Meteo“ na ploči „Arduino UNO R3“ (delova: 1, veza: 3)",
+            "en": "Build “Meteo” on “Arduino UNO R3” (parts: 1, wires: 3)"
+          },
+          "content": "Sastavljeno kolo „Meteo“ (id-1): delova 1, veza 3."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "electronics.build", "args": { "name": { "contains": "Meteo" }, "board": { "contains": "arduino" } } }
+        ],
+        "answerContains": ["Meteo"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "electronics.build",
+              "arguments": {
+                "name": "Meteo",
+                "board": "arduino-uno",
+                "parts": [{ "ref": "DHT1", "component": "dht22" }],
+                "wires": [
+                  { "from": "DHT1.VCC", "to": "arduino-uno.5V" },
+                  { "from": "DHT1.GND", "to": "arduino-uno.GND" },
+                  { "from": "DHT1.DATA", "to": "arduino-uno.D2" }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "text": "Sastavio sam kolo Meteo na ploči Arduino UNO: DHT22 je na pinu D2, napajanje ide sa 5V, a masa na GND. Ploča je spremna za kôd."
+        }
+      ]
+    },
+    {
+      "id": "electronics-parts-en",
+      "title": "Finding a part by what it does, in English",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Which sensor can I use outdoors in winter, below zero?" }
+      ],
+      "tools": [
+        {
+          "name": "electronics.parts",
+          "effect": "read",
+          "content": "Catalogue parts (1):\n- dht22: DHT22 (AM2302) (sensor), pins: VCC, GND, DATA"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "electronics.parts", "args": { "query": { "contains": "zero" } } }
+        ],
+        "answerContains": ["DHT22"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "electronics.parts", "arguments": { "query": "below zero" } }] },
+        {
+          "text": "The DHT22 (AM2302) is the one: its range goes below zero. It has VCC, GND and DATA pins."
+        }
+      ]
+    },
+    {
+      "id": "electronics-connect-en",
+      "title": "Wiring one pin on a bench circuit, in English",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Connect the anode of the LED on Meteo to pin D13 on the board." }
+      ],
+      "tools": [
+        {
+          "name": "electronics.connect",
+          "effect": "write",
+          "summary": {
+            "sr": "Poveži L1.A sa Arduino UNO R3.D13 na kolu „Meteo“",
+            "en": "Connect L1.A to Arduino UNO R3.D13 on “Meteo”"
+          },
+          "content": "Connected: L1.A — Arduino UNO R3.D13 (id-3)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "electronics.connect", "args": { "circuit": { "contains": "Meteo" }, "to": { "contains": "D13" } } }
+        ],
+        "answerContains": ["D13"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "electronics.connect",
+              "arguments": { "circuit": "Meteo", "from": "L1.A", "to": "Arduino UNO R3.D13" }
+            }
+          ]
+        },
+        {
+          "text": "Done: the LED's anode is now wired to pin D13 on the Meteo circuit."
+        }
+      ]
+    }
+  ]
+}
