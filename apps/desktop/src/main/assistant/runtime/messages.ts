@@ -5,7 +5,7 @@
  * conversation in two different shapes, and this file is the translation — the
  * only one, so a change in either shape has exactly one place to be made.
  *
- * FOUR DECISIONS WORTH STATING, because each one is visible to the model:
+ * FIVE DECISIONS WORTH STATING, because each one is visible to the model:
  *
  *   1. **A tool call and its result are ONE history item.** llama.cpp's chat
  *      templates render a call and its result as a pair inside the assistant's
@@ -32,6 +32,14 @@
  *      result is returned positionally. `call_1`, `call_2` … are therefore the
  *      runtime's own identifiers, they never reach the model, and the agent loop
  *      gets a stable key to pair results with.
+ *   5. **A tool's schema reaches the model as the GRAMMAR it decodes under, not
+ *      as the schema the tool declares** (`grammarSchemaFor`). node-llama-cpp
+ *      compiles `params` into GBNF and forces every key in `properties` —
+ *      `required` has no effect there — so an optional property handed over
+ *      unchanged is a property the model MUST fill, and the value it writes for
+ *      one it has nothing to say about is `""`. The copy says the same thing
+ *      the tool declared, in the terms the decoder reads it: which fields may
+ *      be null, and which strings are a day.
  *
  * THE TEXT FALLBACK, for a chat template node-llama-cpp cannot drive with
  * `functions` (see `llama.ts`): the tools are described in a system block and
@@ -42,10 +50,23 @@
  */
 
 import type { AssistantText, ChatMessage, StopReason, ToolCall, ToolSpec } from "@nexus/core";
-import type { ChatHistoryItem, ChatModelFunctionCall, ChatModelFunctions } from "node-llama-cpp";
+import type {
+  ChatHistoryItem,
+  ChatModelFunctionCall,
+  ChatModelFunctions,
+  GbnfJsonSchema,
+} from "node-llama-cpp";
 
 /** The fence tag of the text fallback. `agent-core`'s parser reads the same tag. */
 export const TOOL_CALL_FENCE = "tool_call";
+
+/**
+ * The assistant contract's schema shape, reached through the tool spec: the
+ * name `JsonSchema` is the WIDGET contract's on the package root, because a
+ * named export shadows the assistant contract's star export (`web/index.ts`
+ * hit the same trap).
+ */
+type Schema = ToolSpec["parameters"];
 
 /** How much text is held back while a fence may still be arriving. The tag is 11 characters. */
 const FENCE_TAIL = 16;
@@ -104,14 +125,161 @@ export function functionsFrom(tools: readonly ToolSpec[]): ChatModelFunctions {
   for (const tool of tools) {
     functions[tool.name] = {
       description: englishDescription(tool.description),
-      // The contract's `JsonSchema` is the JSON Schema the model is shown; llama.cpp's
-      // `GbnfJsonSchema` is the same document read by its grammar compiler, which
-      // refuses a schema it cannot compile before a token is generated. One shape,
-      // two readers, and the reader that refuses is the one that matters.
-      params: tool.parameters as ChatModelFunctions[string]["params"],
+      // Not the tool's own schema: the schema the model DECODES under, which the
+      // grammar compiler reads every time it is asked for a call. What the
+      // compiler cannot express is translated (`grammarSchemaFor`), and what the
+      // translation leaves out — a `pattern` — is still checked, because the
+      // arguments are validated against `tool.parameters` itself (`arguments.ts`).
+      params: grammarSchemaFor(tool.parameters) as ChatModelFunctions[string]["params"],
     };
   }
   return functions;
+}
+
+/**
+ * The day pattern the tools spell a calendar day with (`tools/tasks.ts`,
+ * `calendar.ts`, `car.ts`, `pantry.ts`, `culture.ts`, `habits.ts`,
+ * `recorder.ts`), and the one pattern the grammar has a name for. The
+ * arguments' own reader states the same pattern (`@nexus/core`'s
+ * `assistant/arguments.ts`): there it is a day to resolve, here a format to
+ * decode.
+ */
+const DAY_PATTERN = "^\\d{4}-\\d{2}-\\d{2}$";
+
+/**
+ * A tool's JSON Schema as the schema the model decodes under.
+ *
+ * node-llama-cpp compiles the `params` of a function into a GBNF grammar, and
+ * its own documentation states the two places where that grammar reads a JSON
+ * Schema differently (`utils/gbnfJson/types.d.ts`):
+ *
+ *   1. **"`required` is always set to all keys in `properties`, and setting it
+ *      has no effect."** So every OPTIONAL property is forced, and a model with
+ *      nothing to say for one must still write a value — which is how `""`
+ *      reached `tasks.create` in the 2.0.3 run this repairs. An optional
+ *      property therefore arrives here as the library's own guidance for an
+ *      optional value: `oneOf: [<its schema>, { type: "null" }]`, with the
+ *      description moved onto the choice and ending in „Null when not given."
+ *      A property that already accepts null is that same choice already, so no
+ *      second null branch is added beside it.
+ *   2. **The string schema knows `minLength`, `maxLength` and
+ *      `format: "date" | "time" | "date-time"`, and no `pattern`.** A day
+ *      spelled as the pattern above becomes `{ type: "string", format: "date" }`,
+ *      which the grammar can enforce; any other pattern is dropped, because a
+ *      regular expression left in the copy would read as a constraint the
+ *      decoder does not apply.
+ *
+ * The copy is what the model reads as the tool's parameters too, so the moved
+ * description is not bookkeeping: "Null when not given." is the only place a
+ * small model is told that leaving a field out is allowed.
+ *
+ * Validation still reads the tool's own schema (`arguments.ts`,
+ * `packages/core/src/assistant/schema.ts`), so a call this translation makes
+ * decodable but not valid is refused where it always was.
+ */
+export function grammarSchemaFor(schema: Schema): GbnfJsonSchema {
+  return grammarNode(schema) as GbnfJsonSchema;
+}
+
+/** One node of the grammar copy. */
+function grammarNode(node: Schema): Record<string, unknown> {
+  const body = grammarBody(node);
+  const description = node["description"];
+  return typeof description === "string" ? { ...body, description } : body;
+}
+
+/**
+ * A node without its description, which is attached one level up — on the
+ * `oneOf` an optional property becomes, where the model reads it.
+ */
+function grammarBody(node: Schema): Record<string, unknown> {
+  const types = immutableTypes(node["type"]);
+  const present = types.filter((type) => type !== "null");
+  if (present.length > 0 && present.length < types.length) {
+    const rest = omit(node, "description");
+    const branch = grammarNode({ ...rest, type: present.length === 1 ? present[0] : present });
+    return { oneOf: [branch, { type: "null" }] };
+  }
+
+  if (types.length === 1 && types[0] === "string" && node["pattern"] === DAY_PATTERN) {
+    return { type: "string", format: "date" };
+  }
+
+  // Everything else is carried over as the tool declared it: the compiler
+  // ignores a keyword it does not read, and validation still reads all of them,
+  // so the copy is the tool's own arguments document minus the one key the
+  // grammar would read as a constraint it does not apply.
+  const copy = omit(node, "description", "pattern");
+  const properties = node["properties"];
+  if (isSchema(properties)) {
+    const required = stringList(node["required"]);
+    const converted: Record<string, unknown> = {};
+    for (const [name, property] of Object.entries(properties)) {
+      converted[name] = isSchema(property)
+        ? grammarProperty(property, required.includes(name))
+        : property;
+    }
+    copy["properties"] = converted;
+  }
+  const items = node["items"];
+  if (isSchema(items)) copy["items"] = grammarNode(items);
+  return copy;
+}
+
+/**
+ * One property of an object schema. Required properties decode exactly as they
+ * are declared; everything else decodes as itself or null (the object rule in
+ * the file header), and its description says so.
+ */
+function grammarProperty(property: Schema, required: boolean): Record<string, unknown> {
+  const body = grammarBody(property);
+  if (required) return grammarNode(property);
+  const description = property["description"];
+  const note = "Null when not given.";
+  const optional =
+    typeof description === "string" && description.trim().length > 0
+      ? `${description} ${note}`
+      : note;
+  return admitsNull(body)
+    ? { ...body, description: optional }
+    : { oneOf: [body, { type: "null" }], description: optional };
+}
+
+/** Whether a converted node can already decode null — an optional property needs no second way to say it. */
+function admitsNull(body: Record<string, unknown>): boolean {
+  const branches = body["oneOf"];
+  return (
+    Array.isArray(branches) &&
+    branches.some((branch) => isSchema(branch) && immutableTypes(branch["type"]).includes("null"))
+  );
+}
+
+/** A JSON Schema node, as opposed to values within one (`enum`, `required`, …). */
+function isSchema(value: unknown): value is Schema {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The `type` a node declares, as the list of names it accepts. */
+function immutableTypes(value: unknown): readonly string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === "string");
+  return [];
+}
+
+/** The strings of a list-valued keyword, ignoring anything that is not one. */
+function stringList(value: unknown): readonly string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+/** A copy of a node without the named keys. Nothing here mutates its input. */
+function omit(node: Schema, ...keys: readonly string[]): Record<string, unknown> {
+  const copy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (!keys.includes(key)) copy[key] = value;
+  }
+  return copy;
 }
 
 /** The English half of a tool's description, which is the half the model reads. */

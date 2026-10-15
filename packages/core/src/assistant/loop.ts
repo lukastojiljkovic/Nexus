@@ -10,8 +10,9 @@
  *   2. knowledge, retrieved ONCE before the first completion and injected as a
  *      fenced block, so every step of the turn reads the same passages;
  *   3. the model, streamed out as `token` events;
- *   4. the model's tool calls, each one checked against its own JSON schema
- *      before anything runs (`schema.ts`), then run together;
+ *   4. the model's tool calls, each one normalised for the loose values a small
+ *      model writes (`arguments.ts`) and then checked against its own JSON
+ *      schema before anything runs (`schema.ts`), then run together;
  *   5. the results, fenced as data, back to the model; repeat until it answers,
  *      or until `maxSteps`.
  *
@@ -38,6 +39,15 @@
  * (`refusals.ts`): a repeat of a refused call is answered without running the
  * tool and without asking again. A call with other arguments is a new question
  * and is asked normally, and the memory is gone by the next user message.
+ *
+ * **A refusal names what the schema wanted, and a second one ends the trying.**
+ * The message a refused call comes back as carries the finding and the fields
+ * with what each expects, built from the schema, and NOT the call the model
+ * just made: a small model copies a failed call that sits in its context back
+ * verbatim. The same tool refused twice in one turn is answered with the same
+ * sentence - do not call it again, tell the user - and a third attempt is not
+ * read at all, because a model that has written the same bad call twice will
+ * write it a third time, and the turn has `maxSteps` steps to answer in.
  *
  * **A tool call is never lost to the step limit.** The limit counts MODEL calls;
  * a final call that still asks for tools has those tools run and its results
@@ -69,6 +79,7 @@ import {
   createToolEstimator,
   planContext,
 } from "./budget.js";
+import { DAY_PATTERN, normalizeToolArguments } from "./arguments.js";
 import { filterAnswer } from "./citations.js";
 import { createFenceBoundary, fenceUntrusted, isFenced } from "./fence.js";
 import { replyLanguage, transliterateToLatin } from "./language.js";
@@ -89,6 +100,7 @@ import type {
   ChatMessage,
   Citation,
   CompletionResult,
+  JsonSchema,
   KnowledgeHit,
   RunAgentTurn,
   StopReason,
@@ -247,6 +259,13 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     const pending: ChatMessage[] = [input.user];
     let measured: MeasuredUsage | undefined;
     let counted = false;
+    /**
+     * How many times this turn a tool's arguments have been refused, by tool
+     * name. The loop's own small memory, kept as its own object so a second one
+     * (another reason a call must not be repeated) can sit beside it rather
+     * than inside it.
+     */
+    const invalidCalls = new Map<string, number>();
 
     for (let step = 0; step < input.maxSteps; step += 1) {
       if (signal.aborted) {
@@ -352,7 +371,15 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
 
       pending.push({ role: "assistant", content: text, toolCalls: calls });
       for (const call of calls) emit({ type: "tool-call", call });
-      const outcome = await runToolCalls(calls, offeredTools, input.context, emit, refusals);
+      const outcome = await runToolCalls(
+        calls,
+        offeredTools,
+        input.context,
+        emit,
+        input.today,
+        refusals,
+        invalidCalls,
+      );
       if (outcome.aborted) {
         stopped();
         return;
@@ -415,16 +442,22 @@ type ToolOutcome =
  * tool was faster. A refusal is the tool's own business: `ToolContext.confirm`
  * is its question, and the tool decides what the answer means for its result.
  *
- * The one thing this adds to that is the turn's memory of the refusals already
- * given (`refusals.ts`): a call the user has said no to is answered here, because
- * running the tool would ask them the same question a second time.
+ * What this adds to that is two memories of the turn, both owned by
+ * `createAgentTurn`: the refusals the user already gave (`refusals.ts`) - a call
+ * they said no to is answered here, because running the tool would ask them the
+ * same question a second time - and `invalidCalls`, the tools whose arguments
+ * were already refused, so a third attempt is answered without being read.
+ * `today` is the turn's own day, which a day word in the arguments is resolved
+ * against before validation.
  */
 async function runToolCalls(
   calls: readonly ToolCall[],
   tools: readonly Tool[],
   context: ToolContext,
   emit: (event: AgentEvent) => void,
+  today: string,
   refusals: RefusalMemory,
+  invalidCalls: Map<string, number>,
 ): Promise<ToolOutcome> {
   const names = tools.map((tool) => tool.name);
   const settled = await Promise.all(
@@ -448,14 +481,27 @@ async function runToolCalls(
       if (declined !== undefined) {
         return { aborted: false, entry: { call, result: declined } };
       }
-      const check = validateToolArguments(tool.parameters, call.arguments);
+      const refused = invalidCalls.get(call.name) ?? 0;
+      if (refused >= 2) {
+        // Not validated and not run: the model has written this same bad call
+        // twice already, and the answer it gets is the one that tells it to
+        // stop, in the same words as the second refusal.
+        return { aborted: false, entry: { call, result: failure(refusedTwice(call.name)) } };
+      }
+      const check = validateToolArguments(
+        tool.parameters,
+        normalizeToolArguments(tool.parameters, call.arguments, today),
+      );
       if (!check.ok) {
+        invalidCalls.set(call.name, refused + 1);
         return {
           aborted: false,
           entry: {
             call,
             result: failure(
-              `Invalid arguments for ${call.name}: ${check.errors.join("; ")}. Call it again with arguments that match its schema.`,
+              refused + 1 >= 2
+                ? refusedTwice(call.name)
+                : refusal(call.name, tool.parameters, check.errors),
             ),
           },
         };
@@ -496,6 +542,97 @@ async function runToolCalls(
 
 function failure(content: string): ToolResult {
   return { ok: false, content };
+}
+
+/**
+ * What one refused call tells the model: the finding, what the tool's schema
+ * wants of each field, and the two ways out.
+ *
+ * The failed arguments are deliberately NOT repeated. A small model copies a
+ * call that sits in its context back verbatim - the 2.0.3 run this repairs is
+ * the proof - so the one thing this message must not carry is a second copy of
+ * the call it is answering. The finding (`schema.ts`'s own sentence) names the
+ * field and the shape it wanted; the rest is read off the schema rather than
+ * written out by hand, because a hand-kept list is wrong the first time a tool
+ * changes its arguments.
+ */
+function refusal(name: string, schema: JsonSchema, errors: readonly string[]): string {
+  return `Invalid arguments for ${name}: ${errors.join("; ")}. ${expectations(schema)} Call it again with the corrected arguments, or tell the user what is missing.`;
+}
+
+/**
+ * The same tool refused twice in one turn. The model is told the call will not
+ * run and asked to answer instead, which is the only useful thing left to say:
+ * a second identical refusal has already been read and not acted on.
+ */
+function refusedTwice(name: string): string {
+  return `${name} failed twice this turn. Do not call it again: tell the user it was not done and why.`;
+}
+
+/** What a tool's schema expects of its arguments, one clause per field. */
+function expectations(schema: JsonSchema): string {
+  const properties = isPlainObject(schema["properties"]) ? schema["properties"] : {};
+  const required = stringList(schema["required"]);
+  const fields = Object.entries(properties).map(([name, property]) =>
+    expectation(name, isPlainObject(property) ? property : {}, required.includes(name)),
+  );
+  return fields.length === 0 ? "It takes no arguments." : `Its arguments are: ${fields.join("; ")}.`;
+}
+
+/** One field: its name, whether it may be left out, and what it expects. */
+function expectation(name: string, property: JsonSchema, required: boolean): string {
+  return `${name} (${required ? "required" : "optional"}): ${expected(property)}`;
+}
+
+/**
+ * What one field expects, in the schema's own terms: a closed vocabulary is
+ * quoted, a calendar day is named as the form it takes, and everything else is
+ * its type.
+ */
+function expected(property: JsonSchema): string {
+  if (property["pattern"] === DAY_PATTERN) return "a day as YYYY-MM-DD";
+  const members = stringList(property["enum"]);
+  if (members.length > 0) return `one of ${members.map((member) => JSON.stringify(member)).join(", ")}`;
+  switch (property["type"]) {
+    case "integer":
+      return "a whole number";
+    case "number":
+      return "a number";
+    case "boolean":
+      return "true or false";
+    case "array":
+      return "a list";
+    case "object":
+      return "an object";
+    default:
+      return text(property);
+  }
+}
+
+/** A text field, with the length the schema states when it states one. */
+function text(property: JsonSchema): string {
+  const bounds: string[] = [];
+  const min = property["minLength"];
+  const max = property["maxLength"];
+  if (typeof min === "number" && min > 0) bounds.push(`at least ${characters(min)}`);
+  if (typeof max === "number") bounds.push(`at most ${characters(max)}`);
+  return ["text", ...bounds].join(", ");
+}
+
+/** A count of characters a refusal can read. */
+function characters(count: number): string {
+  return count === 1 ? "1 character" : `${count} characters`;
+}
+
+/** The strings of a list-valued keyword, ignoring anything that is not one. */
+function stringList(value: unknown): readonly string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function errorMessage(error: unknown): string {

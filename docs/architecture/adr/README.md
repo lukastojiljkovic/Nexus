@@ -125,3 +125,4 @@ directory is the decision log behind it.
 | [111](111-cards-module.md) | The Cards module on the kit: one shelf, nine engines, one worker (uses ADR-090, ADR-093) | Accepted | 2026-10-11 |
 | [112](112-assistant-tools-per-turn.md) | The assistant's tools per turn: what fits in the window, and a prompt that stops repeating them (uses ADR-095, ADR-104) | Accepted | 2026-10-14 |
 | [113](113-assistant-tiers-by-active-parameters.md) | The assistant's tiers are ordered by active parameters, and Gemma 4 E2B is the speed pick | Accepted; supersedes ADR-096 §4 in part | 2026-10-15 |
+| [116](116-the-grammar-a-tool-call-decodes-under.md) | The grammar a tool call decodes under: optional properties that may be null, days as a format, and a refusal the model can act on (uses ADR-095, ADR-112) | Accepted | 2026-10-15 |
