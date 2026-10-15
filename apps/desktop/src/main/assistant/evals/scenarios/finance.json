@@ -1,0 +1,160 @@
+{
+  "scenarios": [
+    {
+      "id": "finance-summary-sr",
+      "title": "Pregled novca po valutama",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koliko novca imam ovog meseca i gde ga trošim?" }
+      ],
+      "tools": [
+        { "name": "finance.summary", "effect": "read" },
+        {
+          "name": "finance.record",
+          "effect": "write",
+          "summary": { "sr": "Zapisaću trošak.", "en": "I will record an expense." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "finance.summary" }],
+        "toolsNotCalled": ["finance.record"],
+        "answerContains": ["RSD"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "finance.summary", "arguments": {} }] },
+        {
+          "text": "Na računima imaš 84.300,00 RSD. Najviše si potrošio na hranu, 21.450,00 RSD ovog meseca."
+        }
+      ]
+    },
+    {
+      "id": "finance-record-accepted-sr",
+      "title": "Trošak zabeležen posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Zapiši da sam danas platio 1250 dinara za hranu sa tekućeg računa." }
+      ],
+      "tools": [
+        {
+          "name": "finance.record",
+          "effect": "write",
+          "summary": {
+            "sr": "Zapisaću trošak 1.250,00 RSD na „Tekući račun“ (Hrana), danas.",
+            "en": "I will record an expense of 1,250.00 RSD on “Tekući račun” (Hrana), today."
+          },
+          "content": "Recorded an expense of 1.250,00 RSD on “Tekući račun” (tx-1), 2026-10-15."
+        },
+        { "name": "finance.summary", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "finance.record",
+            "args": { "account": { "contains": "račun" }, "amount": { "eq": 1250 }, "kind": { "eq": "expense" } }
+          }
+        ],
+        "toolsNotCalled": ["finance.summary"],
+        "answerContains": ["1.250,00"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "finance.record",
+              "arguments": { "account": "Tekući račun", "amount": 1250, "kind": "expense", "category": "Hrana" }
+            }
+          ]
+        },
+        {
+          "text": "Zabeležio sam trošak od 1.250,00 RSD za hranu na tekućem računu, za danas."
+        }
+      ]
+    },
+    {
+      "id": "finance-budget-declined-en",
+      "title": "Budžet nije postavljen kada je korisnik odbio",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Set my grocery budget to 15000 dinars a month." }
+      ],
+      "tools": [
+        {
+          "name": "finance.budget",
+          "effect": "write",
+          "summary": {
+            "sr": "Postaviću budžet za „Hrana“ na 15.000,00 RSD mesečno.",
+            "en": "I will set the budget for “Hrana” to 15,000.00 RSD a month."
+          },
+          "content": "The budget for “Hrana” is 15,000.00 RSD a month."
+        },
+        { "name": "finance.budgets", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "finance.budget", "args": { "action": { "eq": "set" }, "amount": { "eq": 15000 } } }],
+        "toolsNotCalled": ["finance.budgets"],
+        "answerContains": ["budget"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "finance.budget",
+              "arguments": { "action": "set", "category": "Hrana", "amount": 15000 }
+            }
+          ]
+        },
+        {
+          "text": "I did not set the grocery budget, because you declined. Nothing has changed; I can set it later if you want."
+        }
+      ]
+    },
+    {
+      "id": "finance-subscriptions-en",
+      "title": "Subscriptions due in the next week",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What subscriptions am I paying for, and what is due this week?" }
+      ],
+      "tools": [
+        { "name": "finance.subscriptions", "effect": "read" },
+        {
+          "name": "finance.pause",
+          "effect": "write",
+          "summary": { "sr": "Pauziraću pretplatu.", "en": "I will pause the subscription." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "finance.subscriptions", "args": { "days": { "eq": 7 } } }],
+        "toolsNotCalled": ["finance.pause"],
+        "answerContains": ["Netflix"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "finance.subscriptions", "arguments": { "days": 7 } }] },
+        {
+          "text": "You subscribe to Netflix, and its next charge of 1,200.00 RSD falls within the next week."
+        }
+      ]
+    }
+  ]
+}

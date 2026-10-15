@@ -68,6 +68,7 @@ import { carTools } from "./car.js";
 import { cookbookTools } from "./cookbook.js";
 import { cultureTools } from "./culture.js";
 import { emergencyTools } from "./emergency.js";
+import { financeTools } from "./finance.js";
 import { habitTools } from "./habits.js";
 import { labTools } from "./lab.js";
 import { libraryTools } from "./library.js";
@@ -132,6 +133,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...timerTools({ timers: deps.timers }),
     ...packTools({ packs: deps.packs }),
     ...emergencyTools({ profileDb: deps.profileDb }),
+    ...financeTools({ profileDb: deps.profileDb, now: deps.now }),
     // The wave-1 kit modules, in the order their manifests sort: library,
     // culture, car, pantry, cookbook, recorder, calculator, reader, wiki, maps,
     // lab, miniapps.
