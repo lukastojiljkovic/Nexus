@@ -1,0 +1,139 @@
+{
+  "scenarios": [
+    {
+      "id": "fitness-day-read-sr",
+      "title": "Koliko kalorija mi je ostalo danas",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koliko kalorija mi je ostalo danas?" }
+      ],
+      "tools": [
+        {
+          "name": "fitness.day",
+          "effect": "read",
+          "content": "Ishrana, 10. oktobar 2026:\n- doručak: Jogurt, punomasni 150 g (91,5 kcal)\nUkupno: kalorije 91,5 / 800 kcal, proteini 5,25 g, ugljeni hidrati 7,05 g, masti 4,8 g."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "fitness.day" }],
+        "answerContains": ["708,5"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "fitness.day", "arguments": {} }] },
+        { "text": "Danas si do sada uneo 91,5 kcal, a cilj je 800 kcal, pa ti je jos ostalo 708,5 kcal." }
+      ]
+    },
+    {
+      "id": "fitness-meal-write-sr",
+      "title": "Punomasni jogurt za doručak",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Upiši 150 grama punomasnog jogurta za doručak." }
+      ],
+      "tools": [
+        {
+          "name": "fitness.meal",
+          "effect": "write",
+          "summary": { "sr": "Upiši za 10. oktobar 2026, doručak: 150 g „Jogurt, punomasni“.", "en": "Log for 10 October 2026, breakfast: 150 g “Jogurt, punomasni”." },
+          "content": "Upisano: 150 g „Jogurt, punomasni“, doručak (10. oktobar 2026)."
+        },
+        { "name": "fitness.day", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "fitness.meal", "args": { "grams": { "eq": 150 }, "slot": { "eq": "breakfast" } } }
+        ],
+        "toolsNotCalled": ["fitness.day"],
+        "answerContains": ["jogurt"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "fitness.meal", "arguments": { "food": "Jogurt, punomasni", "slot": "breakfast", "grams": 150 } }
+          ]
+        },
+        { "text": "Upisao sam 150 g punomasnog jogurta za doručak." }
+      ]
+    },
+    {
+      "id": "fitness-day-read-en",
+      "title": "Calories eaten so far today",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "How many calories have I eaten today?" }
+      ],
+      "tools": [
+        {
+          "name": "fitness.day",
+          "effect": "read",
+          "content": "Food, October 10, 2026:\n- breakfast: Jogurt, punomasni 150 g (91.5 kcal)\nTotal: calories 91.5 / 800 kcal, protein 5.25 g, carbs 7.05 g, fat 4.8 g."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "fitness.day" }],
+        "answerContains": ["91.5"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "fitness.day", "arguments": {} }] },
+        { "text": "So far today you have eaten 91.5 kcal, against a goal of 800 kcal." }
+      ]
+    },
+    {
+      "id": "fitness-set-write-en",
+      "title": "Logging a bench press set",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Log a set: bench press, 60 kilos for 8 reps." }
+      ],
+      "tools": [
+        {
+          "name": "fitness.set",
+          "effect": "write",
+          "summary": { "sr": "Zapiši „Potisak sa klupe“: 60 kg × 8. Pokreće se trening za 10. oktobar 2026.", "en": "Log “Barbell bench press”: 60 kg × 8. A workout for 10 October 2026 starts with it." },
+          "content": "Logged: “Barbell bench press”, 60 kg × 8."
+        },
+        {
+          "name": "fitness.workout",
+          "effect": "write",
+          "summary": { "sr": "Pokreni trening za 10. oktobar 2026.", "en": "Start a workout for 10 October 2026." },
+          "content": "Workout started for 10 October 2026."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "fitness.set", "args": { "exercise": { "contains": "bench" }, "weight": { "eq": 60 }, "reps": { "eq": 8 } } }
+        ],
+        "toolsNotCalled": ["fitness.workout"],
+        "answerContains": ["bench"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "fitness.set", "arguments": { "exercise": "Barbell bench press", "weight": 60, "reps": 8 } }
+          ]
+        },
+        { "text": "Logged 60 kg for 8 reps on the bench press, and a workout is now in progress." }
+      ]
+    }
+  ]
+}

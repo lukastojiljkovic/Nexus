@@ -78,8 +78,6 @@ import {
   buildSearchSnippet,
   buildSearchTagFacets,
   catalogueComponent,
-  catalogueExercise,
-  catalogueFood,
   CHASSIS_LENGTHS,
   CHASSIS_MASSES,
   CHASSIS_MAX_CM,
@@ -87,13 +85,11 @@ import {
   chordAccelerator,
   countSearchKinds,
   dayKeyToUtcMs,
-  EXERCISE_CATALOGUE,
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
   exerciseRefText,
   FOCUS_PHASE_KINDS,
   foldSearchTag,
-  FOOD_CATALOGUE,
   FOOD_CATEGORIES,
   foodRefText,
   generateCode,
@@ -118,8 +114,6 @@ import {
   packFlagKey,
   PART_ROTATIONS,
   parseCanvasScene,
-  parseExerciseRef,
-  parseFoodRef,
   parseSearchQuery,
   phaseProgress,
   rankSearchResults,
@@ -636,6 +630,13 @@ import {
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
 import { mainLocale, setMainLocale } from "./locale.js";
+import {
+  exerciseCandidates,
+  fitExerciseLookup,
+  foodCandidates,
+  resolveLoggedExercise,
+  resolveLoggedFood,
+} from "./fitness/refs.js";
 import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
@@ -4443,105 +4444,6 @@ function asFitSetCount(value: unknown, field: string, max: number): number | nul
 }
 
 /**
- * Turns the reference the renderer sent into the label, the metric and the
- * muscle list the set (or routine item) will be stamped with. **The module's
- * security boundary** — see the block comment above.
- *
- * `catalogue:<slug>` is looked up in the app's own shipped data; a slug this
- * build no longer ships is refused rather than logged as a name with no meaning.
- * `user:<uuid>` goes through the exercise store, which answers only for a LIVE
- * exercise in THIS profile — so a soft-deleted exercise cannot be logged afresh,
- * while every set already logged with it stays exactly as it was.
- */
-/**
- * A catalogue or user exercise's label in the language main is serving.
- *
- * A workout set and a routine item SNAPSHOT the name they were logged under, so
- * this is written at the moment of the write, in the language `mainLocale()`
- * holds — the same source the dialogs and notifications read. A user's own
- * exercise may carry no English name, in which case its own name stands.
- */
-function localizedExerciseName(name: string, nameEn: string | undefined): string {
-  return mainLocale() === "en" && nameEn !== undefined && nameEn.trim().length > 0 ? nameEn : name;
-}
-
-function resolveLoggedExercise(
-  profileId: string,
-  reference: unknown,
-): { exerciseRef: string; label: string; metric: ExerciseMetric; primaryMuscles: MuscleGroup[] } {
-  if (typeof reference !== "string") {
-    throw new Error(`Invalid IPC payload: "exerciseRef" must be a string.`);
-  }
-  const parsed = parseExerciseRef(reference);
-  if (parsed === null) {
-    throw new Error(
-      `Invalid IPC payload: "exerciseRef" must be "catalogue:<slug>" or "user:<id>".`,
-    );
-  }
-  if (parsed.kind === "catalogue") {
-    const entry = catalogueExercise(parsed.id);
-    if (entry === undefined) {
-      throw new Error(`Invalid IPC payload: "exerciseRef" names no exercise this build ships.`);
-    }
-    return {
-      exerciseRef: reference,
-      label: localizedExerciseName(entry.name, entry.nameEn),
-      metric: entry.metric,
-      primaryMuscles: [...entry.primaryMuscles],
-    };
-  }
-  const own = fitExerciseStore(profileId).get(parsed.id);
-  return {
-    exerciseRef: reference,
-    label: localizedExerciseName(own.name, own.nameEn),
-    metric: own.metric,
-    primaryMuscles: own.primaryMuscles,
-  };
-}
-
-/**
- * The same lookup `resolveLoggedExercise` performs, in the shape a READ needs:
- * it answers `null` instead of throwing, and it reads the profile's own
- * exercises ONCE for however many references the caller is about to resolve.
- *
- * Both differences are the difference between a write and a read.
- *
- * - **A write must refuse.** Logging a set against an exercise that does not
- *   exist would put a name with no meaning in the history, so
- *   `resolveLoggedExercise` throws and the act fails.
- * - **A read must not.** A routine is allowed to name an exercise the user
- *   deleted afterwards — nothing stops them, `exercise_ref` is text with no
- *   foreign key by design — and answering that whole routine with an exception
- *   would take a working page down over one stale line. `null` is what lets
- *   „Trening" draw that one line as unusable and the other eleven as usable.
- * - **One `list()` for the batch.** `fit:routines-list` resolves every item of
- *   every routine; a per-item store call would be the N+1 `fit:last-performed`
- *   exists to avoid, on a read that happens on every mount of the page.
- */
-function fitExerciseLookup(
-  profileId: string,
-): (reference: string) => { label: string; metric: ExerciseMetric } | null {
-  let own: Map<string, FitExercise> | null = null;
-  return (reference) => {
-    const parsed = parseExerciseRef(reference);
-    if (parsed === null) return null;
-    if (parsed.kind === "catalogue") {
-      const entry = catalogueExercise(parsed.id);
-      return entry === undefined
-        ? null
-        : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
-    }
-    // Read on first use rather than eagerly: a profile with no routines, or one
-    // whose routines are all catalogue movements, never touches the table.
-    own ??= new Map(fitExerciseStore(profileId).list().map((entry) => [entry.id, entry]));
-    const entry = own.get(parsed.id);
-    return entry === undefined
-      ? null
-      : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
-  };
-}
-
-/**
  * A stored routine as the wire declares it: every item's `label` and `metric`
  * resolved LIVE, with the stored label kept as the fallback for a reference that
  * resolves to nothing (`FitRoutineItem` carries the reasoning).
@@ -4786,7 +4688,7 @@ function readFitRoutineBody(payload: unknown): {
         : asCappedChars(body.notes, "notes", MAX_FIT_ROUTINE_NOTES_LENGTH),
     items: asFitRoutineItemInputs(body.items).map((item) => ({
       ...item,
-      label: resolveLoggedExercise(profileId, item.exerciseRef).label,
+      label: resolveLoggedExercise(fitExerciseStore(profileId), item.exerciseRef).label,
     })),
   };
 }
@@ -4912,44 +4814,6 @@ function asFitTargetGoals(value: unknown): FitTargetGoals {
     carbsG: asFitTargetGoal(goals.carbsG, "goals.carbsG"),
     fatG: asFitTargetGoal(goals.fatG, "goals.fatG"),
   };
-}
-
-/**
- * Turns the reference the renderer sent into the label and the seven numbers the
- * item will be stamped with. **The module's security boundary** — see the block
- * comment above.
- *
- * `catalogue:<id>` is looked up in the app's own shipped data; an id this build
- * no longer ships is refused rather than logged as a name with no numbers.
- * `user:<uuid>` goes through the food store, which answers only for a LIVE food
- * in THIS profile — so a soft-deleted food cannot be logged afresh, while every
- * item already logged with it stays exactly as it was.
- */
-function resolveLoggedFood(
-  profileId: string,
-  reference: unknown,
-): { foodRef: string; label: string; per100g: FoodMacros } {
-  if (typeof reference !== "string") {
-    throw new Error(`Invalid IPC payload: "foodRef" must be a string.`);
-  }
-  const parsed = parseFoodRef(reference);
-  if (parsed === null) {
-    throw new Error(`Invalid IPC payload: "foodRef" must be "catalogue:<id>" or "user:<id>".`);
-  }
-  if (parsed.kind === "catalogue") {
-    const food = catalogueFood(parsed.id);
-    if (food === undefined) {
-      throw new Error(`Invalid IPC payload: "foodRef" names no food this build ships.`);
-    }
-    // The snapshot label is what a diary row reads for the rest of its life, so
-    // it is written in the language main is serving — the same `mainLocale()`
-    // the dialogs and notifications follow. The user-food path below has no
-    // English text to choose from.
-    const label = mainLocale() === "en" ? (food.nameEn ?? food.name) : food.name;
-    return { foodRef: reference, label, per100g: food.per100g };
-  }
-  const food = fitFoodStore(profileId).get(parsed.id);
-  return { foodRef: reference, label: food.name, per100g: food.per100g };
 }
 
 /** One catalogue entry as the picker reads it — its provenance rides along, which is the reason the catalogue was built the way it was. */
@@ -11122,25 +10986,7 @@ function registerIpc(): void {
     const query = asCappedChars(body.query, "query", MAX_FIT_FOOD_QUERY_LENGTH);
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_FOOD_RESULTS);
 
-    type Candidate =
-      | { id: string; name: string; nameEn?: string; catalogue: FoodEntry }
-      | { id: string; name: string; nameEn?: string; user: FitFood };
-    const pool: Candidate[] = [
-      ...FOOD_CATALOGUE.map((food) => ({
-        id: foodRefText({ kind: "catalogue", id: food.id }),
-        name: food.name,
-        nameEn: food.nameEn,
-        catalogue: food,
-      })),
-      ...fitFoodStore(profileId)
-        .list()
-        .map((food) => ({
-          id: foodRefText({ kind: "user", id: food.id }),
-          name: food.name,
-          user: food,
-        })),
-    ];
-    return searchFoods(pool, query, limit).map((hit) =>
+    return searchFoods(foodCandidates(fitFoodStore(profileId)), query, limit).map((hit) =>
       "catalogue" in hit ? catalogueOption(hit.catalogue) : userFoodOption(hit.user),
     );
   });
@@ -11167,7 +11013,7 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
-    const resolved = resolveLoggedFood(profileId, body.foodRef);
+    const resolved = resolveLoggedFood(fitFoodStore(profileId), body.foodRef);
     return fitMealStore(profileId).addItem(
       {
         date: asFitDay(body.day, "day"),
@@ -11310,26 +11156,7 @@ function registerIpc(): void {
 
     // One pool, one ranking. Two lists merged by the renderer would be a second
     // definition of "best match" — `fit:food-search`'s own reason.
-    type Candidate =
-      | { id: string; name: string; nameEn: string; catalogue: ExerciseEntry }
-      | { id: string; name: string; nameEn: string; own: FitExercise };
-    const pool: Candidate[] = [
-      ...EXERCISE_CATALOGUE.map((entry) => ({
-        id: exerciseRefText({ kind: "catalogue", id: entry.id }),
-        name: entry.name,
-        nameEn: entry.nameEn,
-        catalogue: entry,
-      })),
-      ...fitExerciseStore(profileId)
-        .list()
-        .map((entry) => ({
-          id: exerciseRefText({ kind: "user", id: entry.id }),
-          name: entry.name,
-          nameEn: entry.nameEn,
-          own: entry,
-        })),
-    ];
-    return searchExercises(pool, query, limit).map((hit) =>
+    return searchExercises(exerciseCandidates(fitExerciseStore(profileId)), query, limit).map((hit) =>
       "catalogue" in hit ? catalogueExerciseOption(hit.catalogue) : userExerciseOption(hit.own),
     );
   });
@@ -11382,7 +11209,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitRoutinesList, (event, payload): FitRoutine[] => {
     assertTrustedSender(event);
     const profileId = asId(asRecord(payload).profileId, "profileId");
-    const lookup = fitExerciseLookup(profileId);
+    const lookup = fitExerciseLookup(fitExerciseStore(profileId));
     return fitRoutineStore(profileId)
       .list()
       .map((routine) => toWireRoutine(routine, lookup));
@@ -11396,7 +11223,7 @@ function registerIpc(): void {
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
     return toWireRoutine(
       fitRoutineStore(profileId).create({ name, notes, items }, new Date().toISOString()),
-      fitExerciseLookup(profileId),
+      fitExerciseLookup(fitExerciseStore(profileId)),
     );
   });
 
@@ -11407,7 +11234,7 @@ function registerIpc(): void {
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
     return toWireRoutine(
       fitRoutineStore(profileId).update(id, { name, notes, items }, new Date().toISOString()),
-      fitExerciseLookup(profileId),
+      fitExerciseLookup(fitExerciseStore(profileId)),
     );
   });
 
@@ -11518,7 +11345,7 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
     const workoutId = asId(body.workoutId, "workoutId");
-    const resolved = resolveLoggedExercise(profileId, body.exerciseRef);
+    const resolved = resolveLoggedExercise(fitExerciseStore(profileId), body.exerciseRef);
     return fitWorkoutStore(profileId).logSet(
       workoutId,
       {
