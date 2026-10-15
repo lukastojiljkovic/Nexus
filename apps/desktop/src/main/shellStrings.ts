@@ -40,6 +40,11 @@ export interface ShellStrings {
   archiveFilterName: string;
   calendarFilenameToken: string;
   calendarFilterName: string;
+  /** Open-dialog filter for a browser bookmarks file (IMEX-007, `index.ts`'s `pickBookmarksFile`). */
+  bookmarksFilterName: string;
+  /** The one tag every imported bookmark note carries, and the title of the note holding links with no folder. */
+  bookmarksTagName: string;
+  bookmarksRootTitle: string;
   sketchFilterName: string;
   rosWorkspaceDialogTitle: string;
   rosWorkspaceDialogButton: string;
@@ -81,6 +86,9 @@ const SR: ShellStrings = {
    * other way.
    */
   calendarFilterName: "Kalendar (iCalendar)",
+  bookmarksFilterName: "Obeleživači (HTML)",
+  bookmarksTagName: "Obeleživači",
+  bookmarksRootTitle: "Bez fascikle",
   /**
    * Save-dialog filter for a generated Arduino sketch (`index.ts`'s
    * `elec:export-code`, ADR-085 E4). The extension is what the Arduino IDE
@@ -167,6 +175,9 @@ const EN: ShellStrings = {
   archiveFilterName: "Nexus archive",
   calendarFilenameToken: "calendar",
   calendarFilterName: "Calendar (iCalendar)",
+  bookmarksFilterName: "Bookmarks (HTML)",
+  bookmarksTagName: "Bookmarks",
+  bookmarksRootTitle: "No folder",
   sketchFilterName: "Arduino sketch",
   rosWorkspaceDialogTitle: "Where to create the ROS 2 package",
   rosWorkspaceDialogButton: "Create here",

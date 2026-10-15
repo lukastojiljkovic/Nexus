@@ -32,6 +32,8 @@ import type {
   FinCsvImportRowDropCode,
   FinCsvImportRowSkipCode,
   FinCsvImportSignConvention,
+  BookmarksImportReadErrorCode,
+  BookmarksImportSkipCode,
   IcsImportReadErrorCode,
   IcsImportSkipCode,
   ImportDuplicateType,
@@ -5873,12 +5875,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notifications: "Obaveštenja",
       backup: "Rezervna kopija i vraćanje",
       /**
-       * The eight sub-pages of „Uvoz i izvoz" (SET-015). The text is the one
+       * The nine sub-pages of „Uvoz i izvoz" (SET-015). The text is the one
        * the block inside each already draws, so a list row and its card name
        * the same thing rather than two spellings of it.
        */
       "import-archive": "Uvoz iz arhive",
       "import-ics": "Uvoz kalendara (.ics)",
+      "import-bookmarks": "Uvoz obeleživača (.html)",
       "export-ics": "Izvoz kalendara",
       "import-apkg": "Uvoz iz Anki (.apkg)",
       "import-csv": "Uvoz zadataka (.csv)",
@@ -7289,6 +7292,41 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       nothingToImport: "Iz ovog fajla nema šta da se uvede — razlozi su izlistani iznad.",
       /** The post-reload banner (App.tsx) when the undo slot holds an .ics import. */
       undoBanner: "Događaji su uvezeni iz kalendara (.ics).",
+    },
+    /**
+     * Uvoz obeleživača (IMEX-007) — the browser's HTML export. Its own card,
+     * beside the calendar's, on the same pick → preview → apply flow.
+     */
+    bookmarksImport: {
+      title: "Uvoz obeleživača (.html)",
+      description:
+        "Uvezi obeleživače iz HTML fajla koji izvoze Chrome, Edge i Firefox. Svaka fascikla postaje jedna beleška sa spiskom linkova, a sve beleške dobijaju oznaku „Obeleživači“. Uvoz ništa ne briše. Dolaze samo http i https linkovi; ostalo se prebroji u pregledu pre uvoza. Uvoz možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      pickButton: "Izaberi HTML fajl…",
+      previewRunning: "Čitanje obeleživača…",
+      columnSource: "U fajlu",
+      columnPlanned: "Uvozi se",
+      rowBookmarks: "Obeleživači",
+      rowFolders: "Beleške (fascikle)",
+      skipsTitle: "Šta se ne uvozi",
+      /** One sentence per `BookmarksImportSkipCode`. */
+      skips: {
+        "unsupported-url":
+          "Link nije http ili https adresa (javascript:, file:, data: i slične), pa se preskače.",
+      } satisfies Record<BookmarksImportSkipCode, string>,
+      /** One sentence per `BookmarksImportReadErrorCode`: the file could not be read at all. */
+      unreadable: {
+        "too-large": "Fajl prelazi bezbednosna ograničenja i zato je odbijen.",
+        "not-bookmarks": "Ovaj fajl nije izvoz obeleživača iz pregledača.",
+      } satisfies Record<BookmarksImportReadErrorCode, string>,
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Obeleživači su uvezeni. Aplikacija se osvežava…",
+      readError: "Čitanje fajla nije uspelo. Pokušaj ponovo.",
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      noFileError: "Fajl više nije izabran. Izaberi ga ponovo.",
+      nothingToImport: "Iz ovog fajla nema šta da se uvede — razlozi su izlistani iznad.",
+      /** The post-reload banner (App.tsx) when the undo slot holds a bookmarks import. */
+      undoBanner: "Beleške su uvezene iz obeleživača.",
     },
     /**
      * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose

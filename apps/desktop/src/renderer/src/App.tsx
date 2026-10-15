@@ -201,6 +201,7 @@ function restoreUndoBanners(): Record<RestoreUndoKind, string> {
     csv: strings.settings.csvImport.undoBanner,
     "fin-csv": strings.settings.finCsvImport.undoBanner,
     ics: strings.settings.icsImport.undoBanner,
+    bookmarks: strings.settings.bookmarksImport.undoBanner,
   };
 }
 

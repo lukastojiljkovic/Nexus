@@ -56,7 +56,8 @@ explicit confirmation; private notes per PRIV-010.
   an atomic batch with one-click undo immediately after.
 - **IMEX-007 (M)** Direct importers v1: markdown files/folder (→ NOTE),
   CSV (→ TASK, FIN with column mapping UI), ICS (→ CAL-008), Anki .apkg
-  (→ STUDY-011), browser bookmarks HTML (→ READ when enabled).
+  (→ STUDY-011), browser bookmarks HTML (→ NOTE: built, one note per bookmark
+  folder under a „Obeleživači“ tag, with only http and https links kept).
 - **IMEX-008 (S)** Duplicate detection per module (by external-id when
   present, else heuristic) with skip/merge choices in preview.
 - **IMEX-009 (S)** Scheduled automatic local backup uses the IMEX-001

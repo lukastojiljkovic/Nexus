@@ -813,6 +813,17 @@ export type {
   IcsTranslateTarget,
 } from "./imex/icsImport.js";
 
+export { parseBookmarksHtml, translateBookmarks } from "./imex/bookmarksImport.js";
+export type {
+  BookmarkEntry,
+  BookmarkFolder,
+  BookmarksImportSkip,
+  BookmarksImportSkipCode,
+  BookmarksParseResult,
+  BookmarksTranslateTarget,
+  ParsedBookmarks,
+} from "./imex/bookmarksImport.js";
+
 export {
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
   MIN_ARCHIVE_PASSPHRASE_LENGTH,

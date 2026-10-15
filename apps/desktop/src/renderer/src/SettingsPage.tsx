@@ -57,6 +57,8 @@ import type {
   CsvImportPlanPreview,
   CsvImportPreview,
   FlagState,
+  BookmarksImportPreview,
+  BookmarksImportSkip,
   IcsImportPreview,
   IcsImportSkip,
   IcsImportSkippedComponent,
@@ -2676,6 +2678,229 @@ interface ApkgImportSectionProps {
   hits: ReadonlySet<string>;
   /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
   showTitle?: boolean;
+}
+
+/**
+ * The bookmarks flow's state (IMEX-007). The `.ics` machine without its
+ * duplicate question: a bookmark folder always becomes a new note, so the
+ * preview has no answer to change and no re-preview to offer.
+ */
+type BookmarksState =
+  | { phase: "idle"; error: string | null }
+  | { phase: "picked"; fileName: string; busy: boolean; error: string | null }
+  | { phase: "ready"; fileName: string; preview: BookmarksImportPreview; error: string | null }
+  | { phase: "applying"; fileName: string; preview: BookmarksImportPreview }
+  | { phase: "applied" };
+
+/** One named group of links the file carried and this import does not keep: its Serbian reason, then how many. */
+function BookmarksSkipRow({ skip }: { skip: BookmarksImportSkip }) {
+  const s = strings.settings.bookmarksImport;
+  return (
+    <li className="set__import-skip">
+      {s.skips[skip.code]} <span className="set__import-skip-meta">{skip.count}</span>
+    </li>
+  );
+}
+
+interface BookmarksImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+  /** SET-015: Settings draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
+}
+
+/**
+ * Uvoz obeleživača (IMEX-007) — the `.ics` section's twin: pick → preview →
+ * confirm, the same busy and error states, the same shared undo banner
+ * afterwards. The preview's table says how many links the file holds and how
+ * many arrive, and how many notes that becomes; below it, every named skip.
+ */
+function BookmarksImportSection({ profileId, hits, showTitle = true }: BookmarksImportSectionProps) {
+  const s = strings.settings.bookmarksImport;
+  // The half of the flow identical to a restore's, read from where it is already spelled.
+  const shared = strings.settings.restore;
+
+  const [state, setState] = useState<BookmarksState>({ phase: "idle", error: null });
+  // Read by the unmount cleanup only: an apply in flight must never be cancelled
+  // from here, because main is writing the very plan `cancelBookmarksImport` drops.
+  const applying = useRef(false);
+
+  // Releasing the pick on unmount, as the calendar's section does: main holds
+  // somebody's parsed browsing history until it is told to let go.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelBookmarksImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked bookmarks file:", error);
+      });
+    };
+  }, []);
+
+  async function runPreview(fileName: string): Promise<void> {
+    try {
+      const result = await window.nexus.previewBookmarksImport(profileId);
+      switch (result.status) {
+        case "ready":
+          setState({ phase: "ready", fileName, preview: result.preview, error: null });
+          return;
+        case "unreadable":
+          setState({ phase: "picked", fileName, busy: false, error: s.unreadable[result.code] });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: s.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({ phase: "picked", fileName, busy: false, error: s.readError });
+      console.error("Nexus: failed to preview a bookmarks file:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over; main drops the superseded pick itself. */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      const picked = await window.nexus.pickBookmarksFile();
+      if (picked.canceled) return;
+      setState({ phase: "picked", fileName: picked.fileName, busy: true, error: null });
+      await runPreview(picked.fileName);
+    } catch (pickError) {
+      setState({ phase: "idle", error: s.readError });
+      console.error("Nexus: failed to pick a bookmarks file:", pickError);
+    }
+  }
+
+  async function apply(fileName: string, preview: BookmarksImportPreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", fileName, preview });
+    try {
+      await window.nexus.applyBookmarksImport(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the success
+      // line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan, and the token main accepts, untouched.
+      setState({ phase: "ready", fileName, preview, error: s.error });
+      console.error("Nexus: failed to apply a bookmarks import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      await window.nexus.cancelBookmarksImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked bookmarks file:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+
+  return (
+    <div className="set__import-block">
+      {showTitle && (
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-bookmarks"))}>
+          {s.title}
+        </h3>
+      )}
+      <p className="nx-hint">{s.description}</p>
+
+      {!previewing && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={state.phase === "picked" && state.busy}
+          onClick={() => void choose()}
+        >
+          {s.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="nx-hint">
+            {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
+          </p>
+          {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
+          {state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {previewing && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.preview.fileName}</span>
+          </div>
+
+          <table className="set__restore-table">
+            <thead>
+              <tr>
+                <td />
+                <th scope="col">{s.columnSource}</th>
+                <th scope="col">{s.columnPlanned}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">{s.rowBookmarks}</th>
+                <td>{state.preview.bookmarks + state.preview.skips.reduce((total, skip) => total + skip.count, 0)}</td>
+                <td>{state.preview.bookmarks}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowFolders}</th>
+                <td />
+                <td>{state.preview.folders}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {state.preview.skips.length > 0 && (
+            <>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.skips.map((skip) => (
+                  <BookmarksSkipRow key={skip.code} skip={skip} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state.preview.folders === 0 && <p className="nx-hint">{s.nothingToImport}</p>}
+
+          <div className="set__restore-actions">
+            {state.preview.folders > 0 && (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={state.phase === "applying"}
+                onClick={() => void apply(state.fileName, state.preview)}
+              >
+                {s.applyButton}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
+          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
+    </div>
+  );
 }
 
 /**
@@ -6202,6 +6427,16 @@ export function SettingsPage({
             }`}
           >
             <IcsImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-bookmarks")}
+            title={s.sectionTitle["import-bookmarks"]}
+            className={`${sectionClass(visibility.cards.has("import-bookmarks"))}${
+              hitCards.has("import-bookmarks") ? " set__hit-card" : ""
+            }`}
+          >
+            <BookmarksImportSection profileId={profileId} hits={hits} showTitle={false} />
           </Card>
 
           <Card

@@ -825,6 +825,14 @@ export const IpcChannel = {
   imexImportIcsPreview: "imex:import-ics-preview",
   imexImportIcsApply: "imex:import-ics-apply",
   imexImportIcsCancel: "imex:import-ics-cancel",
+  // Browser bookmarks (IMEX-007): the same four-channel shape as the calendar's,
+  // on the same reasoning — a different reader under a different cap, so a
+  // channel of its own. No replan channel: there is no duplicate question to
+  // answer, because a bookmark folder always becomes a new note.
+  imexImportBookmarksPick: "imex:import-bookmarks-pick",
+  imexImportBookmarksPreview: "imex:import-bookmarks-preview",
+  imexImportBookmarksApply: "imex:import-bookmarks-apply",
+  imexImportBookmarksCancel: "imex:import-bookmarks-cancel",
   // The LLM-assisted import (IMEX-005). Four channels, not five: there is no
   // FILE to pick — the "source" is text the user pasted out of their own chat,
   // which travels with the preview request. The prompt itself needs no channel
@@ -7245,7 +7253,9 @@ export interface RestoreUndoResult {
  * it undoes came out of a calendar file. `"fin-csv"` (FIN slice e) is its own
  * for the sharpest version of the same reason: undoing a bank statement is
  * about somebody's money, and a banner that called it „uvoz zadataka" would be
- * naming the wrong thing at the one moment naming matters.
+ * naming the wrong thing at the one moment naming matters. `"bookmarks"`
+ * (IMEX-007) is its own for the same reason as `"ics"`: what it undoes came out
+ * of a browser, and the banner names that.
  */
 export type RestoreUndoKind =
   | "restore"
@@ -7254,7 +7264,8 @@ export type RestoreUndoKind =
   | "llm"
   | "csv"
   | "fin-csv"
-  | "ics";
+  | "ics"
+  | "bookmarks";
 
 export interface RestoreStatus {
   undo: {
@@ -8297,6 +8308,67 @@ export interface ImexImportIcsPreviewRequest {
 
 /** `token` names the exact plan being confirmed — main refuses any other value. */
 export interface ImexImportIcsApplyRequest {
+  profileId: string;
+  token: string;
+}
+
+// --- Browser bookmarks import (IMEX-007) -------------------------------------
+
+/**
+ * The bound `main/bookmarksReader.ts` enforces on a bookmarks file. A policy
+ * cap, matched to the calendar import's rather than measured from any browser
+ * export: a Netscape file is text, and the cap only decides what is too much
+ * text to parse in one read.
+ */
+export const BOOKMARKS_IMPORT_MAX_FILE_BYTES = 20_971_520; // 20 MiB
+
+/** Why a bookmarks file could not be read at all: past the cap, or with no `<DL>` in it. */
+export type BookmarksImportReadErrorCode = "too-large" | "not-bookmarks";
+
+/** Why a link in the file is not in the result. Mirrors `@nexus/core`'s `BookmarksImportSkipCode` — redeclared like every closed domain here. */
+export type BookmarksImportSkipCode = "unsupported-url";
+
+/** One named, counted group of links that will not arrive. */
+export interface BookmarksImportSkip {
+  code: BookmarksImportSkipCode;
+  count: number;
+}
+
+/** The outcome of the native "pick a bookmarks file" dialog. */
+export type BookmarksImportPickResult =
+  | { canceled: true }
+  | { canceled: false; path: string; fileName: string };
+
+/**
+ * A dry run of a real bookmarks import: the file really read, parsed and
+ * planned against this profile. Each bookmark folder becomes one note; the
+ * links kept and the links skipped are counted from the file itself.
+ */
+export interface BookmarksImportPreview {
+  /** Identifies this exact read-and-plan. The apply refuses any other value, so a stale screen can never write a plan the user did not see. */
+  token: string;
+  fileName: string;
+  /** Links the file carried that this import keeps: `http:` and `https:` only. */
+  bookmarks: number;
+  /** Notes the plan will create, one per folder that holds a kept link. */
+  folders: number;
+  skips: BookmarksImportSkip[];
+}
+
+/**
+ * `"no-file"` when nothing has been picked yet; `"unreadable"` when the file
+ * could not be read at all; `"ready"` is the only state the apply accepts.
+ */
+export type BookmarksImportPreviewResult =
+  | { status: "no-file" }
+  | { status: "unreadable"; code: BookmarksImportReadErrorCode }
+  | { status: "ready"; preview: BookmarksImportPreview };
+
+/** What a completed bookmarks import wrote. The same shape every archive operation reports, undone through the same one slot. */
+export type BookmarksImportApplyResult = RestoreApplyResult;
+
+/** `token` names the exact plan being confirmed — main refuses any other value. */
+export interface ImexImportBookmarksApplyRequest {
   profileId: string;
   token: string;
 }
@@ -10502,6 +10574,14 @@ export interface NexusApi {
   applyIcsImport(profileId: string, token: string): Promise<IcsImportApplyResult>;
   /** Drops the picked `.ics` and the parsed events main is holding for it. No file handle is involved — the reader closed the file before the preview answered. */
   cancelIcsImport(): Promise<void>;
+  /** Opens the native "pick a bookmarks file" dialog (IMEX-007), held apart from every other pick for the same reason the `.ics` pick is. */
+  pickBookmarksFile(): Promise<BookmarksImportPickResult>;
+  /** Dry-runs the bookmarks import by really reading, parsing and planning the picked file against this profile. */
+  previewBookmarksImport(profileId: string): Promise<BookmarksImportPreviewResult>;
+  /** Confirms the plan `token` names, ADDING its notes to this profile. Undoable through `undoRestore`; the renderer is reloaded shortly after this resolves. */
+  applyBookmarksImport(profileId: string, token: string): Promise<BookmarksImportApplyResult>;
+  /** Drops the picked bookmarks file and the parsed folders main holds for it. */
+  cancelBookmarksImport(): Promise<void>;
   /**
    * Dry-runs the LLM import (IMEX-005) by really parsing the pasted answer and
    * really planning it against this profile. No file and no dialog: the source

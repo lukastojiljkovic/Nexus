@@ -818,6 +818,12 @@ const api: NexusApi = {
   applyIcsImport: (profileId, token) =>
     ipcRenderer.invoke(IpcChannel.imexImportIcsApply, { profileId, token }),
   cancelIcsImport: () => ipcRenderer.invoke(IpcChannel.imexImportIcsCancel),
+  pickBookmarksFile: () => ipcRenderer.invoke(IpcChannel.imexImportBookmarksPick),
+  previewBookmarksImport: (profileId) =>
+    ipcRenderer.invoke(IpcChannel.imexImportBookmarksPreview, { profileId }),
+  applyBookmarksImport: (profileId, token) =>
+    ipcRenderer.invoke(IpcChannel.imexImportBookmarksApply, { profileId, token }),
+  cancelBookmarksImport: () => ipcRenderer.invoke(IpcChannel.imexImportBookmarksCancel),
   previewLlmImport: (profileId, kind, text, deck) =>
     ipcRenderer.invoke(IpcChannel.imexImportLlmPreview, { profileId, kind, text, deck }),
   replanLlmImport: (profileId, token, importDuplicates) =>

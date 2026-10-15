@@ -103,6 +103,7 @@ describe("the category table", () => {
         "export-ics",
         "import-apkg",
         "import-archive",
+        "import-bookmarks",
         "import-csv",
         "import-fin-csv",
         "import-ics",
@@ -117,6 +118,7 @@ describe("the category table", () => {
     expect(subPageListById("import-export").subPages.map((subPage) => subPage.id)).toEqual([
       "import-archive",
       "import-ics",
+      "import-bookmarks",
       "export-ics",
       "import-apkg",
       "import-csv",
