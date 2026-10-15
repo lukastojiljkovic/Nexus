@@ -5,16 +5,14 @@ import { wrappedStep } from "../focusCycle.js";
 /**
  * The modal focus trap, for every `role="dialog"` surface this package draws.
  *
- * WHERE THIS RULE ALREADY LIVED. The renderer has carried its own copy since
- * 2026-08 (`apps/desktop/src/renderer/src/useFocusTrap.ts`, over the pure index
- * arithmetic in `focusOrder.ts` there), and that copy is why its dialogs behave
- * — Tab cycles inside the panel, Escape answers nothing, and focus goes back
- * where it came from. This is the same rule stated inside the package that now
- * OWNS a dialog, so a component shipped from here is not a dialog without a
- * trap. A later pass that adopts `ConfirmDialog` across the app can delete the
- * renderer's copy wholesale; until then the two must not drift, and the two
- * halves that could drift (the initial index, the wrap) are the ones this
- * package tests directly in `dialogFocus.test.ts`.
+ * WHERE THIS RULE ALREADY LIVED. The renderer carried a second implementation
+ * since 2026-08 (`apps/desktop/src/renderer/src/useFocusTrap.ts`, over the pure
+ * index arithmetic in `focusOrder.ts` there), because this package had no
+ * dialog for it to belong to. The two agreed by being read side by side, which
+ * is a rule held by whoever remembers to compare them — so this is now the one
+ * implementation, and the renderer's file re-exports it. The two options that
+ * copy needs and this one did not have are stated here rather than left to it:
+ * `restoreFocus`, and the media elements its selector had learned to count.
  */
 
 const FOCUSABLE_SELECTOR = [
@@ -23,6 +21,11 @@ const FOCUSABLE_SELECTOR = [
   "input:not([disabled])",
   "select:not([disabled])",
   "textarea:not([disabled])",
+  // A recording or a video with its own controls is tabbable in every browser,
+  // so a dialog that holds one (the recorder's preview) must count it: leaving
+  // it out of the trap makes Tab jump past a control the user can see.
+  "audio[controls]",
+  "video[controls]",
   '[contenteditable]:not([contenteditable="false"])',
   "[tabindex]",
 ].join(",");
@@ -47,7 +50,15 @@ export interface UseFocusTrapOptions {
    * opening focus. `ConfirmDialog` uses it for the safe answer; the hook
    * otherwise falls back to the first tabbable descendant.
    */
-  readonly initialFocusRef?: RefObject<HTMLElement | null>;
+  readonly initialFocusRef?: RefObject<HTMLElement | null> | undefined;
+  /**
+   * Whether closing hands focus back to whatever held it when the dialog
+   * opened. Defaults to true, which is what every dialog wants; false is for
+   * the one caller — the search palette — that restores focus itself under a
+   * policy this hook cannot express, because it suppresses the restore when the
+   * palette closed by navigating rather than by being dismissed.
+   */
+  readonly restoreFocus?: boolean;
 }
 
 /**
@@ -60,6 +71,7 @@ export interface UseFocusTrapOptions {
 export function useFocusTrap<T extends HTMLElement>({
   open,
   initialFocusRef,
+  restoreFocus = true,
 }: UseFocusTrapOptions): RefObject<T | null> {
   const containerRef = useRef<T | null>(null);
 
@@ -104,11 +116,11 @@ export function useFocusTrap<T extends HTMLElement>({
 
     return () => {
       container.removeEventListener("keydown", onKeyDown);
-      if (previouslyFocused !== null && document.contains(previouslyFocused)) {
+      if (restoreFocus && previouslyFocused !== null && document.contains(previouslyFocused)) {
         previouslyFocused.focus();
       }
     };
-  }, [open, initialFocusRef]);
+  }, [open, initialFocusRef, restoreFocus]);
 
   return containerRef;
 }

@@ -2322,6 +2322,138 @@ samp {
   color: var(--nx-text);
 }
 
+/* --- Notice ----------------------------------------------------------
+   One inline line of news or refusal, in the shape the app draws it: a mark, a
+   sentence, and — when there is one — the way out, all on one line.
+
+   INLINE and not a panel, because the thing it reports is beside the thing it
+   is about: a bad value under its field, a failed read above the list that
+   would have held the rows. `Toast` already covers the news that belongs to the
+   whole page and may be dismissed, and this must not become a second one of
+   those. */
+.nx-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2) var(--nx-space-3);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-alt);
+}
+/* Each kind gets an ink AND a shape: the three inks are one glance apart on a
+   dimmed screen, and a reader who cannot tell them apart still reads the mark. */
+.nx-notice__mark {
+  flex: none;
+  line-height: 0;
+  padding-top: 1px;
+  color: var(--nx-text-muted);
+}
+/* The theme has no warning ink, so a warning draws its mark in the text ink and
+   the glyph is what tells it from the other two. */
+.nx-notice--warning .nx-notice__mark {
+  color: var(--nx-text);
+}
+.nx-notice--danger .nx-notice__mark {
+  color: var(--nx-danger);
+}
+.nx-notice__text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--nx-font-size-body-sm);
+  line-height: var(--nx-font-leading-snug);
+  color: var(--nx-text);
+  /* A refusal that names a value, a path or an address can be one long word. */
+  overflow-wrap: anywhere;
+}
+.nx-notice__action.nx-button {
+  flex: none;
+}
+
+/* --- AsyncSurface ----------------------------------------------------
+   The failure arm of one read: its own heading, and the announcement under it.
+   The heading is full-strength text rather than a hint, because it is the line
+   that says which of the page's reads failed — a page with three surfaces can
+   have three of them on screen at once. */
+.nx-async__title {
+  margin: 0 0 var(--nx-space-2);
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+
+/* --- Segmented -------------------------------------------------------
+   A row of entries of which one is on. The paint of „on" is stated above, on
+   `.nx-segmented__option[aria-pressed]`; this rule is only the row: the entries
+   sit together, and they wrap rather than overflow, because a switcher with
+   five names in it is wider than a page's title column at the 900px window the
+   desktop enforces. */
+.nx-segmented {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+}
+
+/* --- Toolbar ---------------------------------------------------------
+   The row of page-level controls under the header. It wraps for the same reason
+   `.nx-segmented` does: a row of five names is wider than a 900px page's title
+   column. */
+.nx-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* --- Section ---------------------------------------------------------
+   A named group of rows: the caption above, its actions at the caption's right,
+   and the rows beneath. The caption's ink is `.nx-eyebrow`'s; this rule only
+   sets the spacing and clears the margin a heading element would bring. */
+.nx-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+.nx-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nx-space-3);
+}
+.nx-section__title {
+  margin: 0;
+}
+
+/* --- SettingsRow -----------------------------------------------------
+   One setting in a settings card: name and hint on the left, control on the
+   right. The arrangement is the shell's own settings row, drawn here so a
+   module's card does not depend on the shell's stylesheet. */
+.nx-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-2) 0;
+}
+.nx-settings-row + .nx-settings-row {
+  border-top: 1px solid var(--nx-border-subtle);
+}
+.nx-settings-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nx-settings-row__label {
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-medium);
+  color: var(--nx-text);
+}
+.nx-settings-row__control {
+  flex: none;
+}
+
 /* --- ListDetail ------------------------------------------------------ */
 /* Two panes, and under 1100px one pane at a time. 1100 is not a round number
    chosen for looks: the rail token is 280px and a detail less than

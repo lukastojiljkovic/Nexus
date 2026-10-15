@@ -58,3 +58,21 @@ export { formatMoney, formatMoneyPlain } from "../money.js";
  * confirmation on the one action that needs one.
  */
 export { ConfirmDialog, type ConfirmDialogProps } from "../ConfirmDialog.js";
+
+// --- The shell's shared components (the kit patterns, docs/design/patterns.md) ---
+//
+// One of each pattern, from `@nexus/ui`: a module draws its dialog, its inline
+// notice, its page-level undo offer and its switchers with the same components
+// the shell does, so a module cannot ship a second version of any of them.
+export {
+  AsyncSurface,
+  Dialog,
+  EmptyState,
+  Notice,
+  Section,
+  Segmented,
+  SettingsRow,
+  Toast,
+  Toolbar,
+  useFocusTrap,
+} from "@nexus/ui";
