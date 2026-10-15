@@ -9,12 +9,13 @@
 //   --scripted            the checked-in transcripts and the reference loop.
 //                         Needs no model and is what proves the harness; the
 //                         same scenarios run in the ordinary test suite.
-//   --model <path.gguf>   the real thing: a GGUF loaded through the runtime
-//                         run's `createModelHost`, driven by the real agent
-//                         loop. The tools and the passages still come from the
-//                         scenario, so the two modes differ in the loop and the
-//                         model and in nothing else — which is what makes their
-//                         numbers comparable.
+//   --model <path.gguf>   the real thing: a GGUF loaded through the runtime's
+//                         own llama engine, driven by the real agent loop. The
+//                         tools and the passages still come from the scenario,
+//                         and each tool a scenario offers under a name the app
+//                         has wears the APP's own description and schema (see
+//                         `loadToolSpecs`), which is what a real model has to
+//                         be judged against.
 //
 // THE REAL MODE IS A SKIP, NOT A FAILURE, WHEN A PART IS ABSENT. Both factories
 // it needs are built by other runs of the 2.0 wave and merged after this one, so
@@ -27,27 +28,63 @@
 // TypeScript file uses for its `.ts` neighbour — so the hook below teaches the
 // resolver that one mapping and everything else is Node's own behaviour.
 //
-// THE HOOK IS DELIBERATELY NARROW: it fires only when the literal specifier ends
-// in `.js` AND the resolver could not find it, and it retries the same path with
-// `.ts`. A real `.js` file still wins, and nothing else is rewritten.
+// THE RESOLVE HOOK IS DELIBERATELY NARROW: it fires only when the literal
+// specifier ends in `.js` AND the resolver could not find it, and it retries the
+// same path with `.ts`. A real `.js` file still wins, and nothing else is
+// rewritten. The one other thing it does is what the bundler does without being
+// asked: a `.json` import (the model catalogue) is read as JSON, which Node
+// refuses to do for a specifier that carries no `with { type: "json" }`. The
+// load hook beside it does the bundler's other half — see there.
 
-import { writeFileSync } from "node:fs";
-import { registerHooks } from "node:module";
+import { readFileSync, writeFileSync } from "node:fs";
+import { registerHooks, stripTypeScriptTypes } from "node:module";
 import { basename, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    let resolved;
     try {
-      return nextResolve(specifier, context);
+      resolved = nextResolve(specifier, context);
     } catch (error) {
       if (typeof specifier === "string" && specifier.endsWith(".js")) {
         return nextResolve(`${specifier.slice(0, -3)}.ts`, context);
       }
       throw error;
     }
+    return resolved.url.endsWith(".json")
+      ? { ...resolved, importAttributes: { ...context.importAttributes, type: "json" } }
+      : resolved;
   },
 });
+
+/**
+ * The second thing the bundler does without being asked: a `.ts` file is read
+ * as TypeScript, not as the narrower syntax Node strips on its own.
+ *
+ * WHY, AND WHY ONLY IN THE REAL MODE. Node's strip-only mode refuses a
+ * parameter property, an enum and a namespace, and the app's main-process
+ * modules use all three (`packages/core`'s views engine, the model runtime,
+ * every store in `@nexus/db`). The real mode READS those modules — the tool
+ * registry built in {@link loadToolSpecs} — so it applies Node's own transform,
+ * the one `--experimental-transform-types` turns on, from the loader rather than
+ * from a flag a maintainer has to remember. The scripted mode reads nothing
+ * outside the evals, which strip cleanly, so it registers no transform and
+ * prints no warning. (This one does print Node's own `ExperimentalWarning`;
+ * the README names it beside the other expected one.)
+ */
+function transformTypeScript() {
+  registerHooks({
+    load(url, context, nextLoad) {
+      if (!url.startsWith("file:") || !url.endsWith(".ts")) return nextLoad(url, context);
+      const source = stripTypeScriptTypes(readFileSync(fileURLToPath(url), "utf8"), {
+        mode: "transform",
+        sourceUrl: url,
+      });
+      return { format: "module", source, shortCircuit: true };
+    },
+  });
+}
 
 const USAGE = `Usage: node scripts/assistant-eval.mjs --scripted
        node scripts/assistant-eval.mjs --model <path.gguf> [--locale sr|en]
@@ -112,6 +149,69 @@ export function parseArgs(argv) {
 
 const EVALS = "../apps/desktop/src/main/assistant/evals/index.js";
 
+/** The app's tool registry, and the web service the app plugs into it when the user turned web search on. */
+const TOOL_REGISTRY = "../apps/desktop/src/main/assistant/tools/index.js";
+const WEB_SERVICE = "../apps/desktop/src/main/assistant/web/index.js";
+
+/** A seam the evals never reach: they read declarations, and nothing here runs a tool. */
+function refuse() {
+  throw new Error("The evals read the tool specs and run no tool.");
+}
+
+/**
+ * The app's own description and schema for every tool it has, by tool name.
+ *
+ * WHY THE REAL MODE BUILDS THE APP'S REGISTRY. A scenario says what a tool
+ * DOES; what the MODEL is shown — the sentence that says when to reach for it,
+ * and the schema of the fields it may send — is the app's. A run that showed a
+ * real model an empty schema and the tool's own name measured the harness and
+ * not the model: on 2026-10-15, Gemma 4 E2B scored 0 of 4 on the English task
+ * scenarios, and one reason was that nothing had told it `tasks.create` has a
+ * title.
+ *
+ * The registry is built the way `tools/index.test.ts` builds it — with fakes,
+ * because this process must not open a profile database, install a pack or arm
+ * a timer to read a schema. Every seam here is therefore either an empty
+ * answer or a refusal, and the web service is stood up with the same kind of
+ * stand-in so `web.search` and `web.readPage` wear their real specs too.
+ */
+async function loadToolSpecs() {
+  const tools = await loadPart("the tool registry", TOOL_REGISTRY, "createToolRegistry");
+  if (!tools.ok) return { ok: false, reason: tools.reason };
+  const web = await loadPart("the web service", WEB_SERVICE, "createWebService");
+  try {
+    const webService = web.ok
+      ? web.factory({
+          // Nothing here fetches anything: the scenarios own every result, and
+          // the mode is the one the app itself has before a user turns web
+          // search on.
+          userData: process.cwd(),
+          version: "eval",
+          mode: () => "offline",
+          resolve: () => Promise.resolve([]),
+          http: { request: refuse },
+          secrets: { apiKey: () => null, setApiKey: refuse, clearApiKey: refuse },
+        })
+      : null;
+    const registry = tools.factory({
+      profileDb: refuse,
+      now: () => Date.now(),
+      search: () => Promise.resolve([]),
+      packs: { list: () => Promise.resolve([]) },
+      timers: { startCountdown: refuse, listCountdowns: () => [] },
+      modules: { all: () => [], get: () => undefined },
+      web: webService,
+    });
+    const specs = {};
+    for (const tool of registry.tools({ web: webService !== null })) {
+      specs[tool.name] = { description: tool.description, parameters: tool.parameters };
+    }
+    return { ok: true, specs };
+  } catch (error) {
+    return { ok: false, reason: `the tool registry could not be built: ${error.message}` };
+  }
+}
+
 /**
  * Loads a module the wave builds, or explains why it is not there yet.
  *
@@ -172,30 +272,57 @@ async function main() {
     });
     modelLabel = "scripted transcript";
   } else {
-    const host = await loadPart("the model host", "../apps/desktop/src/main/assistant/runtime/index.js", "createModelHost");
-    if (!host.ok) return skip(host.reason);
+    // Before anything outside the evals is imported: the app's own modules use
+    // syntax Node strips only under a transform, and the registry below reads
+    // them.
+    transformTypeScript();
+    const engine = await loadPart("the llama engine", "../apps/desktop/src/main/assistant/runtime/llama.js", "createLlamaEngine");
+    if (!engine.ok) return skip(engine.reason);
     const loop = await loadPart("the agent loop", "../packages/core/src/assistant/loop.js", "runAgentTurn");
     if (!loop.ok) return skip(loop.reason);
 
-    let modelHost;
+    // The app's own specs, so the model is offered the fields the real tools
+    // have. A runner that cannot read them says so and carries on: the real
+    // mode's job is to measure the model, and a scenario's own tools still
+    // describe themselves, just less.
+    const specSource = await loadToolSpecs();
+    if (specSource.ok) {
+      const count = Object.keys(specSource.specs).length;
+      console.error(`assistant-eval: the scenario tools wear ${count} of the app's own specs.`);
+    } else {
+      console.error(`assistant-eval: warning — ${specSource.reason}`);
+      console.error("The scenario tools keep their generic spec for this run.");
+    }
+
     let chatModel;
     try {
-      // The factory's own signature is the runtime run's decision; this runner
-      // calls it with no arguments and records that as an assumption in the
-      // README. The scenario owns the tools and the passages, so the real mode
+      // The engine the app's utility process runs, driven in this process the
+      // way the runtime's own smoke test drives it: the model host around it
+      // spawns that process through Electron, which a plain Node run does not
+      // have. The scenario owns the tools and the passages, so the real mode
       // varies exactly two things against the scripted one: the loop and the
       // model.
-      modelHost = host.factory();
-      const entry = await modelHost.importFile(resolve(options.model));
-      chatModel = await modelHost.loadChat(entry.id, new AbortController().signal);
+      const llama = engine.factory({ onToken: () => {} });
+      const hardware = await llama.hardware();
+      await llama.loadChat({
+        id: "eval",
+        title: basename(options.model),
+        capabilities: ["chat"],
+        modelPath: resolve(options.model),
+        contextTokens: 0,
+        gpuLayers: "auto",
+        threads: hardware.cpuThreads,
+      });
+      chatModel = llama.chat("eval");
     } catch (error) {
-      return skip(`the real mode could not be wired: ${error.message}`);
+      return skip(`the model could not be loaded: ${error.message}`);
     }
 
     harness = evals.createHarness({
       runAgentTurn: loop.factory,
       modelFor: () => chatModel,
       timeoutMs: options.timeoutMs,
+      ...(specSource.ok ? { toolSpecs: specSource.specs } : {}),
     });
     modelLabel = basename(options.model);
   }

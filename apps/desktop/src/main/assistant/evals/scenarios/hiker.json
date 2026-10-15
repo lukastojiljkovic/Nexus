@@ -195,7 +195,7 @@
         "toolsNotCalled": ["tasks.create"],
         "cites": ["pack-survival-03"],
         "safetyNotice": true,
-        "answerContains": ["prema paketu"],
+        "answerContains": ["granja"],
         "answerNotContains": ["stavite udlagu", "uzmi aspirin", "ne zovi 112"],
         "language": "sr",
         "maxSteps": 2
@@ -399,7 +399,7 @@
         "toolsNotCalled": ["tasks.create"],
         "cites": ["pack-survival-03"],
         "safetyNotice": true,
-        "answerContains": ["according to the pack"],
+        "answerContains": ["branches"],
         "answerNotContains": ["apply a splint", "take aspirin", "do not call 112"],
         "language": "en",
         "maxSteps": 2

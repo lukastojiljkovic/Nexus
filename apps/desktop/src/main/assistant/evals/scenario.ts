@@ -24,6 +24,8 @@
 
 import type { AppLocation, AssistantLocale, SourceKind, ToolEffect } from "@nexus/core";
 
+import type { ReplyScript } from "./language.js";
+
 /** Raised for a scenario the harness will not run. The message names the field and the file. */
 export class ScenarioError extends Error {
   constructor(message: string) {
@@ -85,7 +87,9 @@ export interface ScenarioExpectation {
   readonly cites?: readonly string[];
   readonly safetyNotice?: boolean;
   readonly language?: AssistantLocale;
+  readonly script?: ReplyScript;
   readonly doesNotKnow?: boolean;
+  readonly claimsOnlyWhatRan?: boolean;
   readonly maxSteps?: number;
   readonly answerContains?: readonly string[];
   readonly answerNotContains?: readonly string[];
@@ -122,6 +126,8 @@ export interface Scenario {
 }
 
 const LOCALES: readonly AssistantLocale[] = ["sr", "en"];
+
+const SCRIPTS: readonly ReplyScript[] = ["latin", "cyrillic"];
 
 const TOOL_EFFECTS: readonly ToolEffect[] = ["read", "write", "navigate", "network"];
 
@@ -161,7 +167,9 @@ const EXPECT_KEYS = [
   "cites",
   "safetyNotice",
   "language",
+  "script",
   "doesNotKnow",
+  "claimsOnlyWhatRan",
   "maxSteps",
   "answerContains",
   "answerNotContains",
@@ -457,6 +465,16 @@ function parseExpectation(value: unknown, field: string): ScenarioExpectation {
           parseToolCallExpectation(entry, `${field}.toolsCalled[${index}]`),
         );
   const languageRaw = record["language"];
+  const scriptRaw = record["script"];
+  const claimsRaw = record["claimsOnlyWhatRan"];
+  // `claimsOnlyWhatRan` is asked for, never denied: the negative form of it is
+  // a check with nothing to say, and a key nobody can act on is the thing this
+  // validator exists to refuse.
+  if (claimsRaw !== undefined && claimsRaw !== true) {
+    throw new ScenarioError(
+      `${field}.claimsOnlyWhatRan, when it is written, must be true: the answer must not claim a write that did not run.`,
+    );
+  }
   return {
     ...optional(toolsCalled, "toolsCalled"),
     ...optional(strings("toolsNotCalled"), "toolsNotCalled"),
@@ -467,9 +485,11 @@ function parseExpectation(value: unknown, field: string): ScenarioExpectation {
     ...(languageRaw === undefined
       ? {}
       : { language: asOneOf(languageRaw, `${field}.language`, LOCALES) }),
+    ...(scriptRaw === undefined ? {} : { script: asOneOf(scriptRaw, `${field}.script`, SCRIPTS) }),
     ...(record["doesNotKnow"] === undefined
       ? {}
       : { doesNotKnow: asBoolean(record["doesNotKnow"], `${field}.doesNotKnow`) }),
+    ...(claimsRaw === undefined ? {} : { claimsOnlyWhatRan: true }),
     ...(record["maxSteps"] === undefined
       ? {}
       : { maxSteps: asPositiveInteger(record["maxSteps"], `${field}.maxSteps`) }),

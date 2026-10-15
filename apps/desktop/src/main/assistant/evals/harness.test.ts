@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { runAgentTurn } from "@nexus/core";
 
-import { createHarness } from "./harness.js";
+import { createHarness, type HarnessOptions } from "./harness.js";
 import { parseScenario, type Scenario } from "./scenario.js";
 import { createScriptedModel, referenceRunAgentTurn, type ScriptedModel } from "./scripted.js";
 
@@ -37,7 +37,10 @@ function scenario(overrides: Record<string, unknown> = {}): Scenario {
   return parseScenario(draft, "test.json");
 }
 
-function harnessFor(capture: { model?: ScriptedModel } = {}) {
+function harnessFor(
+  capture: { model?: ScriptedModel } = {},
+  options: Partial<HarnessOptions> = {},
+) {
   let ticks = 0;
   return createHarness({
     runAgentTurn: referenceRunAgentTurn,
@@ -51,6 +54,7 @@ function harnessFor(capture: { model?: ScriptedModel } = {}) {
     // A clock that advances 3 ms per reading, so a duration is a computed
     // number and the two readings of one scenario differ by exactly 3.
     now: () => (ticks += 3),
+    ...options,
   });
 }
 
@@ -240,6 +244,54 @@ describe("createHarness", () => {
     const result = await harness.runScenario(scenario());
     expect(result.passed).toBe(false);
     expect(result.error).toBe("no model loaded");
+  });
+
+  it("hands the tool a caller's real spec, and the generic one when nobody has it", async () => {
+    const spec = {
+      description: { sr: "Pravi zadatak.", en: "Creates a task." },
+      parameters: {
+        type: "object",
+        properties: { title: { type: "string" } },
+        required: ["title"],
+        additionalProperties: false,
+      },
+    };
+    const capture: { model?: ScriptedModel } = {};
+    await harnessFor(capture, { toolSpecs: { "app.open": spec } }).runScenario(scenario());
+    expect(capture.model?.requests[0]?.tools[0]?.description).toEqual(spec.description);
+    expect(capture.model?.requests[0]?.tools[0]?.parameters).toEqual(spec.parameters);
+    // The name nobody handed a spec in keeps the scenario's own generic one.
+    const generic: { model?: ScriptedModel } = {};
+    await harnessFor(generic, { toolSpecs: { "tasks.create": spec } }).runScenario(scenario());
+    expect(generic.model?.requests[0]?.tools[0]?.description).toEqual({ sr: "app.open", en: "app.open" });
+    expect(generic.model?.requests[0]?.tools[0]?.parameters).toMatchObject({
+      additionalProperties: true,
+    });
+  });
+
+  it("reports every call with what its result said", async () => {
+    const result = await harnessFor().runScenario(
+      scenario({
+        tools: [
+          {
+            name: "tasks.create",
+            effect: "write",
+            summary: { sr: "Dodati zadatak.", en: "Add a task." },
+            fail: "the store is locked",
+          },
+        ],
+        confirmations: [true],
+        expect: { claimsOnlyWhatRan: true, maxSteps: 2 },
+        script: [
+          { toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+          { text: "Nisam dodao zadatak: baza je zaključana." },
+        ],
+      }),
+    );
+    expect(result.passed).toBe(true);
+    expect(result.calls).toEqual([
+      { name: "tasks.create", arguments: { title: "Kupi vodu" }, ok: false },
+    ]);
   });
 });
 
