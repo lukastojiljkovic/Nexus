@@ -120,6 +120,7 @@ describe("createToolRegistry", () => {
       cookbook: 2,
       culture: 2,
       emergency: 1,
+      fitness: 8,
       habits: 2,
       lab: 2,
       library: 2,
