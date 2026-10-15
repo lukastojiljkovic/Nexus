@@ -161,9 +161,11 @@ describe("zimWikiSource.searchTitles", () => {
 
     const titles = await wiki.searchTitles("Ko je bio Nikola Tesla?", 5, NEVER);
 
+    // The paths are the reader's own and the titles are the app's script: the
+    // same two articles, cited the way this app writes Serbian.
     expect(titles).toEqual([
-      { path: "wikipedia-sr-mini/A/Никола_Тесла.html", title: "Никола Тесла" },
-      { path: "wikipedia-sr-mini/A/Тесла.html", title: "Тесла" },
+      { path: "wikipedia-sr-mini/A/Никола_Тесла.html", title: "Nikola Tesla" },
+      { path: "wikipedia-sr-mini/A/Тесла.html", title: "Tesla" },
     ]);
     expect(calls.map((call) => call.prefix)).toContain("Никола Тесла");
     // The Latin spelling is still asked first: a pack whose titles are Latin
@@ -176,6 +178,8 @@ describe("zimWikiSource.searchTitles", () => {
       libraries: [{ id: "wikipedia-sr-mini", language: "srp" }],
       titles: {
         "wikipedia-sr-mini\u0000Београд": [
+          // The index's own order, which puts the Latin entry first.
+          { zimPath: "A/Beograd_na_vodi", title: "Beograd na vodi" },
           { zimPath: "A/Београд", title: "Београд" },
           { zimPath: "A/Београдска_арена", title: "Београдска арена" },
         ],
@@ -188,13 +192,19 @@ describe("zimWikiSource.searchTitles", () => {
     });
     const wiki = zimWikiSource(host);
 
-    // "Beogradu" less its ending is the title itself, which ranks as exact.
+    // "Beogradu" less its ending is the title itself, and it is a prefix match
+    // like the ones around it: a stem is a guess at an ending, so a hit that
+    // merely equals one cannot jump ahead of the entry the search reached first.
     const located = await wiki.searchTitles("Šta znaš o Beogradu?", 5, NEVER);
-    expect(located.map((title) => title.title)).toEqual(["Београд", "Београдска арена"]);
+    expect(located.map((title) => title.title)).toEqual([
+      "Beograd na vodi",
+      "Beograd",
+      "Beogradska arena",
+    ]);
 
     // A stem's prefix matches come before the next word's.
     const declined = await wiki.searchTitles("Koji je glavni grad Francuske?", 5, NEVER);
-    expect(declined.map((title) => title.title)).toEqual(["Француска", "Француски језик", "Градац"]);
+    expect(declined.map((title) => title.title)).toEqual(["Francuska", "Francuski jezik", "Gradac"]);
 
     // Never cut below four letters: "grad" is asked as itself only.
     expect(calls.map((call) => call.prefix)).not.toContain("gra");
@@ -208,6 +218,59 @@ describe("zimWikiSource.searchTitles", () => {
     await zimWikiSource(host).searchTitles("Nikola Tesla", 5, NEVER);
     expect(calls.every((call) => /^[\x20-\x7f]*$/.test(call.prefix))).toBe(true);
     expect(calls.map((call) => call.prefix)).not.toContain("Tesl");
+  });
+
+  it("answers a Serbian library in the app's script, and leaves the path it routes back to alone", async () => {
+    const article = [
+      '<h1 id="firstHeading">Никола Тесла</h1>',
+      "<p><b>Никола Тесла</b> (Смиљан, 10. јул 1856) био је српски проналазач.</p>",
+    ].join("");
+    const { host } = fakeHost({
+      libraries: [{ id: "wikipedia-sr-mini", language: "srp" }],
+      titles: {
+        "wikipedia-sr-mini\u0000Никола Тесла": [
+          { zimPath: "A/Никола_Тесла.html", title: "Никола Тесла" },
+        ],
+      },
+      articles: { "wikipedia-sr-mini\u0000A/Никола_Тесла.html": article },
+    });
+    const wiki = zimWikiSource(host);
+
+    const titles = await wiki.searchTitles("Ko je bio Nikola Tesla?", 5, NEVER);
+
+    // The title is this app's script and the path is the reader's own bytes.
+    expect(titles).toEqual([{ path: "wikipedia-sr-mini/A/Никола_Тесла.html", title: "Nikola Tesla" }]);
+    // The passage follows the title: a model that copies it answers in the
+    // script this app writes Serbian in.
+    expect(await wiki.readArticle(titles[0]?.path ?? "", NEVER)).toBe(
+      [
+        "# Nikola Tesla",
+        "Nikola Tesla (Smiljan, 10. jul 1856) bio je srpski pronalazač.",
+      ].join("\n\n"),
+    );
+  });
+
+  it("leaves a library that is not Serbian in its own script", async () => {
+    // openZIM's Belarusian Wikibooks writes Cyrillic, and this build reads it as
+    // written: the transliteration follows the LIBRARY's language, not the shape
+    // of the letters.
+    const article = "<h1>Кава</h1><p>Кава је напитак.</p>";
+    const { host } = fakeHost({
+      libraries: [{ id: "wikibooks-be", language: "bel" }],
+      titles: { "wikibooks-be\u0000Кава": [{ zimPath: "A/Кава.html", title: "Кава" }] },
+      articles: { "wikibooks-be\u0000A/Кава.html": article },
+    });
+    const wiki = zimWikiSource(host);
+
+    const titles = await wiki.searchTitles("Кава", 5, NEVER);
+
+    expect(titles).toEqual([{ path: "wikibooks-be/A/Кава.html", title: "Кава" }]);
+    expect(await wiki.readArticle(titles[0]?.path ?? "", NEVER)).toBe(
+      [
+        "# Кава",
+        "Кава је напитак.",
+      ].join("\n\n"),
+    );
   });
 
   it("answers nothing, and asks nothing, when there is no library or the signal is already aborted", async () => {
@@ -398,25 +461,26 @@ describe("zimWikiSource over the real reader", () => {
       const wiki = zimWikiSource(hostOverReader({ id: "wikipedia-sr-mini", language: "srp", reader }));
 
       const titles = await wiki.searchTitles("Ko je bio Nikola Tesla?", 5, NEVER);
-      // Both titles a Latin question reaches in this file. Their ORDER is the
-      // fake host's business, not this file's: the Latin redirect resolves to
-      // the same entry the Cyrillic key finds, so which bucket claims it depends
-      // on which key was asked first.
-      expect([...titles].map((title) => title.title).sort()).toEqual(["Никола Тесла", "Тесла"]);
+      // Both titles a Latin question reaches in this file, in the app's script.
+      // Their ORDER is the fake host's business, not this file's: the Latin
+      // redirect resolves to the same entry the Cyrillic key finds, so which
+      // bucket claims it depends on which key was asked first.
+      expect([...titles].map((title) => title.title).sort()).toEqual(["Nikola Tesla", "Tesla"]);
 
       const article = await wiki.readArticle("wikipedia-sr-mini/A/Никола_Тесла.html", NEVER);
       // The title, both paragraphs and the section heading - and nothing of the
-      // infobox, which is where "10. јул 1856." also sits.
+      // infobox, which is where "10. јул 1856." also sits. Read in the app's
+      // script, because this library is Serbian.
       expect(article).toBe(
         [
-          "# Никола Тесла",
-          "Никола Тесла (Смиљан, 10. јул 1856) био је српски проналазач.",
-          "## Биографија",
-          "Рођен је у Смиљану.",
+          "# Nikola Tesla",
+          "Nikola Tesla (Smiljan, 10. jul 1856) bio je srpski pronalazač.",
+          "## Biografija",
+          "Rođen je u Smiljanu.",
         ].join("\n\n"),
       );
       expect(leadSection(article, 2_000)).toBe(
-        "Никола Тесла (Смиљан, 10. јул 1856) био је српски проналазач.",
+        "Nikola Tesla (Smiljan, 10. jul 1856) bio je srpski pronalazač.",
       );
       // The redirect entry answers with the article it points at - the same
       // bytes the reader resolves to for the path the bytes are stored in.

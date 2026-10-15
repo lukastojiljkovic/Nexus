@@ -100,6 +100,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   finds Београд), and cites the opening section of the few articles that
   match.
 
+- **The assistant cites only the articles a question is about.** A Wikipedia
+  title list matches the start of a word, so "Šta imam od zadataka za danas?"
+  cited a film and a newspaper, and a Serbian question about the capital of
+  France lost Француска to titles that only began like it. The assistant now
+  reads more titles than it cites and keeps those the question names and that
+  carry at least two of its words, best first. A Serbian library's titles and
+  passages reach the model in Latin, the script the app writes Serbian in, and a
+  tool call is no longer refused for an optional field the model left empty.
+
 ## [2.0.2] - 2026-10-14
 
 The downloads that 2.0.0 introduced never finished, and the card table that

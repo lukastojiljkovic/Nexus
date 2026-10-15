@@ -73,6 +73,56 @@ describe("validateToolArguments", () => {
     });
   });
 
+  it("drops an empty optional string, and refuses an empty required one", () => {
+    // The shape that made this rule: the model called `tasks.create` with
+    // `"description": ""`, which the spec's `minLength: 1` refused - a refusal
+    // about a property the model believed it had left out.
+    expect(validateToolArguments(TASK_SCHEMA, { title: "Kupovina", priority: "", tags: [] })).toEqual({
+      ok: true,
+      value: { title: "Kupovina", tags: [] },
+    });
+    expect(validateToolArguments(TASK_SCHEMA, { title: "Kupovina", kind: "   " })).toEqual({
+      ok: true,
+      value: { title: "Kupovina" },
+    });
+    // `title` is required: it is never dropped, so an empty one is a call to
+    // refuse rather than to repair.
+    expect(validateToolArguments(TASK_SCHEMA, { title: "" })).toEqual({
+      ok: false,
+      errors: ["/title: expected at least 1 characters, got 0"],
+    });
+    // Nothing else is read as absent: `0`, `false` and `[]` are values a model
+    // chose to send.
+    expect(validateToolArguments(TASK_SCHEMA, { title: "x", priority: 0, done: false })).toEqual({
+      ok: true,
+      value: { title: "x", priority: 0, done: false },
+    });
+  });
+
+  it("drops an empty optional string wherever the schema says a property is", () => {
+    const nested: JsonSchema = {
+      type: "object",
+      properties: {
+        a: { type: "object", properties: { b: { type: "string", minLength: 1 } } },
+        rows: { type: "array", items: { type: "object", properties: { c: { type: "string" } } } },
+      },
+      required: ["a"],
+    };
+    expect(validateToolArguments(nested, { a: { b: "" }, rows: [{ c: "x" }, { c: "" }] })).toEqual({
+      ok: true,
+      value: { a: {}, rows: [{ c: "x" }, {}] },
+    });
+  });
+
+  it("drops an empty string without letting a property named __proto__ reach the prototype", () => {
+    const hostile = args('{"title":"x","priority":"","__proto__":{"polluted":true}}');
+    expect(validateToolArguments(TASK_SCHEMA, hostile)).toEqual({
+      ok: false,
+      errors: ["/__proto__: unexpected property"],
+    });
+    expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+  });
+
   it("walks array items and names the index", () => {
     expect(validateToolArguments(TASK_SCHEMA, { title: "x", tags: ["a", 2] })).toEqual({
       ok: false,
