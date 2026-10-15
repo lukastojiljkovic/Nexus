@@ -17,9 +17,9 @@
  * **Where the names come from.** A kit module carries its name and one-line
  * description in its manifest (`ModuleManifest.copy`). The shell's compiled-in
  * modules keep theirs in the renderer's `strings`, which main cannot read, so
- * `BUILTIN_COPY` below holds the same words for them, in both locales. The
- * copy is the gallery's own, and a module in neither place is printed by its id
- * and its group alone.
+ * `shared/builtinModuleCopy.ts` holds the same words for them, in both locales,
+ * pinned to the renderer's by a test. A module in neither place is printed by
+ * its id and its group alone.
  *
  * **Search results carry places.** A hit whose kind a page can reveal answers
  * with a citation whose `location` opens it (`citationFor`). The kinds that
@@ -38,6 +38,7 @@ import type {
 import { foldSearchText, MAX_ID_LENGTH } from "@nexus/core";
 import { rebuildSearchIndex, SearchHistoryStore } from "@nexus/db";
 import type { SearchResult } from "../../../shared/ipc.js";
+import { BUILTIN_MODULE_COPY } from "../../../shared/builtinModuleCopy.js";
 import { isModuleVisible, type ShellVisibility } from "../../../shared/moduleVisibility.js";
 import { asArgs, asIdentifier, asOptionalCount, asOptionalText, asText } from "./args.js";
 import {
@@ -70,8 +71,6 @@ export interface AppToolDeps {
   readonly visibility: () => ShellVisibility;
 }
 
-type ModuleCopy = NonNullable<ModuleManifest["copy"]>;
-
 /** How many results `app.search` answers with when the model names no cap. */
 const DEFAULT_SEARCH_LIMIT = 8;
 
@@ -86,127 +85,6 @@ const SETTINGS_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** A module id is a kebab slug — the shape `ModuleManifest.id` states and `asIdentifier` bounds. */
 const MODULE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-/**
- * The compiled-in modules' name and one-line description, in both locales: the
- * same words as `strings.modules` and `strings.settings.moduleDescriptions` in the
- * renderer (`strings.sr.ts`, `strings.en.ts`). Main cannot read those strings, so
- * these are a copy, and `app.test.ts` fails the moment the two disagree.
- */
-export const BUILTIN_COPY: Partial<Record<string, ModuleCopy>> = {
-  dashboard: {
-    name: { sr: "Kontrolna tabla", en: "Dashboard" },
-    description: {
-      sr: "Pregled dana na jednom mestu — obaveze, zadaci i dokumenta koja ističu.",
-      en: "Your day at a glance — commitments, tasks and expiring documents.",
-    },
-  },
-  tasks: {
-    name: { sr: "Zadaci", en: "Tasks" },
-    description: {
-      sr: "Zadaci sa listom i tablom, prioritetima i rokovima.",
-      en: "Tasks with list and board views, priorities and deadlines.",
-    },
-  },
-  calendar: {
-    name: { sr: "Kalendar", en: "Calendar" },
-    description: {
-      sr: "Događaji, agenda i praćenje isteka dokumenata.",
-      en: "Events, an agenda and document expiry tracking.",
-    },
-  },
-  settings: {
-    name: { sr: "Podešavanja", en: "Settings" },
-    description: {
-      sr: "Profil, izgled, moduli i obaveštenja.",
-      en: "Profile, appearance, modules and notifications.",
-    },
-  },
-  notes: {
-    name: { sr: "Beleške", en: "Notes" },
-    description: {
-      sr: "Beleške sa blok-editorom — markdown prečice i „/“ meni za formatiranje.",
-      en: "Notes with a block editor — Markdown shortcuts and a “/” menu for formatting.",
-    },
-  },
-  study: {
-    name: { sr: "Učenje", en: "Study" },
-    description: {
-      sr: "Predmeti, ispiti, kartice za učenje i planovi pripreme za ispite.",
-      en: "Subjects, exams, study cards and exam preparation plans.",
-    },
-  },
-  priv: {
-    name: { sr: "Privatno", en: "Private" },
-    description: {
-      sr: "Šifrovane privatne beleške — otključavaju se posebno i ne pojavljuju se u pretrazi.",
-      en: "Encrypted private notes — unlocked separately and never shown in search.",
-    },
-  },
-  files: {
-    name: { sr: "Datoteke", en: "Files" },
-    description: {
-      sr: "Sve datoteke priložene uz beleške, zadatke i predmete, na jednom mestu.",
-      en: "Every file attached to notes, tasks and subjects, in one place.",
-    },
-  },
-  finance: {
-    name: { sr: "Finansije", en: "Finance" },
-    description: {
-      sr: "Računi, transakcije i prenosi — stanje se računa iz onoga što upišeš.",
-      en: "Accounts, transactions and transfers — the balance is worked out from what you enter.",
-    },
-  },
-  habits: {
-    name: { sr: "Navike", en: "Habits" },
-    description: {
-      sr: "Dnevne i nedeljne navike — niz, istorija i ono što se danas očekuje.",
-      en: "Daily and weekly habits — streak, history and what is expected today.",
-    },
-  },
-  focus: {
-    name: { sr: "Fokus", en: "Focus" },
-    description: {
-      sr: "Pomodoro tajmer i istorija fokusa — isti tajmer koji „Učenje“ koristi.",
-      en: "A Pomodoro timer and focus history — the same timer “Study” uses.",
-    },
-  },
-  fitness: {
-    name: { sr: "Fitnes", en: "Fitness" },
-    description: {
-      sr: "Ishrana i trening — obroci i dnevni ciljevi, dnevnik treninga sa rutinama i katalogom vežbi.",
-      en: "Nutrition and training — meals and daily targets, a training log with routines and an exercise catalogue.",
-    },
-  },
-  tools: {
-    name: { sr: "Alatke", en: "Tools" },
-    description: {
-      sr: "Pretvarači jedinica i svakodnevni računi — procenat, PDV, kredit i cena po jedinici.",
-      en: "Unit converters and everyday sums — percentage, VAT, loans and unit price.",
-    },
-  },
-  canvas: {
-    name: { sr: "Tabla", en: "Board" },
-    description: {
-      sr: "Beskonačna tabla za crtanje, dijagrame i skice — sa karticama koje vode na druge module.",
-      en: "An endless board for drawing, diagrams and sketches — with cards that lead to other modules.",
-    },
-  },
-  electronics: {
-    name: { sr: "Elektronika", en: "Electronics" },
-    description: {
-      sr: "Radna površina za Arduino i Raspberry — postavi ploče i senzore iz kataloga i poveži ih žicama.",
-      en: "A workbench for Arduino and Raspberry — place boards and sensors from the catalogue and wire them up.",
-    },
-  },
-  pro: {
-    name: { sr: "Stručne alatke", en: "Professional tools" },
-    description: {
-      sr: "Alatke po strukama — uključuješ pakete koji ti trebaju, a fioka pokazuje samo njih.",
-      en: "Tools by trade — turn on the packs you need, and the drawer shows only those.",
-    },
-  },
-};
 
 const SEARCH_RESULTS: AssistantPhrase<[count: number, query: string]> = {
   sr: (count, query) => `Rezultati (${count}) za „${query}“:`,
@@ -514,13 +392,12 @@ function searchHistory(profileDb: ProfileDb, profileId: string) {
 }
 
 /**
- * One module's row. Every module has a name and a description in the active
- * locale (its manifest's `copy`, or `BUILTIN_COPY` for a compiled-in one); a
- * module the device hides says so in its tag, so the model does not offer it as
- * a place in the sidebar.
+ * One module's row: its name and description in the active locale (from its
+ * manifest, or `BUILTIN_MODULE_COPY` for a compiled-in one), and a tag when the
+ * device hides it, so the model does not offer it as a place in the sidebar.
  */
 function describeModule(locale: AssistantLocale, manifest: ModuleManifest, visible: boolean): string {
-  const copy: ModuleCopy | undefined = manifest.copy ?? BUILTIN_COPY[manifest.id];
+  const copy = manifest.copy ?? BUILTIN_MODULE_COPY[manifest.id];
   const tags = [manifest.group, ...(visible ? [] : [text(locale, HIDDEN_TAG)])].join(", ");
   const head = `- ${manifest.id} (${tags})`;
   if (copy === undefined) return head;

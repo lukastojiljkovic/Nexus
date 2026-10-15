@@ -9,9 +9,7 @@ import { createModuleRegistry } from "../../../shared/modules.js";
 import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import type { AssistantTurnEventView } from "../../../modules/assistant/shared/ipc.js";
 import { turnLocations } from "../../../modules/assistant/renderer/turnLocations.js";
-import { en as stringsEn } from "../../../renderer/src/strings.en.js";
-import { sr as stringsSr } from "../../../renderer/src/strings.sr.js";
-import { BUILTIN_COPY, appTools, type AppToolDeps } from "./app.js";
+import { appTools, type AppToolDeps } from "./app.js";
 
 /**
  * The APP tools: navigation, the global search, and the search's own history
@@ -311,28 +309,6 @@ describe("app.search", () => {
     expect(result.content).toBe(
       'Failed: "limit" must be a whole number between 1 and 20.',
     );
-  });
-});
-
-describe("BUILTIN_COPY", () => {
-  it("holds the renderer's own words for every compiled-in module, in both locales", () => {
-    const locales = { sr: stringsSr, en: stringsEn } as const;
-    const builtIn = createModuleRegistry()
-      .all()
-      .filter((manifest) => manifest.copy === undefined)
-      .map((manifest) => manifest.id);
-    expect(Object.keys(BUILTIN_COPY).sort()).toEqual([...builtIn].sort());
-    for (const id of builtIn) {
-      for (const locale of ["sr", "en"] as const) {
-        const strings = locales[locale];
-        expect(BUILTIN_COPY[id]?.name[locale], `${id} ${locale}`).toBe(
-          (strings.modules as Record<string, string>)[id],
-        );
-        expect(BUILTIN_COPY[id]?.description[locale], `${id} ${locale}`).toBe(
-          (strings.settings.moduleDescriptions as Record<string, string>)[id],
-        );
-      }
-    }
   });
 });
 
