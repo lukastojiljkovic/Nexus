@@ -1414,8 +1414,10 @@ describe("RestoreStore", () => {
 
     // Exactly the archive's rows, and nothing B held before.
     expect(new TaskStore(db.raw, profileB).listActive()).toEqual(withProfile(fresh.tasks, profileB));
+    // The archive does not carry a subject's own retention (STUDY-007), so every
+    // restored subject inherits the profile's.
     expect(new SubjectStore(db.raw, profileB).listActive()).toEqual(
-      withProfile(fresh.subjects, profileB),
+      withProfile(fresh.subjects, profileB).map((subject) => ({ ...subject, targetRetention: null })),
     );
     expect(new NoteTemplateStore(db.raw, profileB).list()).toEqual(
       withProfile(fresh.noteTemplates, profileB),

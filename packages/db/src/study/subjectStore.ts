@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { SubjectNotFoundError, SubjectValidationError } from "../errors.js";
 import { uuidv7 } from "../ids.js";
+import { validateRetention } from "./studySettingsStore.js";
 
 type DatabaseHandle = Database.Database;
 
@@ -35,6 +36,8 @@ export interface Subject {
   color: SubjectColor;
   semester: string | null;
   archived: boolean;
+  /** This subject's own target retention, or `null` to inherit the profile's (STUDY-007). */
+  targetRetention: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +47,7 @@ export interface CreateSubjectInput {
   name: string;
   color?: SubjectColor;
   semester?: string | null;
+  targetRetention?: number | null;
 }
 
 /**
@@ -55,6 +59,7 @@ export interface UpdateSubjectFields {
   color?: SubjectColor;
   semester?: string | null;
   archived?: boolean;
+  targetRetention?: number | null;
 }
 
 interface SubjectRow {
@@ -64,12 +69,13 @@ interface SubjectRow {
   color: SubjectColor;
   semester: string | null;
   archived: number;
+  target_retention: number | null;
   created_at: string;
   updated_at: string;
 }
 
 const COLUMNS =
-  "id, profile_id, name, color, semester, archived, created_at, updated_at";
+  "id, profile_id, name, color, semester, archived, target_retention, created_at, updated_at";
 
 /**
  * Subject persistence for a single profile, over prepared, parameterized
@@ -92,8 +98,8 @@ export class SubjectStore {
   ) {
     this.insert = db.prepare(
       `INSERT INTO subjects
-         (id, profile_id, name, color, semester, archived, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, profile_id, name, color, semester, archived, target_retention, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
     this.selectActive = db.prepare(
       `SELECT ${COLUMNS} FROM subjects
@@ -106,7 +112,7 @@ export class SubjectStore {
     );
     this.updateFields = db.prepare(
       `UPDATE subjects
-         SET name = ?, color = ?, semester = ?, archived = ?, updated_at = ?
+         SET name = ?, color = ?, semester = ?, archived = ?, target_retention = ?, updated_at = ?
        WHERE id = ? AND profile_id = ? AND deleted_at IS NULL`,
     );
     this.markDeleted = db.prepare(
@@ -130,14 +136,15 @@ export class SubjectStore {
     const name = validateName(input.name);
     const color = validateColor(input.color ?? "jade");
     const semester = normalizeOptional(input.semester);
+    const targetRetention = validateOptionalRetention(input.targetRetention);
     const now = new Date().toISOString();
     const id = uuidv7();
 
-    this.insert.run(id, this.profileId, name, color, semester, 0, now, now);
+    this.insert.run(id, this.profileId, name, color, semester, 0, targetRetention, now, now);
 
     return {
       id, profileId: this.profileId, name, color, semester,
-      archived: false, createdAt: now, updatedAt: now,
+      archived: false, targetRetention, createdAt: now, updatedAt: now,
     };
   }
 
@@ -150,6 +157,10 @@ export class SubjectStore {
       semester:
         fields.semester !== undefined ? normalizeOptional(fields.semester) : current.semester,
       archived: fields.archived !== undefined ? fields.archived : current.archived,
+      targetRetention:
+        fields.targetRetention !== undefined
+          ? validateOptionalRetention(fields.targetRetention)
+          : current.targetRetention,
     });
   }
 
@@ -185,7 +196,7 @@ export class SubjectStore {
     const now = new Date().toISOString();
 
     this.updateFields.run(
-      next.name, next.color, next.semester, next.archived ? 1 : 0, now,
+      next.name, next.color, next.semester, next.archived ? 1 : 0, next.targetRetention, now,
       current.id, this.profileId,
     );
 
@@ -201,9 +212,15 @@ function toSubject(row: SubjectRow): Subject {
     color: row.color,
     semester: row.semester,
     archived: row.archived === 1,
+    targetRetention: row.target_retention,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/** `null` is "inherit the profile's"; anything else must sit in the profile setting's window. */
+function validateOptionalRetention(value: number | null | undefined): number | null {
+  return value === undefined || value === null ? null : validateRetention(value);
 }
 
 function validateName(value: string): string {

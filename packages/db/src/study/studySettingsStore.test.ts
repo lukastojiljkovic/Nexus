@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   DEFAULT_NEW_PER_DAY,
   DEFAULT_TARGET_RETENTION,
+  DeckStore,
   MAX_NEW_PER_DAY,
   MAX_REVIEWS_PER_DAY,
   MAX_TARGET_RETENTION,
@@ -13,6 +14,7 @@ import {
   openDatabase,
   StudySettingsStore,
   StudySettingsValidationError,
+  SubjectStore,
 } from "../index.js";
 
 let dir: string;
@@ -179,5 +181,77 @@ describe("StudySettingsStore — profile scoping", () => {
       newPerDay: DEFAULT_NEW_PER_DAY,
       maxReviewsPerDay: null,
     });
+  });
+});
+
+describe("StudySettingsStore.retentionFor — deck, then subject, then profile (STUDY-007)", () => {
+  /** One profile with a subject and a deck under it, and the stores that set their overrides. */
+  function fixture(name: string) {
+    const profileId = createProfile(name);
+    const subjects = new SubjectStore(db.raw, profileId);
+    const decks = new DeckStore(db.raw, profileId);
+    const subjectId = subjects.create({ name: "Analiza" }).id;
+    const deckId = decks.create({ subjectId, name: "Nizovi" }).id;
+    return {
+      settings: new StudySettingsStore(db.raw, profileId),
+      subjects,
+      decks,
+      subjectId,
+      deckId,
+    };
+  }
+
+  it("answers the library default while no level has chosen a retention", () => {
+    const { settings, deckId } = fixture("a");
+    expect(settings.retentionFor(deckId)).toBe(DEFAULT_TARGET_RETENTION);
+  });
+
+  it("answers the profile's value when nothing below it has overridden it", () => {
+    const { settings, deckId } = fixture("a");
+    settings.save({ targetRetention: 0.85, newPerDay: 20, maxReviewsPerDay: null }, NOW);
+    expect(settings.retentionFor(deckId)).toBe(0.85);
+  });
+
+  it("answers the subject's value over the profile's when the deck is unset", () => {
+    const { settings, subjects, subjectId, deckId } = fixture("a");
+    settings.save({ targetRetention: 0.85, newPerDay: 20, maxReviewsPerDay: null }, NOW);
+    subjects.update(subjectId, { targetRetention: 0.95 });
+    expect(settings.retentionFor(deckId)).toBe(0.95);
+  });
+
+  it("answers the deck's value over both the subject's and the profile's", () => {
+    const { settings, subjects, decks, subjectId, deckId } = fixture("a");
+    settings.save({ targetRetention: 0.85, newPerDay: 20, maxReviewsPerDay: null }, NOW);
+    subjects.update(subjectId, { targetRetention: 0.95 });
+    decks.update(deckId, { targetRetention: 0.8 });
+    expect(settings.retentionFor(deckId)).toBe(0.8);
+  });
+
+  it("answers the deck's value when its subject is unset — the deck wins without a subject override", () => {
+    const { settings, decks, deckId } = fixture("a");
+    settings.save({ targetRetention: 0.85, newPerDay: 20, maxReviewsPerDay: null }, NOW);
+    decks.update(deckId, { targetRetention: 0.8 });
+    expect(settings.retentionFor(deckId)).toBe(0.8);
+  });
+
+  it("falls back to the subject, then the profile, as each override is cleared", () => {
+    const { settings, subjects, decks, subjectId, deckId } = fixture("a");
+    settings.save({ targetRetention: 0.85, newPerDay: 20, maxReviewsPerDay: null }, NOW);
+    subjects.update(subjectId, { targetRetention: 0.95 });
+    decks.update(deckId, { targetRetention: 0.8 });
+
+    decks.update(deckId, { targetRetention: null });
+    expect(settings.retentionFor(deckId)).toBe(0.95);
+
+    subjects.update(subjectId, { targetRetention: null });
+    expect(settings.retentionFor(deckId)).toBe(0.85);
+  });
+
+  it("answers this profile's value for a deck another profile owns, never that profile's override", () => {
+    const owner = fixture("owner");
+    owner.decks.update(owner.deckId, { targetRetention: 0.8 });
+    const other = fixture("other");
+    other.settings.save({ targetRetention: 0.9, newPerDay: 20, maxReviewsPerDay: null }, NOW);
+    expect(other.settings.retentionFor(owner.deckId)).toBe(0.9);
   });
 });

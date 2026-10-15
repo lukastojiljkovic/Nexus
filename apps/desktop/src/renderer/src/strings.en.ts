@@ -2946,6 +2946,9 @@ export const en = {
      * empty. Four other fields took the same parenthesis on the same day.
      */
     semesterLabel: "Semester (optional)",
+    /** Blank inherits; the field's placeholder shows the value that applies. Shared by subjects and decks. */
+    retentionOverrideLabel: "Target retention (blank inherits)",
+    retentionProblem: "Target retention must be between 0.70 and 0.97.",
     colorLabel: "Colour",
     /** Colour-dot names, keyed by subject colour value (labels are presentation). */
     color: {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  encoderQuality,
   IMAGE_QUALITY_MAX,
   needsReencode,
   outputMime,
@@ -110,5 +111,13 @@ describe("needsReencode", () => {
 
   it("ignores the quality for PNG, where there is no quality to choose", () => {
     expect(needsReencode({ ...NOTHING, quality: 30 }, { width: 10, height: 10 }, "png")).toBe(false);
+  });
+});
+
+describe("encoderQuality", () => {
+  it("maps the plan's 1..100 onto the encoder's 0..1, with 100 as 1", () => {
+    expect(encoderQuality(IMAGE_QUALITY_MAX)).toBe(1);
+    expect(encoderQuality(80)).toBe(0.8);
+    expect(encoderQuality(1)).toBe(0.01);
   });
 });

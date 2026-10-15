@@ -35,8 +35,8 @@ import {
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);
 
 describe("the migration list", () => {
-  it("is at version 93 (whether a tool call did the thing), ascending and gap-free from 1", () => {
-    expect(LATEST_VERSION).toBe(93);
+  it("is at version 94 (per-subject and per-deck retention), ascending and gap-free from 1", () => {
+    expect(LATEST_VERSION).toBe(94);
     expect(MIGRATIONS.map((migration) => migration.version)).toEqual(
       Array.from({ length: LATEST_VERSION }, (_, index) => index + 1),
     );
@@ -3694,6 +3694,60 @@ describe("migration 034 — study settings", () => {
     expect(
       (db.raw.prepare("SELECT count(*) AS n FROM study_settings").get() as { n: number }).n,
     ).toBe(0);
+    db.close();
+  });
+});
+
+describe("migration 094 — per-subject and per-deck target retention (STUDY-007)", () => {
+  const now = () => new Date().toISOString();
+
+  const insertSubject = (db: NexusDatabase, id: string, retention: number | null) =>
+    db.raw
+      .prepare(
+        `INSERT INTO subjects (id, profile_id, name, color, target_retention, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, "p1", "x", "jade", retention, now(), now());
+
+  const insertDeck = (db: NexusDatabase, id: string, retention: number | null) =>
+    db.raw
+      .prepare(
+        `INSERT INTO decks (id, profile_id, subject_id, name, target_retention, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, "p1", "s1", "x", retention, now(), now());
+
+  it("leaves both columns NULL when omitted, which is the inherit state", () => {
+    const db = openDatabase({ path: join(dir, "defaults-094.db") });
+    insertProfile(db, "p1");
+    insertSubject(db, "s1", null);
+    db.raw
+      .prepare(
+        `INSERT INTO decks (id, profile_id, subject_id, name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run("d1", "p1", "s1", "x", now(), now());
+    const subject = db.raw
+      .prepare("SELECT target_retention FROM subjects WHERE id = ?")
+      .get("s1") as { target_retention: number | null };
+    const deck = db.raw
+      .prepare("SELECT target_retention FROM decks WHERE id = ?")
+      .get("d1") as { target_retention: number | null };
+    expect(subject.target_retention).toBeNull();
+    expect(deck.target_retention).toBeNull();
+    db.close();
+  });
+
+  it("rejects a retention outside 0.70..0.97 on subjects and decks alike, and accepts the bounds", () => {
+    const db = openDatabase({ path: join(dir, "check-094.db") });
+    insertProfile(db, "p1");
+    expect(() => insertSubject(db, "s1", 0.69)).toThrow();
+    expect(() => insertSubject(db, "s1", 0.98)).toThrow();
+    insertSubject(db, "s1", 0.7);
+    expect(() => insertDeck(db, "d1", 0.69)).toThrow();
+    expect(() => insertDeck(db, "d1", 0.98)).toThrow();
+    insertDeck(db, "d1", 0.97);
+    insertDeck(db, "d2", null);
     db.close();
   });
 });

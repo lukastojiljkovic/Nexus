@@ -414,11 +414,12 @@ export class CardStore {
   private readonly settings: StudySettingsStore;
 
   /**
-   * The scheduler built for the retention currently stored, kept until that
-   * number changes. One slot, not a map: a store is scoped to one profile, and
-   * one profile has one retention — so this is a memo of the ts-fsrs parameter
-   * generation, not a cache with an invalidation problem. A settings write is
-   * picked up on the very next call, because the KEY is the value itself.
+   * The scheduler built for the retention a deck is currently scheduled at, kept
+   * until that number changes. One slot, not a map: it is a memo of the ts-fsrs
+   * parameter generation, not a cache with an invalidation problem. A write to
+   * any retention is picked up on the very next call, because the KEY is the
+   * value itself; a review that moves between decks with different retentions
+   * only costs one regeneration per switch.
    */
   private schedulerFor: { retention: number; instance: Scheduler } | null = null;
 
@@ -1118,22 +1119,23 @@ export class CardStore {
   }
 
   /**
-   * The scheduler this profile's CURRENT target retention describes (STUDY-007).
+   * The scheduler the card's deck's CURRENT target retention describes (STUDY-007,
+   * resolved deck → subject → profile by `StudySettingsStore.retentionFor`).
    *
    * The pinned semantics, and the whole reason this is a read-through rather
    * than something computed once: **grading and preview use the retention
    * stored at that moment, and existing cards are never retro-rescheduled.** A
-   * change to the setting therefore shows up on the next review of each card,
-   * as its own next interval — never as a silent, profile-wide rewrite of every
-   * `due` the user has already seen. (ts-fsrs offers `reschedule` for that; it
-   * is deliberately not called anywhere.)
+   * change to a setting therefore shows up on the next review of each card,
+   * as its own next interval — never as a silent rewrite of every `due` the user
+   * has already seen. (ts-fsrs offers `reschedule` for that; it is deliberately
+   * not called anywhere.)
    */
-  private scheduler(): Scheduler {
-    const { targetRetention } = this.settings.get();
-    if (this.schedulerFor === null || this.schedulerFor.retention !== targetRetention) {
+  private scheduler(deckId: string): Scheduler {
+    const retention = this.settings.retentionFor(deckId);
+    if (this.schedulerFor === null || this.schedulerFor.retention !== retention) {
       this.schedulerFor = {
-        retention: targetRetention,
-        instance: fsrs({ request_retention: targetRetention }),
+        retention,
+        instance: fsrs({ request_retention: retention }),
       };
     }
     return this.schedulerFor.instance;
@@ -1148,7 +1150,7 @@ export class CardStore {
     const validRating = validateRating(rating);
     const validNow = validateNow(now);
     const current = this.requireActive(id);
-    const scheduler = this.scheduler();
+    const scheduler = this.scheduler(current.deckId);
 
     return this.db.transaction((): Card => {
       const { card: nextCard, log } = scheduler.next(toCardInput(current), validNow, validRating);
@@ -1205,7 +1207,7 @@ export class CardStore {
     if (!logRow) {
       throw new CardValidationError(`No review to undo for card "${id}" in this profile.`);
     }
-    const scheduler = this.scheduler();
+    const scheduler = this.scheduler(current.deckId);
 
     return this.db.transaction((): Card => {
       const prevCard = scheduler.rollback(toCardInput(current), toReviewLogInput(logRow));
@@ -1237,7 +1239,7 @@ export class CardStore {
   previewIntervals(id: string, now: string): PreviewIntervals {
     const validNow = validateNow(now);
     const current = this.requireActive(id);
-    const preview = this.scheduler().repeat(toCardInput(current), validNow);
+    const preview = this.scheduler(current.deckId).repeat(toCardInput(current), validNow);
 
     return {
       again: preview[Rating.Again].card.due.toISOString(),

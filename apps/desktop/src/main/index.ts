@@ -3386,6 +3386,13 @@ function asNullableBoundedInteger(
   return value === null ? null : asBoundedInteger(value, field, min, max);
 }
 
+/** A deck's or subject's own target retention: `null` is "inherit", anything else sits in the profile setting's window (STUDY-007). */
+function asRetentionOverride(value: unknown, field: string): number | null {
+  return value === null
+    ? null
+    : asBoundedNumber(value, field, MIN_TARGET_RETENTION, MAX_TARGET_RETENTION);
+}
+
 // A person's date is (month, day) rather than a date string, so each half is
 // bounded on its own here. These are the PER-COLUMN bounds only — that the pair
 // names a real calendar day (never 30 February) and that a year falls inside
@@ -3503,6 +3510,9 @@ function asNewSubjectInput(value: unknown): CreateSubjectInput {
   if (subject.semester !== undefined) {
     input.semester = asNullableString(subject.semester, "subject.semester");
   }
+  if (subject.targetRetention !== undefined) {
+    input.targetRetention = asRetentionOverride(subject.targetRetention, "subject.targetRetention");
+  }
   return input;
 }
 
@@ -3516,6 +3526,9 @@ function asSubjectFieldChanges(value: unknown): UpdateSubjectFields {
     patch.semester = asNullableString(changes.semester, "changes.semester");
   }
   if (changes.archived !== undefined) patch.archived = asBoolean(changes.archived, "changes.archived");
+  if (changes.targetRetention !== undefined) {
+    patch.targetRetention = asRetentionOverride(changes.targetRetention, "changes.targetRetention");
+  }
   return patch;
 }
 
@@ -3662,10 +3675,14 @@ function asExamFieldChanges(value: unknown): UpdateExamFields {
  */
 function asNewDeckInput(value: unknown): CreateDeckInput {
   const deck = asRecord(value);
-  return {
+  const input: CreateDeckInput = {
     subjectId: asId(deck.subjectId, "deck.subjectId"),
     name: asNonEmptyString(deck.name, "deck.name"),
   };
+  if (deck.targetRetention !== undefined) {
+    input.targetRetention = asRetentionOverride(deck.targetRetention, "deck.targetRetention");
+  }
+  return input;
 }
 
 /** Validates a `DeckFieldChanges` payload into a store patch; an omitted key stays omitted. */
@@ -3676,6 +3693,9 @@ function asDeckFieldChanges(value: unknown): UpdateDeckFields {
     patch.subjectId = asId(changes.subjectId, "changes.subjectId");
   }
   if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.targetRetention !== undefined) {
+    patch.targetRetention = asRetentionOverride(changes.targetRetention, "changes.targetRetention");
+  }
   return patch;
 }
 

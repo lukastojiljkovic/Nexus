@@ -48,6 +48,10 @@ from SRCH command mode ("uuid", "base64 …", "45 usd u rsd").
 ### Converters (files)
 - **UTIL-005 (M)** Image converter: PNG/JPEG/WebP/AVIF + resize/quality;
   batch; all local, sandboxed (SEC-FILE-01/04 caps).
+  **Built 2026-10-15** in the Workshop's image tool
+  (`apps/desktop/src/modules/workshop/renderer/images/`): PNG, JPEG and WebP
+  output, resize by percentage or box, a quality setting for JPEG and WebP,
+  batch, all local. AVIF is neither an output nor an input.
 - **UTIL-006 (S)** Audio converter: common formats via bundled encoder
   where licensing is clean (architecture ADR: codec licensing — MP3 now
   patent-free, AAC caution); batch.
