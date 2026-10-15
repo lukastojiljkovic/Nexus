@@ -6,7 +6,7 @@ export interface LoadingStateProps {
    * three for a card, six or eight for a list. A skeleton that is much shorter
    * than its page reads as a page that finished loading almost empty.
    */
-  rows?: number;
+  rows?: number | undefined;
   className?: string;
 }
 
