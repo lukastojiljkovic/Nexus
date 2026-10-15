@@ -1054,7 +1054,9 @@ export function App() {
       // `intentForPage` below is what decides that — including for a page that
       // mounts after this moment. A request naming neither queues nothing and
       // leaves every other module's queue alone.
-      if (hasModulePage(moduleId)) {
+      // The Settings page is compiled in, but it takes a queued action too: the
+      // assistant's `set-preference` is applied by the page that owns the setter.
+      if (hasModulePage(moduleId) || moduleId === "settings") {
         setItemIntents((current) =>
           enqueueIntent(current, moduleId, { item: detail?.item, action: detail?.action }),
         );
@@ -1065,6 +1067,16 @@ export function App() {
       const settings = detail?.settings;
       if (typeof settings === "string" && moduleSettingsCardIds(registry).has(settings)) {
         setSettingsTarget(settings);
+      }
+      // The assistant's `settings.module` writes the device's arrangement in
+      // main and then opens the Modules card, so the rail re-reads it here.
+      if (moduleId === "settings" && settings === "modules") {
+        void window.nexus
+          .getModuleVisibility()
+          .then(setVisibility)
+          .catch((error: unknown) => {
+            console.error("Nexus: failed to reload the module arrangement:", error);
+          });
       }
     };
     window.addEventListener("nexus:open-location", handler);
@@ -2323,6 +2335,8 @@ export function App() {
                   onTargetHandled={clearSettingsTarget}
                   moduleVisibility={visibility}
                   onModuleVisibilityChanged={setVisibility}
+                  intent={intentForPage(itemIntents, "settings")}
+                  onIntentHandled={handleIntentHandled}
                 />
               ) : activeProfile !== undefined && hasModulePage(shownId) ? (
                 // The kit's ONE generic path (ADR-090): the shown id is a

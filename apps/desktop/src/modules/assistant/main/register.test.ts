@@ -23,6 +23,7 @@ import { TurnBusyError } from "./turns.js";
 import { register } from "./register.js";
 import { assistantMicArmedAt } from "./micAccess.js";
 import { setAssistantServicesForTest, type AssistantServices } from "./services.js";
+import { createModuleRegistry } from "../../../shared/modules.js";
 
 /**
  * THE ASSISTANT THROUGH THE KIT (ADR-106): its ops, one real turn end to end
@@ -239,7 +240,7 @@ function services(): AssistantServices {
     // No ZIM service in this harness: the wiki kind answers nothing, which is
     // the state `knowledge/index.ts` describes for a build without one.
     zimWiki: () => null,
-    modules: { all: () => [], get: () => undefined },
+    modules: createModuleRegistry(),
   };
 }
 

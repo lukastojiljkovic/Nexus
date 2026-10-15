@@ -10,6 +10,7 @@ import {
   tempDatabase,
 } from "../../../main/assistant/knowledge/testFixtures.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
+import { createModuleRegistry } from "../../../shared/modules.js";
 import type { TimerHost } from "../../../main/assistant/tools/timers.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import { AssistantProfile } from "./profile.js";
@@ -93,7 +94,7 @@ function services(wiki: WikiSource | null): AssistantServices {
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [] },
     zimWiki: () => wiki,
-    modules: { all: () => [], get: () => undefined },
+    modules: createModuleRegistry(),
   };
 }
 

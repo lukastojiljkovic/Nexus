@@ -1,7 +1,6 @@
-import type { ModelHost } from "@nexus/core";
+import type { ModelHost, ModuleRegistry } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
-import type { ModuleLookup } from "../../../main/assistant/tools/app.js";
 import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
 import type { SecretCipher } from "../../../main/assistant/web/secrets.js";
@@ -89,8 +88,8 @@ export interface AssistantServices {
   // against is assembled by THIS module (`main/timers.ts`), because it needs the
   // kit's own `armUntil`/`notify` - capabilities index.ts does not hold and would
   // have had to re-implement. See that file's header.
-  /** The app's module registry (`createModuleRegistry`), for navigation. */
-  readonly modules: ModuleLookup;
+  /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
+  readonly modules: ModuleRegistry;
 }
 
 let configured: AssistantServices | null = null;

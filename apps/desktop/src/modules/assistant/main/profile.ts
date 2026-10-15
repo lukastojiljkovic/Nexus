@@ -162,6 +162,8 @@ export class AssistantProfile {
       packs: this.services.packs,
       timers: this.timers,
       modules: this.services.modules,
+      userData: () => this.services.userData(),
+      appVersion: () => this.services.appVersion(),
       web: this.webService(),
     });
     return this.toolRegistry.tools({ web });

@@ -66,6 +66,8 @@ function appTools(): readonly Tool[] {
     packs: { list: () => Promise.resolve([]) },
     timers: { startCountdown: refuse, listCountdowns: () => [] },
     modules: createModuleRegistry(),
+    userData: refuse,
+    appVersion: refuse,
     web: { tools: () => WEB_TOOLS },
   };
   return createToolRegistry(deps).tools({ web: true });

@@ -86,6 +86,8 @@ function registryWith(web: WebService | null = null): ToolRegistry {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    userData: () => tmpdir(),
+    appVersion: () => "0.0.0-test",
     web,
   };
   return createToolRegistry(deps);
@@ -130,6 +132,7 @@ describe("createToolRegistry", () => {
       pantry: 2,
       reader: 1,
       recorder: 1,
+      settings: 6,
       tasks: 4,
       timers: 2,
       wiki: 1,

@@ -51,6 +51,8 @@ function toolNames(): readonly string[] {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    userData: () => "",
+    appVersion: () => "",
     web: webService(),
   };
   return createToolRegistry(deps)

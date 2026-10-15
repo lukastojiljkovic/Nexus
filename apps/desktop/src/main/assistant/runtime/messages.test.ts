@@ -308,6 +308,8 @@ function realTools(): readonly ToolSpec[] {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    userData: () => "",
+    appVersion: () => "",
     web: null,
   }).tools({ web: false });
 }
