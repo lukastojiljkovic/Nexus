@@ -62,6 +62,7 @@
 import type { ModuleRegistry, Tool, ToolRegistry, WebService } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
+import type { DictionaryReader } from "../../../modules/translator/main/dictionary.js";
 import { appTools } from "./app.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
@@ -91,6 +92,7 @@ import { settingsTools } from "./settings.js";
 import { studyTools } from "./study.js";
 import { taskTools } from "./tasks.js";
 import { timerTools, type TimerHost } from "./timers.js";
+import { translatorTools } from "./translator.js";
 import { wikiTools } from "./wiki.js";
 import type { ProfileDb } from "./support.js";
 
@@ -119,6 +121,8 @@ export interface ToolDeps {
   readonly packs: PackManager;
   /** The TIMERS module's start/list, which also arms main's clock. */
   readonly timers: TimerHost;
+  /** The dictionary pack's reader, the same one the TRANSLATOR page's channels answer through. */
+  readonly dictionary: DictionaryReader;
   /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
   readonly modules: ModuleRegistry;
   /** The device's module visibility (ADR-101), for the hidden tag `app.modules` prints. */
@@ -158,6 +162,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),
     ...habitTools({ profileDb: deps.profileDb, now: deps.now }),
     ...timerTools({ timers: deps.timers, profileDb: deps.profileDb, now: deps.now }),
+    ...translatorTools({ dictionary: deps.dictionary, packs: deps.packs }),
     ...packTools({ packs: deps.packs }),
     ...emergencyTools({ profileDb: deps.profileDb }),
     ...fileTools({ profileDb: deps.profileDb }),

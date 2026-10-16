@@ -30,6 +30,7 @@ import {
 import { copy } from "./copy.js";
 import { entryText, sourceLine } from "./format.js";
 import { SentenceTranslator } from "./sentences/SentenceTranslator.js";
+import { sentenceRequestOf, type SentenceRequest } from "./sentences/request.js";
 import {
   clearRecent,
   persistRecent,
@@ -72,10 +73,13 @@ const DEBOUNCE_MS = 150;
 /** The page's two tabs: this module's word search, and the sentence translator's surface. */
 type TranslatorTab = "words" | "sentences";
 
-export default function TranslatorPage({ profileId }: ModulePageProps) {
+export default function TranslatorPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [status, setStatus] = useState<TranslatorStatusView | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [tab, setTab] = useState<TranslatorTab>("words");
+  // The assistant's sentence request, held until the sentence surface has applied it.
+  const [sentenceRequest, setSentenceRequest] = useState<SentenceRequest | null>(null);
+  const requestApplied = useCallback(() => setSentenceRequest(null), []);
 
   const [query, setQuery] = useState("");
   const [choice, setChoice] = useState<TranslatorDirectionChoice>(() => readStoredDirection());
@@ -102,6 +106,19 @@ export default function TranslatorPage({ profileId }: ModulePageProps) {
       active = false;
     };
   }, []);
+
+  // The assistant's translate action opens the sentence tab with its text. Every
+  // intent is reported handled, the kinds this page does not use included, so the
+  // shell's queue moves on rather than parking the page.
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    const request = sentenceRequestOf(intent);
+    if (request !== null) {
+      setTab("sentences");
+      setSentenceRequest(request);
+    }
+    onIntentHandled?.();
+  }, [intent, onIntentHandled]);
 
   /**
    * One search, with the answer adopted only when it is still the answer to what
@@ -236,6 +253,8 @@ export default function TranslatorPage({ profileId }: ModulePageProps) {
             loadPacks={() =>
               window.nexus.modules.translator.packs({}).then((view) => view.packs)
             }
+            request={sentenceRequest}
+            onRequestApplied={requestApplied}
           />
         </div>
       )}

@@ -164,6 +164,7 @@ export class AssistantProfile {
       timers: this.timers,
       focus: this.services.focus,
       notifications: this.services.notifications,
+      dictionary: this.services.dictionary,
       modules: this.services.modules,
       visibility: () => resolveShellVisibility(this.services.userData()),
       userData: () => this.services.userData(),

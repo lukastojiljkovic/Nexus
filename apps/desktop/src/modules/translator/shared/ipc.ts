@@ -26,6 +26,14 @@ export type TranslatorDirection = (typeof TRANSLATOR_DIRECTIONS)[number];
 
 /** What the switch can be set to: one of the two directions, or let the dictionary decide. */
 export const TRANSLATOR_DIRECTION_CHOICES = ["auto", "en-sr", "sr-en"] as const;
+
+/**
+ * The longest text the assistant may hand the sentence translator, in characters.
+ * A policy choice, not a measurement: the page translates as you type, and a
+ * paragraph is what it is for. The assistant's tool refuses more, and the page
+ * refuses it again because the request travelled through a window event.
+ */
+export const TRANSLATOR_TEXT_MAX_CHARS = 4000;
 export type TranslatorDirectionChoice = (typeof TRANSLATOR_DIRECTION_CHOICES)[number];
 
 /** One dictionary entry as it crosses the wire. */

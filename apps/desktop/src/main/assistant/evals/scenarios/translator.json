@@ -1,0 +1,164 @@
+{
+  "scenarios": [
+    {
+      "id": "translator-lookup-sr",
+      "title": "Kako se na engleskom kaže zdravo",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Kako se na engleskom kaže „zdravo“?" }
+      ],
+      "tools": [
+        {
+          "name": "translator.lookup",
+          "effect": "read",
+          "content": "Rečnik sr-en (1):\n- zdravo [interjection]: hello, hi (https://en.wiktionary.org/wiki/zdravo)"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "translator.lookup", "args": { "word": { "eq": "zdravo" } } }
+        ],
+        "answerContains": ["hello"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "translator.lookup", "arguments": { "word": "zdravo" } }
+          ]
+        },
+        {
+          "text": "Na engleskom se „zdravo“ kaže „hello“ ili „hi“."
+        }
+      ]
+    },
+    {
+      "id": "translator-phrases-en",
+      "title": "A ready phrase for paying at a restaurant",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What is a polite way to ask for the bill in English?" }
+      ],
+      "tools": [
+        {
+          "name": "translator.phrases",
+          "effect": "read",
+          "content": "Phrases (1):\n- Restaurant: Can I have the bill, please? — Mogu li račun, molim?"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "translator.phrases", "args": { "query": { "eq": "bill" } } }
+        ],
+        "answerContains": ["Can I have the bill"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "translator.phrases", "arguments": { "query": "bill" } }
+          ]
+        },
+        {
+          "text": "You can say “Can I have the bill, please?”. In Serbian that is „Mogu li račun, molim?“."
+        }
+      ]
+    },
+    {
+      "id": "translator-translate-sr",
+      "title": "Prevod pasusa na engleski",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Prevedi ovaj tekst na engleski: Dobar dan, gde je stanica?" }
+      ],
+      "tools": [
+        {
+          "name": "translator.translate",
+          "effect": "read",
+          "content": "Otvoren je Prevodilac sa tim tekstom. Prevod se prikazuje na toj stranici i ne mogu da ga pročitam, pa ga ne prevodi sam."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "translator.translate",
+            "args": { "text": { "contains": "gde je stanica" }, "from": { "eq": "sr" }, "to": { "eq": "en" } }
+          }
+        ],
+        "answerContains": ["Prevodilac"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "translator.translate",
+              "arguments": { "text": "Dobar dan, gde je stanica?", "from": "sr", "to": "en" }
+            }
+          ]
+        },
+        {
+          "text": "Otvorio sam Prevodilac sa tim tekstom. Prevod se pojavljuje na toj stranici, a ja ga ne vidim, pa ga ne prevodim sam."
+        }
+      ]
+    },
+    {
+      "id": "translator-translate-en",
+      "title": "A paragraph into Serbian",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Translate this paragraph into Serbian: The train leaves at nine, so we should be at the station early." }
+      ],
+      "tools": [
+        {
+          "name": "translator.translate",
+          "effect": "read",
+          "content": "Opened the Translator page with that text. The translation appears on that page and I cannot read it, so do not translate the text yourself."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "translator.translate",
+            "args": { "from": { "eq": "en" }, "to": { "eq": "sr" } }
+          }
+        ],
+        "answerContains": ["Translator page"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "translator.translate",
+              "arguments": {
+                "text": "The train leaves at nine, so we should be at the station early.",
+                "from": "en",
+                "to": "sr"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I opened the Translator page with that paragraph. The Serbian translation appears there, so I have not translated it myself."
+        }
+      ]
+    }
+  ]
+}

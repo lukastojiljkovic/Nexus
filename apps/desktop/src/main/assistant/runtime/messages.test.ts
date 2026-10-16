@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { createModuleRegistry } from "../../../shared/modules.js";
 import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
+import { tmpdir } from "node:os";
+import { createDictionaryReader } from "../../../modules/translator/main/dictionary.js";
 import { createToolRegistry } from "../tools/index.js";
 import {
   TOOL_CALL_FENCE,
@@ -302,6 +304,7 @@ function realTools(): readonly ToolSpec[] {
     now: () => 0,
     search: () => Promise.resolve([]),
     packs: { list: () => Promise.resolve([]), catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
+    dictionary: createDictionaryReader(() => tmpdir()),
     timers: {
       startCountdown: () => {
         throw new Error("The grammar test never starts a countdown.");

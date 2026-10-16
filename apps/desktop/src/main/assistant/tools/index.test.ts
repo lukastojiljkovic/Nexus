@@ -18,6 +18,7 @@ import type { Tool, ToolEffect, ToolRegistry, WebService } from "@nexus/core";
 import { createModuleRegistry } from "../../../shared/modules.js";
 import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { createToolRegistry, type ToolDeps } from "./index.js";
+import { createDictionaryReader } from "../../../modules/translator/main/dictionary.js";
 
 /**
  * The registry itself: the properties that are about the SET of tools rather
@@ -86,6 +87,8 @@ function registryWith(web: WebService | null = null): ToolRegistry {
       remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }),
       downloadsAllowed: () => false,
     },
+    // No pack folder under the temp directory, so the reader answers "not installed".
+    dictionary: createDictionaryReader(() => tmpdir()),
     timers: {
       startCountdown: () => {
         throw new Error("Test setup: timers.start was not expected here.");
@@ -187,6 +190,7 @@ describe("createToolRegistry", () => {
       study: 14,
       tasks: 17,
       timers: 9,
+      translator: 3,
       wiki: 1,
     });
     for (const tool of tools) {

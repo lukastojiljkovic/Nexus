@@ -4,6 +4,8 @@ import type { Tool } from "@nexus/core";
 
 import { createModuleRegistry } from "../../../shared/modules.js";
 import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
+import { tmpdir } from "node:os";
+import { createDictionaryReader } from "../../../modules/translator/main/dictionary.js";
 import { createToolRegistry, type ToolDeps } from "../tools/index.js";
 import { loadScenarios } from "./harness.js";
 
@@ -95,6 +97,7 @@ function appTools(): readonly Tool[] {
       setSourceEnabled: refuse,
       upcoming: () => [],
     },
+    dictionary: createDictionaryReader(() => tmpdir()),
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
     userData: refuse,

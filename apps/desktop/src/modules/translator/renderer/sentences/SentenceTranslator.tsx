@@ -11,6 +11,7 @@ import {
   type Direction,
   type PackRef,
 } from "./models.js";
+import type { SentenceRequest } from "./request.js";
 import { splitParagraphs } from "./split.js";
 import "./sentences.css";
 
@@ -57,6 +58,9 @@ export interface SentenceTranslatorProps {
    * only when it already holds it (`window.nexus.packsList` is the same read).
    */
   readonly loadPacks?: () => Promise<readonly PackRef[]>;
+  /** A translation another surface asked for (the assistant's): its text and direction are applied once, then `onRequestApplied` is called. */
+  readonly request?: SentenceRequest | null;
+  readonly onRequestApplied?: () => void;
 }
 
 /** `{name}` placeholders in a copy sentence, filled by the component. */
@@ -66,7 +70,7 @@ function fill(template: string, values: Readonly<Record<string, string>>): strin
 
 type Phase = "idle" | "translating" | "failed";
 
-export function SentenceTranslator({ loadPacks }: SentenceTranslatorProps = {}) {
+export function SentenceTranslator({ loadPacks, request, onRequestApplied }: SentenceTranslatorProps = {}) {
   const [packs, setPacks] = useState<readonly PackRef[] | null>(null);
   const [direction, setDirection] = useState<Direction | null>(null);
   const [source, setSource] = useState("");
@@ -110,6 +114,16 @@ export function SentenceTranslator({ loadPacks }: SentenceTranslatorProps = {}) 
       off();
     };
   }, [readPacks]);
+
+  // The assistant's request replaces the text and the direction, and the debounce
+  // below translates it as it would any typing. The page then forgets the request,
+  // so coming back to this tab does not apply it a second time.
+  useEffect(() => {
+    if (request === null || request === undefined) return;
+    setDirection(request.direction);
+    setSource(request.text);
+    onRequestApplied?.();
+  }, [request, onRequestApplied]);
 
   // A direction is offered when its pack is installed, and the selection follows
   // the packs: uninstalling the current one moves the switch rather than leaving

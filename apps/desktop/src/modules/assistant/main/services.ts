@@ -5,6 +5,7 @@ import type { FocusHost } from "../../../main/assistant/tools/focus.js";
 import type { NotificationsHost } from "../../../main/assistant/tools/notifications.js";
 import type { PackManager } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
+import type { DictionaryReader } from "../../translator/main/dictionary.js";
 import type { SecretCipher } from "../../../main/assistant/web/secrets.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import type { AssistantNetworkMode } from "../shared/ipc.js";
@@ -72,6 +73,8 @@ export interface AssistantServices {
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service, for the installed list. */
   readonly packs: PackManager;
+  /** The dictionary pack's reader (`modules/translator/main/dictionary.ts`), for the translator's word and phrase tools. */
+  readonly dictionary: DictionaryReader;
   /**
    * The offline wiki, in the shape the knowledge base reads it
    * (`main/assistant/knowledge/zimWiki.ts`), or `null` in a build with no ZIM
