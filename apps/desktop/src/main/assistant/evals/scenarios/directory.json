@@ -1,0 +1,306 @@
+{
+  "scenarios": [
+    {
+      "id": "directory-people-list-sr",
+      "title": "Kad je rođendan Ane",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Kad je rođendan Ane?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "people.list",
+          "effect": "read",
+          "content": "- 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a31 Ana: rođendan, 12. maj 1990"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "people.list"
+          }
+        ],
+        "answerContains": [
+          "12. maj"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "people.list",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "Anin rođendan je 12. maj 1990."
+        }
+      ]
+    },
+    {
+      "id": "directory-people-create-sr",
+      "title": "Zapamti rođendan",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Zapamti da Ana slavi rođendan 12. maja."
+        }
+      ],
+      "tools": [
+        {
+          "name": "people.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodati osobu „Ana“: rođendan, 12. maj.",
+            "en": "Add “Ana”: birthday, 12 May."
+          },
+          "content": "Sačuvana je osoba „Ana“ (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a31).",
+          "navigateTo": { "module": "calendar" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "people.create",
+            "args": {
+              "name": {
+                "contains": "Ana"
+              },
+              "kind": {
+                "eq": "birthday"
+              },
+              "month": {
+                "eq": 5
+              },
+              "day": {
+                "eq": 12
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "calendar"
+          }
+        ],
+        "answerContains": [
+          "Ana"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "people.create",
+              "arguments": {
+                "name": "Ana",
+                "kind": "birthday",
+                "month": 5,
+                "day": 12
+              }
+            }
+          ]
+        },
+        {
+          "text": "Zapamtio sam da Ana slavi rođendan 12. maja."
+        }
+      ]
+    },
+    {
+      "id": "directory-documents-list-en",
+      "title": "When the passport expires",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "When does my passport expire?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "documents.list",
+          "effect": "read",
+          "content": "- 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a41 Ana (passport): 12 May 2030, expires in 1300 days"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "documents.list"
+          }
+        ],
+        "answerContains": [
+          "12 May 2030"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "documents.list",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "Your passport expires on 12 May 2030."
+        }
+      ]
+    },
+    {
+      "id": "directory-documents-renew-sr",
+      "title": "Obnovljen pasoš",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Obnovio sam pasoš, novi rok je 12. maj 2036."
+        }
+      ],
+      "tools": [
+        {
+          "name": "documents.renew",
+          "effect": "write",
+          "summary": {
+            "sr": "Obnoviti dokument „Pasoš“: novi rok 12. maj 2036.",
+            "en": "Renew “Pasoš”: new expiry 12 May 2036."
+          },
+          "content": "Dokument „Pasoš“ je obnovljen (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a41); rok ističe za 3500 dana."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "documents.renew",
+            "args": {
+              "document": {
+                "contains": "Pasoš"
+              },
+              "newExpiryDate": {
+                "eq": "2036-05-12"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "2036"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "documents.renew",
+              "arguments": {
+                "document": "Pasoš",
+                "newExpiryDate": "2036-05-12"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Zabeležio sam obnavljanje pasoša: novi rok je 12. maj 2036."
+        }
+      ]
+    },
+    {
+      "id": "directory-documents-create-en",
+      "title": "Track a driving licence",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Keep track of my driving licence, it expires on 3 March 2031."
+        }
+      ],
+      "tools": [
+        {
+          "name": "documents.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodati dokument „Vozačka“ (vozačka dozvola), rok 3. mart 2031.",
+            "en": "Add “Vozačka” (driving licence), expiring 3 March 2031."
+          },
+          "content": "Dokument „Vozačka“ je sačuvan (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a51); rok ističe za 1600 dana.",
+          "navigateTo": { "module": "calendar" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "documents.create",
+            "args": {
+              "docType": {
+                "eq": "vozacka"
+              },
+              "expiryDate": {
+                "eq": "2031-03-03"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "calendar"
+          }
+        ],
+        "answerContains": [
+          "2031"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "documents.create",
+              "arguments": {
+                "docType": "vozacka",
+                "label": "Driving licence",
+                "expiryDate": "2031-03-03"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I am tracking your driving licence, which expires on 3 March 2031."
+        }
+      ]
+    }
+  ]
+}
