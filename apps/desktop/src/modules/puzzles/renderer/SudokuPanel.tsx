@@ -18,9 +18,11 @@ import {
 } from "./history.js";
 import {
   ActionRow,
+  NewGameButton,
   Readout,
   VariantChips,
   initialGame,
+  savedFor,
   variantLabel,
   useElapsedClock,
   type PanelProps,
@@ -393,9 +395,7 @@ export function SudokuPanel({
         <Button size="sm" onClick={askHint}>
           {copy.common.hint}
         </Button>
-        <Button size="sm" variant="primary" onClick={newGame}>
-          {copy.common.newGame}
-        </Button>
+        <NewGameButton saved={savedFor(saves, "sudoku", variant) !== null} primary onNew={newGame} />
       </ActionRow>
 
       {hint !== null && (

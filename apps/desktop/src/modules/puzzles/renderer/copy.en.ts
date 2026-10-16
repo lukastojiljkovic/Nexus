@@ -51,6 +51,9 @@ export const en: typeof sr = {
   },
   common: {
     newGame: "New game",
+    cancel: "Cancel",
+    discardTitle: "Start a new game?",
+    discardQuestion: "The game in progress is discarded: its moves and its clock are not kept.",
     undo: "Undo",
     redo: "Redo",
     hint: "Hint",

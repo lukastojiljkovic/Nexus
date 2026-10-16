@@ -26,8 +26,10 @@ import {
 } from "./mahjong.js";
 import {
   ActionRow,
+  NewGameButton,
   Readout,
   initialGame,
+  savedFor,
   useElapsedClock,
   variantLabel,
   type PanelProps,
@@ -329,9 +331,7 @@ export function MahjongPanel({
         <Button size="sm" onClick={stepForward} disabled={redoStack.length === 0}>
           {copy.common.redo}
         </Button>
-        <Button size="sm" variant="primary" onClick={newGame}>
-          {copy.common.newGame}
-        </Button>
+        <NewGameButton saved={savedFor(saves, PUZZLE, "turtle") !== null} primary onNew={newGame} />
       </ActionRow>
 
       {hinting && <p className="pz__note">{copy.page.stages.search}</p>}

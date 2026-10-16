@@ -276,10 +276,27 @@ export default function CardsPage({ profileId, intent, onIntentHandled }: Module
     onIntentHandled?.();
   }, [intent, deal, refresh, onIntentHandled]);
 
+  // One header for every state of the page: it is a sibling of the body, never a
+  // condition on it (docs/design/patterns.md, PageHeader).
+  const header = (
+    <PageHeader
+      title={declaredText(manifest.copy?.name)}
+      subtitle={copy.page.subtitle}
+      sigil="cards"
+      actions={
+        session === null ? undefined : (
+          <Button variant="quiet" onClick={() => void record(false)}>
+            {copy.play.giveUp}
+          </Button>
+        )
+      }
+    />
+  );
+
   if (view === null) {
     return (
       <div className="cards">
-        <PageHeader title={declaredText(manifest.copy?.name)} subtitle={copy.page.subtitle} sigil="cards" />
+        {header}
         {error !== null ? (
           <p className="cards__error" role="alert">
             {error}
@@ -298,18 +315,7 @@ export default function CardsPage({ profileId, intent, onIntentHandled }: Module
 
   return (
     <div className="cards">
-      <PageHeader
-        title={declaredText(manifest.copy?.name)}
-        subtitle={copy.page.subtitle}
-        sigil="cards"
-        actions={
-          session === null ? undefined : (
-            <Button variant="quiet" onClick={() => void record(false)}>
-              {copy.play.giveUp}
-            </Button>
-          )
-        }
-      />
+      {header}
       {error !== null && (
         <p className="cards__error" role="alert">
           {error}
