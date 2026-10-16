@@ -45,12 +45,14 @@ action stay where they are. 900px is the window minimum the desktop enforces, so
 this is the narrowest window that exists rather than a breakpoint nobody
 reaches.
 
+**Adopted by:** all 26 module pages, each rendering one `PageHeader`. The shell's
+Habits page holds its "new habit" primary here; with no habits yet, the page's
+empty state carries that one invitation instead, so there is never a second.
 The settings page's search box is the one control in `actions`, and that is
 deliberate: it is a jump-to that highlights the row it finds, not a filter over
 the page's content, so it does not belong in `filters`. It is 320px wide and
 the header keeps it on the title's line at the 900px minimum.
 
-**Adopted by:** all 26 module pages, each rendering one `PageHeader`.
 
 ## EmptyState
 

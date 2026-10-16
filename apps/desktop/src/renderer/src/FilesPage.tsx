@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MIME_FAMILIES, isInlineImageMime } from "@nexus/core";
-import { Button, EmptyState, LoadingState, PageHeader, StatBand, TextField } from "@nexus/ui";
+import { AsyncSurface, Button, EmptyState, PageHeader, StatBand, TextField, Toast } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
 import { DOC_ATTACHMENT_LIST_LIMIT } from "../../shared/ipc.js";
 import type {
@@ -558,23 +558,24 @@ export function FilesPage({ profileId, onOpenOwner }: FilesPageProps) {
       />
 
       {actionFailed && (
-        <p className="doc__action-error" role="status">
-          {s.actionError}
-        </p>
+        <Toast
+          kind="error"
+          message={s.actionError}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setActionFailed(false)}
+        />
       )}
 
-      {state.status === "loading" ? (
-        <LoadingState label={strings.app.loading} rows={6} />
-      ) : state.status === "failed" ? (
-        <div className="doc__failure" role="alert">
-          <p className="nx-hint">{s.error}</p>
-          <Button size="sm" onClick={() => setAttempt((value) => value + 1)}>
-            {s.retry}
-          </Button>
-        </div>
-      ) : (
-        renderBody(state.data)
-      )}
+      <AsyncSurface
+        state={state}
+        loadingLabel={strings.app.loading}
+        loadingRows={6}
+        failureTitle={s.failureTitle}
+        failureMessage={s.error}
+        retry={{ label: s.retry, onClick: () => setAttempt((value) => value + 1) }}
+      >
+        {(data) => renderBody(data)}
+      </AsyncSurface>
 
       {preview !== null && (
         <AttachmentPreviewDialog

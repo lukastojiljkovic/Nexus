@@ -2949,9 +2949,11 @@ export const en = {
     noMatchDescription: "Change the search or turn off a filter.",
     clearFilters: "Clear filters",
     /** The isolated failure of this one read, with the way to ask again — the dashboard widgets' recipe. */
+    failureTitle: "Files are not available",
     error: "Files cannot be loaded right now.",
     retry: "Try again",
     actionError: "The file action failed. Try again.",
+    dismiss: "Dismiss",
   },
 
   study: {
@@ -3666,7 +3668,8 @@ export const en = {
       emptyReason: "The line appears as soon as there is at least one item this month.",
     },
     loadErrorTitle: "Finance failed to load",
-    loadError: "Loading finance failed. Close and reopen the page.",
+    loadError: "Loading finance failed. Try again.",
+    retry: "Try again",
     /** The one line every failed write falls back to when `financeErrorMessage` recognizes nothing more specific. */
     actionError: "The action failed. Try again.",
     undo: "Undo",
@@ -4008,7 +4011,8 @@ export const en = {
    */
   habits: {
     loadErrorTitle: "Habits failed to load",
-    loadError: "Loading habits failed. Close and reopen the page.",
+    loadError: "Loading habits failed. Try again.",
+    retry: "Try again",
     /** The one line every failed write falls back to when `habitErrorMessage` recognizes nothing more specific. */
     actionError: "The action failed. Try again.",
     undo: "Undo",
@@ -4278,7 +4282,8 @@ export const en = {
       emptyReason: "The bars appear as soon as there is at least one finished phase today.",
     },
     loadErrorTitle: "Focus failed to load",
-    loadError: "Loading focus failed. Close and reopen the page.",
+    loadError: "Loading focus failed. Try again.",
+    retry: "Try again",
     actionError: "The action failed. Try again.",
     undo: "Undo",
     dismiss: "Dismiss",

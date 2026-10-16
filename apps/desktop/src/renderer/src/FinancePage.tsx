@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
+  AsyncSurface,
   Button,
   CardsView,
   Chip,
@@ -407,6 +408,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   const [subscriptions, setSubscriptions] = useState<FinRecurring[]>([]);
   const [renewals, setRenewals] = useState<FinUpcomingRenewal[]>([]);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
 
   // „Izveštaj": which half is on screen, which month it reads, and that month's
@@ -486,6 +488,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
   // actually have cost something.
   useEffect(() => {
     let active = true;
+    setFailed(false);
     void (async () => {
       try {
         const snapshot = await loadFinance(profileId);
@@ -506,7 +509,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, attempt]);
 
   // The month's own read, re-run whenever the chosen month changes. Read even
   // while „Knjiga" is on screen: both queries are indexed aggregates over the
@@ -1837,11 +1840,57 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
 
   // --- The screen -------------------------------------------------------------
 
-  if (failed) {
-    return <EmptyState sigil="finance" title={s.loadErrorTitle} description={s.loadError} />;
-  }
-  if (accounts === null || transactions === null) {
-    return <LoadingState label={strings.app.loading} rows={6} />;
+  // The header stands above the read's three states, so a page that is still
+  // loading or has failed keeps its name and its half-switcher on screen.
+  const header = (
+    // The page's three halves, in the header's own actions slot. They used to
+    // be the first of five stacked switcher rows above the data; a half is a
+    // property of the PAGE, so it belongs beside the page's name.
+    <PageHeader
+      title={moduleName("finance")}
+      sigil="finance"
+      actions={
+        <>
+          <div className="fin__segmented" role="group" aria-label={s.pages.label}>
+            {FIN_PAGES.map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                className="nx-segmented__option"
+                aria-pressed={page === option}
+                onClick={() => setPage(option)}
+              >
+                {option === "ledger"
+                  ? s.pages.ledger
+                  : option === "report"
+                    ? s.pages.report
+                    : s.pages.subscriptions}
+              </Button>
+            ))}
+          </div>
+          <ModuleSettingsGear moduleId="finance" />
+        </>
+      }
+    />
+  );
+
+  if (failed || accounts === null || transactions === null) {
+    // The ready arm is the page below, so this surface draws only its two others.
+    return (
+      <div className="fin">
+        {header}
+        <AsyncSurface
+          state={failed ? { status: "failed" } : { status: "loading" }}
+          loadingLabel={strings.app.loading}
+          loadingRows={6}
+          failureTitle={s.loadErrorTitle}
+          failureMessage={s.loadError}
+          retry={{ label: s.retry, onClick: () => setAttempt((value) => value + 1) }}
+        >
+          {() => null}
+        </AsyncSurface>
+      </div>
+    );
   }
 
   /** The picker offers exactly the kind this entry can carry; a transfer gets no picker at all. */
@@ -1888,35 +1937,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
 
   return (
     <div className="fin">
-      {/* The page's three halves, in the header's own actions slot. They used to
-          be the first of five stacked switcher rows above the data; a half is a
-          property of the PAGE, so it belongs beside the page's name. */}
-      <PageHeader
-        title={moduleName("finance")}
-        sigil="finance"
-        actions={
-          <>
-            <div className="fin__segmented" role="group" aria-label={s.pages.label}>
-              {FIN_PAGES.map((option) => (
-                <Button
-                  key={option}
-                  size="sm"
-                  className="nx-segmented__option"
-                  aria-pressed={page === option}
-                  onClick={() => setPage(option)}
-                >
-                  {option === "ledger"
-                    ? s.pages.ledger
-                    : option === "report"
-                      ? s.pages.report
-                      : s.pages.subscriptions}
-                </Button>
-              ))}
-            </div>
-            <ModuleSettingsGear moduleId="finance" />
-          </>
-        }
-      />
+      {header}
 
       <div className="fin__body">
         <aside className="fin__rail" aria-label={s.accounts.heading}>
@@ -2661,7 +2682,7 @@ export function FinancePage({ profileId, intent, onIntentHandled }: FinancePageP
                   description={s.ledger.emptyDescription}
                 />
               ) : view === "list" ? (
-                <div className={showMetaColumn ? "fin__ledger" : "fin__ledger fin__ledger--nometa"}>
+                <div className={showMetaColumn ? "fin__ledger nx-measure" : "fin__ledger fin__ledger--nometa nx-measure"}>
                   <div className="fin__ledger-head">
                     <span>{s.form.payeeLabel}</span>
                     <span>{metaColumnLabel}</span>

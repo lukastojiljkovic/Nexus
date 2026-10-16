@@ -3,16 +3,16 @@ import type { ReactNode } from "react";
 import { FOCUS_PHASE_KINDS, phaseProgress } from "@nexus/core";
 import type { FocusPhaseKind } from "@nexus/core";
 import {
+  AsyncSurface,
   Button,
   Chip,
   EmptyState,
-  Icon,
   ListRow,
-  LoadingState,
   PageHeader,
   Select,
   StatBand,
   TextField,
+  Toast,
 } from "@nexus/ui";
 import { MAX_FOCUS_LABEL_LENGTH } from "../../shared/ipc.js";
 import type { FocusSession, RunningFocusSession, Subject, Task } from "../../shared/ipc.js";
@@ -141,6 +141,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   // „Odbaci" writes nothing at all and offers no undo afterwards — the one
@@ -172,6 +173,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
 
   useEffect(() => {
     let active = true;
+    setFailed(false);
     void (async () => {
       try {
         const snapshot = await loadFocus(profileId, tasksOn, studyOn);
@@ -188,7 +190,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
     return () => {
       active = false;
     };
-  }, [profileId, tasksOn, studyOn]);
+  }, [profileId, tasksOn, studyOn, attempt]);
 
   /**
    * The one-second tick, and it runs ONLY while a phase is running: a page
@@ -555,53 +557,65 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
 
   // --- The screen -------------------------------------------------------------
 
-  if (failed) {
-    return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
-  }
-  if (sessions === null) {
-    return <LoadingState label={strings.app.loading} rows={6} />;
+  // The header stands above the read's three states, so a page that is still
+  // loading or has failed keeps its name on screen.
+  const header = (
+    <PageHeader
+      title={moduleName("focus")}
+      sigil="focus"
+      actions={<ModuleSettingsGear moduleId="focus" />}
+    />
+  );
+
+  if (failed || sessions === null) {
+    // The ready arm is the page below, so this surface draws only its two others.
+    return (
+      <div className="foc nx-measure">
+        {header}
+        <AsyncSurface
+          state={failed ? { status: "failed" } : { status: "loading" }}
+          loadingLabel={strings.app.loading}
+          loadingRows={6}
+          failureTitle={s.loadErrorTitle}
+          failureMessage={s.loadError}
+          retry={{ label: s.retry, onClick: () => setAttempt((value) => value + 1) }}
+        >
+          {() => null}
+        </AsyncSurface>
+      </div>
+    );
   }
 
   return (
     // `.nx-measure`: everything under the timer panel is rows, and a row spread
     // across 1360px is two columns pretending to be one.
     <div className="foc nx-measure">
-      <PageHeader
-        title={moduleName("focus")}
-        sigil="focus"
-        actions={<ModuleSettingsGear moduleId="focus" />}
-      />
+      {header}
       {pendingUndoId !== null && (
-        <div className="foc__undo" role="status">
-          <span className="foc__undo-text">{s.history.deletedNotice}</span>
-          <Button
-            size="sm"
-            onClick={() =>
+        <Toast
+          message={s.history.deletedNotice}
+          undo={{
+            label: s.undo,
+            onUndo: () =>
               void run(async () => {
                 await window.nexus.restoreFocus(profileId, pendingUndoId);
                 setPendingUndoId(null);
-              })
-            }
-          >
-            {s.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="foc__quiet"
-            aria-label={s.dismiss}
-            onClick={() => setPendingUndoId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+              }),
+          }}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
       {running !== null ? renderRunning(running) : renderIdle()}
 
       {actionError !== null && (
-        <p className="foc__error" role="status">
-          {actionError}
-        </p>
+        <Toast
+          kind="error"
+          message={actionError}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setActionError(null)}
+        />
       )}
 
       {/* One section for today, in the house order: the figures, then the
@@ -648,7 +662,7 @@ export function FocusPage({ profileId, enabledModules }: FocusPageProps) {
       <section className="foc__section" aria-label={s.history.heading}>
         <div className="foc__heading">{s.history.heading}</div>
         {earlierSessions.length === 0 ? (
-          <p className="foc__note">{s.history.empty}</p>
+          <EmptyState variant="inline" sigil="focus" title={s.history.empty} />
         ) : (
           <div className="foc__list">{earlierSessions.map((session) => renderRow(session))}</div>
         )}
