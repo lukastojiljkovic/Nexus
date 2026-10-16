@@ -228,7 +228,8 @@ what the packaged app loads.
 belong to the detail pane, where they have their own names and their own place
 in the Tab order.
 
-**Adopted by:** no module page. The gallery uses it; the product does not yet.
+**Adopted by:** the maps pin list, whose detail pane holds the selected pin's
+Edit and Remove. The gallery uses it too.
 
 ## FormLayout, Field, FieldError
 
@@ -384,9 +385,9 @@ EmptyState columns, which are tags.
 | cards | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | chess | 1 | 3 | 0 | 1 | 2 | 0 | 1 | 0 | 0 | 0 |
 | cookbook | 1 | 4 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
-| culture | 1 | 8 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 1 |
+| culture | 1 | 8 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 |
 | drawings | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| emergency | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
+| emergency | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 0 | 0 | 0 |
 | lab | 1 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 0 | 0 | 0 |
 | maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
@@ -401,11 +402,11 @@ EmptyState columns, which are tags.
 | translator | 1 | 2 | 1 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
 | wiki | 1 | 2 | 0 | 1 | 4 | 0 | 0 | 0 | 0 | 0 |
 | workshop | 1 | 2 | 3 | 1 | 4 | 0 | 0 | 0 | 1 | 1 |
-| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **6** | **0** | **7** | **9** |
+| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **8** | **0** | **7** | **9** |
 
 Not counted in this matrix: the shell's pages (`apps/desktop/src/renderer/src`).
 The settings page is one of them and has no row; its adoption is in the sections
 above (Notice, Field, ConfirmDialog).
 Components no module page uses yet: `Dialog`, `Notice`, `AsyncSurface`,
-`Section`, `Toolbar`, `SettingsRow`, the `Segmented` component, `Toast`,
-`ListDetail` and `FormLayout`.
+`Section`, `Toolbar`, `SettingsRow`, the `Segmented` component, `Toast` and
+`FormLayout`.

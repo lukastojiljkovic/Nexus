@@ -39,6 +39,10 @@ export const sr = {
   cancel: "Otkaži",
   close: "Zatvori",
   confirm: "Potvrdi",
+  removeAsk: {
+    title: "Ukloniti ovo?",
+    question: "Ovo se ne može vratiti.",
+  },
   // The ten visit kinds, in `VISIT_KINDS` order (the store's and the schema's
   // own list, which the pickers render as they stand).
   kinds: {
