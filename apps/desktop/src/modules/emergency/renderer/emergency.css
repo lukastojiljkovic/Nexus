@@ -65,13 +65,6 @@
   flex: 1 1 18rem;
 }
 
-.emergency__confirm {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nx-space-2);
-  align-items: center;
-}
-
 .emergency__actions {
   display: flex;
   flex-wrap: wrap;

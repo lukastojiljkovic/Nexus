@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { buildCardModel, cardCompleteness } from "@nexus/core";
 import type { CardGap, CardModel, EmergencyCardSource } from "@nexus/core";
-import { Button, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
+import { Button, ConfirmDialog, EmptyState, LoadingState, PageHeader } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { activeLocale, declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import type { CardPrintFormat, EmergencyView } from "../shared/ipc.js";
@@ -185,19 +185,19 @@ export default function EmergencyPage({ profileId }: ModulePageProps) {
             <Button onClick={() => void print("a6")}>{copy.card.printA6}</Button>
             <Button onClick={() => void print("card-a4")}>{copy.card.printCardOnA4}</Button>
             <span className="nx-hint emergency__print-hint">{copy.card.printHint}</span>
-            {confirming ? (
-              <span className="emergency__confirm">
-                <span className="nx-hint">{copy.card.removeQuestion}</span>
-                <Button onClick={() => void removeCard()}>{copy.card.confirmRemove}</Button>
-                <Button variant="quiet" onClick={() => setConfirming(false)}>
-                  {copy.card.cancelRemove}
-                </Button>
-                <span className="nx-hint">{copy.card.removeNote}</span>
-              </span>
-            ) : (
-              <Button variant="quiet" onClick={() => setConfirming(true)}>
-                {copy.card.remove}
-              </Button>
+            <Button variant="quiet" onClick={() => setConfirming(true)}>
+              {copy.card.remove}
+            </Button>
+            {confirming && (
+              <ConfirmDialog
+                title={copy.card.removeQuestion}
+                question={copy.card.removeNote}
+                confirmLabel={copy.card.confirmRemove}
+                cancelLabel={copy.card.cancelRemove}
+                destructive
+                onConfirm={() => void removeCard()}
+                onCancel={() => setConfirming(false)}
+              />
             )}
           </div>
           {notice !== null && <p className="nx-hint">{notice}</p>}

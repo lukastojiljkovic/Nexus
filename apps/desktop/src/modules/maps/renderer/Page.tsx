@@ -657,8 +657,8 @@ export default function MapsPage({ profileId }: ModulePageProps) {
                 pins={pins}
                 selectedId={selectedId}
                 onSelect={(pin) => {
-                  setSelectedId(pin.id);
-                  mapRef.current?.jumpTo({ center: [pin.lon, pin.lat], zoom: 14 });
+                  setSelectedId(pin?.id ?? null);
+                  if (pin !== null) mapRef.current?.jumpTo({ center: [pin.lon, pin.lat], zoom: 14 });
                 }}
                 onEdit={(pin) => setDialog({ mode: "edit", pin, point: { lat: pin.lat, lon: pin.lon } })}
                 onRemove={(pin) => {

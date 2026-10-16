@@ -28,6 +28,10 @@ export const en: typeof sr = {
   cancel: "Cancel",
   close: "Close",
   confirm: "Confirm",
+  removeAsk: {
+    title: "Remove it?",
+    question: "This cannot be undone.",
+  },
   kinds: {
     museum: "Museum",
     gallery: "Gallery",
