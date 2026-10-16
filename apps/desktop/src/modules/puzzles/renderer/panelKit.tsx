@@ -63,8 +63,9 @@ export function initialGame(
   puzzle: PuzzleId,
   variants: readonly string[],
   newSeed: () => number,
+  opening?: string,
 ): InitialGame {
-  const variant = initialVariant(saves, puzzle, variants);
+  const variant = opening ?? initialVariant(saves, puzzle, variants);
   const saved = savedFor(saves, puzzle, variant);
   return {
     variant,
@@ -213,6 +214,11 @@ export interface PanelProps {
    * which is the row's job to prevent, not the page's memory of it.
    */
   readonly onClear: (input: ClearInput) => void;
+  /**
+   * A grade the assistant asked the page to open on. A panel mounted with one opens on
+   * it rather than on the game it finds first; the page remounts the panel when asked again.
+   */
+  readonly opening?: string | undefined;
 }
 
 /** One line of numbers, right-aligned and tabular: the readouts a board carries. */

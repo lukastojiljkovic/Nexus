@@ -63,6 +63,7 @@ import type { ModuleRegistry, Tool, ToolRegistry, WebService } from "@nexus/core
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
 import { appTools } from "./app.js";
+import { boardsTools } from "./boards.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
 import { canvasTools } from "./canvas.js";
@@ -82,6 +83,7 @@ import { miniappsTools } from "./miniapps.js";
 import { noteTools } from "./notes.js";
 import { packTools, type PacksLookup } from "./packs.js";
 import { pantryTools } from "./pantry.js";
+import { puzzlesTools } from "./puzzles.js";
 import { readerTools } from "./reader.js";
 import { recorderTools } from "./recorder.js";
 import { settingsTools } from "./settings.js";
@@ -138,6 +140,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
    * fresh function identity per turn for no reason.
    */
   const appLevel: readonly Tool[] = [
+    ...boardsTools({ profileDb: deps.profileDb, now: deps.now }),
     ...appTools({
       modules: deps.modules,
       search: deps.search,
@@ -152,6 +155,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...habitTools({ profileDb: deps.profileDb, now: deps.now }),
     ...timerTools({ timers: deps.timers, profileDb: deps.profileDb, now: deps.now }),
     ...packTools({ packs: deps.packs }),
+    ...puzzlesTools({ profileDb: deps.profileDb, now: deps.now }),
     ...emergencyTools({ profileDb: deps.profileDb }),
     ...electronicsTools({ profileDb: deps.profileDb, now: deps.now }),
     ...financeTools({ profileDb: deps.profileDb, now: deps.now }),

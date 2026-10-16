@@ -1,0 +1,126 @@
+{
+  "scenarios": [
+    {
+      "id": "puzzles-hint-sr",
+      "title": "Savet za sudoku, bez rešenja",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Daj mi savet za sudoku, lako." }
+      ],
+      "tools": [
+        { "name": "puzzles.hint", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "puzzles.hint", "args": { "puzzle": { "eq": "sudoku" }, "variant": { "eq": "easy" } } }
+        ],
+        "answerContains": ["korak"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "puzzles.hint", "arguments": { "puzzle": "sudoku", "variant": "easy" } }] },
+        { "text": "Sledeći korak je jedini mogući broj u jednom polju; rešenje ti ne dajem." }
+      ]
+    },
+    {
+      "id": "puzzles-start-fresh-en",
+      "title": "A new hard sudoku, started fresh",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Throw away my sudoku and start a new hard one." }
+      ],
+      "tools": [
+        {
+          "name": "puzzles.start",
+          "effect": "write",
+          "summary": { "sr": "Obrisati sačuvanu igru i započeti novu: Sudoku, teško?", "en": "Delete the saved game and start a new one: Sudoku, hard?" },
+          "content": "Opening a new Sudoku game, hard.",
+          "navigateTo": { "module": "puzzles" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "puzzles.start", "args": { "puzzle": { "eq": "sudoku" }, "variant": { "eq": "hard" }, "fresh": { "eq": true } } }
+        ],
+        "navigatesTo": [{ "module": "puzzles" }],
+        "answerContains": ["hard"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "puzzles.start", "arguments": { "puzzle": "sudoku", "variant": "hard", "fresh": true } }] },
+        { "text": "Opened a new hard sudoku. The board is ready." }
+      ]
+    },
+    {
+      "id": "puzzles-clear-declined-sr",
+      "title": "Igra nije obrisana kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Obriši sačuvanu igru Brojeva, šest brojeva." }
+      ],
+      "tools": [
+        {
+          "name": "puzzles.clear",
+          "effect": "write",
+          "summary": { "sr": "Obrisati sačuvanu igru: Broj, šest brojeva? Napredak se gubi.", "en": "Delete the saved Numbers game (six numbers)? Its progress is lost." },
+          "content": "Sačuvana igra je obrisana: Broj, šest brojeva."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "puzzles.clear", "args": { "puzzle": { "eq": "broj" } } }],
+        "answerContains": ["odbio"],
+        "claimsOnlyWhatRan": true,
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "puzzles.clear", "arguments": { "puzzle": "broj", "variant": "six" } }] },
+        { "text": "Nisam obrisao igru, jer si odbio." }
+      ]
+    },
+    {
+      "id": "puzzles-mistakes-en",
+      "title": "Mistakes marked as the user types",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Show me my mistakes in sudoku as I type." }
+      ],
+      "tools": [
+        {
+          "name": "puzzles.mistakes",
+          "effect": "write",
+          "summary": { "sr": "Označavati greške dok se igra sudoku?", "en": "Mark mistakes while a sudoku is played?" },
+          "content": "Marking mistakes while a sudoku is played is on.",
+          "navigateTo": { "module": "settings" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "puzzles.mistakes", "args": { "on": { "eq": true } } }],
+        "navigatesTo": [{ "module": "settings" }],
+        "answerContains": ["on"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "puzzles.mistakes", "arguments": { "on": true } }] },
+        { "text": "Marking mistakes while a sudoku is played is on." }
+      ]
+    }
+  ]
+}

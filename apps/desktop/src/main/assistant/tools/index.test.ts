@@ -127,6 +127,7 @@ describe("createToolRegistry", () => {
     // removed and left in the table.
     expect(countByArea(tools)).toEqual({
       app: 3,
+      boards: 6,
       calendar: 9,
       calculator: 3,
       canvas: 7,
@@ -146,6 +147,7 @@ describe("createToolRegistry", () => {
       notes: 18,
       packs: 1,
       pantry: 2,
+      puzzles: 5,
       reader: 1,
       recorder: 1,
       search: 3,

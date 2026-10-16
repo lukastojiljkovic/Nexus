@@ -12,6 +12,7 @@ import { MahjongPanel } from "./MahjongPanel.js";
 import { NonogramPanel } from "./NonogramPanel.js";
 import { SudokuPanel } from "./SudokuPanel.js";
 import { copy } from "./copy.js";
+import { openRequestOf, type OpenRequest } from "./intent.js";
 import { formatClock, formatCount } from "./format.js";
 import {
   variantLabel,
@@ -47,7 +48,7 @@ import "./puzzles.css";
 /** The four tabs, in the order the page draws them. */
 const TABS: readonly PuzzleId[] = ["sudoku", "nonogram", "mahjong", "broj"];
 
-export default function PuzzlesPage({ profileId }: ModulePageProps) {
+export default function PuzzlesPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<PuzzlesView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<PuzzleId>("sudoku");
@@ -64,9 +65,11 @@ export default function PuzzlesPage({ profileId }: ModulePageProps) {
       try {
         setView(await action(window.nexus.modules.puzzles));
         setError(null);
+        return true;
       } catch (failure) {
         setError(copy.page.saveError);
         console.error("Nexus: a puzzles change failed:", failure);
+        return false;
       }
     },
     [],
@@ -110,6 +113,51 @@ export default function PuzzlesPage({ profileId }: ModulePageProps) {
     [profileId, run],
   );
 
+  /** The grade the assistant opened a panel on. A new serial remounts that panel, even when its tab is already the open one. */
+  const [opening, setOpening] = useState<{
+    readonly puzzle: PuzzleId;
+    readonly variant: string;
+    readonly serial: number;
+  } | null>(null);
+  const gradeOf = (puzzle: PuzzleId) => (opening?.puzzle === puzzle ? opening.variant : undefined);
+
+  /**
+   * Opens a puzzle the assistant asked for, as the grade chips do. A fresh game discards
+   * the saved one first, the way the page's new-game control does, and only a cleared row
+   * lets the panel deal a new board.
+   */
+  const openPuzzle = useCallback(
+    async (request: OpenRequest) => {
+      if (request.fresh) {
+        const cleared = await run((puzzles) =>
+          puzzles.clearSave({ profileId, puzzle: request.puzzle, variant: request.variant }),
+        );
+        if (!cleared) return;
+      }
+      setTab(request.puzzle);
+      setOpening((previous) => ({
+        puzzle: request.puzzle,
+        variant: request.variant,
+        serial: (previous?.serial ?? 0) + 1,
+      }));
+    },
+    [profileId, run],
+  );
+
+  /**
+   * What the assistant asked this page to do: open a puzzle. It waits for the view, since
+   * the grade has to be one the view lists. Anything else is not this page's verb and is
+   * reported handled all the same, so the shell's queue moves on.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined || view === null) return;
+    if (intent.kind === "action" && intent.action === "start") {
+      const request = openRequestOf(intent.payload, view.variants);
+      if (request !== null) void openPuzzle(request);
+    }
+    onIntentHandled?.();
+  }, [intent, view, onIntentHandled, openPuzzle]);
+
   const locale = activeLocale();
 
   return (
@@ -148,6 +196,8 @@ export default function PuzzlesPage({ profileId }: ModulePageProps) {
               preference, and the two writes it is allowed to make. */}
           {tab === "sudoku" && (
             <SudokuPanel
+              key={opening?.serial}
+              opening={gradeOf("sudoku")}
               saves={view.saves}
               variants={view.variants.sudoku}
               settings={view.settings}
@@ -158,6 +208,8 @@ export default function PuzzlesPage({ profileId }: ModulePageProps) {
           )}
           {tab === "nonogram" && (
             <NonogramPanel
+              key={opening?.serial}
+              opening={gradeOf("nonogram")}
               saves={view.saves}
               variants={view.variants.nonogram}
               settings={view.settings}
@@ -168,6 +220,8 @@ export default function PuzzlesPage({ profileId }: ModulePageProps) {
           )}
           {tab === "mahjong" && (
             <MahjongPanel
+              key={opening?.serial}
+              opening={gradeOf("mahjong")}
               saves={view.saves}
               variants={view.variants.mahjong}
               settings={view.settings}
@@ -178,6 +232,8 @@ export default function PuzzlesPage({ profileId }: ModulePageProps) {
           )}
           {tab === "broj" && (
             <BrojPanel
+              key={opening?.serial}
+              opening={gradeOf("broj")}
               saves={view.saves}
               variants={view.variants.broj}
               settings={view.settings}
