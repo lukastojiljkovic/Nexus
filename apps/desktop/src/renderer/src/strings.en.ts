@@ -126,6 +126,8 @@ export const en = {
      */
     overviewToggle: "Overview",
     themeToggle: "Switch theme",
+    assistantOpen: "Open the assistant beside this page",
+    assistantClose: "Close the assistant",
     themeDan: "Day",
     themeNoc: "Night",
     /**
@@ -8242,6 +8244,7 @@ export const en = {
     dialogTitle: "Keyboard shortcuts",
     dialogClose: "Close",
     groups: {
+      assistant: "Assistant",
       global: "Global",
       modules: "Modules",
       palette: "Palette",
@@ -8265,6 +8268,7 @@ export const en = {
       paletteMove: "Move through the results",
       paletteOpen: "Open a result or run a command",
       paletteClose: "Close the palette",
+      assistantDock: "Open or close the assistant beside this page",
       tasksSubtask: "Add a subtask from the entry row",
       tasksCancel: "Cancel the entry in the row or close the question",
       tasksExitSelection: "Leave Select mode",

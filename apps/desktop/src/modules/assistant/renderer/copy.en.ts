@@ -8,6 +8,23 @@ export const en: typeof sr = {
   page: {
     subtitle: "A conversation with a local model — no internet, and your own data.",
     loading: "Loading…",
+    loadFailed: "The assistant did not start.",
+  },
+  dock: {
+    label: "Assistant beside this page",
+    picker: "Conversation",
+    close: "Close the assistant",
+    resize: "Resize the assistant",
+    settings: "Assistant settings",
+  },
+  status: {
+    web: {
+      on: "Web search is on.",
+      off: "Web search is off.",
+      blocked: "Web search is on, but the network mode blocks it.",
+    },
+    indexed: "Passages indexed",
+    pending: "Sources pending",
   },
   rail: {
     title: "Conversations",
@@ -28,6 +45,7 @@ export const en: typeof sr = {
     emptyBody:
       "The assistant knows your notes, tasks, events and the app's own manual, and answers with no internet. Pick a conversation, or type a question below.",
     thinking: "Thinking…",
+    loadingModel: "Loading the model…",
     /**
      * What is said when a turn ended without an answer, by the code the loop
      * sent. The key is the code itself, so a new code with no sentence fails the
@@ -224,6 +242,12 @@ export const en: typeof sr = {
     question: "A tool is asking for permission before it goes on.",
     allow: "Allow",
     deny: "No",
+    /** What the tool's permission changes, as a chip and the sentence under it. */
+    effects: {
+      write: { chip: "Changes the app", note: "The tool will change something in the app." },
+      navigate: { chip: "Opens a page", note: "The tool will open a page in the app." },
+      network: { chip: "Uses the internet", note: "The query will leave this computer." },
+    },
   },
   citations: {
     sources: "Sources",
@@ -249,7 +273,8 @@ export const en: typeof sr = {
     licence: "Licence",
     download: "Download",
     stop: "Stop",
-    resume: "Resume",
+    working: "Working…",
+    resume:"Resume",
     import: "Import a .gguf",
     remove: "Delete",
     removeTitle: "Delete this model",
@@ -295,5 +320,7 @@ export const en: typeof sr = {
     load: "The assistant was not loaded.",
     action: "That change was not saved.",
     send: "The message was not sent.",
+    lostStream: "The answer could not be read. Your message was saved, and the answer may be in the conversation.",
+    retry: "Try again",
   },
 };

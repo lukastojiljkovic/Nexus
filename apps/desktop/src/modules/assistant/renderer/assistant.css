@@ -118,10 +118,100 @@
   align-items: center;
 }
 
+/* The composer stays reachable: it is pinned to the foot of the page while the thread scrolls above it. */
 .asst__composer {
   display: flex;
   flex-direction: column;
   gap: var(--nx-space-2);
+  position: sticky;
+  bottom: 0;
+  background: var(--nx-surface);
+}
+
+/* The thread has its own scroller, so a long answer scrolls inside the page and the composer stays in reach. */
+.asst__scroll {
+  max-height: min(50vh, 28rem);
+  overflow-y: auto;
+}
+
+.asst__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+.asst__ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
+
+/* Docked: the picker, New and Models in one row over the thread. */
+.asst--docked {
+  height: 100%;
+  padding: var(--nx-space-3);
+}
+
+.asst--docked .asst__grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.asst__dock-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: end;
+}
+
+/* The dock: a column beside the page. Its width is set inline; the edge on its left resizes it. */
+.asst-dock {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--nx-surface);
+  border-inline-start: 1px solid var(--nx-border-subtle);
+}
+
+.asst-dock__edge {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.asst-dock__bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--nx-space-1) var(--nx-space-2) 0;
+}
+
+.asst-dock__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.asst-dock .asst__scroll {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Below the width where the page and the dock no longer fit, the dock overlays the page
+   instead of narrowing it. The breakpoint is a policy choice, not a measurement. */
+@media (max-width: 1100px) {
+  .asst-dock {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 10;
+    box-shadow: var(--nx-elevation-overlay);
+  }
 }
 
 .asst__workflows {

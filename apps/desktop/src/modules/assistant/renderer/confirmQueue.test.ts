@@ -17,8 +17,18 @@ import {
  * rendered here, so the queue is pinned as the pure thing it is.
  */
 
-const FIRST: ConfirmAsk = { requestId: "r1", summary: "Add the task «Plaćanje»." };
-const SECOND: ConfirmAsk = { requestId: "r2", summary: "Add the note «Spisak»." };
+const FIRST: ConfirmAsk = {
+  requestId: "r1",
+  tool: "tasks.create",
+  effect: "write",
+  summary: "Add the task «Plaćanje».",
+};
+const SECOND: ConfirmAsk = {
+  requestId: "r2",
+  tool: "notes.create",
+  effect: "write",
+  summary: "Add the note «Spisak».",
+};
 
 describe("the questions a turn is waiting on", () => {
   it("draws the oldest question, and the next one after it is answered", () => {

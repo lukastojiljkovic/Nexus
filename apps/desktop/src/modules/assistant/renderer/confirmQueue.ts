@@ -15,9 +15,13 @@
  * parked question as refused.
  */
 
-/** One parked question: the request its answer goes back to, and the tool's own summary. */
+import type { ConfirmEffect } from "./surfaceStates.js";
+
+/** One parked question: the request its answer goes back to, the tool's name and effect, and its own summary. */
 export interface ConfirmAsk {
   readonly requestId: string;
+  readonly tool: string;
+  readonly effect: ConfirmEffect;
   readonly summary: string;
 }
 

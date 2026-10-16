@@ -194,16 +194,25 @@ export interface ToolLineView {
  * sentence about it.
  */
 export function toolLineView(line: ThreadToolLine): ToolLineView {
-  // Read at call time and widened once: a tool name is a value the model wrote,
-  // not one of the map's own keys - so only an OWN key counts, or a call named
-  // `constructor` would draw Object's function as its label.
-  const labels: Readonly<Record<string, string>> = copy.thread.tools.labels;
-  const known = line.name !== null && Object.hasOwn(labels, line.name);
   return {
-    label: line.name === null ? copy.thread.tools.unnamed : known ? (labels[line.name] ?? line.name) : line.name,
+    label: toolLabel(line.name),
     state: line.ok === null ? "running" : line.ok ? "done" : "failed",
     detail: line.text,
   };
+}
+
+/**
+ * A tool's name as a person reads it: its action in the copy table, the name as it
+ * stands when this build cannot name it, or the unnamed label for a call the thread
+ * no longer holds.
+ */
+export function toolLabel(name: string | null): string {
+  // Read at call time and widened once: a tool name is a value the model wrote,
+  // not one of the map's own keys - so only an OWN key counts, or a call named
+  // `constructor` would draw Object's function as its label.
+  if (name === null) return copy.thread.tools.unnamed;
+  const labels: Readonly<Record<string, string>> = copy.thread.tools.labels;
+  return Object.hasOwn(labels, name) ? (labels[name] ?? name) : name;
 }
 
 /**

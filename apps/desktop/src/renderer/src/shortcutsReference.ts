@@ -37,6 +37,20 @@ export interface ShortcutReferenceGroup {
  */
 export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
   {
+    id: "assistant",
+    get title() {
+      return strings.shortcuts.groups.assistant;
+    },
+    rows: [
+      {
+        keys: ["Ctrl", "J"],
+        get description() {
+          return strings.shortcuts.reference.assistantDock;
+        },
+      },
+    ],
+  },
+  {
     id: "palette",
     get title() {
       return strings.shortcuts.groups.palette;
