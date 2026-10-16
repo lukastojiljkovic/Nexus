@@ -119,7 +119,7 @@ describe("createToolRegistry", () => {
     expect(countByArea(tools)).toEqual({
       app: 3,
       calculator: 1,
-      calendar: 2,
+      calendar: 9,
       canvas: 7,
       car: 2,
       cookbook: 2,
