@@ -1,0 +1,118 @@
+{
+  "scenarios": [
+    {
+      "id": "scanner-sr",
+      "title": "Zahtev da se pročita tekst sa fotografije",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Pročitaj mi tekst sa ove fotografije."
+        }
+      ],
+      "tools": [
+        {
+          "name": "scanner.open",
+          "effect": "navigate",
+          "navigateTo": {
+            "module": "scanner"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "scanner.open",
+            "args": {
+              "source": {
+                "eq": "file"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "scanner"
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "scanner.open",
+              "arguments": {
+                "source": "file"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Otvaram skener. Izaberi sliku na stranici, pa pokreni čitanje teksta."
+        }
+      ]
+    },
+    {
+      "id": "scanner-en",
+      "title": "A request to read text from a photo",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Read the text off the photo of the receipt."
+        }
+      ],
+      "tools": [
+        {
+          "name": "scanner.open",
+          "effect": "navigate",
+          "navigateTo": {
+            "module": "scanner"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "scanner.open",
+            "args": {
+              "source": {
+                "eq": "file"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "scanner"
+          }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "scanner.open",
+              "arguments": {
+                "source": "file"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I am opening the Scanner. Pick the photo on the page, then start the read."
+        }
+      ]
+    }
+  ]
+}

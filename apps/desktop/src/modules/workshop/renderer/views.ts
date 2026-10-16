@@ -36,3 +36,13 @@ export function isViewer(view: WorkshopView): view is WorkshopTarget {
 export function viewLabel(view: WorkshopView): string {
   return isViewer(view) ? copy.targets[view] : copy.views[view];
 }
+
+/**
+ * The view an `open-tool` action asks for, or `null` for a payload this page does
+ * not know. The assistant sends the view's own name (`main/assistant/tools/workshop.ts`);
+ * an unknown name is left alone rather than guessed at.
+ */
+export function viewOfAction(payload: unknown): WorkshopView | null {
+  const tool = typeof payload === "object" && payload !== null ? (payload as { tool?: unknown }).tool : undefined;
+  return WORKSHOP_VIEWS.find((view) => view === tool) ?? null;
+}

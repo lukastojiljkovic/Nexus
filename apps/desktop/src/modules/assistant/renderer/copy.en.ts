@@ -190,6 +190,7 @@ export const en: typeof sr = {
         "notifications.settings": "Read notification settings",
         "notifications.snooze": "Snooze a notification",
         "reminders.due": "Read upcoming reminders",
+        "scanner.open": "Open the Scanner",
         "settings.model": "Change the assistant's model",
         "settings.module": "Show or hide a module",
         "settings.open": "Open a settings card",
@@ -242,6 +243,7 @@ export const en: typeof sr = {
         "web.read": "Read a web page",
         "web.search": "Search the web",
         "wiki.recent": "Read the reference history",
+        "workshop.open": "Open a Workshop tool",
       },
       /** A tool whose call the thread no longer holds: no name to print, so it is named this. */
       unnamed: "A tool",
