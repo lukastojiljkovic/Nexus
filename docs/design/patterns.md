@@ -92,8 +92,9 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** no module page yet. The hand-written `*__error` lines are the
-ones it replaces.
+**Adopted by:** the calendar page and its People and Documents panels, for the
+refusal lines beside a field and the overlay read that failed. The hand-written
+`*__error` lines in the other pages are the ones it replaces.
 
 ## AsyncSurface
 
@@ -113,8 +114,8 @@ the data is there.
 The header stays with the page (see PageHeader); `AsyncSurface` is the body.
 `asyncSurfacePlan` is the pure decision and the test beside it pins it.
 
-**Adopted by:** no module page yet. The shell surfaces that show a failed read
-as a dead end are the ones to convert.
+**Adopted by:** the calendar page and its People and Documents panels. The shell
+surfaces that still show a failed read as a dead end are the ones to convert.
 
 ## Dialog
 
@@ -183,8 +184,8 @@ that is named in the page's words. `kind="error"` is the same component
 announcing assertively with the `error` glyph; both kinds carry a shape as well
 as an ink.
 
-**Adopted by:** no module page, and the shell's two (Finance, Habits). The undo
-bars that predate it are the ones to convert.
+**Adopted by:** the shell's Finance and Habits, and the calendar page with its
+People and Documents panels. The undo bars that predate it are the ones to convert.
 
 ## ListDetail
 

@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { ageAtOccurrence, birthdayOccurrencesInRange, shiftDayKey } from "@nexus/core";
-import { Button, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
+import {
+  AsyncSurface,
+  Button,
+  EmptyState,
+  Icon,
+  ListRow,
+  Notice,
+  Select,
+  TextField,
+  Toast,
+  type AsyncState,
+} from "@nexus/ui";
 import type { NewPersonFields, Person, PersonFieldChanges, PersonKind } from "../../shared/ipc.js";
 import { localTodayKey } from "./examDates.js";
 import { collator, dateTimeFormat } from "./intl.js";
@@ -110,6 +121,8 @@ export interface PeoplePanelProps {
 export function PeoplePanel({ profileId }: PeoplePanelProps) {
   const [people, setPeople] = useState<Person[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Bumped by the retry button: the load effect runs again from the top.
+  const [attempt, setAttempt] = useState(0);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   // One form serves both modes; a non-null editingId means "editing that person".
@@ -137,7 +150,12 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, attempt]);
+
+  function retryLoad(): void {
+    setFailed(false);
+    setAttempt((count) => count + 1);
+  }
 
   function resetForm(): void {
     setEditingId(null);
@@ -246,6 +264,12 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
       (a, b) => collator().compare(a.name, b.name) || a.id.localeCompare(b.id),
     );
 
+  const loadState: AsyncState<Person[]> = failed
+    ? { status: "failed" }
+    : ordered === null
+      ? { status: "loading" }
+      : { status: "ready", data: ordered };
+
   // One error line, two causes: an impossible date (live, as the selects move)
   // or a write the store refused.
   const dateIsReal = isRealMonthDay(month, day);
@@ -329,100 +353,94 @@ export function PeoplePanel({ profileId }: PeoplePanelProps) {
             {s.cancel}
           </Button>
         )}
-        {errorLine != null && (
-          <p className="people__error" role="alert">
-            {errorLine}
-          </p>
-        )}
+        {errorLine != null && <Notice kind="danger" className="people__error" message={errorLine} />}
       </form>
 
       {pendingUndoId != null && (
-        <div className="people__undo" role="status">
-          <span className="people__undo-text">{s.deletedNotice}</span>
-          <Button size="sm" className="people__undo-action" onClick={() => void undo()}>
-            {s.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="people__undo-dismiss"
-            aria-label={s.dismiss}
-            onClick={() => setPendingUndoId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+        <Toast
+          message={s.deletedNotice}
+          undo={{ label: s.undo, onUndo: () => void undo() }}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
-      {failed ? (
-        <EmptyState title={s.emptyTitle} description={s.loadError} />
-      ) : ordered === null ? (
-        <LoadingState label={strings.app.loading} rows={3} />
-      ) : ordered.length === 0 ? (
-        <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
-      ) : (
-        <div className="people__list">
-          {ordered.map((person) => {
-            const age = currentAge(person, todayKey);
-            return (
-              <ListRow
-                key={person.id}
-                // The row's KIND, as a mark rather than a word (dashboard's own
-                // RowMark recipe): the demo profile's twenty birthdays used to
-                // print the chip „Rođendan" twenty times down one column — the
-                // column's name, not the row's data. `title` keeps the
-                // accessible name exactly what it was; the icon is `person` for
-                // BOTH kinds, matching the dashboard's own „Danas" card — the
-                // set has no honest cake/ring mark to tell a birthday from an
-                // anniversary apart, and a shape invented for the occasion
-                // would be a guess, not a mark.
-                leading={
-                  <span className="people__lead">
-                    <Icon name="person" size={15} title={s.kind[person.kind]} />
-                  </span>
-                }
-                trailing={
-                  <span className="people__row-actions">
-                    <Button
-                      size="sm"
-                      className="people__edit"
-                      aria-label={s.editLabel}
-                      onClick={() => startEdit(person)}
-                    >
-                      <Icon name="pencil" size={14} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="people__delete"
-                      aria-label={s.deleteLabel}
-                      onClick={() => void remove(person)}
-                    >
-                      <Icon name="trash" size={14} />
-                    </Button>
-                  </span>
-                }
-              >
-                <span className="people__item">
-                  <span className="people__heading">
-                    <span className="people__name">{person.name}</span>
-                    <span className="people__date">{formatRecurringDate(person)}</span>
-                  </span>
-                  {(person.year !== null || person.note != null) && (
-                    <span className="people__meta">
-                      {person.year !== null && (
-                        <span className="people__years">
-                          {person.year}
-                          {age !== null && ` · ${age} ${s.yearsUnit}`}
+      <AsyncSurface
+        state={loadState}
+        loadingLabel={strings.app.loading}
+        loadingRows={3}
+        failureTitle={s.loadFailedTitle}
+        failureMessage={s.loadError}
+        retry={{ label: s.retry, onClick: retryLoad }}
+      >
+        {(list) =>
+          list.length === 0 ? (
+            <EmptyState title={s.emptyTitle} description={s.emptyDescription} />
+          ) : (
+            <div className="people__list">
+              {list.map((person) => {
+                const age = currentAge(person, todayKey);
+                return (
+                  <ListRow
+                    key={person.id}
+                    // The row's KIND, as a mark rather than a word (dashboard's own
+                    // RowMark recipe): the demo profile's twenty birthdays used to
+                    // print the chip „Rođendan" twenty times down one column — the
+                    // column's name, not the row's data. `title` keeps the
+                    // accessible name exactly what it was; the icon is `person` for
+                    // BOTH kinds, matching the dashboard's own „Danas" card — the
+                    // set has no honest cake/ring mark to tell a birthday from an
+                    // anniversary apart, and a shape invented for the occasion
+                    // would be a guess, not a mark.
+                    leading={
+                      <span className="people__lead">
+                        <Icon name="person" size={15} title={s.kind[person.kind]} />
+                      </span>
+                    }
+                    trailing={
+                      <span className="people__row-actions">
+                        <Button
+                          size="sm"
+                          className="people__edit"
+                          aria-label={s.editLabel}
+                          onClick={() => startEdit(person)}
+                        >
+                          <Icon name="pencil" size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="people__delete"
+                          aria-label={s.deleteLabel}
+                          onClick={() => void remove(person)}
+                        >
+                          <Icon name="trash" size={14} />
+                        </Button>
+                      </span>
+                    }
+                  >
+                    <span className="people__item">
+                      <span className="people__heading">
+                        <span className="people__name">{person.name}</span>
+                        <span className="people__date">{formatRecurringDate(person)}</span>
+                      </span>
+                      {(person.year !== null || person.note != null) && (
+                        <span className="people__meta">
+                          {person.year !== null && (
+                            <span className="people__years">
+                              {person.year}
+                              {age !== null && ` · ${age} ${s.yearsUnit}`}
+                            </span>
+                          )}
+                          {person.note != null && <span className="people__note">{person.note}</span>}
                         </span>
                       )}
-                      {person.note != null && <span className="people__note">{person.note}</span>}
                     </span>
-                  )}
-                </span>
-              </ListRow>
-            );
-          })}
-        </div>
-      )}
+                  </ListRow>
+                );
+              })}
+            </div>
+          )}
+      </AsyncSurface>
     </div>
   );
 }
