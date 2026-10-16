@@ -130,6 +130,13 @@ export const en = {
     assistantClose: "Close the assistant",
     themeDan: "Day",
     themeNoc: "Night",
+    /** The theme toggle's name stays put; `aria-pressed` says whether the dark theme is on. */
+    themeDark: "Dark theme",
+    /** The rail could not re-read the device's module order (ADR-101). */
+    arrangementError: "The module order on this device could not be reloaded.",
+    dismissNotice: "Dismiss",
+    /** The tooltip of a pinned row: the keyboard reorder that the shortcuts reference documents. */
+    pinnedMoveHint: "Alt+↑ and Alt+↓ move this module up or down",
     /**
      * The drawn window frame (`TitleBar.tsx`). Three controls that used to be
      * the operating system's, so their names have to be the ones a Serbian
@@ -682,6 +689,8 @@ export const en = {
      */
     createDemo: "Add a demo profile",
     createError: "Creating the profile failed. Try again.",
+    /** The demo item's label while main is filling the profile, which takes a moment. */
+    creatingDemo: "Adding the demo profile…",
     /**
      * The passcode gate in front of EVERY switch (AUTH-024). The error map is
      * the lock screen's own (`authErrorMessage`), never respelled here — a
@@ -8252,6 +8261,7 @@ export const en = {
       global: "Global",
       modules: "Modules",
       palette: "Palette",
+      rail: "Sidebar",
       tasks: "Tasks",
       calendar: "Calendar",
       study: "Study",
@@ -8272,6 +8282,7 @@ export const en = {
       paletteMove: "Move through the results",
       paletteOpen: "Open a result or run a command",
       paletteClose: "Close the palette",
+      railMove: "Move a pinned module up or down",
       assistantDock: "Open or close the assistant beside this page",
       tasksSubtask: "Add a subtask from the entry row",
       tasksCancel: "Cancel the entry in the row or close the question",

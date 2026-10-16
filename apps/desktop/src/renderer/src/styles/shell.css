@@ -739,14 +739,6 @@ body {
   text-transform: uppercase;
   color: var(--nx-text-muted);
 }
-/* The switcher path's own error line (the „Profili“ card reports its errors
-   itself): danger-hued caption under the row, nothing louder. */
-.app__profile-error {
-  margin: 0;
-  padding: 0 var(--nx-space-2);
-  font-size: var(--nx-font-size-caption);
-  color: var(--nx-danger);
-}
 /* The two profile dialogs (passcode gate, typed-name delete): a field inside
    the house dialog panel. The panel's own gap spaces the blocks; the form only
    stacks its field over its actions and gives the action row the pair gap the
@@ -1450,11 +1442,10 @@ body {
   outline-offset: 2px;
 }
 
-/* „Svi moduli" (ADR-093 §4) — the house dialog recipe worn wider, because its
-   body is a catalogue rather than a question. The panel, the backdrop and the
-   title are `recur-dialog__*` outright (see `recurrence.css`); nothing about the
-   overlay, the focus landing or the way out is redeclared here. */
-.launcher__panel.recur-dialog__panel {
+/* „Svi moduli" (ADR-093 §4) — the kit's `Dialog` worn wider, because its body is
+   a catalogue rather than a question. Only the width is the launcher's; the
+   overlay, the focus landing and the way out are the `Dialog`'s. */
+.launcher__panel.nx-dialog__panel {
   width: min(760px, 94vw);
   max-height: min(680px, 88vh);
 }

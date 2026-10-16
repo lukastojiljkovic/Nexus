@@ -77,6 +77,20 @@ export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
     ],
   },
   {
+    id: "rail",
+    get title() {
+      return strings.shortcuts.groups.rail;
+    },
+    rows: [
+      {
+        keys: ["Alt", "↑", "↓"],
+        get description() {
+          return strings.shortcuts.reference.railMove;
+        },
+      },
+    ],
+  },
+  {
     id: "tasks",
     get title() {
       return strings.shortcuts.groups.tasks;

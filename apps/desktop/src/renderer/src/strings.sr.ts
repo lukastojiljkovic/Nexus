@@ -133,6 +133,13 @@ export const sr = {
     assistantClose: "Zatvori asistenta",
     themeDan: "Dan",
     themeNoc: "Noć",
+    /** The theme toggle's name stays put; `aria-pressed` says whether the dark theme is on. */
+    themeDark: "Tamna tema",
+    /** The rail could not re-read the device's module order (ADR-101). */
+    arrangementError: "Raspored modula na ovom uređaju nije moguće ponovo učitati.",
+    dismissNotice: "Zatvori",
+    /** The tooltip of a pinned row: the keyboard reorder that the shortcuts reference documents. */
+    pinnedMoveHint: "Alt+↑ i Alt+↓ pomeraju ovaj modul gore ili dole",
     /**
      * The drawn window frame (`TitleBar.tsx`). Three controls that used to be
      * the operating system's, so their names have to be the ones a Serbian
@@ -696,6 +703,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     createDemo: "Dodaj demo profil",
     createError: "Pravljenje profila nije uspelo. Pokušaj ponovo.",
+    /** The demo item's label while main is filling the profile, which takes a moment. */
+    creatingDemo: "Dodaje se demo profil…",
     /**
      * The passcode gate in front of EVERY switch (AUTH-024). The error map is
      * the lock screen's own (`authErrorMessage`), never respelled here — a
@@ -8291,6 +8300,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       global: "Globalno",
       modules: "Moduli",
       palette: "Paleta",
+      rail: "Bočna traka",
       tasks: "Zadaci",
       calendar: "Kalendar",
       study: "Učenje",
@@ -8311,6 +8321,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       paletteMove: "Kretanje kroz rezultate",
       paletteOpen: "Otvori rezultat ili pokreni komandu",
       paletteClose: "Zatvori paletu",
+      railMove: "Pomeri prikačeni modul gore ili dole",
       assistantDock: "Otvori ili zatvori asistenta uz ovu stranicu",
       tasksSubtask: "Dodaj podzadatak iz reda za unos",
       tasksCancel: "Otkaži unos u redu ili zatvori pitanje",

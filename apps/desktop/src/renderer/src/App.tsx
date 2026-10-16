@@ -19,7 +19,16 @@ import {
   moduleNavPosition,
 } from "@nexus/core";
 import type { CanvasRef, ToolDrawer } from "@nexus/core";
-import { Button, EmptyState, Icon, NavItem, StarField } from "@nexus/ui";
+import {
+  Button,
+  EmptyState,
+  holdModalLayer,
+  Icon,
+  isModalOpen,
+  NavItem,
+  StarField,
+  Toast,
+} from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
 import type {
@@ -334,6 +343,13 @@ export function App() {
   // remounted away by the eviction). The „Profili“ card shows every other
   // error itself.
   const [profileActionError, setProfileActionError] = useState<string | null>(null);
+  // The demo profile is filled by main in one call that takes a moment (see
+  // `createDemoFromSwitcher`); the switcher says so while it runs.
+  const [demoPending, setDemoPending] = useState(false);
+  // The rail's device arrangement could not be re-read after a write that
+  // changed it; the rail says so until dismissed, rather than showing the old
+  // order with no word.
+  const [arrangementFailed, setArrangementFailed] = useState(false);
   // Per-profile module overrides (SET-007). Empty until loaded — every v0
   // module defaults enabled, so the pre-load render matches the common case.
   const [flags, setFlags] = useState<FlagState>({});
@@ -868,10 +884,12 @@ export function App() {
    * Main both creates AND fills it in one call (`profiles:create-demo`): the
    * data is the entire point, and a renderer loop writing it row by row would
    * be a second copy of the seeders. It takes a moment, which is why the
-   * switch is offered only once the answer is back.
+   * switch is offered only once the answer is back — and why the menu stays
+   * open, with its item disabled, until then.
    */
-  async function createDemoFromSwitcher(): Promise<void> {
+  async function createDemoFromSwitcher(close: () => void): Promise<void> {
     setProfileActionError(null);
+    setDemoPending(true);
     try {
       const created = await window.nexus.createDemoProfile();
       setProfiles((previous) => (previous === null ? [created] : [...previous, created]));
@@ -879,6 +897,9 @@ export function App() {
     } catch (error) {
       setProfileActionError(strings.profiles.createError);
       console.error("Nexus: failed to add the demo profile:", error);
+    } finally {
+      setDemoPending(false);
+      close();
     }
   }
 
@@ -1119,6 +1140,7 @@ export function App() {
           .then(setVisibility)
           .catch((error: unknown) => {
             console.error("Nexus: failed to reload the module arrangement:", error);
+            setArrangementFailed(true);
           });
       }
     };
@@ -1472,6 +1494,11 @@ export function App() {
     if (!ready) return;
     function handleGlobalKeydown(event: KeyboardEvent): void {
       if (event.repeat) return;
+      // A chord pressed over an open dialog (the launcher, the palette, a
+      // confirmation) acts on the page underneath it, which is not what was
+      // asked for. Each open modal holds a layer (`useModalLayer`), and the
+      // guard asks whether any is open. The palette's own chord still closes it.
+      if (isModalOpen() && !(paletteOpen && matchesChord(shortcuts.palette, event))) return;
       const position = moduleNavPosition(event);
       if (position !== null) {
         event.preventDefault();
@@ -1501,7 +1528,11 @@ export function App() {
     // close over nothing that changes except `activeId` and `visibleModuleIds`,
     // both listed here — everything else they touch is a stable state setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus?.state, activeProfile, shortcuts, visibleModuleIds, activeId, closePalette]);
+  }, [authStatus?.state, activeProfile, shortcuts, visibleModuleIds, activeId, closePalette, paletteOpen]);
+
+  // The palette is an overlay the shell draws itself, so it holds a modal layer
+  // the same way a kit `Dialog` does: the chord guard above stops at it.
+  useEffect(() => (paletteOpen ? holdModalLayer() : undefined), [paletteOpen]);
 
   // Rebuilt whenever the VISIBLE-module set can change (the device's
   // arrangement, ADR-101), the active
@@ -1702,6 +1733,7 @@ export function App() {
               .then(setVisibility)
               .catch((error: unknown) => {
                 console.error("Nexus: failed to reload the module arrangement:", error);
+                setArrangementFailed(true);
               });
             // The questionnaire has just written the pinned modules for this
             // profile (ADR-086); the bump is what redraws the sidebar without
@@ -1915,6 +1947,7 @@ export function App() {
                             onKeyDown={
                               isPinned ? (event) => onPinnedRowKeyDown(event, moduleId) : undefined
                             }
+                            title={isPinned ? strings.app.pinnedMoveHint : undefined}
                           >
                             {moduleIcon(moduleId)}
                             {moduleName(moduleId)}
@@ -2088,12 +2121,12 @@ export function App() {
                           className="note__menu-item"
                           role="menuitem"
                           type="button"
-                          onClick={() => {
-                            close();
-                            void createDemoFromSwitcher();
-                          }}
+                          disabled={demoPending}
+                          onClick={() => void createDemoFromSwitcher(close)}
                         >
-                          {strings.profiles.createDemo}…
+                          {demoPending
+                            ? strings.profiles.creatingDemo
+                            : `${strings.profiles.createDemo}…`}
                         </button>
                       </>
                     )}
@@ -2101,9 +2134,20 @@ export function App() {
                 )}
               </NotePopover>
               {profileActionError != null && (
-                <p className="app__profile-error" role="alert">
-                  {profileActionError}
-                </p>
+                <Toast
+                  kind="error"
+                  message={profileActionError}
+                  dismissLabel={strings.app.dismissNotice}
+                  onDismiss={() => setProfileActionError(null)}
+                />
+              )}
+              {arrangementFailed && (
+                <Toast
+                  kind="error"
+                  message={strings.app.arrangementError}
+                  dismissLabel={strings.app.dismissNotice}
+                  onDismiss={() => setArrangementFailed(false)}
+                />
               )}
               {/* Only with somewhere to switch TO (ADR-044). Locking is the
                   whole action: AuthGate opens on the picker by itself once

@@ -1,13 +1,10 @@
-import { useEffect, useId } from "react";
 import type { ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { formatChord, MODULE_NAV_MAX, moduleNavChord } from "@nexus/core";
-import { Button } from "@nexus/ui";
+import { Button, Dialog } from "@nexus/ui";
 import { SHORTCUT_ACTIONS, type ShortcutBindings } from "./shortcuts.js";
 import { SHORTCUT_REFERENCE } from "./shortcutsReference.js";
 import { moduleName } from "./moduleName.js";
 import { strings } from "./strings.js";
-import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * One key as a chip. The single `<kbd>` recipe in the app — the Settings
@@ -91,90 +88,56 @@ export interface ShortcutsDialogProps {
  * — because a reference that prints a chord the app no longer uses is worse
  * than none. Everything else comes from `shortcutsReference.ts`.
  *
- * Same house dialog recipe as the recurrence-scope question (backdrop and
- * panel as siblings, Escape and the backdrop close, no glow), widened for a
- * two-column list and scrolling in its body rather than growing past the
- * window.
+ * Drawn with the kit's `Dialog`, widened for a two-column list and scrolling in
+ * its body rather than growing past the window. Focus goes to the only control
+ * there is, and back where it came from on close.
  */
 export function ShortcutsDialog({ bindings, moduleIds, onClose }: ShortcutsDialogProps) {
   const s = strings.shortcuts;
-  const titleId = useId();
 
-  // Focus goes to the only control there is, and back where it came from on
-  // close — the trap's own default (the first tabbable descendant), since the
-  // reference body carries no focusable rows of its own. It also cycles Tab
-  // within the panel, which the dialog never did before.
-  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
+  return (
+    <Dialog
+      className="shortcuts-dialog__panel"
+      title={s.dialogTitle}
+      onClose={onClose}
+      actions={
+        <Button className="nx-dialog__cancel" onClick={onClose}>
+          {s.dialogClose}
+        </Button>
       }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    >
+      <div className="shortcuts-dialog__body">
+        <ReferenceGroup title={s.groups.global}>
+          {SHORTCUT_ACTIONS.map((action) => (
+            <ReferenceRow
+              key={action.id}
+              label={action.label}
+              keys={[formatChord(bindings[action.id])]}
+              note={action.global ? s.globalHint : undefined}
+            />
+          ))}
+        </ReferenceGroup>
 
-  return createPortal(
-    <div className="recur-dialog__overlay">
-      <div className="recur-dialog__backdrop" onClick={onClose} />
-      <div
-        ref={panelRef}
-        className="recur-dialog__panel shortcuts-dialog__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <h2 id={titleId} className="recur-dialog__title">
-          {s.dialogTitle}
-        </h2>
+        {moduleIds.length > 0 && (
+          <ReferenceGroup title={s.groups.modules} caption={s.moduleNavCaption}>
+            {moduleIds.slice(0, MODULE_NAV_MAX).map((moduleId, index) => {
+              const chord = moduleNavChord(index + 1);
+              if (chord === null) return null;
+              return (
+                <ReferenceRow key={moduleId} label={moduleName(moduleId)} keys={[formatChord(chord)]} />
+              );
+            })}
+          </ReferenceGroup>
+        )}
 
-        <div className="shortcuts-dialog__body">
-          <ReferenceGroup title={s.groups.global}>
-            {SHORTCUT_ACTIONS.map((action) => (
-              <ReferenceRow
-                key={action.id}
-                label={action.label}
-                keys={[formatChord(bindings[action.id])]}
-                note={action.global ? s.globalHint : undefined}
-              />
+        {SHORTCUT_REFERENCE.map((group) => (
+          <ReferenceGroup key={group.id} title={group.title} caption={group.caption}>
+            {group.rows.map((row) => (
+              <ReferenceRow key={row.description} label={row.description} keys={row.keys} />
             ))}
           </ReferenceGroup>
-
-          {moduleIds.length > 0 && (
-            <ReferenceGroup title={s.groups.modules} caption={s.moduleNavCaption}>
-              {moduleIds.slice(0, MODULE_NAV_MAX).map((moduleId, index) => {
-                const chord = moduleNavChord(index + 1);
-                if (chord === null) return null;
-                return (
-                  <ReferenceRow
-                    key={moduleId}
-                    label={moduleName(moduleId)}
-                    keys={[formatChord(chord)]}
-                  />
-                );
-              })}
-            </ReferenceGroup>
-          )}
-
-          {SHORTCUT_REFERENCE.map((group) => (
-            <ReferenceGroup key={group.id} title={group.title} caption={group.caption}>
-              {group.rows.map((row) => (
-                <ReferenceRow key={row.description} label={row.description} keys={row.keys} />
-              ))}
-            </ReferenceGroup>
-          ))}
-        </div>
-
-        <div className="recur-dialog__actions">
-          <Button className="recur-dialog__cancel" onClick={onClose}>
-            {s.dialogClose}
-          </Button>
-        </div>
+        ))}
       </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

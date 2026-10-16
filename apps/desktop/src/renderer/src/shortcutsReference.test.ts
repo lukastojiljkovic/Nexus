@@ -33,7 +33,16 @@ describe("SHORTCUT_REFERENCE", () => {
   it("gives every group a unique id", () => {
     const ids = SHORTCUT_REFERENCE.map((group) => group.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["assistant", "palette", "tasks", "calendar", "study", "notes", "notesFind"]);
+    expect(ids).toEqual([
+      "assistant",
+      "palette",
+      "rail",
+      "tasks",
+      "calendar",
+      "study",
+      "notes",
+      "notesFind",
+    ]);
   });
 
   it("titles every group from the shared group copy", () => {
@@ -91,6 +100,14 @@ describe("SHORTCUT_REFERENCE", () => {
       group.rows.map((row) => row.description),
     );
     expect([...printed].sort()).toEqual(Object.values(r()).sort());
+  });
+});
+
+describe("the rail group", () => {
+  it("documents the keyboard reorder of a pinned module, the one the rail offers", () => {
+    const rows = groupById("rail").rows;
+    expect(rows.map((row) => row.description)).toEqual([r().railMove]);
+    expect(rows[0]?.keys).toEqual(["Alt", "↑", "↓"]);
   });
 });
 
