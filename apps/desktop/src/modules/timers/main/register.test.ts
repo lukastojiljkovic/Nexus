@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, uuidv7, type NexusDatabase } from "@nexus/db";
+import { TimersStore, openDatabase, uuidv7, type NexusDatabase } from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
 import { register } from "./register.js";
 
@@ -388,5 +388,47 @@ describe("the timers archive section", () => {
   it("writes nothing for a session that names more than one profile, rather than guess", () => {
     const kit = harness();
     expect(kit.host.collectExports(["profile-1", "profile-2"])).toEqual([]);
+  });
+});
+
+describe("a countdown whose end changed after its alarm was set", () => {
+  it("is not announced by the alarm of the end it had when the page was open", async () => {
+    const kit = harness();
+    const profileId = createProfile();
+    const view = await call<{ countdowns: { id: string }[] }>(kit.host, "timers:createCountdown", {
+      profileId,
+      name: "Kafa",
+      durationSeconds: 90,
+    });
+    const countdownId = view.countdowns[0]?.id ?? "";
+    // The assistant pauses it outside the page's arming path.
+    new TimersStore(db.raw, profileId).pauseCountdown(countdownId, new Date(clock).toISOString());
+
+    kit.advance(90);
+
+    expect(kit.toasts).toEqual([]);
+    expect(new TimersStore(db.raw, profileId).countdown(countdownId)?.remainingSeconds).toBe(90);
+  });
+
+  it("stays silent at the old end after a pause and resume moved it", async () => {
+    const kit = harness();
+    const profileId = createProfile();
+    const view = await call<{ countdowns: { id: string }[] }>(kit.host, "timers:createCountdown", {
+      profileId,
+      name: "Kafa",
+      durationSeconds: 90,
+    });
+    const countdownId = view.countdowns[0]?.id ?? "";
+    const store = new TimersStore(db.raw, profileId);
+
+    kit.advance(30);
+    store.pauseCountdown(countdownId, new Date(clock).toISOString());
+    kit.advance(30);
+    store.resumeCountdown(countdownId, new Date(clock).toISOString());
+    // The alarm for the first end comes due; the countdown now ends later.
+    kit.advance(30);
+
+    expect(kit.toasts).toEqual([]);
+    expect(store.countdown(countdownId)).not.toBeNull();
   });
 });

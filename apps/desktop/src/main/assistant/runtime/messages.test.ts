@@ -307,6 +307,15 @@ function realTools(): readonly ToolSpec[] {
         throw new Error("The grammar test never starts a countdown.");
       },
       listCountdowns: () => [],
+      pauseCountdown: () => {
+        throw new Error("The grammar test never pauses a countdown.");
+      },
+      resumeCountdown: () => {
+        throw new Error("The grammar test never resumes a countdown.");
+      },
+      cancelCountdown: () => {
+        throw new Error("The grammar test never cancels a countdown.");
+      },
     },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,

@@ -150,7 +150,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...canvasTools({ profileDb: deps.profileDb, now: deps.now }),
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),
     ...habitTools({ profileDb: deps.profileDb, now: deps.now }),
-    ...timerTools({ timers: deps.timers }),
+    ...timerTools({ timers: deps.timers, profileDb: deps.profileDb, now: deps.now }),
     ...packTools({ packs: deps.packs }),
     ...emergencyTools({ profileDb: deps.profileDb }),
     ...electronicsTools({ profileDb: deps.profileDb, now: deps.now }),

@@ -139,6 +139,15 @@ function timers(): TimerHost {
       throw new Error("this test builds no timers");
     },
     listCountdowns: () => [],
+    pauseCountdown: () => {
+      throw new Error("this test builds no timers");
+    },
+    resumeCountdown: () => {
+      throw new Error("this test builds no timers");
+    },
+    cancelCountdown: () => {
+      throw new Error("this test builds no timers");
+    },
   };
 }
 

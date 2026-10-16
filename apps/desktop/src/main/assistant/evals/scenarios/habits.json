@@ -1,0 +1,242 @@
+{
+  "scenarios": [
+    {
+      "id": "habits-today-sr",
+      "title": "Kako stoje navike danas",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Kako stoje sa navikama danas?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "habits.today",
+          "effect": "read",
+          "content": "Navike za danas: 1 od 2 završeno.\n- [x] 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01 Teretana\n- [ ] 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02 Voda (2/8 čaša)"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "habits.today"
+          }
+        ],
+        "answerContains": [
+          "Teretana",
+          "Voda"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "habits.today",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "Danas je završena jedna od dve navike: teretana. Voda je na 2 od 8 čaša."
+        }
+      ]
+    },
+    {
+      "id": "habits-create-sr",
+      "title": "Napravi naviku za vodu",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Prati mi da pijem osam čaša vode dnevno."
+        }
+      ],
+      "tools": [
+        {
+          "name": "habits.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaj naviku „Voda“, 7 puta nedeljno",
+            "en": "Add the habit “Voda”, 7 times a week"
+          },
+          "content": "Napravljena navika „Voda“ (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "habits.create",
+            "args": {
+              "name": {
+                "contains": "Voda"
+              },
+              "schedule": {
+                "eq": "quota"
+              },
+              "target": {
+                "eq": 8
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Voda"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "habits.create",
+              "arguments": {
+                "name": "Voda",
+                "schedule": "quota",
+                "perWeek": 7,
+                "target": 8,
+                "unit": "čaša"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Napravio sam naviku „Voda“: osam čaša dnevno, svakog dana u nedelji."
+        }
+      ]
+    },
+    {
+      "id": "habits-create-en",
+      "title": "A gym habit on set days",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Track going to the gym on Mondays and Wednesdays."
+        }
+      ],
+      "tools": [
+        {
+          "name": "habits.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaj naviku „Gym“, na dane: pon, sre",
+            "en": "Add the habit “Gym”, on Mon, Wed"
+          },
+          "content": "Created the habit “Gym” (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a03)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "habits.create",
+            "args": {
+              "name": {
+                "contains": "Gym"
+              },
+              "schedule": {
+                "eq": "days"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Gym"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "habits.create",
+              "arguments": {
+                "name": "Gym",
+                "schedule": "days",
+                "days": [
+                  1,
+                  3
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "text": "I added the habit “Gym” for Mondays and Wednesdays."
+        }
+      ]
+    },
+    {
+      "id": "habits-history-en",
+      "title": "How the reading habit has gone",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "How has my reading habit been going this month?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "habits.history",
+          "effect": "read",
+          "content": "Habits from 1 October 2026 to 10 October 2026:\n- Reading: 3 of 5 scheduled days\n  3 October 2026: done\n  6 October 2026: done\n  10 October 2026: done\nStreaks are on the habits page, which knows which day your week starts on."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "habits.history",
+            "args": {
+              "habit": {
+                "contains": "Reading"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "3 of 5"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "habits.history",
+              "arguments": {
+                "habit": "Reading",
+                "from": "2026-10-01",
+                "to": "2026-10-10"
+              }
+            }
+          ]
+        },
+        {
+          "text": "So far this month you read on 3 of 5 scheduled days."
+        }
+      ]
+    }
+  ]
+}

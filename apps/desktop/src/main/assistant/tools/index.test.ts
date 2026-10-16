@@ -85,6 +85,15 @@ function registryWith(web: WebService | null = null): ToolRegistry {
         throw new Error("Test setup: timers.start was not expected here.");
       },
       listCountdowns: () => [],
+      pauseCountdown: () => {
+        throw new Error("Test setup: timers.pause was not expected here.");
+      },
+      resumeCountdown: () => {
+        throw new Error("Test setup: timers.resume was not expected here.");
+      },
+      cancelCountdown: () => {
+        throw new Error("Test setup: timers.cancel was not expected here.");
+      },
     },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
@@ -130,6 +139,7 @@ describe("createToolRegistry", () => {
       finance: 8,
       fitness: 8,
       habits: 2,
+      habits: 7,
       lab: 2,
       library: 2,
       maps: 1,
@@ -143,7 +153,7 @@ describe("createToolRegistry", () => {
       settings: 6,
       study: 14,
       tasks: 4,
-      timers: 2,
+      timers: 9,
       wiki: 1,
     });
     for (const tool of tools) {
