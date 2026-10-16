@@ -2407,6 +2407,44 @@ export type {
   TablicState,
 } from "./games/cards/tablic.js";
 
+// --- GAMES: cards, the turn logic (AG-22) ------------------------------------
+//
+// The dispatcher the cards page and the assistant share: one function per
+// question, answered by the nine engines above. `legalCardMoves` is named apart from
+// the chess `legalMoves` that this index already exports.
+export type { CardSession } from "./games/cards/dispatch.js";
+export {
+  LEVELS,
+  DEFAULT_LEVEL_NAME,
+  GAME_ORDER,
+  variantsOf,
+  isComputerGame,
+  seatCount,
+  listIsValid,
+  startGame,
+  resumeGame,
+  legalCardMoves,
+  hasMovesLeft,
+  isWon,
+  isFinished,
+  seatToAct,
+  seatNow,
+  undoEntry,
+  stepSession,
+  canUndo,
+  undoSession,
+  hintMove,
+  safeMoves,
+  canSolve,
+  solveVerdict,
+  spiderRows,
+  playedMoves,
+  moveSeed,
+  computerMove,
+  isMoveFor,
+  cardCodeOf,
+} from "./games/cards/dispatch.js";
+
 // --- GAMES / CHESS (stage 1) -------------------------------------------------
 //
 // The module's LOGIC: no UI, no IPC, no database. Three layers meet here, and

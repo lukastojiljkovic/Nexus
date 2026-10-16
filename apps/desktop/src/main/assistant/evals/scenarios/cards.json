@@ -1,0 +1,231 @@
+{
+  "scenarios": [
+    {
+      "id": "cards-stats-read-sr",
+      "title": "Kako mi ide u kartama",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Kako su mi partije u kartama?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "cards.stats",
+          "effect": "read",
+          "content": "Rezultati (1):\n- Klondajk (po jednu): 12 odigrano, 5 pobeda, najbolji rezultat 340, najduži niz pobeda 2."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "cards.stats"
+          }
+        ],
+        "answerContains": [
+          "Klondajk",
+          "5"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "cards.stats",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "U kartama imaš 5 pobeda od 12 partija Klondajka po jednu, a najbolji rezultat ti je 340."
+        }
+      ]
+    },
+    {
+      "id": "cards-start-write-sr",
+      "title": "Podeli frisel sa brojem partije",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Podeli mi novu partiju frisela sa brojem 617."
+        }
+      ],
+      "tools": [
+        {
+          "name": "cards.start",
+          "effect": "write",
+          "summary": {
+            "sr": "Podeli novu igru Frisel (klasična)",
+            "en": "Deal a new FreeCell game (classic)"
+          },
+          "content": "Otvorena je nova igra Frisel (klasična)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "cards.start",
+            "args": {
+              "game": {
+                "eq": "freecell"
+              },
+              "deal": {
+                "eq": 617
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "617"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "cards.start",
+              "arguments": {
+                "game": "freecell",
+                "deal": 617
+              }
+            }
+          ]
+        },
+        {
+          "text": "Otvorio sam novu partiju Frisela sa brojem 617, pa možeš odmah da počneš da slažeš karte."
+        }
+      ]
+    },
+    {
+      "id": "cards-position-read-en",
+      "title": "Where did I stop",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Where did I stop in my Klondike game?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "cards.position",
+          "effect": "read",
+          "content": "Klondike (draw one): score 40, 34 moves played.\nIt is your turn.\nLegal moves: 9.\ncolumn 1: 1 cards, top 7H\nstock: 21\nwaste: 3 cards, top 5S"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "cards.position",
+            "args": {
+              "game": {
+                "eq": "klondike"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Klondike",
+          "9"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "cards.position",
+              "arguments": {
+                "game": "klondike"
+              }
+            }
+          ]
+        },
+        {
+          "text": "You are on move in Klondike: score 40, after 34 moves, with 9 legal moves."
+        }
+      ]
+    },
+    {
+      "id": "cards-clear-write-en",
+      "title": "Throw away a saved game",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Throw away my saved Spider game with two suits."
+        }
+      ],
+      "tools": [
+        {
+          "name": "cards.clear",
+          "effect": "write",
+          "summary": {
+            "sr": "Odbaci sačuvanu igru Pauk (dve boje) sa 34 poteza",
+            "en": "Discard the saved Spider game (two suits) of 34 moves"
+          },
+          "content": "Discarded the saved Spider game (two suits)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "cards.clear",
+            "args": {
+              "game": {
+                "eq": "spider"
+              },
+              "variant": {
+                "eq": "suits2"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Spider"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "cards.clear",
+              "arguments": {
+                "game": "spider",
+                "variant": "suits2"
+              }
+            }
+          ]
+        },
+        {
+          "text": "The saved Spider game with two suits is discarded."
+        }
+      ]
+    }
+  ]
+}
