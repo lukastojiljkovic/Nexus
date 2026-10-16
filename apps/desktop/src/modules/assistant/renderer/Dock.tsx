@@ -30,6 +30,7 @@ export default function AssistantDock({
   beside,
   onClose,
   onEscape,
+  onPageChanged,
 }: {
   readonly profileId: string;
   /** The page the dock sits beside, which the assistant's tools see as the user's place. */
@@ -37,6 +38,8 @@ export default function AssistantDock({
   readonly onClose: () => void;
   /** Returns focus to the page beside the dock. */
   readonly onEscape: () => void;
+  /** Remounts the page beside the dock after a turn that changed it (`AssistantSurface`). */
+  readonly onPageChanged: () => void;
 }) {
   const [width, setWidth] = useState(readStoredDockWidth);
 
@@ -95,7 +98,7 @@ export default function AssistantDock({
         </Button>
       </div>
       <div className="asst-dock__body">
-        <AssistantSurface profileId={profileId} docked beside={beside} />
+        <AssistantSurface profileId={profileId} docked beside={beside} onPageChanged={onPageChanged} />
       </div>
     </aside>
   );

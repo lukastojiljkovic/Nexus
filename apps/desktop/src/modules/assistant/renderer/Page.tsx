@@ -123,10 +123,16 @@ export function AssistantSurface({
   profileId,
   docked = false,
   beside = manifest.id,
+  onPageChanged,
 }: {
   readonly profileId: string;
   readonly docked?: boolean;
   readonly beside?: string;
+  /**
+   * Called once when a docked turn ends that asked to change something or opened a
+   * place, so the page beside re-reads what the turn may have written under it.
+   */
+  readonly onPageChanged?: () => void;
 }) {
   const [view, setView] = useState<AssistantView | null>(null);
   const [setup, setSetup] = useState<AssistantSetupView | null>(null);
@@ -377,6 +383,14 @@ export function AssistantSurface({
             setConfirms(NO_CONFIRMS);
             if (polled.thread !== null) setThread(polled.thread);
             await refresh();
+            // A turn that asked to change something, or opened a place, may have written
+            // under the page beside the dock, which re-reads once it is over.
+            const changed = turnEvents.current.some(
+              (turnEvent) => turnEvent.type === "confirm" || placeOf(turnEvent) !== null,
+            );
+            if (docked && changed) {
+              onPageChanged?.();
+            }
             // Last, because opening a place unmounts this page: the answer and
             // the saved thread are on screen first, and then the view moves.
             for (const location of locations) openAppLocation(location);
@@ -399,7 +413,7 @@ export function AssistantSurface({
       active = false;
       clearInterval(handle);
     };
-  }, [docked, live, profileId, refresh]);
+  }, [docked, live, onPageChanged, profileId, refresh]);
 
   /** Re-reads the conversation after a lost stream, so what was saved is what is on screen. */
   const retryLost = useCallback(() => {

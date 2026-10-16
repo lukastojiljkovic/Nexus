@@ -397,8 +397,14 @@ export function App() {
    * has just written the key, and this is what re-reads it.
    */
   const [navEpoch, setNavEpoch] = useState(0);
-  /** Bumped when a location opens the dashboard, so a page that is already up re-reads a layout the assistant changed in main. */
-  const [dashboardEpoch, setDashboardEpoch] = useState(0);
+  /**
+   * Bumped when the assistant changed what the page on screen shows: a location
+   * that opens the dashboard (its layout lives in main), or a docked turn that
+   * wrote beside the page. Every page's key carries it, so that page remounts and
+   * re-reads, and only that one.
+   */
+  const [pageEpoch, setPageEpoch] = useState(0);
+  const bumpPageEpoch = useCallback(() => setPageEpoch((epoch) => epoch + 1), []);
   const [pinnedModules, setPinnedModules] = useState<readonly string[]>([]);
   /**
    * The group keys this profile has folded away (ADR-093 §2), and whether the
@@ -1067,7 +1073,7 @@ export function App() {
       const moduleId = detail?.module;
       if (typeof moduleId !== "string" || moduleId === "") return;
       setActiveId(moduleId);
-      if (moduleId === "dashboard") setDashboardEpoch((epoch) => epoch + 1);
+      if (moduleId === "dashboard") setPageEpoch((epoch) => epoch + 1);
       // An item or an action is QUEUED rather than announced (ADR-114, ADR-117):
       // the request's own module gets it as the next thing its page is owed, and
       // `intentForPage` below is what decides that — including for a page that
@@ -1715,6 +1721,9 @@ export function App() {
     patchActiveProfile({ pictureHash });
   }
 
+  /** Every page's key: a profile switch (ADR-058 §1) or a bumped `pageEpoch` remounts the page on screen. */
+  const pageKey = `${activeProfile?.id ?? ""}:${String(pageEpoch)}`;
+
   return (
     // The key REMOUNTS the shell when the language changes, which is deliberate
     // and is the only thing that makes the switch complete. A bare re-render
@@ -2164,7 +2173,7 @@ export function App() {
             <ModuleSettingsNavProvider value={settingsNav}>
               {shownId === "dashboard" && activeProfile ? (
                 <DashboardPage
-                  key={`${activeProfile.id}:${dashboardEpoch}`}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   profileName={activeProfile.name}
                   registry={registry}
@@ -2176,14 +2185,14 @@ export function App() {
                 />
               ) : shownId === "tasks" && activeProfile ? (
                 <TasksPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "tasks" ? pending.intent : null}
                   onIntentHandled={clearIntent}
                 />
               ) : shownId === "calendar" && activeProfile ? (
                 <CalendarPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   // CAL-005 / ADR-058 §5: the account's OTHER profile is the
                   // overlay chip's origin — v1 keeps one personal anchor plus at
@@ -2199,22 +2208,22 @@ export function App() {
                 />
               ) : shownId === "notes" && activeProfile ? (
                 <NotesPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "notes" ? pending.intent : null}
                   onIntentHandled={clearIntent}
                 />
               ) : shownId === "priv" && activeProfile ? (
-                <PrivPage key={activeProfile.id} profileId={activeProfile.id} />
+                <PrivPage key={pageKey} profileId={activeProfile.id} />
               ) : shownId === "files" && activeProfile ? (
                 <FilesPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   onOpenOwner={openAttachmentOwner}
                 />
               ) : shownId === "study" && activeProfile ? (
                 <StudyPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   onOpenNote={openNote}
                   intent={pending?.module === "study" ? pending.intent : null}
@@ -2222,7 +2231,7 @@ export function App() {
                 />
               ) : shownId === "finance" && activeProfile ? (
                 <FinancePage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "finance" ? pending.intent : null}
                   onIntentHandled={clearIntent}
@@ -2231,14 +2240,14 @@ export function App() {
                 // No `intent` pair: HABIT publishes no quick-create command in this
                 // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
                 // there is nothing pending for this page to consume.
-                <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
+                <HabitsPage key={pageKey} profileId={activeProfile.id} />
               ) : shownId === "fitness" && activeProfile ? (
                 // No `intent` pair, on HABIT's terms exactly: FIT publishes no
                 // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
                 // untouched) — logging a meal needs a food, an amount and a slot, and
                 // a palette line that opened an empty picker would be a command that
                 // only ever means „open the page".
-                <FitnessPage key={activeProfile.id} profileId={activeProfile.id} />
+                <FitnessPage key={pageKey} profileId={activeProfile.id} />
               ) : shownId === "focus" && activeProfile ? (
                 // `enabledModules` rather than an `intent` pair: UTIL publishes no
                 // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
@@ -2246,7 +2255,7 @@ export function App() {
                 // picker draws rows from TASK and STUDY and must not offer either
                 // while the profile has it switched off.
                 <FocusPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   enabledModules={visibleIds}
                 />
@@ -2257,13 +2266,13 @@ export function App() {
                 // this profile has switched off must go with it, exactly as that
                 // module's page and widgets do.
                 //
-                // `key={activeProfile.id}`, where the drawer used to go without
+                // `key={pageKey}`, where the drawer used to go without
                 // one: it reads nothing profile-shaped except the finder's stars
                 // and history, and those ARE per-profile state — so a switch now
                 // discards the previous person's favourites exactly as it
                 // discards every other page's half-typed work.
                 <ToolsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   drawer="utilities"
                   profileId={activeProfile.id}
                   enabledModules={visibleIds}
@@ -2285,7 +2294,7 @@ export function App() {
                 // therefore visible to everybody — passing it to both is what keeps
                 // the two pages one component.
                 <ToolsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   drawer="professional"
                   profileId={activeProfile.id}
                   enabledModules={visibleIds}
@@ -2309,7 +2318,7 @@ export function App() {
                 // and never see `<html data-theme>`, and `onOpenRef` because a card
                 // is a pointer and following one is a cross-module intent App owns.
                 <CanvasPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   theme={theme}
                   onOpenRef={openCanvasRef}
@@ -2328,14 +2337,14 @@ export function App() {
                 // the page, from a name — ELEC publishes no create command — so
                 // „reveal" is the only arm.
                 <ElectronicsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "electronics" ? pending.intent : null}
                   onIntentHandled={clearIntent}
                 />
               ) : shownId === SEARCH_PAGE_ID && activeProfile ? (
                 <SearchPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   seed={searchSeed}
                   onSeedConsumed={clearSearchSeed}
@@ -2344,7 +2353,7 @@ export function App() {
                 />
               ) : shownId === "settings" && activeProfile ? (
                 <SettingsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   profileName={activeProfile.name}
                   profilePictureHash={activeProfile.pictureHash}
@@ -2388,7 +2397,7 @@ export function App() {
                 // one, and a module that ignores the prop, are handed `null` and
                 // behave exactly as they did before it existed.
                 <KitModulePage
-                  key={activeProfile.id}
+                  key={pageKey}
                   id={shownId}
                   profileId={activeProfile.id}
                   intent={intentForPage(itemIntents, shownId)}
@@ -2408,6 +2417,7 @@ export function App() {
               beside={shownId}
               onClose={() => setAssistantOpen(false)}
               onEscape={() => mainRef.current?.focus()}
+              onPageChanged={bumpPageEpoch}
             />
           </Suspense>
         )}
