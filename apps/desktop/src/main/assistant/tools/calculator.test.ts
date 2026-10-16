@@ -7,12 +7,12 @@ import type { Tool, ToolContext } from "@nexus/core";
 import { calculatorTools } from "./calculator.js";
 
 /**
- * The CALCULATOR tool over a real database.
+ * The CALCULATOR tools over a real database.
  *
- * It reads history and computes nothing — the engine is the module's, and it is
- * the only place in this application an expression is evaluated — so what this
- * suite pins is that both halves of a row come back as they were stored, with
- * the pinned flag beside them.
+ * `calculate` and `remember` evaluate through the module's own engine, so these
+ * tests pin what the engine's answer becomes in a tool result: the refusals by
+ * name, the settings the user chose, and the history row a confirmed write
+ * leaves behind. The arithmetic itself is the engine's and is tested there.
  */
 
 const NOW_MS = new Date(2026, 9, 10, 9, 0, 0).getTime();
@@ -43,20 +43,24 @@ function store(): CalculatorStore {
   return new CalculatorStore(db.raw, profileId);
 }
 
-function context(locale: "sr" | "en"): ToolContext {
+function context(
+  locale: "sr" | "en",
+  confirm: ToolContext["confirm"] = () => Promise.resolve(true),
+): ToolContext {
   return {
     profileId,
     locale,
     signal: new AbortController().signal,
-    confirm: () => Promise.resolve(true),
+    confirm,
   };
 }
 
-function tool(): Tool {
-  const found = calculatorTools({ profileDb: (id, open) => open(db.raw, id) }).find(
-    (entry) => entry.name === "calculator.history",
-  );
-  if (found === undefined) throw new Error('Test setup: no tool "calculator.history".');
+function tool(name = "calculator.history"): Tool {
+  const found = calculatorTools({
+    profileDb: (id, open) => open(db.raw, id),
+    now: () => NOW_MS,
+  }).find((entry) => entry.name === name);
+  if (found === undefined) throw new Error(`Test setup: no tool "${name}".`);
   return found;
 }
 
@@ -100,5 +104,102 @@ describe("calculator.history", () => {
   it("says the history is empty rather than answering with nothing", async () => {
     const result = await tool().run({}, context("sr"));
     expect(result).toEqual({ ok: true, content: "Istorija kalkulatora je prazna." });
+  });
+});
+
+describe("calculator.calculate", () => {
+  it("answers the engine's result for the expression as written", async () => {
+    const result = await tool("calculator.calculate").run({ expression: "2+2*2" }, context("en"));
+    expect(result).toEqual({ ok: true, content: "2+2*2 = 6" });
+  });
+
+  it("writes the result in the user's locale, with the exact value beside it", async () => {
+    const result = await tool("calculator.calculate").run({ expression: "sin(30)" }, context("sr"));
+    expect(result).toEqual({
+      ok: true,
+      content: "sin(30) = 0,5\nTačna vrednost: 0.49999999999999994",
+    });
+  });
+
+  it("computes in the angle mode the user has chosen", async () => {
+    store().saveSettings({ angleMode: "rad", precision: "float" }, NOW_ISO);
+    const result = await tool("calculator.calculate").run({ expression: "sin(30)" }, context("en"));
+    expect(result.content).toMatch(/^sin\(30\) = -0\.98803/);
+  });
+
+  it("refuses a disabled function by name", async () => {
+    const result = await tool("calculator.calculate").run(
+      { expression: 'evaluate("2+2")' },
+      context("en"),
+    );
+    expect(result).toEqual({
+      ok: false,
+      content: "Failed: The function “evaluate” is not allowed in the calculator.",
+    });
+  });
+
+  it("refuses an unknown name by name", async () => {
+    const result = await tool("calculator.calculate").run({ expression: "foo + 1" }, context("sr"));
+    expect(result).toEqual({ ok: false, content: "Neuspešno: Nepoznato ime u izrazu: „foo“." });
+  });
+
+  it("refuses an expression that is not written correctly", async () => {
+    const result = await tool("calculator.calculate").run({ expression: "2+" }, context("en"));
+    expect(result).toEqual({
+      ok: false,
+      content: "Failed: The expression is not written correctly.",
+    });
+  });
+
+  it("refuses a call without an expression", async () => {
+    const result = await tool("calculator.calculate").run({}, context("en"));
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("calculator.remember", () => {
+  it("asks first, then saves the row the page would save", async () => {
+    const asked: string[] = [];
+    const result = await tool("calculator.remember").run(
+      { expression: "2+2*2" },
+      context("en", ({ summary, tool: name, effect }) => {
+        asked.push(`${name} ${effect} ${summary}`);
+        return Promise.resolve(true);
+      }),
+    );
+
+    expect(asked).toEqual([
+      "calculator.remember write Save “2+2*2” = 6 to the calculator's history?",
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      content: "Saved to the calculator's history: 2+2*2 = 6",
+      navigateTo: { module: "calculator" },
+    });
+    const [entry] = store().listHistory();
+    expect(entry).toMatchObject({ expression: "2+2*2", result: "6", value: "6", pinned: false });
+  });
+
+  it("writes nothing when the user declines", async () => {
+    const result = await tool("calculator.remember").run(
+      { expression: "2+2*2" },
+      context("en", () => Promise.resolve(false)),
+    );
+    expect(result).toEqual({ ok: false, content: "The user declined." });
+    expect(store().listHistory()).toEqual([]);
+  });
+
+  it("does not ask about an expression the engine refuses", async () => {
+    let asked = false;
+    const result = await tool("calculator.remember").run(
+      { expression: 'evaluate("2+2")' },
+      context("en", () => {
+        asked = true;
+        return Promise.resolve(true);
+      }),
+    );
+    expect(result.ok).toBe(false);
+    expect(asked).toBe(false);
+    expect(store().listHistory()).toEqual([]);
   });
 });

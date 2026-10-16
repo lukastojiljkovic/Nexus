@@ -133,6 +133,8 @@ export interface CalculatorFailure {
   readonly code: CalculatorCode;
   /** The zero-based character a syntax error stopped at, when mathjs names one. */
   readonly position?: number;
+  /** The name a `disabled` or `unknown-symbol` refusal is about, when the engine knows it. */
+  readonly symbol?: string;
 }
 
 export type CalculatorOutcome = CalculatorSuccess | CalculatorFailure;
@@ -832,7 +834,9 @@ function resolveNumber(
  * one of them is the expression asking an operation for something it cannot do.
  */
 function refusal(error: unknown): CalculatorFailure {
-  if (error instanceof CalculatorDisabledError) return { ok: false, code: "disabled" };
+  if (error instanceof CalculatorDisabledError) {
+    return { ok: false, code: "disabled", symbol: error.disabledFunction };
+  }
 
   const message = error instanceof Error ? error.message : "";
   if (error instanceof SyntaxError || /\(char \d+\)/.test(message)) {
@@ -841,7 +845,8 @@ function refusal(error: unknown): CalculatorFailure {
       ? { ok: false, code: "syntax" }
       : { ok: false, code: "syntax", position };
   }
-  if (/Undefined (symbol|function)/.test(message)) return { ok: false, code: "unknown-symbol" };
+  const unknownName = /Undefined (?:symbol|function) (\S+)/.exec(message)?.[1];
+  if (unknownName !== undefined) return { ok: false, code: "unknown-symbol", symbol: unknownName };
   // mathjs refuses the property names that would lead out of its own world;
   // there is no name here, so there is no symbol to name.
   if (/No access to property/.test(message)) return { ok: false, code: "unknown-symbol" };
