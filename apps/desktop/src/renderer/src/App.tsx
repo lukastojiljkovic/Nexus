@@ -384,6 +384,8 @@ export function App() {
    * has just written the key, and this is what re-reads it.
    */
   const [navEpoch, setNavEpoch] = useState(0);
+  /** Bumped when a location opens the dashboard, so a page that is already up re-reads a layout the assistant changed in main. */
+  const [dashboardEpoch, setDashboardEpoch] = useState(0);
   const [pinnedModules, setPinnedModules] = useState<readonly string[]>([]);
   /**
    * The group keys this profile has folded away (ADR-093 §2), and whether the
@@ -1052,6 +1054,7 @@ export function App() {
       const moduleId = detail?.module;
       if (typeof moduleId !== "string" || moduleId === "") return;
       setActiveId(moduleId);
+      if (moduleId === "dashboard") setDashboardEpoch((epoch) => epoch + 1);
       // An item or an action is QUEUED rather than announced (ADR-114, ADR-117):
       // the request's own module gets it as the next thing its page is owed, and
       // `intentForPage` below is what decides that — including for a page that
@@ -2138,7 +2141,7 @@ export function App() {
             <ModuleSettingsNavProvider value={settingsNav}>
               {shownId === "dashboard" && activeProfile ? (
                 <DashboardPage
-                  key={activeProfile.id}
+                  key={`${activeProfile.id}:${dashboardEpoch}`}
                   profileId={activeProfile.id}
                   profileName={activeProfile.name}
                   registry={registry}

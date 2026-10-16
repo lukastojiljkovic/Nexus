@@ -1,0 +1,122 @@
+{
+  "scenarios": [
+    {
+      "id": "dashboard-widgets-sr",
+      "title": "Šta je na kontrolnoj tabli",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta trenutno imam na kontrolnoj tabli?" }
+      ],
+      "tools": [
+        {
+          "name": "dashboard.widgets",
+          "effect": "read",
+          "content": "Vidžeti na tabli „Početna“:\n- a1 · calendar:danas · „Danas“ · M\n- a2 · tasks:predstojece · „Predstojeći zadaci“ · M\n- a3 · calendar:isticanja · „Dokumenta koja ističu“ · M\n- a4 · study:ispiti · „Ispiti“ · M\n- a5 · study:ucenje · „Učenje“ · M"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "dashboard.widgets" }],
+        "answerContains": ["Danas", "Predstojeći zadaci"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "dashboard.widgets", "arguments": {} }] },
+        { "text": "Na kontrolnoj tabli su ti pet kartica: Danas, Predstojeći zadaci, Dokumenta koja ističu, Ispiti i Učenje." }
+      ]
+    },
+    {
+      "id": "dashboard-add-sr",
+      "title": "Dodavanje vidžeta posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Dodaj mi na kontrolnu tablu karticu sa statistikom." }
+      ],
+      "tools": [
+        {
+          "name": "dashboard.arrange",
+          "effect": "write",
+          "summary": { "sr": "Dodaj vidžet „Statistika“ (M) na tablu „Početna“", "en": "Add the “Stats” widget (M) to the “Home” board" },
+          "content": "Dodat vidžet Statistika, veličina M.\nVidžeti na tabli „Početna“:\n- b1 · calendar:danas · „Danas“ · M\n- b6 · tasks:statistika · „Statistika“ · M",
+          "navigateTo": { "module": "dashboard" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "dashboard.arrange", "args": { "action": { "eq": "add" }, "widget": { "contains": "Statistika" } } }],
+        "navigatesTo": [{ "module": "dashboard" }],
+        "answerContains": ["Statistika"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "dashboard.arrange", "arguments": { "action": "add", "widget": "Statistika", "size": "M" } }] },
+        { "text": "Dodao sam vidžet Statistika na kontrolnu tablu, veličine M." }
+      ]
+    },
+    {
+      "id": "dashboard-widgets-en",
+      "title": "What is on the dashboard",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What is on my dashboard right now?" }
+      ],
+      "tools": [
+        {
+          "name": "dashboard.widgets",
+          "effect": "read",
+          "content": "Widgets on the “Home” board:\n- a1 · calendar:danas · “Today” · M\n- a2 · tasks:predstojece · “Upcoming tasks” · M\n- a3 · calendar:isticanja · “Expiring documents” · M\n- a4 · study:ispiti · “Exams” · M\n- a5 · study:ucenje · “Study” · M"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "dashboard.widgets" }],
+        "answerContains": ["Today", "Exams"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "dashboard.widgets", "arguments": {} }] },
+        { "text": "Your dashboard shows five cards: Today, Upcoming tasks, Expiring documents, Exams and Study." }
+      ]
+    },
+    {
+      "id": "dashboard-board-en",
+      "title": "Creating a board after confirmation",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Make a new dashboard board called Uni for my studies." }
+      ],
+      "tools": [
+        {
+          "name": "dashboard.board",
+          "effect": "write",
+          "summary": { "sr": "Napravi tablu „Uni“", "en": "Create the board “Uni”" },
+          "content": "Created the board Uni.\nDashboard boards:\n- Home · default (open)\n- Uni · c1",
+          "navigateTo": { "module": "dashboard" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "dashboard.board", "args": { "action": { "eq": "create" }, "name": { "eq": "Uni" } } }],
+        "navigatesTo": [{ "module": "dashboard" }],
+        "answerContains": ["Uni"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "dashboard.board", "arguments": { "action": "create", "name": "Uni" } }] },
+        { "text": "I created the board Uni. It is not open yet, so say the word if you want to switch to it." }
+      ]
+    }
+  ]
+}
