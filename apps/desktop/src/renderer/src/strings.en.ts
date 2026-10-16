@@ -8267,6 +8267,9 @@ export const en = {
       study: "Study",
       notes: "Notes",
       notesFind: "Find in note",
+      timers: "Timers",
+      miniapps: "Mini apps",
+      signals: "Signals",
     },
     /** The reserved Ctrl+1…Ctrl+9 family: positional, so it is described rather than named. */
     moduleNavLabel: "Switch module in order",
@@ -8277,6 +8280,9 @@ export const en = {
       notes: "At the start of a line in the note editor.",
       /** The find bar's keys work anywhere in the note, unlike the markdown shortcuts above them — hence a group of its own. */
       notesFind: "While a note is open; searches only that note.",
+      timers: "On the timers page, outside a text field.",
+      miniapps: "While a mini app is open.",
+      signals: "While the Morse lamp covers the screen.",
     },
     reference: {
       paletteMove: "Move through the results",
@@ -8306,6 +8312,11 @@ export const en = {
       notesFindOpen: "Open the find bar in the note",
       notesFindStep: "Next or previous match",
       notesFindClose: "Close the bar and put the cursor back on the match",
+      timersStartPause: "Start or pause the stopwatch",
+      timersLap: "Take a lap",
+      timersReset: "Reset the stopwatch",
+      miniappsClose: "Close the open mini app",
+      signalsLampStop: "Stop the Morse lamp",
     },
   },
 } as const;

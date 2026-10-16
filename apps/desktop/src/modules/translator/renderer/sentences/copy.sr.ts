@@ -35,6 +35,7 @@ export const sr = {
   noPacksTitle: "Nema prevodilačkog paketa",
   noPacksBody:
     "Za prevod je potreban paket modela. Instaliraj ga u Podešavanjima, u kartici „Paketi sadržaja“.",
+  openPacks: "Otvori „Paketi sadržaja“",
   missingPack: "Za ovaj smer je potreban paket {pack}.",
   progress: "Prevedeno {done} od {total} rečenica.",
   count: "{count} rečenica",

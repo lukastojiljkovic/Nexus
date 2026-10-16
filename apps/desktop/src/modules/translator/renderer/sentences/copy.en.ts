@@ -27,6 +27,7 @@ export const en: typeof sr = {
   noPacksTitle: "No translation pack installed",
   noPacksBody:
     "Translation needs a model pack. Install one in Settings, on the “Content packs” card.",
+  openPacks: "Open Content packs",
   missingPack: "This direction needs the {pack} pack.",
   progress: "Translated {done} of {total} sentences.",
   count: "{count} sentences",

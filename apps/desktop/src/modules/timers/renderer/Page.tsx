@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   EmptyState,
   Icon,
   ListRow,
@@ -447,7 +448,7 @@ function CountdownsSection({
       </div>
 
       {countdowns.length === 0 ? (
-        <p className="nx-hint">{copy.countdowns.empty}</p>
+        <EmptyState variant="inline" title={copy.countdowns.empty} />
       ) : (
         <div className="timers__list">
           {countdowns.map((countdown) => {
@@ -528,6 +529,8 @@ function PresetsSection({
   /** Which preset is being renamed, and what has been typed so far. */
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  /** The preset a delete is waiting on: a deleted preset is not brought back, so the act is asked first. */
+  const [removing, setRemoving] = useState<TimersPresetView | null>(null);
 
   return (
     <Card className="timers__card" title={copy.presets.title}>
@@ -606,9 +609,9 @@ function PresetsSection({
                       <Button
                         size="sm"
                         variant="quiet"
-                        onClick={() =>
-                          void run((timers) => timers.removePreset({ profileId, id: preset.id }))
-                        }
+                        onClick={() => {
+                          setRemoving(preset);
+                        }}
                       >
                         {copy.presets.remove}
                       </Button>
@@ -622,6 +625,22 @@ function PresetsSection({
             )
           ))}
         </div>
+      )}
+      {removing !== null && (
+        <ConfirmDialog
+          title={copy.presets.removeTitle}
+          name={removing.name}
+          question={copy.presets.removeQuestion}
+          confirmLabel={copy.presets.removeConfirm}
+          cancelLabel={copy.presets.cancel}
+          destructive
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const id = removing.id;
+            setRemoving(null);
+            void run((timers) => timers.removePreset({ profileId, id }));
+          }}
+        />
       )}
     </Card>
   );

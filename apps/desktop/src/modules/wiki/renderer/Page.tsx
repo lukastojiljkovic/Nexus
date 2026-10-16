@@ -431,7 +431,7 @@ function CatalogueSection({
           </Button>
         </div>
       ) : catalogue.collections.length === 0 ? (
-        <p className="nx-hint">{copy.catalogue.empty}</p>
+        <EmptyState variant="inline" title={copy.catalogue.empty} />
       ) : (
         catalogue.collections.map((collection) => (
           <div key={collection.id} className="wiki__collection">
@@ -565,7 +565,7 @@ function SearchSection({
               {copy.errors.search}
             </p>
           ) : prefix.trim() !== "" && hits.length === 0 ? (
-            <p className="nx-hint">{copy.search.empty}</p>
+            <EmptyState variant="inline" title={copy.search.empty} />
           ) : (
             <div className="wiki__list wiki__list-scroll">
               {hits.map((hit) => (
@@ -684,7 +684,7 @@ function HistorySection({
   return (
     <Card className="wiki__card" title={copy.history.title}>
       {history.length === 0 ? (
-        <p className="nx-hint">{copy.history.empty}</p>
+        <EmptyState variant="inline" title={copy.history.empty} />
       ) : (
         <>
           <div className="wiki__actions">
@@ -751,7 +751,7 @@ function BookmarksSection({
   return (
     <Card className="wiki__card" title={copy.bookmarks.title}>
       {bookmarks.length === 0 ? (
-        <p className="nx-hint">{copy.bookmarks.empty}</p>
+        <EmptyState variant="inline" title={copy.bookmarks.empty} />
       ) : (
         <div className="wiki__list wiki__list-scroll">
           {bookmarks.map((row) => (

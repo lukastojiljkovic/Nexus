@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Button, EmptyState, Icon, LoadingState, PageHeader, type IconName } from "@nexus/ui";
+import { Button, Icon, LoadingState, PageHeader, type IconName } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { manifest } from "../shared/manifest.js";
@@ -18,7 +18,7 @@ import { ScreenLightApp } from "./apps/ScreenLightApp.js";
 import { TallyApp } from "./apps/TallyApp.js";
 import { TypingApp } from "./apps/TypingApp.js";
 import { WorldClockApp } from "./apps/WorldClockApp.js";
-import type { MiniAppProps, Run } from "./apps/contract.js";
+import type { Run } from "./apps/contract.js";
 import { copy } from "./copy.js";
 import "./miniapps.css";
 
@@ -152,9 +152,6 @@ export default function MiniappsPage({ profileId, intent, onIntentHandled }: Mod
     return () => window.removeEventListener("keydown", handler);
   }, [open, show]);
 
-  const appProps: MiniAppProps | null =
-    view === null ? null : { profileId, view, run };
-
   return (
     <div className="miniapps">
       {/* The page's own name is the word the module DECLARED, read in the
@@ -192,18 +189,16 @@ export default function MiniappsPage({ profileId, intent, onIntentHandled }: Mod
             </button>
           ))}
         </div>
-      ) : appProps === null ? (
-        <EmptyState title={copy.page.loading} />
       ) : (
         <Fragment key={revision}>
           <h2 className="miniapps__app-title">{copy.apps[open].name}</h2>
           {open === "metronome" && <MetronomeApp />}
-          {open === "dice" && <DiceApp {...appProps} />}
-          {open === "tally" && <TallyApp {...appProps} />}
-          {open === "scoreboard" && <ScoreboardApp {...appProps} />}
-          {open === "typing" && <TypingApp {...appProps} />}
+          {open === "dice" && <DiceApp profileId={profileId} view={view} run={run} />}
+          {open === "tally" && <TallyApp profileId={profileId} view={view} run={run} />}
+          {open === "scoreboard" && <ScoreboardApp profileId={profileId} view={view} run={run} />}
+          {open === "typing" && <TypingApp profileId={profileId} view={view} run={run} />}
           {open === "dates" && <DatesApp />}
-          {open === "worldclock" && <WorldClockApp {...appProps} />}
+          {open === "worldclock" && <WorldClockApp profileId={profileId} view={view} run={run} />}
           {open === "screenlight" && <ScreenLightApp onLeave={() => show(null)} />}
           {open === "qr" && <QrApp />}
         </Fragment>

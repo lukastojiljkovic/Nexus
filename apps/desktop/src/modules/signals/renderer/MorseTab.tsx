@@ -296,6 +296,13 @@ function LampCard({ plan }: { readonly plan: MorsePlan | null }) {
     };
   }, [running, warned, halt]);
 
+  // The lamp is `aria-modal`, and its one control is Stop: the opening focus is
+  // on it, so the focus the page had (on Start, behind the lamp) does not stay
+  // where nobody can see it.
+  useEffect(() => {
+    if (running !== null) stopRef.current?.focus();
+  }, [running]);
+
   return (
     <Card className="signals__card" title={copy.morse.lamp}>
       {warned ? (

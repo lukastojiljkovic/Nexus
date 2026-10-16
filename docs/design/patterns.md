@@ -70,8 +70,8 @@ fails on a copy leaf named like an empty state inside a bare hint line, and
 names the files that still do it: an entry is removed from that list when its
 page converts, and a new one is a regression.
 
-**Adopted by:** 55 inline and 13 page empty states across the module renderers,
-and 39 bare hint lines still in 27 files (the allowlist).
+**Adopted by:** 60 inline and 13 page empty states across the module renderers,
+and 33 bare hint lines still in 24 files (the allowlist).
 
 ## Notice
 
@@ -92,8 +92,8 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures. No
-module page yet. The hand-written `*__error` lines are the ones it replaces.
+**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures, and
+the astronomy page, for a failed texture-pack read. The hand-written `*__error` lines are the ones it replaces.
 
 ## AsyncSurface
 
@@ -142,8 +142,8 @@ containing block, so a fixed panel is already positioned against the window, and
 `packages/ui` does not depend on `react-dom`.
 
 **Adopted by:** the shared `ConfirmDialog`, and the shell's module launcher and
-shortcuts reference. Six module renderer files still draw their own
-`role="dialog"` (cookbook, culture, lab, maps, reader, signals), and the
+shortcuts reference. Five module renderer files still draw their own
+`role="dialog"` (cookbook, culture, maps, reader, signals), and the
 `recur-dialog__*` recipe still wears the other renderer dialogs.
 
 ## ConfirmDialog
@@ -165,8 +165,8 @@ first in the DOM. What it enforces on top of the frame:
 The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
-**Adopted by:** 6 module renderer files (assistant ×2, calculator, car, chess,
-maps).
+**Adopted by:** 7 module renderer files (assistant ×2, calculator, car, chess,
+maps, timers).
 
 ## Toast
 
@@ -379,23 +379,23 @@ EmptyState columns, which are tags.
 | culture | 1 | 8 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 1 |
 | drawings | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | emergency | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
-| lab | 1 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
+| lab | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 0 | 0 | 0 |
 | maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
-| miniapps | 1 | 0 | 1 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
+| miniapps | 1 | 0 | 0 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
 | pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
 | puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 0 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | recorder | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
 | scanner | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | signals | 1 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 |
-| timers | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
-| translator | 1 | 2 | 1 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
-| wiki | 1 | 2 | 0 | 1 | 4 | 0 | 0 | 0 | 0 | 0 |
+| timers | 1 | 3 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
+| translator | 1 | 1 | 2 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
+| wiki | 1 | 6 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | workshop | 1 | 2 | 3 | 1 | 4 | 0 | 0 | 0 | 1 | 1 |
-| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **6** | **0** | **7** | **9** |
+| **Total** | **26** | **60** | **13** | **24 modules** | **33** | **5** | **7** | **0** | **7** | **9** |
 
 Not counted in this matrix: the shell's pages (`apps/desktop/src/renderer/src`).
-Components no module page uses yet: `Dialog`, `Notice`, `AsyncSurface`,
+Components no module page uses yet: `Dialog`, `AsyncSurface`,
 `Section`, `Toolbar`, `SettingsRow`, the `Segmented` component, `Toast`,
 `ListDetail` and `FormLayout`.

@@ -42,6 +42,9 @@ export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashb
 // `window.nexus.openExternal` itself: one door, and this is it.
 export { ExternalLink, type ExternalLinkProps } from "./ExternalLink.js";
 export { openExternal } from "../links.js";
+// The same door for a place inside the app (ADR-106): a module that names a
+// place to show asks the shell through this one event, and does not switch pages.
+export { openAppLocation } from "../../../modules/assistant/renderer/location.js";
 
 // --- What a module needs to DRAW a value (ADR-090) ---------------------------
 //

@@ -8,7 +8,14 @@ import {
   type SolarSystemSnapshot,
   solarSystemAt,
 } from "@nexus/core";
-import { Button, Card, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  Card,
+  Notice,
+  PageHeader,
+  TextField,
+  type AsyncState,
+} from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import {
   dateTimeFormat,
@@ -36,6 +43,7 @@ import {
   resolveObserver,
   type AstronomyPrefs,
 } from "./prefs.js";
+import { readTexturePacks } from "./packs.js";
 import { bodyLabel } from "./solar/bodies.js";
 import { textureCredits } from "./solar/credit.js";
 import { orbitPaths } from "./solar/orbits.js";
@@ -97,7 +105,7 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
   const [tab, setTab] = useState<TabId>("solar");
   const [clock, setClock] = useState<SkyClock>(() => nowClock(Date.now()));
   const [prefs, setPrefs] = useState<AstronomyPrefs>(() => readAstronomyPrefs(profileId));
-  const [packs, setPacks] = useState<AstronomyPacksView | null>(null);
+  const [packs, setPacks] = useState<AsyncState<AstronomyPacksView>>({ status: "loading" });
   const [scale, setScale] = useState<SolarScale>("readable");
   const [selected, setSelected] = useState<BodyId | null>(null);
   const [nightMode, setNightMode] = useState(false);
@@ -126,29 +134,26 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
    * The installed pack's layout, read once per open.
    *
    * A failed read is not a screen: the corner works without the pack, so the
-   * error is logged and the view stays the textureless one rather than the page
-   * refusing to draw. The read is repeated when the tab changes to a view that
-   * uses the pack, which is what lets a user install it in another window and
-   * see it here without restarting the app.
+   * view stays the textureless one and the page offers a Retry (`readTexturePacks`
+   * keeps the failure in the state). A read still in flight is asked again when a
+   * view that uses the pack comes on screen, which is what lets a user install
+   * the pack in another window and see it here without restarting the app. A
+   * failed read is not repeated on its own, because that would be a retry loop
+   * the user cannot see.
    */
   const readPacks = useCallback(async (): Promise<void> => {
-    try {
-      setPacks(await window.nexus.modules.astronomy.packs({}));
-    } catch (failure) {
-      console.error("Nexus: the planet textures pack could not be read:", failure);
-    }
+    setPacks(await readTexturePacks(() => window.nexus.modules.astronomy.packs({})));
   }, []);
 
   useEffect(() => {
     void readPacks();
   }, [readPacks]);
 
-  // A read that failed is retried when a view that uses the pack comes back on
-  // screen; a read that answered is not repeated, because the answer is a file
-  // on disk rather than something that changes under the page.
+  // An answer, or a failure, is not repeated here: the answer is a file on disk
+  // rather than something that changes under the page.
   useEffect(() => {
     if (tab !== "solar" && tab !== "earth") return;
-    if (packs !== null) return;
+    if (packs.status !== "loading") return;
     void readPacks();
   }, [readPacks, tab, packs]);
 
@@ -159,7 +164,7 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
     () => orbitPaths(orbitEpoch * ORBIT_REFRESH_MS),
     [orbitEpoch],
   );
-  const textures = packs?.textures ?? null;
+  const textures = packs.status === "ready" ? packs.data.textures : null;
   const earthTextures = textures?.bodies.earth ?? null;
 
   function changePlace(point: LatLon | null): void {
@@ -200,6 +205,19 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
         ))}
       </div>
 
+      {packs.status === "failed" && (tab === "solar" || tab === "earth") && (
+        <Notice
+          kind="warning"
+          message={copy.textures.failed}
+          action={{
+            label: copy.textures.retry,
+            onClick: () => {
+              void readPacks();
+            },
+          }}
+        />
+      )}
+
       {tab !== "solar" && (
         <PlacePicker observer={observer} zone={zone} onChange={changePlace} />
       )}
@@ -209,7 +227,7 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
           snapshot={snapshot}
           orbits={orbits}
           textures={textures}
-          packsRead={packs !== null}
+          packsRead={packs.status === "ready"}
           scale={scale}
           onScale={setScale}
           selected={selected}
@@ -353,7 +371,7 @@ function SolarSection({
   readonly snapshot: SolarSystemSnapshot;
   readonly orbits: readonly OrbitPath[];
   readonly textures: PlanetTextures | null;
-  /** Whether the pack read has answered: false only while the first read is in flight. */
+  /** Whether the pack read has answered with a view: false while it is in flight or has failed. */
   readonly packsRead: boolean;
   readonly scale: SolarScale;
   readonly onScale: (scale: SolarScale) => void;
