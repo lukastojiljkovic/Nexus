@@ -137,6 +137,7 @@ export const sr = {
     skipped: "Računa nije priloženo: {value} (preveliki su).",
     workshop: "Servis / radionica",
     parts: "Delovi",
+    edit: "Izmeni",
     attach: "Dodaj račun",
     removeReceipt: "Obriši račun",
     noReceipts: "Bez računa.",
