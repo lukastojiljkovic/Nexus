@@ -625,6 +625,7 @@ import {
   runCheckNow,
   startNotificationScheduler,
   stopNotificationScheduler,
+  upcomingReminders,
   type NotificationSchedulerDeps,
   type SecurityNotificationDeps,
 } from "./notifications.js";
@@ -642,6 +643,8 @@ import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
 import { shellStrings } from "./shellStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
+import type { FocusHost } from "./assistant/tools/focus.js";
+import type { NotificationsHost } from "./assistant/tools/notifications.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
@@ -1704,6 +1707,151 @@ configureCookbook({
 });
 
 /**
+ * The focus timer as both the FOKUS page (over `focus:*` IPC) and the assistant's
+ * `focus.*` tools drive it: one set of methods, so the two cannot disagree about
+ * whether a phase runs. Every method is keyed by profile, as the timer is.
+ */
+const focusHost: FocusHost = {
+  start(profileId, body) {
+    if (runningFocusSessions.has(profileId)) {
+      throw new Error("A focus session is already running for this profile.");
+    }
+    const rawSubjectId = body.subjectId;
+    // Validated BEFORE the phase is recorded — a running phase is never started
+    // against an unknown/foreign/soft-deleted subject. A Pomodoro phase usually
+    // names none at all, which is the ordinary case rather than the exception.
+    const subjectId =
+      rawSubjectId === undefined || rawSubjectId === null
+        ? null
+        : focusStore(profileId).resolveSubject(asId(rawSubjectId, "subjectId"));
+
+    const running: RunningFocusPhase = {
+      subjectId,
+      startedAt: new Date().toISOString(),
+      kind: asFocusPhaseKind(body.kind, "kind"),
+      plannedMinutes: asFocusPlannedMinutes(body.plannedMinutes, "plannedMinutes"),
+      cycleIndex: asFocusCycleIndex(body.cycleIndex, "cycleIndex"),
+      // Deliberately NOT resolved against `tasks`: a focus session is a
+      // historical fact about time somebody spent and must survive the deletion
+      // of whatever it pointed at (migration 057's note). Structural only.
+      taskId: body.taskId === undefined ? null : asNullableId(body.taskId, "taskId"),
+      label: asFocusLabel(body.label, "label"),
+      pausedAt: null,
+      pausedSeconds: 0,
+      timer: null,
+    };
+    runningFocusSessions.set(profileId, running);
+    armFocusAlarm(profileId, running);
+    return toRunningFocusSession(running);
+  },
+
+  // The outcome is derived from the CLOCK rather than named by the caller: a
+  // phase whose plan the wall clock says was met ends `completed`, everything
+  // else `stopped`. Letting the renderer name it would let a compromised one
+  // record a twenty-second phase as a completed Pomodoro, and the outcome is the
+  // one field of a focus row nobody should be able to assert about themselves.
+  // An open-ended phase always lands on `stopped`, for the engine's own reason
+  // (`FOCUS_OUTCOMES`): it was ended by hand, because it had no planned end.
+  stop(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    const endedAt = new Date().toISOString();
+    const met =
+      phase.plannedMinutes !== null && phaseProgress(phase, endedAt).remainingSeconds === 0;
+    return endRunningFocusPhase(profileId, met ? "completed" : "stopped", endedAt);
+  },
+
+  cancel: (profileId) => discardRunningFocusPhase(profileId),
+
+  // Both are idempotent: pausing a paused phase and resuming a running one answer
+  // the phase unchanged rather than throwing, because a double-click on a button
+  // must not be an error.
+  pause(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    if (phase.pausedAt === null) {
+      phase.pausedAt = new Date().toISOString();
+      // The alarm goes with the clock: a paused phase must not announce an end
+      // it is no longer approaching.
+      disarmFocusAlarm(phase);
+    }
+    return toRunningFocusSession(phase);
+  },
+
+  resume(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    if (phase.pausedAt !== null) {
+      // The pause that just ENDED joins the accumulator; the one still running
+      // is never in it (`FocusPhaseTiming`'s rule).
+      phase.pausedSeconds += closedPauseSeconds(phase.pausedAt, new Date().toISOString());
+      phase.pausedAt = null;
+      // Re-armed for what is LEFT, not for the whole plan — `armFocusAlarm`
+      // measures the remainder off the wall clock.
+      armFocusAlarm(profileId, phase);
+    }
+    return toRunningFocusSession(phase);
+  },
+
+  status(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    return phase === undefined ? null : toRunningFocusSession(phase);
+  },
+};
+
+/**
+ * The notification centre and its settings, as the centre's IPC channels and the
+ * assistant's `notifications.*` tools drive them. Every write pushes
+ * `notifications:changed` once, so an open centre never shows a row the store has
+ * already moved on from.
+ */
+const notificationsHost: NotificationsHost = {
+  list: (profileId) => notificationStore(profileId).listCenter(),
+
+  snooze(profileId, id, preset) {
+    const store = notificationStore(profileId);
+    const settings = store.getSettings();
+    const now = new Date();
+    // An omitted preset is the center's plain „Odloži“ button (NTF-009): the
+    // profile's own default, read here rather than sent by the renderer, so the
+    // button cannot go stale against a preference changed in another window —
+    // and resolved through `resolveDefaultSnoozePreset`, so a default of
+    // „Večeras“ still works after 18:00 rather than failing every evening.
+    const resolved = preset ?? resolveDefaultSnoozePreset(settings.snoozeDefault, now);
+    const until = computeSnoozeUntil(resolved, now, settings.morningHour);
+    const record = store.snooze(id, until, now.toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    return record;
+  },
+
+  dismiss(profileId, id) {
+    notificationStore(profileId).dismiss(id, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+  },
+
+  settings: (profileId) => notificationStore(profileId).getSettings(),
+
+  updateSettings(profileId, changes) {
+    const settings = notificationStore(profileId).updateSettings(changes, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    return settings;
+  },
+
+  setSourceEnabled(profileId, source, enabled) {
+    notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+  },
+
+  upcoming: (profileId, days) => upcomingReminders(notificationSchedulerDeps(), profileId, days),
+};
+
+/**
  * What the ASSISTANT module is handed once, at launch (ADR-106).
  *
  * Every member is a fact about THIS file, and each is a closure rather than a
@@ -1755,6 +1903,8 @@ configureAssistant({
   // ask - `installZimProtocol(zimService())` runs before the first window, so by
   // the time a profile exists it always has been built.
   zimWiki: () => zimWikiSource(zimService()),
+  focus: focusHost,
+  notifications: notificationsHost,
   modules: moduleRegistry,
 });
 
@@ -9501,113 +9651,32 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.focusStart, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asId(body.profileId, "profileId");
-    if (runningFocusSessions.has(profileId)) {
-      throw new Error("A focus session is already running for this profile.");
-    }
-    const rawSubjectId = body.subjectId;
-    // Validated BEFORE the phase is recorded — a running phase is never started
-    // against an unknown/foreign/soft-deleted subject. A Pomodoro phase usually
-    // names none at all, which is the ordinary case rather than the exception.
-    const subjectId =
-      rawSubjectId === undefined || rawSubjectId === null
-        ? null
-        : focusStore(profileId).resolveSubject(asId(rawSubjectId, "subjectId"));
-
-    const running: RunningFocusPhase = {
-      subjectId,
-      startedAt: new Date().toISOString(),
-      kind: asFocusPhaseKind(body.kind, "kind"),
-      plannedMinutes: asFocusPlannedMinutes(body.plannedMinutes, "plannedMinutes"),
-      cycleIndex: asFocusCycleIndex(body.cycleIndex, "cycleIndex"),
-      // Deliberately NOT resolved against `tasks`: a focus session is a
-      // historical fact about time somebody spent and must survive the deletion
-      // of whatever it pointed at (migration 057's note). Structural only.
-      taskId: body.taskId === undefined ? null : asNullableId(body.taskId, "taskId"),
-      label: asFocusLabel(body.label, "label"),
-      pausedAt: null,
-      pausedSeconds: 0,
-      timer: null,
-    };
-    runningFocusSessions.set(profileId, running);
-    armFocusAlarm(profileId, running);
-    return toRunningFocusSession(running);
+    return focusHost.start(asId(body.profileId, "profileId"), body);
   });
 
-  // ONE stop channel, and the outcome is derived from the CLOCK rather than
-  // named by the caller: a phase whose plan the wall clock says was met ends
-  // `completed`, everything else `stopped`. Letting the renderer name it would
-  // let a compromised one record a twenty-second phase as a completed Pomodoro,
-  // and the outcome is the one field of a focus row nobody should be able to
-  // assert about themselves.
-  //
-  // An open-ended phase always lands on `stopped`, for the engine's own reason
-  // (`FOCUS_OUTCOMES`): it was ended by hand, because it had no planned end to
-  // reach.
   ipcMain.handle(IpcChannel.focusStop, (event, payload): FocusSession | null => {
     assertTrustedSender(event);
-    const body = asRecord(payload);
-    const profileId = asId(body.profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    if (!phase) {
-      throw new Error("No focus session is running for this profile.");
-    }
-    const endedAt = new Date().toISOString();
-    const met =
-      phase.plannedMinutes !== null && phaseProgress(phase, endedAt).remainingSeconds === 0;
-    return endRunningFocusPhase(profileId, met ? "completed" : "stopped", endedAt);
+    return focusHost.stop(asId(asRecord(payload).profileId, "profileId"));
   });
 
-  // Pause and resume are the only genuinely NEW acts this slice adds, which is
-  // why they are the only new channels. Both are idempotent: pausing a paused
-  // phase and resuming a running one answer the phase unchanged rather than
-  // throwing, because a double-click on a button must not be an error.
   ipcMain.handle(IpcChannel.focusPause, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    if (!phase) {
-      throw new Error("No focus session is running for this profile.");
-    }
-    if (phase.pausedAt === null) {
-      phase.pausedAt = new Date().toISOString();
-      // The alarm goes with the clock: a paused phase must not announce an end
-      // it is no longer approaching.
-      disarmFocusAlarm(phase);
-    }
-    return toRunningFocusSession(phase);
+    return focusHost.pause(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusResume, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    if (!phase) {
-      throw new Error("No focus session is running for this profile.");
-    }
-    if (phase.pausedAt !== null) {
-      // The pause that just ENDED joins the accumulator; the one still running
-      // is never in it (`FocusPhaseTiming`'s rule).
-      phase.pausedSeconds += closedPauseSeconds(phase.pausedAt, new Date().toISOString());
-      phase.pausedAt = null;
-      // Re-armed for what is LEFT, not for the whole plan — `armFocusAlarm`
-      // measures the remainder off the wall clock.
-      armFocusAlarm(profileId, phase);
-    }
-    return toRunningFocusSession(phase);
+    return focusHost.resume(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusStatus, (event, payload): RunningFocusSession | null => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    return phase === undefined ? null : toRunningFocusSession(phase);
+    return focusHost.status(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusCancel, (event, payload): void => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    discardRunningFocusPhase(profileId);
+    focusHost.cancel(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusListRange, (event, payload): FocusSession[] => {
@@ -9711,8 +9780,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.notificationsCenterList, (event, payload): NotificationRecord[] => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    return notificationStore(profileId).listCenter();
+    return notificationsHost.list(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.notificationsSnooze, (event, payload): NotificationRecord => {
@@ -9720,45 +9788,27 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
     const id = asId(body.id, "id");
-    const store = notificationStore(profileId);
-    const settings = store.getSettings();
-    const now = new Date();
-    // An omitted preset is the center's plain „Odloži“ button (NTF-009): the
-    // profile's own default, read here rather than sent by the renderer, so the
-    // button cannot go stale against a preference changed in another window —
-    // and resolved through `resolveDefaultSnoozePreset`, so a default of
-    // „Večeras“ still works after 18:00 rather than failing every evening.
-    const preset =
-      body.preset === undefined
-        ? resolveDefaultSnoozePreset(settings.snoozeDefault, now)
-        : asSnoozePreset(body.preset, "preset");
-    const until = computeSnoozeUntil(preset, now, settings.morningHour);
-    const record = store.snooze(id, until, now.toISOString());
-    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
-    return record;
+    // An omitted preset means the profile's default; the host resolves it.
+    const preset = body.preset === undefined ? undefined : asSnoozePreset(body.preset, "preset");
+    return notificationsHost.snooze(profileId, id, preset);
   });
 
   ipcMain.handle(IpcChannel.notificationsDismiss, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asId(body.profileId, "profileId");
-    const id = asId(body.id, "id");
-    notificationStore(profileId).dismiss(id, new Date().toISOString());
-    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    notificationsHost.dismiss(asId(body.profileId, "profileId"), asId(body.id, "id"));
   });
 
   ipcMain.handle(IpcChannel.notificationsSettingsGet, (event, payload): NotificationSettings => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    return notificationStore(profileId).getSettings();
+    return notificationsHost.settings(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.notificationsSettingsUpdate, (event, payload): NotificationSettings => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
-    const changes = asNotificationSettingsChanges(body.changes);
-    return notificationStore(profileId).updateSettings(changes, new Date().toISOString());
+    return notificationsHost.updateSettings(profileId, asNotificationSettingsChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.notificationsSourceToggle, (event, payload): void => {
@@ -9767,7 +9817,7 @@ function registerIpc(): void {
     const profileId = asId(body.profileId, "profileId");
     const source = asNotificationSource(body.source, "source");
     const enabled = asBoolean(body.enabled, "enabled");
-    notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+    notificationsHost.setSourceEnabled(profileId, source, enabled);
   });
 
   /**

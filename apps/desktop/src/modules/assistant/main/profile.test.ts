@@ -94,6 +94,8 @@ function services(wiki: WikiSource | null): AssistantServices {
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [] },
     zimWiki: () => wiki,
+    focus: { start: () => { throw new Error("not expected"); }, stop: () => { throw new Error("not expected"); }, cancel: () => undefined, pause: () => { throw new Error("not expected"); }, resume: () => { throw new Error("not expected"); }, status: () => null },
+    notifications: { list: () => [], snooze: () => { throw new Error("not expected"); }, dismiss: () => undefined, settings: () => { throw new Error("not expected"); }, updateSettings: () => { throw new Error("not expected"); }, setSourceEnabled: () => undefined, upcoming: () => [] },
     modules: createModuleRegistry(),
   };
 }

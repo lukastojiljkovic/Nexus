@@ -1,6 +1,8 @@
 import type { ModelHost, ModuleRegistry } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
+import type { FocusHost } from "../../../main/assistant/tools/focus.js";
+import type { NotificationsHost } from "../../../main/assistant/tools/notifications.js";
 import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
 import type { SecretCipher } from "../../../main/assistant/web/secrets.js";
@@ -88,6 +90,12 @@ export interface AssistantServices {
   // against is assembled by THIS module (`main/timers.ts`), because it needs the
   // kit's own `armUntil`/`notify` - capabilities index.ts does not hold and would
   // have had to re-implement. See that file's header.
+  // The FOCUS and notification hosts are main's (`main/index.ts`): the running
+  // phase and the centre's writes are main-process state, so they are handed in.
+  /** The running focus phase, as main owns it. */
+  readonly focus: FocusHost;
+  /** The notification centre, its settings and the reminders due, as main owns them. */
+  readonly notifications: NotificationsHost;
   /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
   readonly modules: ModuleRegistry;
 }
