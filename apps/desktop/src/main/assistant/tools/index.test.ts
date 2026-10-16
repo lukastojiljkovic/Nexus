@@ -154,6 +154,8 @@ describe("createToolRegistry", () => {
       study: 14,
       tasks: 4,
       timers: 9,
+      tasks: 17,
+      timers: 2,
       wiki: 1,
     });
     for (const tool of tools) {

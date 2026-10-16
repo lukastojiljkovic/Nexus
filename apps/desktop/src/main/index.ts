@@ -122,7 +122,6 @@ import {
   searchFoods,
   serializeWidgetConfig,
   SET_KINDS,
-  shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
   TOOL_PACKS,
@@ -536,6 +535,7 @@ import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCaptu
 import { handleExport, handleIcsExport, writeProfileArchive, type ImexArchiveDeps } from "./imex.js";
 import { handleMarkdownImport } from "./markdownImport.js";
 import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
+import { applyTaskTemplate } from "./taskTemplates.js";
 import { duplicateNote } from "./noteDuplicate.js";
 import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
 // ADR-100: the Reader's two seams into this file. The pack read protocol is the
@@ -5275,53 +5275,21 @@ function captureTaskTemplatePayload(profileId: string, taskId: string): TaskTemp
   };
 }
 
-/**
- * Creates a task from a template, in one transaction over the store calls: the
- * parent, its tags (get-or-created by name — which is what makes a template
- * outlive the tags it was captured with) and its subtasks are one act, and half
- * of it is a task the user did not ask for. `TaskStore.create` owns the list /
- * section / anchor rules, so this function validates none of them itself.
- *
- * The subtasks inherit their parent's placement, which `TaskStore.create`
- * enforces on its own — the `listId`/`sectionId` are deliberately not repeated
- * on them.
- */
-function applyTaskTemplate(
+/** A template applied for the page, through the one implementation the assistant's `tasks.template` shares (`taskTemplates.ts`). */
+function applyTemplateFor(
   profileId: string,
   templateId: string,
   listId: string,
   sectionId: string | null,
 ): Task {
-  const template = taskTemplateStore(profileId).get(templateId);
-  const { payload } = template;
-  const now = new Date().toISOString();
-  const dueDate =
-    payload.dueOffsetDays === null ? null : shiftDayKey(localToday(), payload.dueOffsetDays);
-  const tasks = taskStore(profileId);
-  const tags = taskTagStore(profileId);
-
-  return requireDb().raw.transaction((): Task => {
-    const parent = tasks.create({
-      title: payload.title,
-      description: payload.description,
-      priority: payload.priority,
-      dueDate,
-      recurrence: payload.recurrence,
-      reminderOffsets: payload.reminderOffsets,
-      listId,
-      sectionId,
-    });
-
-    for (const name of payload.tagNames) {
-      tags.attachTag(parent.id, tags.createTag(name, now).id);
-    }
-
-    for (const title of payload.subtaskTitles) {
-      tasks.create({ title, parentId: parent.id });
-    }
-
-    return parent;
-  })();
+  return applyTaskTemplate(
+    requireDb().raw,
+    { tasks: taskStore(profileId), tags: taskTagStore(profileId) },
+    taskTemplateStore(profileId).get(templateId),
+    { listId, sectionId },
+    localToday(),
+    new Date().toISOString(),
+  );
 }
 
 function taskDependencyStore(profileId: string): TaskDependencyStore {
@@ -8582,7 +8550,7 @@ function registerIpc(): void {
     // would be a second, drifting copy of them.
     const listId = asId(body.listId, "listId");
     const sectionId = asNullableId(body.sectionId, "sectionId");
-    return applyTaskTemplate(profileId, templateId, listId, sectionId);
+    return applyTemplateFor(profileId, templateId, listId, sectionId);
   });
 
   ipcMain.handle(IpcChannel.taskTemplatesDelete, (event, payload): void => {

@@ -35,7 +35,7 @@ description, which is what every scripted transcript was written against.
 | `app.open` | `navigate` | the registry's | `{ module, item?, settings? }` |
 | `tasks.create` | `write` | the registry's | `{ title, due?, project? }` |
 | `tasks.list` | `read` | the registry's | `{ due? }` — the registry's fields are `status`, `due`, `project` and `limit` |
-| `tasks.delete` | `write` | generic | `{ filter? }` — `synthetic: true` in the prompt-injection scenarios, because the app has no delete tool; the guard test accepts a synthetic name only when the registry lacks it |
+| `tasks.purge` | `write` | generic | `{ filter? }` — `synthetic: true` in the prompt-injection scenarios, because the app has no bulk delete tool (bulk delete is `never`); the guard test accepts a synthetic name only when the registry lacks it |
 | `calendar.create` | `write` | the registry's | `{ title, start, end? }` |
 | `calendar.events` | `read` | the registry's | `{ from, to }` |
 | `notes.create` | `write` | the registry's | `{ title, text }` |
