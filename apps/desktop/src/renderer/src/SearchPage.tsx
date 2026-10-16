@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { parseSearchQuery } from "@nexus/core";
-import { Button, EmptyState, Icon, PageHeader, TextField } from "@nexus/ui";
+import { Button, EmptyState, Icon, Notice, PageHeader, TextField } from "@nexus/ui";
 import type { SearchHistoryEntry, SearchPageResult, SearchResult } from "../../shared/ipc.js";
 import {
   SEARCH_DEBOUNCE_MS,
@@ -83,6 +83,8 @@ export function SearchPage({
    * never actually asked.
    */
   const [searchFailed, setSearchFailed] = useState(false);
+  /** Bumped by the failure line's Retry, so the same query is asked again. */
+  const [attempt, setAttempt] = useState(0);
   /** The profile's remembered QUERIES (SRCH-009), shown in browse mode beside the recent entities — never instead of them. */
   const [history, setHistory] = useState<readonly SearchHistoryEntry[]>([]);
   const requestIdRef = useRef(0);
@@ -154,7 +156,7 @@ export function SearchPage({
       })();
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [profileId, query]);
+  }, [profileId, query, attempt]);
 
   const shown = data.hits.slice(0, visible);
   // Flat when the query narrows to exactly one kind: a single group heading
@@ -250,84 +252,87 @@ export function SearchPage({
   }
 
   return (
-    <section className="searchpage">
+    // `.nx-measure`: a result's title and its date were a screen apart at 1600px.
+    <section className="searchpage nx-measure">
       <PageHeader
         title={strings.search.page.title}
         titleId={titleId}
         sigil="search"
         subtitle={`${paletteChordLabel} ${strings.search.page.shortcutHint}`}
-      />
-      {/* Named BY REFERENCE to the heading, not by a copy of it. The
-          `aria-label` that stood here held the same words as `title`, which is
-          [[DC-120]] exactly: two spellings of one name, and the day either is
-          reworded the screen and the screen reader disagree about what the
-          field is called. `titleId` is what makes the heading the name. */}
-      <TextField
-        ref={inputRef}
-        aria-labelledby={titleId}
-        className="searchpage__input"
-        placeholder={strings.search.placeholder}
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
+        filters={
+          <div className="searchpage__facets">
+            {/* Named BY REFERENCE to the heading, not by a copy of it. The
+                `aria-label` that stood here held the same words as `title`, which is
+                [[DC-120]] exactly: two spellings of one name, and the day either is
+                reworded the screen and the screen reader disagree about what the
+                field is called. `titleId` is what makes the heading the name. */}
+            <TextField
+              ref={inputRef}
+              aria-labelledby={titleId}
+              className="searchpage__input"
+              placeholder={strings.search.placeholder}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
 
-      <div className="searchpage__facets">
-        <div className="searchpage__chips" role="group" aria-label={strings.search.kindFilterLabel}>
-          {/* "Sve" is not a filter of its own — it clears whatever kind tokens
-              the query carries, which is the same thing said positively. */}
-          <Button
-            size="sm"
-            className="nx-segmented__option searchpage__chip"
-            aria-pressed={activeKinds.size === 0}
-            onClick={() =>
-              setQuery((current) =>
-                parsed.kinds.reduce((text, kind) => toggleKindInQuery(text, kind), current),
-              )
-            }
-          >
-            {strings.search.page.allKinds}
-          </Button>
-          {/* Only kinds actually present are offered: a chip reading "0" is a
-              dead end the user can click but never get anything from. A kind
-              already in the query stays listed even at zero, or switching it
-              off would mean deleting the token by hand. */}
-          {data.kindCounts
-            .filter(({ kind, count }) => count > 0 || activeKinds.has(kind))
-            .map(({ kind, count }) => (
+            <div className="searchpage__chips" role="group" aria-label={strings.search.kindFilterLabel}>
+              {/* "Sve" is not a filter of its own — it clears whatever kind tokens
+                  the query carries, which is the same thing said positively. */}
               <Button
-                key={kind}
                 size="sm"
                 className="nx-segmented__option searchpage__chip"
-                aria-pressed={activeKinds.has(kind)}
-                onClick={() => setQuery((current) => toggleKindInQuery(current, kind))}
+                aria-pressed={activeKinds.size === 0}
+                onClick={() =>
+                  setQuery((current) =>
+                    parsed.kinds.reduce((text, kind) => toggleKindInQuery(text, kind), current),
+                  )
+                }
               >
-                {searchKindLabel(kind, true)}
-                <span className="searchpage__chip-count">{count}</span>
+                {strings.search.page.allKinds}
               </Button>
-            ))}
-        </div>
+              {/* Only kinds actually present are offered: a chip reading "0" is a
+                  dead end the user can click but never get anything from. A kind
+                  already in the query stays listed even at zero, or switching it
+                  off would mean deleting the token by hand. */}
+              {data.kindCounts
+                .filter(({ kind, count }) => count > 0 || activeKinds.has(kind))
+                .map(({ kind, count }) => (
+                  <Button
+                    key={kind}
+                    size="sm"
+                    className="nx-segmented__option searchpage__chip"
+                    aria-pressed={activeKinds.has(kind)}
+                    onClick={() => setQuery((current) => toggleKindInQuery(current, kind))}
+                  >
+                    {searchKindLabel(kind, true)}
+                    <span className="searchpage__chip-count">{count}</span>
+                  </Button>
+                ))}
+            </div>
 
-        {data.tagFacets.length > 0 && (
-          <div
-            className="searchpage__chips"
-            role="group"
-            aria-label={strings.search.page.tagFilterLabel}
-          >
-            {data.tagFacets.map((facet) => (
-              <Button
-                key={facet.token}
-                size="sm"
-                className="nx-segmented__option searchpage__chip"
-                aria-pressed={activeTags.has(facet.token)}
-                onClick={() => setQuery((current) => toggleTagInQuery(current, facet.token))}
+            {data.tagFacets.length > 0 && (
+              <div
+                className="searchpage__chips"
+                role="group"
+                aria-label={strings.search.page.tagFilterLabel}
               >
-                {`#${facet.name}`}
-                <span className="searchpage__chip-count">{facet.count}</span>
-              </Button>
-            ))}
+                {data.tagFacets.map((facet) => (
+                  <Button
+                    key={facet.token}
+                    size="sm"
+                    className="nx-segmented__option searchpage__chip"
+                    aria-pressed={activeTags.has(facet.token)}
+                    onClick={() => setQuery((current) => toggleTagInQuery(current, facet.token))}
+                  >
+                    {`#${facet.name}`}
+                    <span className="searchpage__chip-count">{facet.count}</span>
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        }
+      />
 
       <div className="searchpage__meta">
         <span className="searchpage__count">
@@ -383,11 +388,16 @@ export function SearchPage({
           `search:page` call, so a browse that failed is exactly as silent as a
           query that did. One sentence, shared with the palette rather than
           copied — the two surfaces cannot drift into two ways of saying that
-          search is down. */}
+          search is down — and a Retry that asks the same query again. */}
       {searchFailed ? (
-        <p className="searchpage__error" role="alert">
-          {strings.search.searchError}
-        </p>
+        <Notice
+          kind="danger"
+          message={strings.search.searchError}
+          action={{
+            label: strings.search.page.retry,
+            onClick: () => setAttempt((value) => value + 1),
+          }}
+        />
       ) : data.hits.length === 0 ? (
         !isBrowsing && (
           <EmptyState

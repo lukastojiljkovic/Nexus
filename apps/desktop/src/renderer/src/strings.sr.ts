@@ -8143,7 +8143,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     quickActionsGroup: "Brze radnje",
     emptyResults: "Nema rezultata.",
     /** Shown instead of `emptyResults` when the fetch itself rejected — a failure is not an empty result and must not read as one. */
-    searchError: "Pretraga trenutno ne radi. Pokušaj ponovo.",
+    searchError: "Pretraga trenutno ne radi.",
     hint: "↑↓ kretanje · Enter otvori · Esc zatvori",
     /**
      * SRCH-009: the profile's remembered QUERIES, which are a different list
@@ -8247,6 +8247,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Shown instead of an exact count once candidate sourcing hit its bound. */
       truncatedNote: "Prikazano je prvih 500 rezultata — suzite pretragu za precizniji spisak.",
       showMore: "Prikaži još",
+      retry: "Pokušaj ponovo",
       emptyTitle: "Nema rezultata",
       emptyDescription: "Probajte drugu reč ili uklonite neki filter.",
     },
