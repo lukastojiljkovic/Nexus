@@ -8090,7 +8090,7 @@ export const en = {
     quickActionsGroup: "Quick actions",
     emptyResults: "No results.",
     /** Shown instead of `emptyResults` when the fetch itself rejected — a failure is not an empty result and must not read as one. */
-    searchError: "Search is not working right now. Try again.",
+    searchError: "Search is not working right now.",
     hint: "↑↓ move · Enter open · Esc close",
     /**
      * SRCH-009: the profile's remembered QUERIES, which are a different list
@@ -8194,6 +8194,7 @@ export const en = {
       /** Shown instead of an exact count once candidate sourcing hit its bound. */
       truncatedNote: "The first 500 results are shown — narrow the search for a more precise list.",
       showMore: "Show more",
+      retry: "Try again",
       emptyTitle: "No results",
       emptyDescription: "Try another word or remove a filter.",
     },

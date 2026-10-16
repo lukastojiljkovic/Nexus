@@ -92,8 +92,9 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures. No
-module page yet. The hand-written `*__error` lines are the ones it replaces.
+**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures, and
+the Search page (shell), where a failed query is the line with a Retry. No module
+page yet. The hand-written `*__error` lines are the ones it replaces.
 
 ## AsyncSurface
 
