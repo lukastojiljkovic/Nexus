@@ -87,8 +87,7 @@
   background: var(--nx-surface-alt);
 }
 
-.maps__result:focus-visible,
-.maps__list-pick:focus-visible {
+.maps__result:focus-visible {
   outline: 2px solid var(--nx-accent);
   outline-offset: 1px;
 }
@@ -237,51 +236,6 @@
   color: var(--nx-text);
 }
 
-.maps__list-rows {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.maps__list-row {
-  display: flex;
-  gap: var(--nx-space-2);
-  align-items: center;
-  padding: var(--nx-space-1) 0;
-  border-bottom: 1px solid var(--nx-border-subtle);
-}
-
-.maps__list-row:last-child {
-  border-bottom: 0;
-}
-
-.maps__list-pick {
-  flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0 var(--nx-space-2);
-  align-items: center;
-  min-width: 0;
-  padding: var(--nx-space-1);
-  background: none;
-  border: 0;
-  border-radius: var(--nx-radius-sm);
-  cursor: pointer;
-  text-align: start;
-  font: inherit;
-  color: var(--nx-text);
-}
-
-.maps__list-pick:hover {
-  background: var(--nx-surface-alt);
-}
-
-.maps__list-pick--selected {
-  background: var(--nx-accent-soft);
-}
-
 .maps__list-dot {
   width: 10px;
   height: 10px;
@@ -294,7 +248,6 @@
 }
 
 .maps__list-note {
-  grid-column: 2;
   color: var(--nx-text-muted);
   font-size: var(--nx-font-size-body-sm);
   overflow-wrap: anywhere;
@@ -304,6 +257,11 @@
   display: flex;
   flex-shrink: 0;
   gap: var(--nx-space-1);
+}
+
+/* The pins are one column in the rail, and the detail stacks under the list. */
+.maps__pins {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The dialog: the shared recipe (`FocusDiscardDialog`'s overlay, backdrop and

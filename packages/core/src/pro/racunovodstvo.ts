@@ -37,6 +37,8 @@ import {
   roundHalfUp,
   type ProResult,
 } from "./result.js";
+import { checkDigitsFrom, groupsOfFour, mod97, stripSeparators } from "./iso7064.js";
+import { agreementOf, groupWords, unitWord, type NumeralGender } from "./srNumeral.js";
 
 import { annuityPlan } from "../tools/calculators.js";
 
@@ -329,62 +331,6 @@ export function allocateWithoutRemainder(input: AllocationInput): ProResult<Allo
 
 /* ------------------------------------------------------- amount-in-words */
 
-/**
- * Serbian numeral words 0–19, the tens, and the hundreds.
- *
- * Source: Pravopis srpskoga jezika, Matica srpska, izmenjeno i dopunjeno izdanje
- * (2010). This is the lexical table of the language — 37 entries no rule-maker
- * revises — which is why it is embedded where a rate never would be.
- */
-const UNIT_WORDS = [
-  "nula",
-  "jedan",
-  "dva",
-  "tri",
-  "četiri",
-  "pet",
-  "šest",
-  "sedam",
-  "osam",
-  "devet",
-  "deset",
-  "jedanaest",
-  "dvanaest",
-  "trinaest",
-  "četrnaest",
-  "petnaest",
-  "šesnaest",
-  "sedamnaest",
-  "osamnaest",
-  "devetnaest",
-] as const;
-
-const TEN_WORDS = [
-  "",
-  "",
-  "dvadeset",
-  "trideset",
-  "četrdeset",
-  "pedeset",
-  "šezdeset",
-  "sedamdeset",
-  "osamdeset",
-  "devedeset",
-] as const;
-
-const HUNDRED_WORDS = [
-  "",
-  "sto",
-  "dvesta",
-  "trista",
-  "četiristo",
-  "petsto",
-  "šeststo",
-  "sedamsto",
-  "osamsto",
-  "devetsto",
-] as const;
-
 /** 1 unit = 100 subunits — the subdivision every listed currency uses, like 1 m = 100 cm. */
 const SUBUNITS_PER_UNIT = 100;
 
@@ -397,50 +343,13 @@ const SUBUNITS_PER_UNIT = 100;
  */
 const MAX_MINOR = 99_999_999_999_999;
 
-export type NumberGender = "masculine" | "feminine" | "neuter";
+export type NumberGender = NumeralGender;
 type Gender = NumberGender;
-
-/** Singular / paucal / plural, with the 11–14 exception that is the whole rule. */
-type Agreement = "singular" | "paucal" | "plural";
-
-function agreementOf(count: number): Agreement {
-  const unit = count % 10;
-  const lastTwo = count % 100;
-  if (unit === 1 && lastTwo !== 11) return "singular";
-  if (unit >= 2 && unit <= 4 && !(lastTwo >= 12 && lastTwo <= 14)) return "paucal";
-  return "plural";
-}
-
-/** Only 1 and 2 inflect for gender; 11 and 12 are single words and do not. */
-function unitWord(digit: number, gender: Gender): string {
-  if (digit === 1) {
-    if (gender === "feminine") return "jedna";
-    if (gender === "neuter") return "jedno";
-  }
-  if (gender === "feminine" && digit === 2) return "dve";
-  return UNIT_WORDS[digit] ?? "";
-}
-
-/** A group of 1..999 in words; the trailing unit takes `gender`. */
-function groupWords(group: number, gender: Gender): string {
-  const parts: string[] = [];
-  const hundreds = Math.floor(group / 100);
-  if (hundreds > 0) parts.push(HUNDRED_WORDS[hundreds] ?? "");
-  const rest = group % 100;
-  if (rest > 0 && rest < 20) {
-    parts.push(unitWord(rest, gender));
-  } else if (rest >= 20) {
-    parts.push(TEN_WORDS[Math.floor(rest / 10)] ?? "");
-    const unit = rest % 10;
-    if (unit > 0) parts.push(unitWord(unit, gender));
-  }
-  return parts.join(" ");
-}
 
 /** „hiljada" is feminine; the nominative singular and the genitive plural coincide. */
 function thousandWords(group: number): string {
   if (group === 1) return "hiljadu";
-  const words = groupWords(group, "feminine");
+  const words = groupWords(group, "feminine").join(" ");
   return agreementOf(group) === "paucal" ? `${words} hiljade` : `${words} hiljada`;
 }
 
@@ -448,12 +357,12 @@ function thousandWords(group: number): string {
 function millionWords(group: number): string {
   if (group === 1) return "milion";
   const noun = agreementOf(group) === "singular" ? "milion" : "miliona";
-  return `${groupWords(group, "masculine")} ${noun}`;
+  return `${groupWords(group, "masculine").join(" ")} ${noun}`;
 }
 
 function milliardWords(group: number): string {
   if (group === 1) return "milijarda";
-  const words = groupWords(group, "feminine");
+  const words = groupWords(group, "feminine").join(" ");
   const form = agreementOf(group);
   if (form === "singular") return `${words} milijarda`;
   if (form === "paucal") return `${words} milijarde`;
@@ -471,7 +380,7 @@ function numberWords(value: number, gender: Gender): string {
   if (milliards > 0) parts.push(milliardWords(milliards));
   if (millions > 0) parts.push(millionWords(millions));
   if (thousands > 0) parts.push(thousandWords(thousands));
-  if (units > 0) parts.push(groupWords(units, gender));
+  if (units > 0) parts.push(groupWords(units, gender).join(" "));
   return parts.join(" ");
 }
 
@@ -561,7 +470,7 @@ function applyCase(text: string, letterCase: LetterCase): string {
  * there is nothing here for `unitWord`'s 1/2 agreement to attach to.
  */
 function digitsWords(value: number): string {
-  return [...String(value).padStart(2, "0")].map((digit) => UNIT_WORDS[Number(digit)] ?? "").join(" ");
+  return [...String(value).padStart(2, "0")].map((digit) => unitWord(Number(digit), "masculine")).join(" ");
 }
 
 /** The form that agrees with `count`, out of the noun's three declared forms. */
@@ -653,44 +562,6 @@ const DOMESTIC_ACCOUNT_DIGITS = 13;
 const IBAN_MAX_LENGTH = 34;
 const IBAN_MIN_LENGTH = 5;
 
-function stripSeparators(value: string): string {
-  return value.replace(/[\s-]/g, "");
-}
-
-/** ISO 7064 MOD 97-10 over a digit string, one digit at a time. */
-function mod97Digits(digits: string): number {
-  let remainder = 0;
-  for (const character of digits) {
-    remainder = (remainder * 10 + (character.charCodeAt(0) - 48)) % 97;
-  }
-  return remainder;
-}
-
-/**
- * The same modulus over letters and digits, A = 10 … Z = 35 (ISO 13616-1:2020).
- *
- * Incremental so no big-integer library is needed: a 34-character IBAN expands
- * past 2^53 as one number, and the remainder does not care.
- */
-function mod97Alphanumeric(value: string): number {
-  let remainder = 0;
-  for (const character of value) {
-    const code = character.charCodeAt(0);
-    if (code >= 48 && code <= 57) {
-      remainder = (remainder * 10 + (code - 48)) % 97;
-    } else {
-      // A letter contributes two decimal digits, hence ×100 and not ×10.
-      remainder = (remainder * 100 + (code - 55)) % 97;
-    }
-  }
-  return remainder;
-}
-
-/** K = 98 − (n mod 97), written with a leading zero (ISO 7064:2003). */
-function checkDigitsFrom(remainder: number): string {
-  return String(98 - remainder).padStart(2, "0");
-}
-
 export interface DomesticAccountInput {
   /** 3-digit bank code. Parsed as TEXT, never as a number, so a leading zero survives. */
   readonly bank: string;
@@ -735,19 +606,19 @@ export interface DomesticAccount {
  * merging them creates.
  */
 export function domesticAccountCheck(input: DomesticAccountInput): ProResult<DomesticAccount> {
-  const bank = stripSeparators(input.bank);
+  const bank = stripSeparators(input.bank, false);
   if (!/^[0-9]{3}$/.test(bank)) return fail("bank");
-  const rawParty = stripSeparators(input.partyNumber);
+  const rawParty = stripSeparators(input.partyNumber, false);
   if (!/^[0-9]{1,13}$/.test(rawParty)) return fail("partyNumber");
   const party = rawParty.padStart(DOMESTIC_ACCOUNT_DIGITS, "0");
 
   const base = bank + party;
   // K = 98 − ((N·100) mod 97): the two check digits sit two decimal places
   // below N, exactly as the two zeroes do in the IBAN construction.
-  const checkDigits = checkDigitsFrom((mod97Digits(base) * 100) % 97);
+  const checkDigits = checkDigitsFrom((mod97(base) * 100) % 97);
   let given: string | undefined;
   if (input.mode === "verify") {
-    const raw = input.checkDigits === undefined ? "" : stripSeparators(input.checkDigits);
+    const raw = input.checkDigits === undefined ? "" : stripSeparators(input.checkDigits, false);
     if (!/^[0-9]{2}$/.test(raw)) return fail("checkDigits");
     given = raw;
   }
@@ -760,7 +631,7 @@ export function domesticAccountCheck(input: DomesticAccountInput): ProResult<Dom
     checkDigits,
     givenCheckDigits: given,
     matches: given === undefined ? undefined : given === checkDigits,
-    remainder: mod97Digits(whole),
+    remainder: mod97(whole),
     formatted: `${bank}-${party}-${given ?? checkDigits}`,
   };
 }
@@ -817,7 +688,7 @@ export interface Iban {
  * all, and is refused by name instead of silently mis-sliced.
  */
 export function ibanCheck(input: IbanInput): ProResult<Iban> {
-  const value = stripSeparators(input.value).toUpperCase();
+  const value = stripSeparators(input.value, false).toUpperCase();
   // U+0400-04FF is the Cyrillic block — checked before the generic character
   // test below so this specific mistake gets its own reason.
   if (/[Ѐ-ӿ]/.test(value)) return fail("confusable");
@@ -829,7 +700,7 @@ export function ibanCheck(input: IbanInput): ProResult<Iban> {
     const countryCode = value.slice(0, 2);
     const given = value.slice(2, 4);
     const bban = value.slice(4);
-    const checkDigits = checkDigitsFrom(mod97Alphanumeric(`${bban}${countryCode}00`));
+    const checkDigits = checkDigitsFrom(mod97(`${bban}${countryCode}00`));
     return {
       ok: true,
       iban: value,
@@ -837,9 +708,9 @@ export function ibanCheck(input: IbanInput): ProResult<Iban> {
       bban,
       checkDigits,
       givenCheckDigits: given,
-      matches: mod97Alphanumeric(`${bban}${countryCode}${given}`) === 1,
-      remainder: mod97Alphanumeric(`${bban}${countryCode}${given}`),
-      formatted: (value.match(/.{1,4}/g) ?? []).join(" "),
+      matches: mod97(`${bban}${countryCode}${given}`) === 1,
+      remainder: mod97(`${bban}${countryCode}${given}`),
+      formatted: groupsOfFour(value),
     };
   }
 
@@ -852,13 +723,13 @@ export function ibanCheck(input: IbanInput): ProResult<Iban> {
     const probeCountry = value.slice(0, 2);
     const probeGiven = value.slice(2, 4);
     const probeBban = value.slice(4);
-    if (mod97Alphanumeric(`${probeBban}${probeCountry}${probeGiven}`) === 1) {
+    if (mod97(`${probeBban}${probeCountry}${probeGiven}`) === 1) {
       return fail("alreadyIban");
     }
   }
   const countryCode = value.slice(0, 2);
   const bban = value.slice(2);
-  const remainder = mod97Alphanumeric(`${bban}${countryCode}00`);
+  const remainder = mod97(`${bban}${countryCode}00`);
   const checkDigits = checkDigitsFrom(remainder);
   const iban = `${countryCode}${checkDigits}${bban}`;
   return {
@@ -870,7 +741,7 @@ export function ibanCheck(input: IbanInput): ProResult<Iban> {
     givenCheckDigits: undefined,
     matches: undefined,
     remainder,
-    formatted: (iban.match(/.{1,4}/g) ?? []).join(" "),
+    formatted: groupsOfFour(iban),
   };
 }
 
@@ -1224,7 +1095,7 @@ function jmbgCheckDigit(base: string): { readonly digit: number; readonly raw: n
  * rule out that one.
  */
 export function identifierCheckDigit(input: IdentifierInput): ProResult<IdentifierCheck> {
-  const digits = stripSeparators(input.value);
+  const digits = stripSeparators(input.value, false);
   if (!/^[0-9]+$/.test(digits)) return fail("value");
   const full = IDENTIFIER_LENGTH[input.kind];
   if (digits.length !== (input.mode === "verify" ? full : full - 1)) return fail("length");

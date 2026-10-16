@@ -65,6 +65,7 @@ function plan(overrides: Partial<CulturePlanView> = {}): CulturePlanView {
     link: null,
     notes: "",
     visitId: null,
+    tickets: [],
     createdAt: "2026-06-01T08:00:00.000Z",
     updatedAt: "2026-06-01T08:00:00.000Z",
     ...overrides,

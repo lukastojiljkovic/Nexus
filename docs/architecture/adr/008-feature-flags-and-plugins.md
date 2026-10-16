@@ -1,6 +1,7 @@
 # ADR-008 — Module System, Feature Flags & the Plugin Path
 
-**Status:** accepted (draft pending founder sign-off) · 2026-07-05
+**Status:** accepted (draft pending founder sign-off) · 2026-07-05 ·
+**Superseded in part on 2026-10-09 by [ADR-093](093-navigation-groups.md)**: decision #11 (the PRD `category` groups as the navigation taxonomy) is replaced; the rest stands.
 **Drives:** ONB flag mapping, SET module gallery, every module's
 registration; PLUG stub discipline ("build the contracts, not the door");
 SEC-EXT-01 (constrains the future, not v1).

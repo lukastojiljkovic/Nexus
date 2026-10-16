@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Icon, ListRow, TextField } from "@nexus/ui";
+import { Button, Card, EmptyState, Icon, ListRow, TextField } from "@nexus/ui";
 import {
   batteryHealth,
   daysOfPower,
@@ -218,7 +218,7 @@ function OffGridForm({
     <div className="lab__panel">
       <div className="nx-eyebrow">{copy.offgrid.title}</div>
       {devices.length === 0 ? (
-        <p className="nx-hint">{copy.offgrid.empty}</p>
+        <EmptyState variant="inline" title={copy.offgrid.empty} />
       ) : (
         <div className="lab__list">
           {devices.map((device, index) => (

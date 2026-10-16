@@ -47,6 +47,10 @@ export const en: typeof sr = {
     moves: "Moves: {count}",
     againstComputer: "Against the computer, level {level}",
     againstHuman: "Two people at one machine",
+    discard: "Discard",
+    discardTitle: "Discard this saved game?",
+    discardQuestion: "The position and its moves are removed, and the game cannot be resumed afterwards.",
+    keep: "Keep it",
   },
   cell: {
     human: "person",

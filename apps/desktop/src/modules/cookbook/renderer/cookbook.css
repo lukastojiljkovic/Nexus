@@ -72,6 +72,14 @@
   gap: var(--nx-space-2);
 }
 
+/* A recipe's shelves, and the shelf manager's name-and-buttons rows. */
+.cookbook__shelves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: flex-end;
+}
+
 /* The servings stepper: a numeric box beside two bare buttons, so the controls
    line up at the end (`check:rows`). */
 .cookbook__servings {
@@ -218,47 +226,7 @@
   width: 6rem;
 }
 
-/* --- The house dialog recipe, under this module's prefix ------------------ */
-
-.cookbook__overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--nx-layer-dialog);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--nx-space-6);
-}
-
-.cookbook__backdrop {
-  position: absolute;
-  inset: 0;
-  background: var(--nx-bg);
-  opacity: 0.75;
-}
-
-.cookbook__panel {
-  position: relative;
+/* The recipe form is the house panel at a wider measure: it is longer than a confirmation. */
+.cookbook__editor {
   width: min(520px, 92vw);
-  max-height: 92vh;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-3);
-  padding: var(--nx-space-5);
-  background: var(--nx-surface);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-lg);
-  box-shadow: var(--nx-elevation-overlay);
-}
-
-.cookbook__panel-title {
-  font-size: var(--nx-font-size-h1);
-  font-weight: var(--nx-font-weight-semibold);
-  letter-spacing: var(--nx-font-tracking-h1);
-}
-
-.cookbook__panel-name {
-  color: var(--nx-text-subtle);
 }

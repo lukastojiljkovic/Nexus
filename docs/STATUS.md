@@ -14,31 +14,36 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-10-04. The state below was verified on that date against
-`main`, and against the branch named under „Unmerged work" for what is not on
-`main` yet. Deliberately no commit sha: a sha in a header goes stale the moment
-anything is pushed, which is the defect class this file keeps recording.
+**Last updated:** 2026-10-15. The state below was verified on that date, in the
+tree the release `v2.0.3` was cut from; every figure says in §1 how a reader
+re-measures it, because a number that cannot be re-derived is the defect class
+this file keeps recording. Deliberately no commit sha: a sha in a header goes
+stale the moment anything is pushed.
 
 **Read alongside:** [OVERVIEW.md](OVERVIEW.md) (plain-language tour) ·
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
-**Where things stand (2026-10-08).** The desktop application is finished and
-the repository is public. The latest release, **1.5.0**, is tagged `v1.5.0` on
+**Where things stand (2026-10-15).** The desktop application is finished and
+the repository is public. The latest release, **2.0.3**, is tagged `v2.0.3` on
 `main`, built by the release workflow and published with its checksums, their
-Ed25519 signature, an SBOM and build provenance; 1.4.0 was the first. The installer is unsigned, and web and
-sync are paused.
+Ed25519 signature, an SBOM and build provenance; 1.4.0 was the first. Every
+release ships unsigned ([DEV-008](deviations.md)), and sync, cloud and the web
+app are on hold permanently.
 
 ---
 
 ## 1. Where the project is
 
-**The desktop app is finished, and the repository is public.** Sixteen modules,
-all usable end to end, on an encrypted local SQLite database with no network
-path; the only connection Nexus can open is the update check, and only when the
-user turns it on. It installs like an ordinary Windows program and the founder
-has used it daily since 2026-08-02. The first public release is **1.4.0**,
-tagged `v1.4.0` (§4), and the latest is **1.5.0** (2026-10-08); every installer
+**The desktop app is finished, and the repository is public.** Every module in
+the registry — 42 of them today, counted from the two places a module is
+declared (§2) — is usable end to end, on an encrypted local SQLite database.
+The network boundary has three modes, and `offline`, the default, cannot make a
+request at all; the two that can reach anything, `updates` and `downloads`, are
+each opt-in and each fixed for the life of a launch. It installs like an
+ordinary Windows program and the founder has used it daily since 2026-08-02.
+Six releases are tagged — **1.4.0** (2026-10-05, `v1.4.0`, the first public
+one) through **2.0.3** (2026-10-15, `v2.0.3`, the latest); every installer
 before 1.4.0 was built by hand and never tagged, the last being 1.3.0, from
 `eceb07e` on 2026-09-23.
 
@@ -68,9 +73,15 @@ technology reads the same language the copy does.
 
 **Web and sync are on hold permanently** (founder, 2026-10-08; paused since
 2026-08-31). Nexus is positioned as an offline application: no public copy
-mentions sync, cloud or a web app, and nothing in §4.2 is scheduled. The code
-stays in the repository and in CI, so it keeps building and passing, but no work
-is planned on it.
+mentions sync, cloud or a web app, and nothing in §4.2 is scheduled. There is no
+resume order and no date. The code stays in the repository and in CI, so it
+keeps building and passing, but no work is planned on it, and the one surface it
+had in the app is hidden rather than removed: `SYNC_ON_HOLD`
+(`apps/desktop/src/shared/syncHold.ts`) is `true` and is the whole of the
+hiding — the Settings card „Sinhronizacija", its search entries and its
+screenshot scene (`settings-sync`) all read the one flag, so flipping it
+restores all three and nothing else has to be remembered. §3 is the record of
+what that code is and what it still owes.
 
 **What exists of sync is real, and it has never run against the real server.**
 The server half ran against a real Postgres 17: 14 migrations, an RLS wall
@@ -84,36 +95,20 @@ project: nothing here has `MAIN_VITE_SUPABASE_URL` set, so every round refuses
 `cloud_off` before making a request. That is the boundary working, and also why
 no round has run for real. It is the head of the web/sync queue.
 
-**The installed 1.3.0 can erase a board in „Tabla"; the fix is in the tree and
-not in any installer yet** (found and fixed 2026-09-26, [[DC-144]] in
-[defect-classes.md](defect-classes.md)). Opening a board — or changing one — and
-then going to another module within about a second wrote an empty drawing over
-it. It is proven on 1.3.0, the last installer built; the exit flush that does it
-dates from the canvas's first slice (ADR-079 §11.6), so every installer built so
-far is likely to carry it, and 1.4.0 is the first that will not. Until 1.4.0 is
-installed, wait two seconds after opening or changing a board before going to
-another module — opening counts as a change. A board that is already empty can
-only come back from a backup (`.nexus.zip`) taken before it emptied.
-
-**Elektronika, the sixteenth module, is complete.** E1–E6 are all built and
-verified, and the module is in the 1.3.0 installer. Two open ends remain, neither
-blocking; both are §5 items.
-
-
 |  |  |
 | --- | --- |
-| Desktop version | **1.5.0**, released as `v1.5.0`: unsigned, with its fuses read back |
-| Installer bytes | 183 215 709 (1.5.0, as published) · `sha256` 3737A3DC… — the release's signed `SHA256SUMS.txt` |
-| Linux | AppImage, tarball and a Gentoo ebuild, all built and verified |
-| Modules registered | **16** |
-| Local migrations | **70** (latest `070-circuit-search`) |
+| Desktop version | **2.0.3**, released as `v2.0.3` (2026-10-15): unsigned, per [DEV-008](deviations.md) |
+| Windows | an NSIS installer, per user |
+| Linux | an AppImage and a tarball, plus a Gentoo ebuild |
+| macOS | an arm64 dmg — unsigned and un-notarised, like the rest |
+| Modules registered | **42** — 16 compiled in (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and 26 discovered (`apps/desktop/src/modules/*/shared/manifest.ts`) |
+| Local migrations | **92** at `v2.0.3` (latest `092-assistant-chat-model`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts`; one more, `093-assistant-tool-outcome`, is on this branch under `[Unreleased]` |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
-| Static gates | **26**, each its own CI step |
-| Commits | **787** on `main` at `v1.5.0` |
-| Unmerged work | none |
-| Open pull requests | none at the 1.5.0 release |
-| Git tags / GitHub releases | `v1.4.0`, the first (§4), and `v1.5.0` |
-| Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass) |
+| Static gates | **30** (`check:*` in `package.json`), each its own CI step |
+| Commits | **1 104** on `main` at `v2.0.3` |
+| Changes since the release | **17** commits on top of `v2.0.3` (`git rev-list --count v2.0.3..HEAD`), recorded in [CHANGELOG.md](../CHANGELOG.md) under `[Unreleased]` |
+| Git tags / GitHub releases | `v1.4.0` through `v2.0.3` — six tags, each a published release |
+| Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass, admins included) |
 
 ---
 
@@ -137,9 +132,11 @@ blocking; both are §5 items.
   CSP. The database lives only in the main process; the renderer reaches it
   through a frozen, one-method-per-channel, per-field-validated IPC bridge.
 - **A renderer loaded by page** (2026-09-26) — startup parses the shell and
-  nothing else; each of the sixteen pages is its own chunk, loaded the first
-  time it is opened (`routes.tsx`), and so is each professional toolkit, the
-  first time one of its tools is (`proToolSurfaces.tsx`). `routes.test.ts`
+  nothing else; every page is its own chunk, loaded the first time it is opened
+  — the compiled-in ones are listed in `routes.tsx`, and a kit module's page is
+  reached through a non-eager `import.meta.glob` (`moduleKit/pages.ts`), so the
+  count is the registry's and not a list. Each professional toolkit is loaded
+  the first time one of its tools is (`proToolSurfaces.tsx`). `routes.test.ts`
   fails if anything the shell imports reaches a page statically. `smoke` opens
   every page and every tool from the built renderer, under the production CSP,
   and fails if one does not arrive or does not draw. Every package declares `sideEffects`, and
@@ -147,6 +144,19 @@ blocking; both are §5 items.
   renderer is minified; the main process deliberately is not, so the crash
   dialog Electron shows for an uncaught main-process error still names its
   functions (`electron.vite.config.ts` says why).
+- **The module kit** ([ADR-090](architecture/adr/090-module-kit.md)) — a module
+  is a folder the shell discovers: `modules/<id>/{shared,main,renderer}`, with
+  its manifest at `modules/<id>/shared/manifest.ts`, its page at
+  `renderer/Page.tsx` and its own copy beside it. A manifest carries what the
+  shell needs before any of the module's chunks load — id, prefix, group, order,
+  the rail's name and the gallery's description. Its channels live in a contract
+  of its own (`shared/ipc.ts`), which main and preload glob and which IS the
+  allowlist — so „every channel starts with `timers:`" is a property of the
+  declaration rather than of anybody's care — and its settings card body and
+  dashboard widgets are declared in the same folder. `ModuleRegistry` reads the
+  two sources in order, compiled-in modules first, then the discovered ones
+  sorted by `order` and id, so a module is added by writing its folder and its
+  store rather than by editing the ten shared files the old shape required.
 - **Design tokens** — a three-tier Dan/Noć pipeline to CSS variables; every
   colour, space, radius and type value is a `--nx-*` token, with a gate that
   keeps raw hex out of the tree.
@@ -169,7 +179,7 @@ blocking; both are §5 items.
   **answers** are what is stored, never the plan, so the explanation cannot drift
   and re-running the questionnaire a year later gets the modules that exist then.
   The plan never turns a module OFF.
-- **Twenty-six static gates in CI**, registered in `package.json` and each its
+- **Thirty static gates in CI**, registered in `package.json` and each its
   own CI step so a red check names the rule. **They are deliberately not listed
   here.** The list is generated from `package.json` by
   `scripts/ci-workflow.test.mjs`, and the hand-kept copy that used to stand in
@@ -177,8 +187,10 @@ blocking; both are §5 items.
   generated list fails by omission, and the omission looks exactly like a gate
   that is fine. `CLAUDE.md` carries the full set with the rule each one holds.
   Every one of them exists because a class in [defect-classes.md](defect-classes.md)
-  could not be caught by review; the newest, **`check:runner`** (2026-09-22), is
-  the one that keeps a process from being started by data.
+  could not be caught by review. **`check:runner`** (2026-09-22) is the one that
+  keeps a process from being started by data; the four added since it —
+  `check:english` and `check:reachable` (2026-10-09), `check:manual`
+  (2026-10-10) and `check:unpack` (2026-10-14) — came with the 2.0 work.
   **`check:names`** (2026-09-22, DC-131)
   is the one that reads the ACCESSIBLE name: a `<label>` that wraps its control
   takes the element's whole text content as that control's name, so a hint
@@ -225,15 +237,16 @@ blocking; both are §5 items.
   the BOXES and leaves the CONTROLS half a label apart. It reads the markup and
   the stylesheet together, because neither carries the discriminator alone, and
   it fires only where the children mix, which is why the fifty-odd toolbars and
-  chip rows that are correctly centred need no exemption list. Their own suite
-  is 547 tests across 33 files — twenty-five unit suites for the gates that live
-  in `scripts/` (the twenty-sixth, `check:rls`, is tested in
-  `supabase/tests/static/`) and eight for the shared scanners, the root config,
-  the CI step list and the run lock.
+  chip rows that are correctly centred need no exemption list. The gates' own
+  tests live beside them in `scripts/*.test.mjs` — 43 files today
+  (`ls scripts/*.test.mjs | wc -l`) — except the RLS gate's, which are in
+  `supabase/tests/static/`. The CI step list itself is pinned by
+  `scripts/ci-workflow.test.mjs`, so a gate that is registered and never run
+  fails.
 - **Packaging** — NSIS per-user installer, a Serbian uninstaller that defaults
   to keeping data, an app icon, and ADR-089's updater — no electron-updater and
-  no feed: a check against the GitHub release API, offered only in „offline +
-  update checks" mode and verified against a key compiled into the app.
+  no feed: a check against the GitHub release API, offered only in the opt-in
+  `updates` network mode and verified against a key compiled into the app.
   Chromium's and Node's own notices ship
   beside the executable (confirmed by watching a real build, 2026-08-16).
 - **A root `Makefile` as the build entry point** (2026-08-16, `a438e32`, on
@@ -252,8 +265,15 @@ blocking; both are §5 items.
 
 ### The modules
 
-Sixteen registered modules, each enabled per profile and usable end to end, plus
-onboarding — which is a flow rather than a module and so carries no manifest.
+**42 registered modules**, each usable end to end — **16 compiled into the
+shell** (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and **26
+discovered** by the kit (`apps/desktop/src/modules/*/shared/manifest.ts`) — plus
+onboarding, which is a flow rather than a module and so carries no manifest.
+What is on screen is one device-level setting
+([ADR-101](architecture/adr/101-shell-visibility.md)): a module can be hidden,
+and the groups and their rows reordered.
+
+The sixteen, in registry order:
 
 | Module | State |
 | --- | --- |
@@ -270,10 +290,43 @@ onboarding — which is a flow rather than a module and so carries no manifest.
 | **Fitness** (FIT) | Complete — a 426-entry public-domain food catalogue with per-number provenance, meal logging, a 230-exercise Serbian catalogue, sessions and routines, personal records and 1RM trend, body measurements with measured energy expenditure. |
 | **Focus** (FOCUS) | Built — one timer for the whole app; a study session and a Pomodoro phase are the same row. |
 | **Tools** (UTIL) | Built — the everyday drawer of converters and calculators. Eleven tools, so it opens ON one: the tool this device used last, or the first in the rail. |
-| **Professional tools** (PRO) | Built — 18 toolkits, **322 tools** (counted 2026-09-26: 274 across the seventeen professions, 48 in the developer toolkit), 1 991 hand-derived assertions. Each toolkit's surfaces are fetched the first time one of its tools is opened. `riskClass` is a required contract field that draws the tool's notice, the line appended to every copied result, the Settings long form, and whether a surface may render a verdict at all. Its resting surface is the drawer's own index — the toolkits this profile chose, who each is for, and what it gave them — over „Nedavno". |
+| **Professional tools** (PRO) | Built — **353 tools**, each declaring who it is for, across **32** distinct packs (counted 2026-10-15: the `titleKey: "pro.name.…"` entries in `apps/desktop/src/shared/modules.ts`, and the distinct `packs: […]` values beside them; `packs` is what routes a tool to a drawer, not its category). Each pack's surfaces are fetched the first time one of its tools is opened. `riskClass` is a required contract field that draws the tool's notice, the line appended to every copied result, the Settings long form, and whether a surface may render a verdict at all. Its resting surface is the drawer's own index — the packs this profile chose, who each is for, and what it gave them — over „Nedavno". |
 | **Canvas** (CANV) | Whole — Excalidraw driven through its imperative API behind our own Serbian toolbar, with notes, tasks and events as live cards that arrows bind to. |
 | **Electronics** (ELEC) | **All six slices complete** ([ADR-085](architecture/adr/085-electronics-module.md)) — a 153-component catalogue, a pan/zoom bench with rotation and snapping, two-click wiring in the trade's nine jumper colours, a panel that reports the *electrical* faults too (thirteen rules over a derived net model, from a 5 V rail on a 3.3 V part to two I²C devices strapped to the same address), and „Kod": the code the wiring implies — an Arduino sketch for a microcontroller, a ROS 2 `ament_python` package for a board that runs Linux — previewed in the app and written out through the native dialog the artefact calls for (a save dialog for the `.ino`, a directory picker for the package, and main decides which from the stored circuit). And „Mašina": two parametric chassis and nine measured numbers turn the mounted sensors into a URDF that ships inside the ROS 2 package, listing what it has no honest geometry for rather than guessing at it (ADR-085 §8, answered 2026-09-01). And „Klupa" (E5): the same derivation running on a deterministic clock — one channel per board pin that carries a signal, with its direction, its unit, its ROS topic and a waveform the *user* declares, plus the one warning a static rule cannot give (a value above the board’s logic level at THIS tick). And **E6, the external runner**: the module can hand the generated workspace to a real toolchain — `colcon build`, natively, through WSL2 or in a Docker container pinned by digest — with the command line written down in one table in source, off until the user consents once, one run at a time, and killed on quit. All six slices are complete. |
 | **Settings** (SET) | Built — themes, accent, module switches, per-module preferences, remappable shortcuts, notification appetite and quiet hours, profiles, scheduled encrypted backups, third-party notices. |
+
+The twenty-six the kit discovers, in registry order — each one's name and the
+sentence below it are the `copy` in its manifest, which is what the rail and the
+settings gallery draw before any of its chunks load:
+
+| Module (id) | Group | What it is |
+| --- | --- | --- |
+| Timers (`timers`) | plan | A stopwatch and named countdowns that keep running with the page closed. |
+| Library (`library`) | culture | The books, films and series you read and watch: what is on the wish list, what is in progress, and what is finished. |
+| Culture (`culture`) | culture | Museums, theatre, concerts and cinema — a programme, an arts guide and music. |
+| Car (`car`) | life | A service book: vehicles, services, intervals, fuel and faults. No advice of its own. |
+| Pantry (`pantry`) | life | What is in the house, what runs out, and what expires. |
+| Cookbook (`cookbook`) | life | Your recipes and the world's cuisines from packs — ingredients, steps and nutrition. |
+| Emergency card (`emergency`) | life | The facts a stranger or a medic can read when you cannot speak. |
+| Recorder (`recorder`) | knowledge | A voice and camera diary: record sound or video and play it back when you need it. |
+| Calculator (`calculator`) | make | One-line calculation: variables, units, history and a scientific keypad. |
+| Astronomy (`astronomy`) | knowledge | The solar system in 3D, day and night on Earth, tonight's sky, and the Sun and Moon for a chosen place. |
+| Signals (`signals`) | make | Morse, an ASCII table, a tuner and a sound meter — the microphone opens only when one is started. |
+| Mini apps (`miniapps`) | make | Nine small tools in one place: a metronome, dice, counters, a scoreboard, typing, dates, a world clock, a screen light and a QR reader. |
+| Arcade (`arcade`) | play | Five quick games for a break: Minesweeper, Blocks, Snake, Bricks and 2048 — all of it offline. |
+| Cards (`cards`) | play | Nine card games — six solitaires and three against the computer. |
+| Chess (`chess`) | play | A board game — against the engine or another person, with clocks, saved games and PGN. |
+| Board games (`boards`) | play | Six board games — against the computer or on one machine. |
+| Puzzles (`puzzles`) | play | Sudoku, nonograms, mahjong and Numbers — every game is saved and picks up where it stopped. |
+| Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet. |
+| Reader (`reader`) | knowledge | Books from content packs — read, search and print them. |
+| Maps (`maps`) | knowledge | Search places, drop pins and measure a distance on an offline map. The map data arrives as a pack; the Serbia map pack is not built yet. |
+| Translator (`translator`) | knowledge | A Serbian–English dictionary and travel phrases — they work offline. |
+| Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note. Its OCR language packs are not built yet. |
+| Drawings (`drawings`) | make | Open an AutoCAD drawing: layers, measurements and print to PDF. DXF right away, DWG with a pack. |
+| Workshop (`workshop`) | make | View STL models, G-code toolpaths and Gerber boards — with nothing else installed. |
+| The Lab (`lab`) | make | Serial, battery, tone and light — what the laptop can do beyond its job. |
+| Assistant (`assistant`) | knowledge | A conversation with a local model that knows the app and your own data, with no internet. |
 
 Plus **global search** (Ctrl+K over every module, Serbian-fold-correct, with a
 command palette) and **notifications** (OS-level, snoozable, with a cleanup
@@ -284,11 +337,15 @@ bordered box that fills the pane with the rail and the surface scrolling
 independently inside it, the search pinned at the head of the rail, and every
 form a grid rather than a column of full-width controls — so a tool's ANSWER
 sits beside its inputs instead of below the fold. One stylesheet rule reaches
-all 327 surfaces; none of them was edited.
+every one of the professional drawer's 353 tool surfaces; none of them was
+edited.
 
 ### The server and sync substrate
 
-Built, executed, and not yet reachable from any screen.
+Built, executed, and on hold with everything else in this area (2026-10-08): it
+keeps building and passing in CI, and the one screen that could reach it is
+hidden behind `SYNC_ON_HOLD` — see §1 and §3. What follows is the record of what
+exists, not a plan; nothing here is scheduled.
 
 - **14 Supabase migrations** applied to a real Postgres 17, with **165 pgTAP
   assertions** (the sum of `select plan(…)` across `tests/database/`) running in
@@ -481,11 +538,15 @@ Built, executed, and not yet reachable from any screen.
 
 ---
 
-## 3. In progress
+## 3. On hold permanently — recorded, not in progress
 
-The desktop side of sync stops at a clean line. Nothing is half-written, no dead
-branches, no disabled tests — what is missing is missing entirely, which is why
-each item below is a self-contained piece of work.
+Sync, cloud and the web app were put on hold permanently on 2026-10-08. Nothing
+in this section is scheduled, and no resume order exists; it is here because the
+code stays in the tree and somebody reading it needs to know what state it is
+in. The desktop side of sync stops at a clean line: nothing is half-written, no
+dead branches, no disabled tests — what is missing is missing entirely, which is
+why each item below is a self-contained piece of work when and if the hold is
+ever lifted.
 
 ### The pairing subsystem's two halves implement two different protocols
 
@@ -606,12 +667,14 @@ anyone remembering to read this list. What is left is four designs that are owed
    the rows it did serve are real. Detecting that needs a signed, monotonic
    manifest over `(object_id, version, ck_epoch)` per collection. Until it
    exists, withholding is the one server attack this design does not see.
-5. **Nothing in the transport reads a 5xx as a 5xx.** `packages/sync-transport`
-   has no retry, no backoff and no status-class handling anywhere: a cold Edge
-   Function boot on hosted Supabase reaches the desktop as `refused` with
-   `reason: "unknown"` and `httpStatus: 503`, and `parseSyncEnableResponse`'s
-   comment describes exactly that outcome („a server that answered something
-   this client was not written against") without anything acting on it. Found
+5. **The sync data path reads no 5xx as a 5xx.** The auth path already does —
+   `auth.ts` maps `status >= 500` to `"unavailable"` — but the data path
+   (`http.ts`, `pull.ts`, `push.ts`) has no retry, no backoff and no status-class
+   handling: a cold Edge Function boot on hosted Supabase reaches the desktop as
+   `refused` with `reason: "unknown"` and `httpStatus: 503`, and
+   `parseSyncEnableResponse`'s comment describes exactly that outcome („a server
+   that answered something this client was not written against") without anything
+   acting on it. Found
    2026-09-07 while root-causing the red `database` job, whose cause was the
    same fact one layer over — see [[DC-118]]. The test suites now wait for the
    runtime; the product does not, so a user's FIRST „turn on sync" is the call
@@ -635,10 +698,12 @@ schedule is now a migration) — reached `main` through the public-release pull
 request (#39), the English locale followed it, and `v1.4.0` was tagged from
 the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**1.5.0 followed on 2026-10-08:** Settings in categories (ADR-088) and the
-opt-in update check (ADR-089), with the security fixes in `CHANGELOG.md`. Its
-release is the first to sign `SHA256SUMS.txt` with the Ed25519 key the app
-pins.
+**Five releases followed it,** each in `CHANGELOG.md` with its date: the
+2026-10-08 release with Settings in categories (ADR-088) and the opt-in update
+check (ADR-089); then 2.0.0 (2026-10-11), 2.0.1, 2.0.2 and 2.0.3 (2026-10-15).
+The 2026-10-08 release is the first whose `SHA256SUMS.txt` carries the Ed25519
+signature the app's update check verifies, and 2.0.0 is the first with a macOS
+dmg.
 
 **What that leaves is the maintainer's, and it is one thing:** the
 code-signing route (`SignPath Foundation` is free for open-source projects;
@@ -646,12 +711,12 @@ Azure Artifact Signing is the alternative). It is not blocked on anything in
 this repository. The repository settings in
 [ops/github-setup.md](ops/github-setup.md) were all applied on 2026-10-05.
 
-**Order of work.** On 2026-08-31 the founder paused web and sync: *„web/sync je
-za sada trajno na hold-u, dok ne završimo sve feature za desktop, lako ćemo ih
-posle portovati na sajt jer je electron osnova."* Everything left on the desktop
-comes first. Web, Supabase and pairing are **paused, not cancelled** — what
-exists stays built, tested, green in CI and off by default, and nothing new is
-added there until the desktop is complete.
+**Order of work.** Web and sync were paused on 2026-08-31, when the desktop
+came first, and put on hold permanently on 2026-10-08: Nexus is an offline
+application, and nothing about the web app, the server or pairing is planned.
+They are **on hold, not cancelled** — what exists stays built, tested and green
+in CI, off by default and hidden (§3), and nothing new is added there. There is
+no resume order and no date.
 
 ### 4.1 Desktop work, in the order to take it
 
@@ -674,13 +739,14 @@ suggestion, cheapest and highest-leverage first.
    same startup chunk, because `strings.ts` imports both locales eagerly — so
    the split this item proposes is worth more, not less, and a lazy per-locale
    load is the other half of the same design.
-2. **A bench wire is pointer-only.** In Elektronika a part is a
-   `role="button"` with a tab stop and Enter/Space; a wire is an invisible hit
-   path with an `onPointerDown` and nothing else. So a keyboard user can select
-   no wire, and therefore recolour or remove none. Found 2026-09-26 while making
-   the wire scene deterministic. The answer is a focus model for a canvas of
-   many small targets — which order, and a name for a wire (its two ends) —
-   not an attribute.
+2. **Done (2026-10-09): the bench wire's focus model.** A wire was an invisible
+   hit path with an `onPointerDown` and nothing else, so a keyboard user could
+   select no wire and therefore recolour or remove none. `elecWires.ts` now
+   decides the order the keyboard walks the wires in (`wireFocusOrder`, by each
+   wire's first end, top to bottom then left to right, stable when nothing
+   moves), gives the group one tab stop (`wireTabStop`), and names each wire by
+   its two ends; the arrows walk that list, Enter and Space select, Escape hands
+   focus back. `elecWires.test.ts` pins the order, the tab stop and the name.
 3. **The sweep has no comparison mode.** Every comparison of two sweeps this
    month was a script in a scratch directory, and each one had to re-learn what
    noise looks like. Measured 2026-09-26 on two partial sweeps of one build: 157
@@ -749,9 +815,14 @@ suggestion, cheapest and highest-leverage first.
     and reachable by scrolling, deliberately left: the card is the scroller, step
     3 is the only step whose actions do not fit, and a sticky action bar would
     change the first screen a user ever sees.
-11. **Mixed line endings within files**, despite `core.autocrlf=true`. Every
-    scripted edit has to be EOL-aware; it has already cost two redoes. A standing
-    hazard rather than a defect.
+11. **Nothing enforces the line-ending rule.** `.gitattributes` pins the files
+    where an ending is load-bearing (the Gentoo overlay, the `Makefile`,
+    generated `licences.json`, `patches/**`, the pack and chess fixtures), and
+    no tracked text file carries a carriage return today — `git grep --cached
+    -P '\r$'` matches only binary assets (images, fonts, a `.zim`, `.pbf`
+    fixtures). What is missing is the guard: a `check:line-endings` gate over
+    committed blobs. Until it exists, every scripted edit has to be EOL-aware,
+    and that has cost two redoes.
 
 **Not on the desktop list:** SEC-VER-01 (threat models), the sync transport's
 error model, and the pairing redesign are all web/sync work and stay paused with
@@ -803,10 +874,11 @@ it. The questions they raise are in §5 so they are not lost.
    machines.
 
 Two further pieces of sync work are paused with the rest and recorded in §3, so
-they are not lost: **the transport's error model** (nothing in
-`packages/sync-transport` reads a 5xx as a 5xx — no retry, no backoff, no
-status-class handling — and a cold Edge Function boot reaches the desktop as
-`refused` with `reason: "unknown"`), and the **four designs the sync subsystem
+they are not lost: **the transport's error model** (the sync data path has no retry and no
+backoff; `pull.ts` maps every non-200 to `unavailable` apart from 401 and 403,
+and `push` classifies by status in `outcome.ts`; the auth path maps a 5xx to
+`unavailable`; and a cold Edge Function boot reaches the desktop as `refused`
+with `reason: "unknown"`), and the **four designs the sync subsystem
 still owes** (an evidence-based reclamation horizon, the service-role writes
 plus the missing three-key ADR, the test-file scope of the web key-surface
 gate, and a sealed per-collection manifest against a server that simply omits
@@ -814,12 +886,13 @@ rows).
 
 ### 4.3 Not started: product breadth
 
-Goals, time tracking, health, car, travel, inventory, shopping, read-later,
-library, the password vault, entertainment, sharing, analytics, automation, the
-AI assistant and the plugin system. The full catalogue and its priorities are in
-[SPECIFICATION.md](SPECIFICATION.md) §4. Several depend on sync existing first.
-**Breadth is not the constraint and has not been since 2026-08-02**; finish
-quality is.
+Everything that has not been built is a named module or slot rather than a gap
+in one that exists: goals, time tracking, travel, a
+password vault, sharing, analytics, automation and the plugin system. The
+catalogue is in [SPECIFICATION.md](SPECIFICATION.md) §4. Several of them
+(sharing, and anything that would need a second device) depend on the work on
+hold in §4.2, and none of them is planned: **finish quality outranks breadth,
+and the app is finished where it is.**
 
 ### 4.4 Notes for whoever picks this up
 
@@ -827,23 +900,26 @@ quality is.
   `eceb07e` built twice produced 183 821 582 and 183 821 644 bytes. Size and
   hash identify an artifact, never a revision. That matters the day an update
   feed publishes a digest.
-- **The Electron fuses are not read back by CI.** The configuration is in
+- **The Electron fuses are still not read back by CI.** The configuration is in
   `electron-builder.yml` (RunAsNode, NODE_OPTIONS and CLI inspect off; cookie
   encryption, embedded asar integrity and only-load-from-asar on), and the 1.3.0
   executable was read back and had all six wrong. 1.4.0's read back as
   configured, on 2026-10-02 and again on 2026-10-05 from the tree the tag was
-  cut from (see `log/2026-10.md`), and 1.5.0's Linux binary, taken from the
-  published tarball, read back as configured on 2026-10-08. After any change to that file or to
+  cut from (see `log/2026-10.md`), and the Linux binary of the 2026-10-08
+  release, taken from the published tarball, read back as configured the same
+  day. Nothing in
+  `.github/workflows/` reads them, so the read-back is still a hand step, and no
+  2.0.x release has one recorded. After any change to that file or to
   Electron: run `pnpm --filter @nexus/desktop dist`, then
   `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
   it reports a number nothing could be verified against. The Gentoo ebuild is
-  `nexus-bin-1.5.0`, its `SRC_URI` points at this repository's releases, and
-  its committed `Manifest` digests the published Linux tarball (the same bytes
-  as the release's `SHA256SUMS.txt`). The next bump regenerates the Manifest
-  from the next published tarball, never from a local build. It has still not
-  been run through portage (`apps/desktop/build/gentoo/README.md`).
+  `nexus-bin-2.0.3`, and its `Manifest` digests the published 2.0.3 tarball.
+  Each release still needs its own bump: rename the ebuild, regenerate
+  `Manifest` from the published tarball (never from a local build) and
+  re-check `metadata.xml`. It has still not been run through portage
+  (`apps/desktop/build/gentoo/README.md`).
 - **`check:licences` fails every bump of a packaged dependency, by
   construction.** Dependabot cannot regenerate a generated artifact, so the
   third-party notices must be regenerated on the branch
@@ -853,8 +929,10 @@ quality is.
   `main` with more packages in it. Fix on the branch, push, and merge promptly;
   the window between push and merge is the window in which the branch can be
   recreated underneath the fix.
-- **Nothing is unpushed and no pull request is open** as of 2026-09-26, and both
-  CI and Security are green on `main`.
+- **`main` is at `v2.0.3`**, and the work that has landed since the release is
+  in `CHANGELOG.md` under `[Unreleased]`. Whether
+  anything is open on GitHub is not a fact this file can carry: ask the
+  repository.
 
 ## 5. Open questions for the founder
 
@@ -868,8 +946,8 @@ implemented until the founder says otherwise.
 | --- | --- |
 | SEC-VER-01: threat-model passes for the modules | Binding on paper, one instance, unenforced. Needs a decision: queue item or aspiration. |
 | The secret scanner and our own naming | Open. Recommendation: keep naming the literals, revisit if it fires a second time. |
-| The screenshot sweep cannot reach the sync forms | Open. Recommendation: (a), a placeholder project, gated on the harness refusing to run in a packaged build. |
-| Two packs may still have built one computation under two names | Recorded, not urgent. Sweeping the seventeen professions' 274 tools is larger than the four fixes already done. |
+| The screenshot sweep cannot reach the sync forms | **Answered by the hold** 2026-10-08: the card and its scene are hidden (`SYNC_ON_HOLD`), so there is nothing to photograph. The question returns if the flag is ever flipped. |
+| Two packs may still have built one computation under two names | Recorded, not urgent. Sweeping the drawer's 353 tools is larger than the four fixes already done. |
 | The medicine toolkit | Recommendation (b) is implemented: survivors folded into `trening` as wellness. Confirm the refusal list stands. |
 | Electronics: URDF geometry | **Answered** 2026-09-01 and built (parametric chassis, ADR-085 §8). |
 | Electronics: what comes next after E5 | **Answered** 2026-08-31 (E3), then superseded by the desktop-first pause. |
@@ -878,7 +956,7 @@ implemented until the founder says otherwise.
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
 | Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. |
+| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Five more releases have been tagged since, through `v2.0.3` (2026-10-15). |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)
@@ -888,16 +966,16 @@ lightweight threat-model pass at design time (STRIDE-style, ~30 minutes,
 documented in `docs/security/threat-models/`)"*. That directory holds **one**
 document — the E6 external-runner threat model, written on 2026-09-22 for the
 slice that has since been **built and shipped** — and **no module has had a
-pass**. All sixteen registered modules, ELEC included: its document covers one
-slice of one of them, and the other fifteen are untouched.
-Several of the sixteen carry a real trust boundary:
+pass**. All 42 registered modules, ELEC included: its document covers one
+slice of one of them, and the other 41 are untouched.
+Several of them carry a real trust boundary:
 the private section's blob protocol, archive import and export, the attachment
 store, the sync wire.
 
 Two readings, and only the founder can say which:
 
 1. **It is a queue item.** Then the honest shape is a pass per SURFACE that
-   crosses a trust boundary, not per module. Sixteen documents shaped like the
+   crosses a trust boundary, not per module. Forty-two documents shaped like the
    module registry would spend most of their words on modules whose entire attack
    surface is a local SQLite table behind an allowlisted IPC channel; the
    candidates worth the time are the four named above, and the rest would each
@@ -995,7 +1073,7 @@ question above; nothing about this pass changes them.
 Name collisions are the only kind that could be found by looking, and all four
 have been. Two packs that each built the same computation under two DIFFERENT
 names would look exactly like two ordinary tools, and nothing in the catalogue
-would say otherwise. Sweeping the 274 for duplicated arithmetic is a larger
+would say otherwise. Sweeping the 353 for duplicated arithmetic is a larger
 piece of work than fixing these four was, and nothing forces it now — recorded
 so that it stays a decision rather than becoming an oversight.
 
@@ -1070,8 +1148,8 @@ proveri testove CICD, PRove sve to sredi… i onda tek exe"* — and
 E3, on the reasoning that a workbench which cannot yet say „that sensor is 3.3 V
 and you have wired it to 5 V" is the half an engineer tests first. That was a
 recommendation about *when to spend a build*, and he spent it; the E3 argument
-survives as an argument about E3, not about the installer. **A newer installer
-exists — 1.3.0, built 2026-09-23; §4 has its release note.**
+survives as an argument about E3, not about the installer. The releases cut
+since are the tagged ones listed in §4.
 
 - **~~What comes next — E3, or the desktop sync wiring?~~ Answered by the
   founder, 2026-08-31: E3** (*„Ok nastavi to za elektroniku sto si hteo"*). It
@@ -1148,7 +1226,7 @@ are questions rather than defects.
 
 - **The three-tier constants doctrine** — `physical` embeds; `published` embeds
   with its source and edition on screen; `regulated` is always a user input with
-  no default. All 274 tools are written against it, so confirming it is cheap
+  no default. All 353 tools are written against it, so confirming it is cheap
   now and expensive later.
 - **`grain-moisture-shrink` (agro)** — does a buyer's contract impurity
   percentage apply to the GROSS mass, or to whichever mass is current at that
@@ -1165,10 +1243,9 @@ All three artifacts exist and work without an answer.
 
 1. **Does `lukastojiljkovic/nexus-releases` get created?** **Answered
    2026-10-02: no.** The ebuild's `SRC_URI` and `electron-builder.yml`'s
-   `publish` block now both point at this repository, which is public. Until a
-   `v*` tag exists the tarball is hand-placed into
-   `/var/cache/distfiles/` — fine for one machine, and the thing standing
-   between „an ebuild" and „an `emerge` that works on somebody else's computer".
+   `publish` block now both point at this repository, which is public, and the
+   `v*` tags since `v1.4.0` make that `SRC_URI` resolve. What is still missing is
+   a run: the ebuild has never been installed through portage (§4.4).
 2. **Is Linux a supported target or a courtesy build?** Supporting it
    commercially means every release gets a Linux run and the keyring requirement
    becomes a support question.
@@ -1191,7 +1268,7 @@ All three artifacts exist and work without an answer.
    The block tool covers `mxfp4`, `mxfp6-e2m3`, `mxfp6-e3m2` and the scale.
    Adding it is about an hour; it was left out only because it was not asked for.
 
-### Version numbering — the bump happened twice, the tagging question did not
+### Version numbering and tagging
 
 **1.3.0 was cut on 2026-09-23** (`0a983ef`), one field in
 `apps/desktop/package.json`, from which the installer filename,
@@ -1207,25 +1284,14 @@ old number produces a file with the same name reporting the same version from
 `app.getVersion()` — the ambiguity behind „I installed it and the module isn't
 there", which 1.1.0 already cost once.
 
-What the bumps did **not** settle: **no version has ever been tagged or
-released.** There are no git tags and no GitHub releases, so „1.3.0" is a
-number the installer reports and nothing a user could verify against anything.
-Two consequences are already live rather than hypothetical:
-
-- the Gentoo ebuild's `SRC_URI` now points at this repository's releases
-  (`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), a URL that
-  resolves as soon as the first tag is cut — it pointed at the never-created
-  `nexus-releases` repository until 2026-10-02;
-- its `Manifest` was deleted with this bump rather than carried forward, because
-  it digested `nexus-1.1.0-linux-x64.tar.gz` and no later ebuild fetches that
-  file. It has to be regenerated where the Linux tarball is built —
-  `dist.mjs` refuses a Linux target from a Windows host, since the native SQLite
-  module is built for the host it runs on.
-
-So the open question is no longer „should we bump" but **„should a release be
-cut at all"** — the ebuild's `SRC_URI` is settled, and a `v*` tag makes the Linux
-packaging work as written; leaving it means the ebuild stays a hand-installed
-recipe.
+Tagging is settled: `v1.4.0` was the first tag and release (2026-10-05), and
+the five tags since then are the releases §4 lists. The Gentoo ebuild's
+`SRC_URI` points at this repository's releases
+(`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), so it resolves
+for every tag. Its `Manifest` digests the published 2.0.3 tarball, so each bump has to
+regenerate it from the published tarball, never from a local build:
+`dist.mjs` refuses a Linux target from a Windows host, since the native SQLite
+module is built for the host it runs on.
 
 ### `gitleaks-action` carries a commercial EULA
 
@@ -1239,32 +1305,32 @@ becomes a licence question the day it moves under an organisation.
 These outrank everything in §3 and §4. No piece of work may trade one of them
 away for being convenient.
 
-- **Code signing is still open, and 1.4.0 ships without it under
-  [DEV-008](deviations.md)** (SEC-EL-07, SEC-SC-05), confirmed by the founder on
-  2026-10-02. The installer is unsigned, so Windows shows a SmartScreen warning
-  on first run, and the release notes, the README and the website say so; macOS
-  builds do not exist. Re-arming the update feed stays behind signing.
+- **Code signing is still open, and every release from 1.4.0 to 2.0.3 ships
+  without it under [DEV-008](deviations.md)** (SEC-EL-07, SEC-SC-05), confirmed
+  by the founder on 2026-10-02. The Windows installer is unsigned, so Windows
+  shows a SmartScreen warning on first run; the macOS dmg (from 2.0.0) is
+  unsigned and un-notarised, so its first start is right-click → Open. The
+  release notes say so. Re-arming the update feed stays behind signing.
 - **No performance claim before a harness measures it.** The budgets in
   [architecture/overview.md](architecture/overview.md) are targets nothing
   checks.
 - **Cloud is OFF BY DEFAULT on the desktop and switchable off entirely.** A user
-  who never turns it on must be in exactly the product 1.0.0 is: no network
-  calls at all. This is structural — the local-only path must not be *able* to
+  who never turns it on is in the `offline` mode, which cannot make a request
+  at all. This is structural — the local-only path must not be *able* to
   reach the network — and `check:egress` is one of the layers that holds it.
 - **The pairing code must never be a bearer token for the data key.** It
   authorises one run of a key-confirmed exchange, inside which an ephemeral
   X25519 handshake carries the wrapped key and both screens show a short
-  confirmation number the user compares.
+  confirmation number the user compares. While sync is on hold this binds only
+  the paused code (§3).
 - **`main` is a protected branch** (founder, 2026-08-16, after DC-59): the four
   checks — `verify`, `database`, `Secret scan (gitleaks)`, `Dependency audit` —
   are required, `strict` is on so a branch must be up to date with `main` before
-  it merges, and force-pushes and deletion are refused. **Administrators are
-  exempt, deliberately**, so direct pushes to `main` keep working the way both of
-  us work today. That exemption means the rule does not physically stop an admin
-  from merging a stale branch — what it does is make the staleness *visible*,
-  because `strict` turns a stale pull request's `mergeStateStatus` from `CLEAN`
-  into `BEHIND`. DC-59's whole failure was that GitHub said `CLEAN`, so the signal
-  is the fix; run `gh pr list --json mergeStateStatus` before merging anything.
+  it merges, and force-pushes and deletion are refused. The ruleset has no
+  bypass, administrators included ([ops/github-setup.md](ops/github-setup.md)).
+  Because `strict` turns a stale pull request's `mergeStateStatus` from `CLEAN`
+  into `BEHIND`, run `gh pr list --json mergeStateStatus` before merging
+  anything: DC-59's whole failure was that GitHub said `CLEAN`.
 - **The `Dependency audit` job has two halves, and they now BOTH report.**
   „Shipped dependencies" is `pnpm audit --prod --audit-level low` with no
   exceptions of any kind; „Build toolchain" is
@@ -1289,7 +1355,7 @@ away for being convenient.
   derived from Electron's published cadence rather than from an announced date.
 - **Every gate green before any commit** — `pnpm typecheck`, `pnpm lint`,
   `pnpm test`, `pnpm build`, `pnpm --filter @nexus/desktop smoke`, and all
-  twenty-six static gates.
+  thirty static gates.
 - **The screenshot sweep runs longer than ten minutes and must be backgrounded.**
   **2 839 frames** at three measured widths in both themes — measured at the end
   of the 2026-09-22 run that added the runner scene, and worth the sentence this

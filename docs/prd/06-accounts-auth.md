@@ -118,6 +118,9 @@ privacy-first user and the founder (local, desktop) are primary for v0.
   explicit typed confirmation, offer a full export first, apply a 14-day
   grace period (cancelable by logging in), then delete per SEC-DAR-03.
   Local-account deletion is immediate after confirmation (with export offer).
+  *Amended 2026-10-15 (ADR-048): for a local account the re-authentication step
+  does not apply; the typed account label is the confirmation, and the grace
+  period does not apply.*
 
 ### Profiles (personal / business)
 - **AUTH-023 (M)** Each account shall have a personal profile and an optional

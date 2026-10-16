@@ -2,6 +2,7 @@ import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ChangeEvent, DragEvent, FormEvent, ReactNode } from "react";
 import {
+  AsyncSurface,
   Button,
   CardsView,
   Checkbox,
@@ -13,12 +14,16 @@ import {
   KanbanView,
   ListRow,
   ListView,
+  LoadingState,
+  Notice,
   PageHeader,
   Select,
   StatBand,
+  TextArea,
   TextField,
+  Toast,
 } from "@nexus/ui";
-import type { Stat } from "@nexus/ui";
+import type { AsyncState, Stat } from "@nexus/ui";
 import {
   applyFilters,
   applySort,
@@ -84,6 +89,7 @@ import type {
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import { localTodayKey } from "./examDates.js";
+import { optionalText } from "./formFields.js";
 import { shiftDay } from "./habitDone.js";
 import { collator, dateTimeFormat, numberFormat } from "./intl.js";
 import {
@@ -616,12 +622,16 @@ function flattenRail(nodes: readonly RailNode[], depth = 0): { list: TaskList; d
 }
 
 /**
- * The page's single pending delete offer: one task (the row ×) or a whole batch
- * (ADR-038's Obriši). ONE slot, not two bars — a fresh delete of either kind
- * replaces the previous offer, which is what "undo" can honestly mean when only
- * the last delete is remembered.
+ * The page's single pending delete offer: one task (the row ×), a whole batch
+ * (ADR-038's Obriši) or one list (the rail's ×). ONE slot, not three bars — a
+ * fresh delete of any kind replaces the previous offer, which is what "undo" can
+ * honestly mean when only the last delete is remembered.
  */
-type PendingUndo = null | { kind: "single"; id: string } | { kind: "bulk"; ids: string[] };
+type PendingUndo =
+  | null
+  | { kind: "single"; id: string }
+  | { kind: "bulk"; ids: string[] }
+  | { kind: "list"; id: string };
 
 /**
  * One rendering group of the list view: the list BODY (`section` null) or one
@@ -738,6 +748,19 @@ function taskChips({
 }: TaskChipsInput): ReactNode {
   const chips: ReactNode[] = [];
   if (task.recurrence !== null) chips.push(<RecurrenceMark key="recurrence" />);
+  // A marker only: the text itself is read in the form, so a row says that
+  // there is a description and nothing more.
+  if (task.description !== null) {
+    chips.push(
+      <Chip
+        key="description"
+        className="tasks__description-chip"
+        title={strings.tasks.descriptionChipTitle}
+      >
+        {strings.tasks.descriptionChip}
+      </Chip>,
+    );
+  }
   const rollUp = progressChip(children);
   if (rollUp !== null) chips.push(rollUp);
   const attachments = attachmentChip(attachmentCount);
@@ -1148,6 +1171,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [overviewOpen, setOverviewOpen] = useState(() => readStoredOverviewOpen("tasks"));
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failed, setFailed] = useState(false);
+  /** Bumped by Retry, so the load effect runs again against the same profile. */
+  const [loadAttempt, setLoadAttempt] = useState(0);
   /** Every list of the profile and every section of those lists — one fetch, see `TaskListsSnapshot`. */
   const [lists, setLists] = useState<TaskList[] | null>(null);
   const [sections, setSections] = useState<TaskSection[]>([]);
@@ -1243,8 +1268,6 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [depFailed, setDepFailed] = useState(false);
   /** The list whose delete is waiting on the "what about its tasks" question, or null. */
   const [deletePrompt, setDeletePrompt] = useState<TaskList | null>(null);
-  /** The list a delete just removed, offered back — the list counterpart of `pendingUndo`. */
-  const [pendingListUndoId, setPendingListUndoId] = useState<string | null>(null);
   /** The section the add/edit form will file the task under; null is the list body. */
   const [formSectionId, setFormSectionId] = useState<string | null>(null);
   /** The task being dragged in the list view, and what the pointer is over. */
@@ -1260,6 +1283,8 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
+  /** The task's notes (TASK-001), as typed; saved trimmed, and a blank box clears them. */
+  const [description, setDescription] = useState("");
   /** The quick-add phrase the user waved away, or null — see `activeQuickDate`. */
   const [dismissedPhrase, setDismissedPhrase] = useState<string | null>(null);
   /** The add/edit form's own save failing at the store/IPC boundary — the CalendarPage `formError` shape. */
@@ -1281,6 +1306,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     priority !== "none" ||
     recurrence !== null ||
     reminderOffsets.length > 0 ||
+    description.trim().length > 0 ||
     formSectionId !== null;
   /**
    * Every write OUTSIDE the live form and outside the rail/tag/dependency
@@ -1704,6 +1730,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         // row this profile does not have.
         closeTemplatePrompt();
         setTemplateFailed(false);
+        setFailed(false);
       } catch (error) {
         if (active) setFailed(true);
         console.error("Nexus: failed to load tasks:", error);
@@ -1712,7 +1739,13 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, loadAttempt]);
+
+  /** Asks the same read again; the failure arm has no other way out. */
+  function retryLoad(): void {
+    setFailed(false);
+    setLoadAttempt((attempt) => attempt + 1);
+  }
 
   // Consumes a pending deep-link (021-e): "create" focuses the quick-add
   // input; "reveal" scrolls to and marks a task's row. The rail filters the
@@ -2077,16 +2110,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
       resetForm();
       closeSubtaskInput();
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingListUndoId(list.id);
+      setPendingUndo({ kind: "list", id: list.id });
     });
   }
 
-  function undoListDelete(): void {
-    const id = pendingListUndoId;
-    if (id === null) return;
+  function undoListDelete(id: string): void {
     void runListAction(async () => {
       await window.nexus.restoreTaskList(profileId, id);
-      setPendingListUndoId(null);
+      setPendingUndo(null);
     });
   }
 
@@ -2554,6 +2585,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setPriority("none");
     setRecurrence(null);
     setReminderOffsets([]);
+    setDescription("");
     setDismissedPhrase(null);
     // The rows themselves are cleared by the effect that watches `editingId`;
     // only the transient error is this function's to drop.
@@ -2590,6 +2622,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     setPriority(task.priority);
     setRecurrence(task.recurrence);
     setReminderOffsets([...task.reminderOffsets]);
+    setDescription(task.description ?? "");
     // The heading the task currently sits under, so saving without touching the
     // select leaves it exactly where it is (`groupKeyOf`, for the same reason
     // the grouping uses it: a section this fetch does not know reads as the body).
@@ -2627,6 +2660,9 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     // refuses a ladder without one, so it is read off the FIELD for exactly the
     // reason the rule above is — the chips are anchored to the field too.
     const ladder = isValidDayKey(dueDate) ? reminderOffsets : [];
+    // The notes ride the same save as the other fields: trimmed, and a blank box
+    // sends null, which is what clears a description on an edit.
+    const notes = optionalText(description);
     setSaving(true);
     try {
       if (editingId != null) {
@@ -2639,6 +2675,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
           // An empty array is meaningful here: it clears whatever ladder the
           // task carried.
           reminderOffsets: ladder,
+          description: notes,
         };
         const edited = tasks?.find((task) => task.id === editingId) ?? null;
         replaceTask(await window.nexus.updateTask(profileId, editingId, changes));
@@ -2658,6 +2695,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         if (priority !== "none") fields.priority = priority;
         if (rule !== null) fields.recurrence = rule;
         if (ladder.length > 0) fields.reminderOffsets = ladder;
+        if (notes !== null) fields.description = notes;
         // A new task lands in the list the rail has selected, under the heading
         // the select names — the whole point of selecting one.
         if (selectedId !== null) fields.listId = selectedId;
@@ -2925,6 +2963,10 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
   async function undo(): Promise<void> {
     const pending = pendingUndo;
     if (pending === null) return;
+    if (pending.kind === "list") {
+      undoListDelete(pending.id);
+      return;
+    }
     setActionError(null);
     try {
       if (pending.kind === "single") {
@@ -3201,7 +3243,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                             );
                           })}
                           {tagToggleFailed && (
-                            <p className="note__menu-caption" role="status">
+                            <p className="note__menu-caption" role="alert">
                               {strings.tasks.tags.actionError}
                             </p>
                           )}
@@ -3237,7 +3279,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                         </button>
                       )}
                       {templateFailed && (
-                        <p className="note__menu-caption" role="status">
+                        <p className="note__menu-caption" role="alert">
                           {strings.tasks.templates.actionError}
                         </p>
                       )}
@@ -3387,11 +3429,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             )}
           </NotePopover>
         </div>
-        {depFailed && (
-          <p className="nx-hint tasks__deps-error" role="status">
-            {s.actionError}
-          </p>
-        )}
+        {depFailed && <Notice kind="danger" message={s.actionError} className="tasks__deps-error" />}
       </div>
     );
   }
@@ -4265,7 +4303,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                 ))
               )}
               {templateFailed && (
-                <p className="note__menu-caption" role="status">
+                <p className="note__menu-caption" role="alert">
                   {strings.tasks.templates.actionError}
                 </p>
               )}
@@ -4309,6 +4347,14 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
     </>
   );
 
+  // The rows' one read, in the three states `AsyncSurface` draws: lists and
+  // rows arrive together, so either one still null is still loading.
+  const rowsState: AsyncState<null> = failed
+    ? { status: "failed" }
+    : tasks === null || lists === null
+      ? { status: "loading" }
+      : { status: "ready", data: null };
+
   return (
     <div className="tasks">
       {/* The override here sets the header's GRID PLACEMENT and nothing else.
@@ -4351,6 +4397,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             stored, renamable row, so a hard-coded label would go stale the
             moment it is renamed. */}
         {lists !== null && renderRailScope(buildListTree(lists), 0)}
+        {lists === null && !failed && <LoadingState label={strings.app.loading} rows={3} />}
         {railEditing?.mode === "new" && railEditing.parentId === null ? (
           <div className="tasks__rail-row">
             <InlineNameForm
@@ -4367,11 +4414,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             {strings.tasks.lists.newList}
           </Button>
         )}
-        {listFailed && (
-          <p className="tasks__rail-error" role="status">
-            {strings.tasks.lists.actionError}
-          </p>
-        )}
+        {listFailed && <Notice kind="danger" message={strings.tasks.lists.actionError} />}
 
         {/* Oznake, below the lists (migration 023): every tag is a filter chip
             that narrows the selected list further, and carries its own rename/
@@ -4470,11 +4513,7 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             {strings.tasks.tags.newTag}
           </Button>
         )}
-        {tagFailed && (
-          <p className="tasks__rail-error" role="status">
-            {tagFailed}
-          </p>
-        )}
+        {tagFailed && <Notice kind="danger" message={tagFailed} />}
       </aside>
 
       <div className="tasks__main">
@@ -4722,6 +4761,17 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
                   )}
                 </div>
 
+                {/* Opis (TASK-001) — plain text. No markdown renderer is among the
+                    desktop app's dependencies, and a textarea keeps the line breaks
+                    the user typed without one. */}
+                <TextArea
+                  className="tasks__description"
+                  label={strings.tasks.descriptionLabel}
+                  rows={3}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
+
                 {/* Prilozi (migration 024) — only while EDITING: an uncreated task
                     has no id to hang a file off, which is the same constraint the
                     note editor lives under (it only ever opens on a note that
@@ -4928,11 +4978,11 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
 
         {selecting && pickedTasks.length > 0 && (
           <div
-            className="tasks__undo tasks__bulk"
+            className="tasks__bulk"
             role="group"
             aria-label={strings.tasks.bulk.regionLabel}
           >
-            <span className="tasks__undo-text">
+            <span className="tasks__bulk-count">
               {strings.tasks.bulk.selected} {pickedTasks.length}
             </span>
 
@@ -5044,69 +5094,44 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
         )}
 
         {bulkFailed && selecting && (
-          <p className="tasks__bulk-error" role="status">
-            {strings.tasks.bulk.actionError}
-          </p>
+          <Toast
+            kind="error"
+            message={strings.tasks.bulk.actionError}
+            dismissLabel={strings.tasks.dismiss}
+            onDismiss={() => setBulkFailed(false)}
+          />
         )}
 
         {pendingUndo !== null && (
-          <div className="tasks__undo" role="status">
-            <span className="tasks__undo-text">
-              {pendingUndo.kind === "single"
+          <Toast
+            message={
+              pendingUndo.kind === "single"
                 ? strings.tasks.deletedNotice
-                : `${strings.tasks.bulk.deletedNotice} ${pendingUndo.ids.length}`}
-            </span>
-            <Button size="sm" className="tasks__undo-action" onClick={() => void undo()}>
-              {strings.tasks.undo}
-            </Button>
-            <Button
-              size="sm"
-              className="tasks__undo-dismiss"
-              aria-label={strings.tasks.dismiss}
-              onClick={() => setPendingUndo(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
+                : pendingUndo.kind === "bulk"
+                  ? `${strings.tasks.bulk.deletedNotice} ${pendingUndo.ids.length}`
+                  : strings.tasks.lists.deletedNotice
+            }
+            undo={{ label: strings.tasks.undo, onUndo: () => void undo() }}
+            dismissLabel={strings.tasks.dismiss}
+            onDismiss={() => setPendingUndo(null)}
+          />
         )}
 
         {actionError != null && (
-          <p className="tasks__form-error" role="status">
-            {actionError}
-          </p>
+          <Toast
+            kind="error"
+            message={actionError}
+            dismissLabel={strings.tasks.dismiss}
+            onDismiss={() => setActionError(null)}
+          />
         )}
 
         {advancedTo != null && (
-          <div className="tasks__undo" role="status">
-            <span className="tasks__undo-text">
-              {strings.recurrence.nextOccurrence} {formatDue(advancedTo)}
-            </span>
-            <Button
-              size="sm"
-              className="tasks__undo-dismiss"
-              aria-label={strings.tasks.dismiss}
-              onClick={() => setAdvancedTo(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
-        )}
-
-        {pendingListUndoId != null && (
-          <div className="tasks__undo" role="status">
-            <span className="tasks__undo-text">{strings.tasks.lists.deletedNotice}</span>
-            <Button size="sm" className="tasks__undo-action" onClick={undoListDelete}>
-              {strings.tasks.undo}
-            </Button>
-            <Button
-              size="sm"
-              className="tasks__undo-dismiss"
-              aria-label={strings.tasks.dismiss}
-              onClick={() => setPendingListUndoId(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
+          <Toast
+            message={`${strings.recurrence.nextOccurrence} ${formatDue(advancedTo)}`}
+            dismissLabel={strings.tasks.dismiss}
+            onDismiss={() => setAdvancedTo(null)}
+          />
         )}
 
         {/* Everything the module is FOR, in one box.
@@ -5123,260 +5148,263 @@ export function TasksPage({ profileId, intent, onIntentHandled }: TasksPageProps
             `--nx-space-4` between its items, and so is this, so the arms sit
             exactly where they sat as direct children of it. */}
         <div className="tasks__rows" data-nx-content>
-          {failed ? (
-            <EmptyState
-              sigil="tasks"
-              title={strings.tasks.emptyTitle}
-              description={strings.tasks.loadError}
-            />
-          ) : tasks === null || lists === null ? (
-            <p className="nx-hint">{strings.app.loading}</p>
-          ) : view === "list" ? (
-            // The body first, then each section by its own position — sections are
-            // what a task row cannot order itself by (see `TaskGroup`).
-            <>
-              {/* An empty list still shows whatever headings it has, and the way to
-                  add one: the empty state stands in only when there is nothing at
-                  all to draw. A filter that matches nothing says so instead —
-                  including where the list does have headings, since empty ones
-                  would only be noise under an answer of "no rows". */}
-              {completedSplit !== null && recentTasks.length === 0 && archivedTasks.length > 0 ? (
-                // „Završeno“ with everything aged past the boundary: not "nothing
-                // was ever finished" — the archive right beneath holds it all,
-                // and the empty state says so instead.
-                <EmptyState
-                  sigil="tasks"
-                  title={strings.tasks.smart.names.zavrseno}
-                  description={`${strings.tasks.smart.allArchivedPrefix} ${TASK_ARCHIVE_AFTER_DAYS} ${strings.tasks.smart.allArchivedSuffix}`}
-                />
-              ) : filterHidesEverything ? (
-                <EmptyState
-                  sigil="tasks"
-                  title={strings.tasks.emptyTitle}
-                  description={filterEmptyDescription}
-                />
-              ) : smartListId !== null && visibleTasks.length === 0 ? (
-                // A view's own calm statement of fact, never the list's „zapiši
-                // prvi zadatak“ invitation: there is no field to type into here.
-                <EmptyState
-                  sigil="tasks"
-                  title={strings.tasks.smart.names[smartListId]}
-                  description={strings.tasks.smart.empty[smartListId]}
-                />
-              ) : listTasks.length === 0 && listSections.length === 0 ? (
-                <EmptyState
-                  sigil="tasks"
-                  title={strings.tasks.emptyTitle}
-                  description={strings.tasks.emptyDescription}
-                />
-              ) : (
-                groups.map((group) => renderGroup(group))
-              )}
-              {/* The „Završeno“ bound (ADR-039 §4): a quiet line saying what is on
-                  screen out of what there is, and one step that widens it. Never a
-                  page count — the rows are already in memory, and the only honest
-                  thing to say is how far down this list currently reaches. */}
-              {completedTruncated && (
-                <div className="tasks__more">
-                  <p className="nx-hint">
-                    {strings.tasks.smart.shownPrefix} {shownRecent.length}{" "}
-                    {strings.tasks.smart.shownOf} {recentTasks.length}
-                  </p>
-                  <Button
-                    size="sm"
-                    className="tasks__more-action"
-                    onClick={() => setCompletedShown((shown) => shown + COMPLETED_PAGE_STEP)}
-                  >
-                    {strings.tasks.smart.showMore}
-                  </Button>
-                </div>
-              )}
-              {/* The archive: everything completed before the 30-day boundary,
-                  beneath the recent rows and collapsed by default. A quiet
-                  typographic disclosure — the export module picker's own idiom,
-                  no chrome — and expanding it draws the same rows the view draws,
-                  under the same paging recipe. The open state lives and dies with
-                  this mount. */}
-              {archivedTasks.length > 0 && (
+          <AsyncSurface
+            state={rowsState}
+            loadingLabel={strings.app.loading}
+            loadingRows={6}
+            failureTitle={strings.tasks.loadFailedTitle}
+            failureMessage={strings.tasks.loadError}
+            retry={{ label: strings.tasks.retry, onClick: retryLoad }}
+          >
+            {() =>
+              view === "list" ? (
+                // The body first, then each section by its own position — sections are
+                // what a task row cannot order itself by (see `TaskGroup`).
                 <>
-                  <Disclosure
-                    label={strings.tasks.smart.archiveTitle}
-                    open={archiveOpen}
-                    onToggle={setArchiveOpen}
-                    summary={String(archivedTasks.length)}
-                  >
-                    {renderGroup({ section: null, roots: [...shownArchived] })}
-                  </Disclosure>
-                  {archiveTruncated && (
+                  {/* An empty list still shows whatever headings it has, and the way to
+                      add one: the empty state stands in only when there is nothing at
+                      all to draw. A filter that matches nothing says so instead —
+                      including where the list does have headings, since empty ones
+                      would only be noise under an answer of "no rows". */}
+                  {completedSplit !== null && recentTasks.length === 0 && archivedTasks.length > 0 ? (
+                    // „Završeno“ with everything aged past the boundary: not "nothing
+                    // was ever finished" — the archive right beneath holds it all,
+                    // and the empty state says so instead.
+                    <EmptyState
+                      sigil="tasks"
+                      title={strings.tasks.smart.names.zavrseno}
+                      description={`${strings.tasks.smart.allArchivedPrefix} ${TASK_ARCHIVE_AFTER_DAYS} ${strings.tasks.smart.allArchivedSuffix}`}
+                    />
+                  ) : filterHidesEverything ? (
+                    <EmptyState
+                      sigil="tasks"
+                      title={strings.tasks.emptyTitle}
+                      description={filterEmptyDescription}
+                    />
+                  ) : smartListId !== null && visibleTasks.length === 0 ? (
+                    // A view's own calm statement of fact, never the list's „zapiši
+                    // prvi zadatak“ invitation: there is no field to type into here.
+                    <EmptyState
+                      sigil="tasks"
+                      title={strings.tasks.smart.names[smartListId]}
+                      description={strings.tasks.smart.empty[smartListId]}
+                    />
+                  ) : listTasks.length === 0 && listSections.length === 0 ? (
+                    <EmptyState
+                      sigil="tasks"
+                      title={strings.tasks.emptyTitle}
+                      description={strings.tasks.emptyDescription}
+                    />
+                  ) : (
+                    groups.map((group) => renderGroup(group))
+                  )}
+                  {/* The „Završeno“ bound (ADR-039 §4): a quiet line saying what is on
+                      screen out of what there is, and one step that widens it. Never a
+                      page count — the rows are already in memory, and the only honest
+                      thing to say is how far down this list currently reaches. */}
+                  {completedTruncated && (
                     <div className="tasks__more">
                       <p className="nx-hint">
-                        {strings.tasks.smart.shownPrefix} {shownArchived.length}{" "}
-                        {strings.tasks.smart.shownOf} {archivedTasks.length}
+                        {strings.tasks.smart.shownPrefix} {shownRecent.length}{" "}
+                        {strings.tasks.smart.shownOf} {recentTasks.length}
                       </p>
                       <Button
                         size="sm"
                         className="tasks__more-action"
-                        onClick={() => setArchiveShown((shown) => shown + COMPLETED_PAGE_STEP)}
+                        onClick={() => setCompletedShown((shown) => shown + COMPLETED_PAGE_STEP)}
                       >
                         {strings.tasks.smart.showMore}
                       </Button>
                     </div>
                   )}
-                </>
-              )}
-              {selectedId !== null &&
-                (sectionEditing?.mode === "new" ? (
-                  <InlineNameForm
-                    value={sectionDraft}
-                    placeholder={strings.tasks.lists.sectionNamePlaceholder}
-                    label={strings.tasks.lists.newSection}
-                    onChange={setSectionDraft}
-                    onSubmit={() => submitNewSection(selectedId)}
-                    onCancel={closeSectionEditor}
-                  />
-                ) : (
-                  <Button size="sm" className="tasks__new-section" onClick={beginNewSection}>
-                    {strings.tasks.lists.newSection}
-                  </Button>
-                ))}
-            </>
-          ) : visibleTasks.length === 0 ? (
-            // The other three shapes have nothing to hold headings or an "add"
-            // affordance for, so an empty list is the empty state there, as it was
-            // for the board before TASK-004 — and a filter that hides everything
-            // says which of the two it is.
-            <EmptyState
-              sigil="tasks"
-              title={strings.tasks.emptyTitle}
-              description={
-                filterHidesEverything ? filterEmptyDescription : strings.tasks.emptyDescription
-              }
-            />
-          ) : view === "kanban" ? (
-            // The board stays flat: a subtask is a real task with a status of its
-            // own, and a card in Za rad whose parent sits in U toku belongs in Za
-            // rad. Only the roll-up chip travels here, so a parent card still says
-            // how much of it is actually finished. What the columns ARE is now the
-            // list's own choice (ADR-050) — status, prioritet or sekcija — while a
-            // card's place WITHIN one is still not something the board lets the
-            // user set.
-            <KanbanView<TaskFields>
-              items={visibleTasks}
-              schema={kanbanSchema}
-              config={kanbanConfig}
-              columnTitle={kanbanColumnTitle}
-              ungroupedTitle={kanbanUngroupedTitle}
-              // The column head's own „⋯“ (ADR-060): one action, „Sakrij kolonu“,
-              // disabled on the last drawn column. The keyless „Telo liste“
-              // bucket cannot be hidden, so it gets no menu rather than a menu
-              // of nothing.
-              columnActions={(value) =>
-                value === null ? null : (
-                  <NotePopover
-                    label={`${strings.tasks.controls.columnMenuLabel} ${kanbanColumnTitle(value)}`}
-                    triggerClassName="tasks__column-menu"
-                  >
-                    {(close) => (
-                      <button
-                        className="note__menu-item"
-                        role="menuitem"
-                        type="button"
-                        disabled={kanbanHideRefused}
-                        onClick={() => {
-                          toggleKanbanColumn(value);
-                          close();
-                        }}
+                  {/* The archive: everything completed before the 30-day boundary,
+                      beneath the recent rows and collapsed by default. A quiet
+                      typographic disclosure — the export module picker's own idiom,
+                      no chrome — and expanding it draws the same rows the view draws,
+                      under the same paging recipe. The open state lives and dies with
+                      this mount. */}
+                  {archivedTasks.length > 0 && (
+                    <>
+                      <Disclosure
+                        label={strings.tasks.smart.archiveTitle}
+                        open={archiveOpen}
+                        onToggle={setArchiveOpen}
+                        summary={String(archivedTasks.length)}
                       >
-                        {strings.tasks.controls.hideColumn}
-                      </button>
-                    )}
-                  </NotePopover>
-                )
-              }
-              itemKey={(task) => task.id}
-              renderCard={(task, { groupValue, columnValues }) => (
-                <KanbanCard
-                  tag={taskChips({
-                    task,
-                    children: childrenOf(task.id),
-                    tags: tagsOf(task.id),
-                    attachmentCount: attachmentCountOf(task.id),
-                    blocked: isBlocked(task.id),
-                    today: todayKey,
-                    // The board only ever shows ONE list, so its own name would be
-                    // on every card and say nothing.
-                    listName: null,
-                  })}
-                >
-                  <span className="tasks__card-title">
-                    <span
-                      id={taskRowDomId(task.id)}
-                      className={revealedId === task.id ? "nx-revealed" : undefined}
-                    >
-                      {task.title}
-                    </span>
-                    {/* The keyboard way to do what the drag does (ADR-050) — the
-                        board's own a11y gap, deferred from TASK-005 and closed
-                        here, where the card is actually rendered. */}
-                    <ColumnMoveMenu
-                      columnValues={columnValues}
-                      groupValue={groupValue}
-                      onMove={(toGroupValue) =>
-                        applyKanbanMove(task, moveBetweenGroups(task, toGroupValue, kanbanConfig))
-                      }
-                    />
-                  </span>
-                </KanbanCard>
-              )}
-              onMove={applyKanbanMove}
-            />
-          ) : view === "cards" ? (
-            // The same rows as the list, one card each: the checkbox (the primary
-            // action belongs on every rendering of a task), the title, and the
-            // chip cluster verbatim. Deliberately no description excerpt — a card
-            // that quotes half a body is a card the eye stops reading.
-            <CardsView<TaskFields>
-              items={visibleTasks}
-              schema={TASK_SCHEMA}
-              config={cardsConfig}
-              itemKey={(task) => task.id}
-              renderItem={(task) => (
-                <>
-                  <Checkbox
-                    checked={task.done}
-                    done={task.done}
-                    onChange={(event) => void toggleDone(task, event.target.checked)}
-                  >
-                    <span
-                      id={taskRowDomId(task.id)}
-                      className={revealedId === task.id ? "nx-revealed" : undefined}
-                    >
-                      {task.title}
-                    </span>
-                  </Checkbox>
-                  {taskChips({
-                    task,
-                    children: childrenOf(task.id),
-                    tags: tagsOf(task.id),
-                    attachmentCount: attachmentCountOf(task.id),
-                    blocked: isBlocked(task.id),
-                    today: todayKey,
-                    listName: null,
-                  })}
+                        {renderGroup({ section: null, roots: [...shownArchived] })}
+                      </Disclosure>
+                      {archiveTruncated && (
+                        <div className="tasks__more">
+                          <p className="nx-hint">
+                            {strings.tasks.smart.shownPrefix} {shownArchived.length}{" "}
+                            {strings.tasks.smart.shownOf} {archivedTasks.length}
+                          </p>
+                          <Button
+                            size="sm"
+                            className="tasks__more-action"
+                            onClick={() => setArchiveShown((shown) => shown + COMPLETED_PAGE_STEP)}
+                          >
+                            {strings.tasks.smart.showMore}
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {selectedId !== null &&
+                    (sectionEditing?.mode === "new" ? (
+                      <InlineNameForm
+                        value={sectionDraft}
+                        placeholder={strings.tasks.lists.sectionNamePlaceholder}
+                        label={strings.tasks.lists.newSection}
+                        onChange={setSectionDraft}
+                        onSubmit={() => submitNewSection(selectedId)}
+                        onCancel={closeSectionEditor}
+                      />
+                    ) : (
+                      <Button size="sm" className="tasks__new-section" onClick={beginNewSection}>
+                        {strings.tasks.lists.newSection}
+                      </Button>
+                    ))}
                 </>
-              )}
-            />
-          ) : (
-            <TaskMonthGrid
-              items={calendarBars}
-              undated={calendarUndated}
-              onOpen={(taskId) => {
-                const task = visibleTasks.find((row) => row.id === taskId);
-                if (task !== undefined) startEdit(task);
-              }}
-              onMoveToDay={(taskId, dayKey) => void moveTaskToDay(taskId, dayKey)}
-            />
-          )}
+              ) : visibleTasks.length === 0 ? (
+                // The other three shapes have nothing to hold headings or an "add"
+                // affordance for, so an empty list is the empty state there, as it was
+                // for the board before TASK-004 — and a filter that hides everything
+                // says which of the two it is.
+                <EmptyState
+                  sigil="tasks"
+                  title={strings.tasks.emptyTitle}
+                  description={
+                    filterHidesEverything ? filterEmptyDescription : strings.tasks.emptyDescription
+                  }
+                />
+              ) : view === "kanban" ? (
+                // The board stays flat: a subtask is a real task with a status of its
+                // own, and a card in Za rad whose parent sits in U toku belongs in Za
+                // rad. Only the roll-up chip travels here, so a parent card still says
+                // how much of it is actually finished. What the columns ARE is now the
+                // list's own choice (ADR-050) — status, prioritet or sekcija — while a
+                // card's place WITHIN one is still not something the board lets the
+                // user set.
+                <KanbanView<TaskFields>
+                  items={visibleTasks}
+                  schema={kanbanSchema}
+                  config={kanbanConfig}
+                  columnTitle={kanbanColumnTitle}
+                  ungroupedTitle={kanbanUngroupedTitle}
+                  // The column head's own „⋯“ (ADR-060): one action, „Sakrij kolonu“,
+                  // disabled on the last drawn column. The keyless „Telo liste“
+                  // bucket cannot be hidden, so it gets no menu rather than a menu
+                  // of nothing.
+                  columnActions={(value) =>
+                    value === null ? null : (
+                      <NotePopover
+                        label={`${strings.tasks.controls.columnMenuLabel} ${kanbanColumnTitle(value)}`}
+                        triggerClassName="tasks__column-menu"
+                      >
+                        {(close) => (
+                          <button
+                            className="note__menu-item"
+                            role="menuitem"
+                            type="button"
+                            disabled={kanbanHideRefused}
+                            onClick={() => {
+                              toggleKanbanColumn(value);
+                              close();
+                            }}
+                          >
+                            {strings.tasks.controls.hideColumn}
+                          </button>
+                        )}
+                      </NotePopover>
+                    )
+                  }
+                  itemKey={(task) => task.id}
+                  renderCard={(task, { groupValue, columnValues }) => (
+                    <KanbanCard
+                      tag={taskChips({
+                        task,
+                        children: childrenOf(task.id),
+                        tags: tagsOf(task.id),
+                        attachmentCount: attachmentCountOf(task.id),
+                        blocked: isBlocked(task.id),
+                        today: todayKey,
+                        // The board only ever shows ONE list, so its own name would be
+                        // on every card and say nothing.
+                        listName: null,
+                      })}
+                    >
+                      <span className="tasks__card-title">
+                        <span
+                          id={taskRowDomId(task.id)}
+                          className={revealedId === task.id ? "nx-revealed" : undefined}
+                        >
+                          {task.title}
+                        </span>
+                        {/* The keyboard way to do what the drag does (ADR-050) — the
+                            board's own a11y gap, deferred from TASK-005 and closed
+                            here, where the card is actually rendered. */}
+                        <ColumnMoveMenu
+                          columnValues={columnValues}
+                          groupValue={groupValue}
+                          onMove={(toGroupValue) =>
+                            applyKanbanMove(task, moveBetweenGroups(task, toGroupValue, kanbanConfig))
+                          }
+                        />
+                      </span>
+                    </KanbanCard>
+                  )}
+                  onMove={applyKanbanMove}
+                />
+              ) : view === "cards" ? (
+                // The same rows as the list, one card each: the checkbox (the primary
+                // action belongs on every rendering of a task), the title, and the
+                // chip cluster verbatim. Deliberately no description excerpt — a card
+                // that quotes half a body is a card the eye stops reading.
+                <CardsView<TaskFields>
+                  items={visibleTasks}
+                  schema={TASK_SCHEMA}
+                  config={cardsConfig}
+                  itemKey={(task) => task.id}
+                  renderItem={(task) => (
+                    <>
+                      <Checkbox
+                        checked={task.done}
+                        done={task.done}
+                        onChange={(event) => void toggleDone(task, event.target.checked)}
+                      >
+                        <span
+                          id={taskRowDomId(task.id)}
+                          className={revealedId === task.id ? "nx-revealed" : undefined}
+                        >
+                          {task.title}
+                        </span>
+                      </Checkbox>
+                      {taskChips({
+                        task,
+                        children: childrenOf(task.id),
+                        tags: tagsOf(task.id),
+                        attachmentCount: attachmentCountOf(task.id),
+                        blocked: isBlocked(task.id),
+                        today: todayKey,
+                        listName: null,
+                      })}
+                    </>
+                  )}
+                />
+              ) : (
+                <TaskMonthGrid
+                  items={calendarBars}
+                  undated={calendarUndated}
+                  onOpen={(taskId) => {
+                    const task = visibleTasks.find((row) => row.id === taskId);
+                    if (task !== undefined) startEdit(task);
+                  }}
+                  onMoveToDay={(taskId, dayKey) => void moveTaskToDay(taskId, dayKey)}
+                />
+              )
+            }
+          </AsyncSurface>
         </div>
       </div>
 

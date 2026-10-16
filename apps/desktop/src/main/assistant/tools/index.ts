@@ -27,50 +27,87 @@
  *
  * **Where the tools come from, area by area.** `app.ts` (navigation and the
  * global search), `tasks.ts`, `calendar.ts`, `notes.ts`, `habits.ts`,
- * `timers.ts`, `packs.ts`, `emergency.ts`. A module built on the kit in a later
- * wave adds its own file here and one line to `appTools`'s neighbours below —
- * the registry is a flat list of areas, and a name that collides with another's
- * is refused rather than shadowed.
+ * `timers.ts`, `packs.ts`, `emergency.ts`, and one file per kit module:
+ * `library.ts`, `culture.ts`, `car.ts`, `pantry.ts`, `cookbook.ts`,
+ * `recorder.ts`, `calculator.ts`, `reader.ts`, `wiki.ts`, `maps.ts`, `lab.ts`
+ * and `miniapps.ts`. The registry is a flat list of areas, and a name that
+ * collides with another's is refused rather than shadowed.
  *
- * **The wave-1 kit modules joined in wave 2**, one file each: `library.ts`,
- * `culture.ts`, `car.ts`, `pantry.ts`, `cookbook.ts`, `recorder.ts`,
- * `calculator.ts`, `reader.ts`, `wiki.ts`, `maps.ts`, `lab.ts` and
- * `miniapps.ts`. A module with nothing of the user's own to read or write has no
- * file here on purpose, and the merge report lists which and why: the games are
- * reachable through `app.open` and a tool that answered with a score would be
- * the page's own table restated worse; `signals.ts`, `workshop.ts` and
- * `drawings.ts` own no table at all (a meter, a file on disk, a drawing on
- * disk); the scanner's one write path is `NoteStore`, which `notes.ts` already
- * covers; and the translator's dictionary is a signed content pack read through
- * its own module's main half, which this registry is not handed a seam to.
+ * **EVERY module gets tools.** The earlier reading of this file — that the games,
+ * `signals`, `workshop`, `drawings`, the scanner and the translator had nothing
+ * worth a tool because `app.open` or another area's store covered them — was
+ * overturned by the maintainer on 2026-10-15: the assistant is to be able to do
+ * everything the app can, so each of those gets an area of its own. What a run
+ * adding an area follows:
+ *
+ * - **One file per area**, named for the module it serves, one line in
+ *   `createToolRegistry` beside its neighbours, one line in each locale's
+ *   `thread.tools.labels` (`modules/assistant/renderer/copy.{sr,en}.ts`, which
+ *   `toolLabels.test.ts` pins against this registry) and one line in
+ *   `index.test.ts`'s per-area counts.
+ * - **A store-backed module writes in main** — the same store or function the
+ *   app's own IPC handler calls — and answers `navigateTo` with an `item`, so the
+ *   app shows the row it just wrote.
+ * - **A page-held module** — Canvas's scene, a device preference in the
+ *   renderer's `localStorage` — cannot be written from main without the page's
+ *   own next save clobbering it, so it answers `navigateTo` with an `action` its
+ *   page applies (`AppAction`, ADR-117).
+ * - **Every write still asks first** through `ToolContext.confirm`, and a refusal
+ *   is an ordinary result the model reads rather than an error.
+ *
+ * `docs/architecture/assistant-tools.md` is the guide to all of it — the schema
+ * the harness relies on, the deps, an eval scenario, and the count line.
  */
 
-import type { Tool, ToolRegistry, WebService } from "@nexus/core";
+import type { ModuleRegistry, Tool, ToolRegistry, WebService } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
-import { appTools, type ModuleLookup } from "./app.js";
+import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
+import type { DictionaryReader } from "../../../modules/translator/main/dictionary.js";
+import type { ModuleToolsAccess } from "../../moduleTools.js";
+import { appTools } from "./app.js";
+import { arcadeTools } from "./arcade.js";
+import { boardsTools } from "./boards.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
+import { canvasTools } from "./canvas.js";
+import { cardsTools } from "./cards.js";
 import { carTools } from "./car.js";
+import { chessTools } from "./chess.js";
 import { cookbookTools } from "./cookbook.js";
 import { cultureTools } from "./culture.js";
+import { dashboardTools } from "./dashboard.js";
+import { directoryTools } from "./directory.js";
+import { drawerTools } from "./drawer.js";
+import { electronicsTools } from "./electronics.js";
 import { emergencyTools } from "./emergency.js";
+import { fileTools } from "./files.js";
+import { financeTools } from "./finance.js";
+import { type FocusHost, focusTools } from "./focus.js";
+import { fitnessTools } from "./fitness.js";
 import { habitTools } from "./habits.js";
 import { labTools } from "./lab.js";
 import { libraryTools } from "./library.js";
 import { mapsTools } from "./maps.js";
 import { miniappsTools } from "./miniapps.js";
+import { notificationTools, type NotificationsHost } from "./notifications.js";
 import { noteTools } from "./notes.js";
-import { packTools, type PacksLookup } from "./packs.js";
+import { packTools, type PackManager } from "./packs.js";
 import { pantryTools } from "./pantry.js";
+import { puzzlesTools } from "./puzzles.js";
 import { readerTools } from "./reader.js";
 import { recorderTools } from "./recorder.js";
+import { scannerTools } from "./scanner.js";
+import { settingsTools } from "./settings.js";
+import { studyTools } from "./study.js";
 import { taskTools } from "./tasks.js";
 import { timerTools, type TimerHost } from "./timers.js";
+import { translatorTools } from "./translator.js";
 import { wikiTools } from "./wiki.js";
+import { workshopTools } from "./workshop.js";
 import type { ProfileDb } from "./support.js";
 
 export type { ModuleLookup } from "./app.js";
-export type { PacksLookup } from "./packs.js";
+export type { PackManager, PacksLookup } from "./packs.js";
 export type { TimerHost } from "./timers.js";
 export type { AssistantPhrase, ProfileDb } from "./support.js";
 
@@ -91,11 +128,25 @@ export interface ToolDeps {
     limit: number,
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service (`createPacksIpc`), for the installed list. */
-  readonly packs: PacksLookup;
+  readonly packs: PackManager;
   /** The TIMERS module's start/list, which also arms main's clock. */
   readonly timers: TimerHost;
-  /** The app's module registry (`createModuleRegistry`), for navigation. */
-  readonly modules: ModuleLookup;
+  /** The dictionary pack's reader, the same one the TRANSLATOR page's channels answer through. */
+  readonly dictionary: DictionaryReader;
+  /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
+  readonly modules: ModuleRegistry;
+  /** The installed tool packs (ADR-094), for the Stockfish analysis the chess tools may run. */
+  readonly tools: ModuleToolsAccess;
+  /** The device's module visibility (ADR-101), for the hidden tag `app.modules` prints. */
+  readonly visibility: () => ShellVisibility;
+  /** The `userData` folder, where the device's module arrangement and web settings are kept. */
+  readonly userData: () => string;
+  /** The release running now (`app.getVersion()`), for the Settings read. */
+  readonly appVersion: () => string;
+  /** The FOKUS module's running phase, as main owns it (`main/index.ts`). */
+  readonly focus: FocusHost;
+  /** The notification centre, its settings and the reminders due, as main owns them. */
+  readonly notifications: NotificationsHost;
   /** The web service, or `null` in a build without one. Its tools appear only when the user turned web search on. */
   readonly web: WebService | null;
 }
@@ -110,14 +161,42 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
    * fresh function identity per turn for no reason.
    */
   const appLevel: readonly Tool[] = [
-    ...appTools({ modules: deps.modules, search: deps.search }),
+    ...boardsTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...appTools({
+      modules: deps.modules,
+      search: deps.search,
+      profileDb: deps.profileDb,
+      visibility: deps.visibility,
+    }),
     ...taskTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...studyTools({ profileDb: deps.profileDb, now: deps.now }),
     ...calendarTools({ profileDb: deps.profileDb }),
+    ...canvasTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...cardsTools({ profileDb: deps.profileDb }),
+    ...chessTools({ profileDb: deps.profileDb, now: deps.now, tools: deps.tools }),
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),
     ...habitTools({ profileDb: deps.profileDb, now: deps.now }),
-    ...timerTools({ timers: deps.timers }),
+    ...timerTools({ timers: deps.timers, profileDb: deps.profileDb, now: deps.now }),
+    ...translatorTools({ dictionary: deps.dictionary, packs: deps.packs }),
     ...packTools({ packs: deps.packs }),
+    ...puzzlesTools({ profileDb: deps.profileDb, now: deps.now }),
     ...emergencyTools({ profileDb: deps.profileDb }),
+    ...fileTools({ profileDb: deps.profileDb }),
+    ...electronicsTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...financeTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...settingsTools({
+      profileDb: deps.profileDb,
+      now: deps.now,
+      userData: deps.userData,
+      appVersion: deps.appVersion,
+      modules: deps.modules,
+    }),
+    ...fitnessTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...dashboardTools({ profileDb: deps.profileDb, now: deps.now, modules: deps.modules }),
+    ...focusTools({ focus: deps.focus, now: deps.now }),
+    ...notificationTools({ notifications: deps.notifications }),
+    ...directoryTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...drawerTools({ modules: deps.modules, visibility: deps.visibility }),
     // The wave-1 kit modules, in the order their manifests sort: library,
     // culture, car, pantry, cookbook, recorder, calculator, reader, wiki, maps,
     // lab, miniapps.
@@ -127,12 +206,15 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...pantryTools({ profileDb: deps.profileDb, now: deps.now }),
     ...cookbookTools({ profileDb: deps.profileDb }),
     ...recorderTools({ profileDb: deps.profileDb }),
-    ...calculatorTools({ profileDb: deps.profileDb }),
+    ...calculatorTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...arcadeTools({ profileDb: deps.profileDb }),
     ...readerTools({ profileDb: deps.profileDb, packs: deps.packs }),
     ...wikiTools({ profileDb: deps.profileDb }),
     ...mapsTools({ profileDb: deps.profileDb }),
     ...labTools({ profileDb: deps.profileDb }),
     ...miniappsTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...scannerTools(),
+    ...workshopTools(),
   ];
 
   return {

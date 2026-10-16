@@ -47,6 +47,8 @@ export interface ChatMessage {
   readonly toolCalls?: readonly ToolCall[];
   /** On a tool message: the call it answers. */
   readonly toolCallId?: string;
+  /** On a tool message: whether the tool said it did what it was asked (`ToolResult.ok`). */
+  readonly ok?: boolean;
   /** On a user message, for a model whose `capabilities` include `vision`. */
   readonly images?: readonly ChatImage[];
 }
@@ -62,6 +64,22 @@ export interface LoadedModelInfo {
   readonly capabilities: readonly ModelCapability[];
   /** The context length the runtime loaded it with, in tokens. */
   readonly contextTokens: number;
+  /**
+   * The chat wrapper the runtime resolved from the model file's own template, by
+   * name (`LlamaChat`'s `wrapperName`). It is the one fact that says which
+   * conversation format the model is being driven with, and the eval report
+   * prints it beside the numbers.
+   */
+  readonly wrapper: string;
+  /**
+   * Which calling path this runtime drives for the model: `native` when the
+   * resolved wrapper carries the library's own function-calling settings, `text`
+   * when the contract's text fallback is what the loop's tools go through. The
+   * `tools` capability of `capabilities` is derived from this and not from what
+   * the caller asked for (`llama.ts`), so a report or a screen that reads one of
+   * the two is reading the truth about the other.
+   */
+  readonly functionCalling: "native" | "text";
 }
 
 export interface CompletionRequest {
@@ -205,6 +223,36 @@ export interface AppLocation {
   readonly module: string;
   readonly item?: string;
   readonly settings?: string;
+  readonly action?: AppAction;
+}
+
+/**
+ * Something the page of `module` applies when it opens: a change that lives in
+ * that page, not in a store.
+ *
+ * **Why a place can carry one.** A store-backed module is written from main: the
+ * tool calls the same store the app's own handler calls and the location then
+ * only has to REVEAL the row. A page-held module has no such row to write -
+ * Canvas keeps its scene in memory and autosaves it every 800 ms, and a device
+ * preference lives in the renderer's `localStorage` - so a write from main would
+ * be clobbered by the page's own next save. The page is the only thing that owns
+ * that state, so the tool states what it wants done and the page does it.
+ *
+ * `payload` is JSON the tool already validated and the page validates again: the
+ * location travels through a window event and a shell that reads neither field,
+ * so nothing between the tool and the page is a gate. `name` is the page's own
+ * verb and is opaque here, exactly as `item` is - a shell that knew what
+ * `sketch` meant would hold a second opinion about another module's page.
+ *
+ * Deliberately NOT part of a citation: a citation is a link to a place, and a
+ * link that acted when it was clicked would be a command wearing a link's shape.
+ * Nothing persisted may carry one either - an action is a request to apply now.
+ */
+export interface AppAction {
+  /** The page's own verb, e.g. `sketch`, `set-preference`. Each module documents the ones it accepts. */
+  readonly name: string;
+  /** JSON data the tool already validated. The page validates it again before applying it. */
+  readonly payload?: unknown;
 }
 
 // --- knowledge ---------------------------------------------------------------
@@ -221,7 +269,7 @@ export interface Citation {
   readonly packId?: string;
   /** Set for a passage from a `notice: "safety"` pack: the answer must carry the disclaimer. */
   readonly safety?: boolean;
-  /** Where opening the citation takes the user. */
+  /** Where opening the citation takes the user. Never carries an `action`: see `AppAction`. */
   readonly location?: AppLocation;
 }
 
@@ -263,12 +311,43 @@ export interface TextToSpeech {
 
 // --- the agent loop ------------------------------------------------------------
 
+/**
+ * What the loop's own check said about an answer, and what the loop did about
+ * it, on the `message` event that carries the turn's answer (`verify.ts`).
+ *
+ * The page draws the answer either way; this exists so the evals and a reader
+ * can count how many turns needed the app's help, and so a later page can mark
+ * an answer it re-asked for. Absent on a preamble (a step that calls tools) and
+ * on an answer nothing was found in, because "no findings" and "not checked"
+ * are the same fact.
+ */
+export interface AnswerVerification {
+  /** What was wrong, in the order `verifyAnswer` reports it. */
+  readonly findings: readonly AnswerVerificationFinding[];
+  /** How many corrective re-asks the loop spent on this answer. At most one. */
+  readonly corrected: number;
+  /** Whether the script was rewritten without asking the model (`language.ts`). */
+  readonly transliterated: boolean;
+}
+
+/** One finding's kind, as a page or a report reads it. The sentence lives in `verify.ts`. */
+export type AnswerVerificationFinding =
+  | "completion-claim"
+  | "language"
+  | "script";
+
 /** What one turn of the agent emits, in order, for the page to draw. */
 export type AgentEvent =
   | { readonly type: "token"; readonly text: string }
   | { readonly type: "tool-call"; readonly call: ToolCall }
   | { readonly type: "tool-result"; readonly callId: string; readonly result: ToolResult }
-  | { readonly type: "message"; readonly message: ChatMessage; readonly citations: readonly Citation[] }
+  | {
+      readonly type: "message";
+      readonly message: ChatMessage;
+      readonly citations: readonly Citation[];
+      /** Set on the answer when the loop's own check had something to say about it. */
+      readonly verification?: AnswerVerification;
+    }
   | {
       readonly type: "error";
       readonly code: AgentErrorCode;
@@ -302,6 +381,16 @@ export interface AgentTurnInput {
   readonly maxSteps: number;
   /** The user's local day, `YYYY-MM-DD`: what „today" and „tomorrow" mean this turn. */
   readonly today: string;
+  /**
+   * The module whose page the user has open beside the assistant, or absent on
+   * the assistant's own page: what „this" and „here" refer to this turn.
+   */
+  readonly location?: string;
+  /**
+   * How close each tool's description is to this turn's question, by tool name,
+   * when an embedder is loaded (`toolMeaning.ts`). Absent: the lexical choice alone.
+   */
+  readonly toolMeaning?: ReadonlyMap<string, number>;
 }
 
 /** The agent loop's signature (`packages/core/src/assistant/loop.ts` implements it). */

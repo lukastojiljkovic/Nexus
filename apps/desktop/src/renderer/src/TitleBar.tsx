@@ -45,6 +45,9 @@ export interface TitleBarProps {
   surface: string | null;
   theme: ThemeName;
   onToggleTheme: () => void;
+  /** Whether the assistant is docked beside the page, and the toggle for it. Absent while locked. */
+  assistantOpen?: boolean;
+  onToggleAssistant?: () => void;
   /** The shell's own menu rows. Empty while locked — there is no profile to act on. */
   commands?: readonly TitleBarCommand[];
 }
@@ -129,7 +132,14 @@ const VIEW_CHORDS: Readonly<Record<WindowViewCommand, string>> = {
 /** Windows' own window-closing chord. The strip does not bind it — the OS does — and it is printed because the OS honours it. */
 const CLOSE_CHORD = chord("F4", "alt");
 
-export function TitleBar({ surface, theme, onToggleTheme, commands = [] }: TitleBarProps) {
+export function TitleBar({
+  surface,
+  theme,
+  onToggleTheme,
+  assistantOpen = false,
+  onToggleAssistant,
+  commands = [],
+}: TitleBarProps) {
   const { maximized, focused, fullScreen, zoomLevel } = useWindowState();
   const [version, setVersion] = useState<string | null>(null);
 
@@ -337,10 +347,23 @@ export function TitleBar({ surface, theme, onToggleTheme, commands = [] }: Title
       </div>
 
       <div className="app__titlebar-controls">
+        {onToggleAssistant !== undefined && (
+          <button
+            type="button"
+            className="app__titlebar-button"
+            aria-label={assistantOpen ? strings.app.assistantClose : strings.app.assistantOpen}
+            aria-pressed={assistantOpen}
+            title={assistantOpen ? strings.app.assistantClose : strings.app.assistantOpen}
+            onClick={onToggleAssistant}
+          >
+            <Icon name="assistant" size={15} />
+          </button>
+        )}
         <button
           type="button"
           className="app__titlebar-button app__titlebar-button--theme"
-          aria-label={strings.app.themeToggle}
+          aria-label={strings.app.themeDark}
+          aria-pressed={theme === "noc"}
           title={theme === "noc" ? strings.app.themeDan : strings.app.themeNoc}
           onClick={onToggleTheme}
         >

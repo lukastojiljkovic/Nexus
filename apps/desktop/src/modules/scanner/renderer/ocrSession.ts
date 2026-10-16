@@ -43,14 +43,24 @@ export interface ScanSession {
    * Recognises one prepared bitmap. Its pixels are drawn onto a canvas because
    * that is the shape the engine takes; everything that decided what those
    * pixels are happened before this call, in `imageOps.ts`.
+   *
+   * An abort rejects with an `AbortError` and terminates the worker: the engine
+   * cannot be asked to stop mid-recognition, and a worker still running would
+   * keep the processor busy for a scan nobody is waiting for.
    */
   recognize(
     image: RgbaImage,
     languages: readonly OcrLanguage[],
     onProgress: (progress: ScanProgress) => void,
+    signal: AbortSignal,
   ): Promise<ScanOutcome>;
   /** Terminates the worker. Idempotent, and safe to call while a scan is running. */
   dispose(): Promise<void>;
+}
+
+/** The rejection a cancelled scan settles with, named the way the platform names an aborted call. */
+function abortError(): DOMException {
+  return new DOMException("The scan was cancelled.", "AbortError");
 }
 
 /** A session over the app's own bundled assets and the installed pack's models. */
@@ -92,11 +102,31 @@ export function createScanSession(): ScanSession {
   }
 
   return {
-    async recognize(image, languages, onProgress) {
+    async recognize(image, languages, onProgress, signal) {
+      if (signal.aborted) throw abortError();
       report = onProgress;
+      // Settles only on an abort, and it is raced below: a promise nobody races
+      // that rejects later would be an unhandled rejection.
+      const aborted = new Promise<never>((_, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            void dispose();
+            reject(abortError());
+          },
+          { once: true },
+        );
+      });
       try {
-        const active = await ensureWorker(languages);
-        const result = await active.recognize(canvasFromPixels(image));
+        const result = await Promise.race([
+          ensureWorker(languages).then((active) => {
+            // An abort that landed while the engine was being created has no
+            // recognition left to run; the worker itself stays for the next scan.
+            if (signal.aborted) throw abortError();
+            return active.recognize(canvasFromPixels(image));
+          }),
+          aborted,
+        ]);
         return scanOutcome(pageLines(result.data));
       } finally {
         report = () => undefined;

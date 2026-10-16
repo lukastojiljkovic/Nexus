@@ -36,6 +36,8 @@ import type {
   FinCsvImportRowDropCode,
   FinCsvImportRowSkipCode,
   FinCsvImportSignConvention,
+  BookmarksImportReadErrorCode,
+  BookmarksImportSkipCode,
   IcsImportReadErrorCode,
   IcsImportSkipCode,
   ImportDuplicateType,
@@ -124,8 +126,17 @@ export const en = {
      */
     overviewToggle: "Overview",
     themeToggle: "Switch theme",
+    assistantOpen: "Open the assistant beside this page",
+    assistantClose: "Close the assistant",
     themeDan: "Day",
     themeNoc: "Night",
+    /** The theme toggle's name stays put; `aria-pressed` says whether the dark theme is on. */
+    themeDark: "Dark theme",
+    /** The rail could not re-read the device's module order (ADR-101). */
+    arrangementError: "The module order on this device could not be reloaded.",
+    dismissNotice: "Dismiss",
+    /** The tooltip of a pinned row: the keyboard reorder that the shortcuts reference documents. */
+    pinnedMoveHint: "Alt+↑ and Alt+↓ move this module up or down",
     /**
      * The drawn window frame (`TitleBar.tsx`). Three controls that used to be
      * the operating system's, so their names have to be the ones a Serbian
@@ -678,6 +689,8 @@ export const en = {
      */
     createDemo: "Add a demo profile",
     createError: "Creating the profile failed. Try again.",
+    /** The demo item's label while main is filling the profile, which takes a moment. */
+    creatingDemo: "Adding the demo profile…",
     /**
      * The passcode gate in front of EVERY switch (AUTH-024). The error map is
      * the lock screen's own (`authErrorMessage`), never respelled here — a
@@ -845,6 +858,38 @@ export const en = {
       title: "Your professional tools",
       empty: "No pack is on yet",
     },
+    /**
+     * NTF's centre, as a card: the reminders that are waiting on the user. The
+     * rows are what the centre HOLDS — a reminder that has not fired yet is not
+     * in the ledger, so the card cannot list it.
+     */
+    reminders: {
+      title: "Reminders",
+      empty: "No reminders waiting",
+    },
+    /** The palette's own quick-creates, as buttons (`searchCommands.ts`); the labels are the palette's. */
+    quickActions: {
+      title: "Quick actions",
+      capture: "Quick capture",
+    },
+    /**
+     * Two small charts over the last seven days, from data the stores already
+     * hold: completed tasks (by the day they were completed) and focus time
+     * (by the day each session started). A day with nothing is a measured zero.
+     */
+    stats: {
+      title: "Stats",
+      tasks: {
+        heading: "Completed tasks",
+        lead: "Tasks completed in the last 7 days",
+        empty: "The chart draws once a task is completed in the last 7 days.",
+      },
+      focus: {
+        heading: "Focus",
+        lead: "Focus in the last 7 days",
+        empty: "The chart draws once a focus session is logged in the last 7 days.",
+      },
+    },
     /** FIN slice d: what the subscriptions' rules say is coming — never a row, always the schedule. */
     renewals: {
       title: "Upcoming charges",
@@ -931,6 +976,8 @@ export const en = {
     },
     /** The layout itself could not be read — the one failure that is the page's own. */
     layoutError: "The card layout cannot be loaded.",
+    /** The overflow trigger's name below 900px, which folds the settings gear. */
+    moreActions: "More actions",
     /** Edit mode (ADR-045 section 5) — the header actions and each card's „⋯“ menu. */
     /**
      * The board with no cards on it, and the board still being read. Until
@@ -1226,7 +1273,9 @@ export const en = {
     emptyTitle: "No tasks",
     emptyDescription:
       "Write your first task in the field above — a name and Enter is enough.",
-    loadError: "Tasks cannot be loaded right now. Try again later.",
+    loadFailedTitle: "Tasks not loaded",
+    loadError: "The tasks could not be read. Try again.",
+    retry: "Try again",
     editLabel: "Edit task",
     deleteLabel: "Delete task",
     /** The per-row „⋯“ menu: tags to attach plus „Sačuvaj kao šablon“, so its name is the row, not one of them. */
@@ -1265,6 +1314,10 @@ export const en = {
      */
     startDateLabel: "Starts",
     priorityLabel: "Priority",
+    descriptionLabel: "Description (optional)",
+    /** The row marker that a task carries a description; the text itself is read in the form. */
+    descriptionChip: "Description",
+    descriptionChipTitle: "The task has a description",
     save: "Save",
     cancel: "Cancel",
     /**
@@ -1790,6 +1843,8 @@ export const en = {
     newNote: "New note",
     untitled: "Untitled",
     listEmptyTitle: "No notes",
+    loadFailedTitle: "Notes could not be loaded",
+    retry: "Try again",
     listEmptyDescription:
       "Create your first note with the button above — you write in the editor on the right.",
     noSelectionTitle: "No note is selected",
@@ -1806,9 +1861,11 @@ export const en = {
     duplicate: "Duplicate",
     duplicateError: "Duplicating the note failed. Try again.",
     duplicateTooLarge: "The note is too large to duplicate in one go.",
+    visualize: "Visualize on canvas",
+    visualizeError: "The note could not be drawn on a canvas. Try again.",
     undo: "Undo",
     dismiss: "Dismiss",
-    loadError: "Notes cannot be loaded right now. Try again later.",
+    loadError: "Notes cannot be loaded right now.",
     editorLoadError: "The note cannot be loaded. Try again.",
     saveError: "Saving the note failed — we will try again on your next edit.",
     saveTooLarge:
@@ -2268,6 +2325,8 @@ export const en = {
       /** A row whose sealed container no longer opens: named, dead, honest. */
       unreadable: "Unreadable note",
       loadError: "Private notes cannot be loaded right now. Try again.",
+      loadErrorTitle: "Private notes failed to load",
+      retry: "Try again",
       noSelectionTitle: "No note is selected",
       noSelectionDescription: "Pick a note on the left or make a new one.",
       deleteLabel: "Delete",
@@ -2277,6 +2336,8 @@ export const en = {
     /** The private editor's own surfaces — save channel, attachments, the honest v1 limits. */
     editor: {
       loadError: "The note cannot be opened. Try again.",
+      loadErrorTitle: "The note failed to open",
+      retry: "Try again",
       saveError: "Saving failed — we will try again on your next edit.",
       saveTooLarge: "The note is too large to save. Shorten it or split it into several notes.",
       attachmentsTitle: "Attachments",
@@ -2300,6 +2361,7 @@ export const en = {
         restore: "Restore this version",
         restoreNote: "The current state is saved as a version before restoring, so this step is reversible too.",
         error: "The version action failed. Try again.",
+        loadError: "The versions failed to load. Try again.",
         /** The preview column's label for the selected version's own title. */
         previewLabel: "Title in this version",
       },
@@ -2313,6 +2375,7 @@ export const en = {
     clipboard: {
       notice: "Copied — the clipboard is cleared after 30 s if Nexus is in the foreground then.",
       cancel: "Keep on the clipboard",
+      dismiss: "Dismiss",
     },
     /** Typed-confirm HARD delete — no trash, no undo, and the copy says so before the field. */
     deleteDialog: {
@@ -2399,6 +2462,8 @@ export const en = {
      * finance year field — an optional field says so in its own name.
      */
     locationLabel: "Location (optional)",
+    notesLabel: "Notes (optional)",
+    categoryLabel: "Category (optional)",
     allDay: "All day",
     add: "Add",
     save: "Save",
@@ -2407,7 +2472,9 @@ export const en = {
     deleteLabel: "Delete event",
     emptyTitle: "No events",
     emptyDescription: "Add your first event in the form above — a title and a date are enough.",
-    loadError: "Events cannot be loaded right now. Try again later.",
+    loadFailedTitle: "Events did not load",
+    loadError: "Events cannot be loaded right now.",
+    retry: "Try again",
     deletedNotice: "Event deleted",
     undo: "Undo",
     dismiss: "Dismiss",
@@ -2599,7 +2666,9 @@ export const en = {
       deleteLabel: "Delete person",
       emptyTitle: "No people",
       emptyDescription: "Add your first person in the form above — a name, a type and a date are enough.",
-      loadError: "People cannot be loaded right now. Try again later.",
+      loadFailedTitle: "People did not load",
+      loadError: "People cannot be loaded right now.",
+      retry: "Try again",
       /** Client-side guard mirroring PeopleStore's own (month, day) pair check. */
       invalidDate: "That date does not exist in any month.",
       saveError: "The person was not saved. Try again.",
@@ -2708,7 +2777,9 @@ export const en = {
     emptyTitle: "No documents",
     emptyDescription:
       "Add your first document in the form above — a type, a name and an expiry date are enough.",
-    loadError: "Documents cannot be loaded right now. Try again later.",
+    loadFailedTitle: "Documents did not load",
+    loadError: "Documents cannot be loaded right now.",
+    retry: "Try again",
     deletedNotice: "Document deleted",
     undo: "Undo",
     dismiss: "Dismiss",
@@ -2878,9 +2949,11 @@ export const en = {
     noMatchDescription: "Change the search or turn off a filter.",
     clearFilters: "Clear filters",
     /** The isolated failure of this one read, with the way to ask again — the dashboard widgets' recipe. */
+    failureTitle: "Files are not available",
     error: "Files cannot be loaded right now.",
     retry: "Try again",
     actionError: "The file action failed. Try again.",
+    dismiss: "Dismiss",
   },
 
   study: {
@@ -2946,6 +3019,9 @@ export const en = {
      * empty. Four other fields took the same parenthesis on the same day.
      */
     semesterLabel: "Semester (optional)",
+    /** Blank inherits; the field's placeholder shows the value that applies. Shared by subjects and decks. */
+    retentionOverrideLabel: "Target retention (blank inherits)",
+    retentionProblem: "Target retention must be between 0.70 and 0.97.",
     colorLabel: "Colour",
     /** Colour-dot names, keyed by subject colour value (labels are presentation). */
     color: {
@@ -2969,7 +3045,9 @@ export const en = {
     emptyTitle: "No subjects",
     /** „u formi iznad" until the form moved behind „Dodaj predmet" — the sentence had to stop pointing at a form nobody can see. */
     emptyDescription: "Add your first subject — a name is enough.",
-    loadError: "Subjects cannot be loaded right now. Try again later.",
+    loadError: "Study data cannot be loaded right now. Try again.",
+    loadFailedTitle: "Study could not be loaded",
+    retry: "Try again",
     showArchived: "Show archived",
     hideArchived: "Hide archived",
     noExams: "No exams scheduled for this subject.",
@@ -3103,7 +3181,8 @@ export const en = {
     cardsEmptyTitle: "No cards",
     /** The card form is BELOW this empty state, never above it — the sentence used to point the wrong way. */
     cardsEmptyDescription: "Add your first card — a front and a back are enough.",
-    loadCardsError: "Cards cannot be loaded right now. Try again later.",
+    loadCardsError: "Cards cannot be loaded right now. Try again.",
+    cardsLoadFailedTitle: "The cards could not be loaded",
     addCard: "Add card",
     saveCard: "Save",
     cancelCard: "Cancel",
@@ -3589,7 +3668,8 @@ export const en = {
       emptyReason: "The line appears as soon as there is at least one item this month.",
     },
     loadErrorTitle: "Finance failed to load",
-    loadError: "Loading finance failed. Close and reopen the page.",
+    loadError: "Loading finance failed. Try again.",
+    retry: "Try again",
     /** The one line every failed write falls back to when `financeErrorMessage` recognizes nothing more specific. */
     actionError: "The action failed. Try again.",
     undo: "Undo",
@@ -3931,7 +4011,8 @@ export const en = {
    */
   habits: {
     loadErrorTitle: "Habits failed to load",
-    loadError: "Loading habits failed. Close and reopen the page.",
+    loadError: "Loading habits failed. Try again.",
+    retry: "Try again",
     /** The one line every failed write falls back to when `habitErrorMessage` recognizes nothing more specific. */
     actionError: "The action failed. Try again.",
     undo: "Undo",
@@ -4201,7 +4282,8 @@ export const en = {
       emptyReason: "The bars appear as soon as there is at least one finished phase today.",
     },
     loadErrorTitle: "Focus failed to load",
-    loadError: "Loading focus failed. Close and reopen the page.",
+    loadError: "Loading focus failed. Try again.",
+    retry: "Try again",
     actionError: "The action failed. Try again.",
     undo: "Undo",
     dismiss: "Dismiss",
@@ -5587,6 +5669,12 @@ export const en = {
     undo: "Undo",
     deletedNotice: "The board was deleted.",
     dismiss: "Dismiss",
+    deleteTitle: "Delete this board?",
+    deleteQuestion: "The board leaves the list, with everything drawn on it.",
+    /** What stays true after the answer: the offer that follows the delete takes it back. */
+    deleteNote: "The Undo offer that follows the delete brings it back.",
+    /** The name of the overflow trigger that holds Rename and Delete below 900px. */
+    moreActions: "More actions",
     /** The mermaid action — see this section's own header for why it is a button. */
     mermaid: "Mermaid diagram",
     mermaidTitle: "Write a Mermaid definition and turn it into shapes you can keep editing.",
@@ -5839,12 +5927,13 @@ export const en = {
       notifications: "Notifications",
       backup: "Backup and restore",
       /**
-       * The eight sub-pages of „Import and export" (SET-015). The text is the
+       * The nine sub-pages of „Import and export" (SET-015). The text is the
        * one the block inside each already draws, so a list row and its card
        * name the same thing rather than two spellings of it.
        */
       "import-archive": "Import from an archive",
       "import-ics": "Import a calendar (.ics)",
+      "import-bookmarks": "Import bookmarks (.html)",
       "export-ics": "Calendar export",
       "import-apkg": "Import from Anki (.apkg)",
       "import-csv": "Import tasks (.csv)",
@@ -7258,6 +7347,41 @@ export const en = {
       undoBanner: "The events were imported from a calendar (.ics).",
     },
     /**
+     * Bookmarks import (IMEX-007) — the browser's HTML export. Its own card,
+     * beside the calendar's, on the same pick → preview → apply flow.
+     */
+    bookmarksImport: {
+      title: "Import bookmarks (.html)",
+      description:
+        "Import bookmarks from the HTML file Chrome, Edge or Firefox export. Each folder becomes one note holding a list of its links, and every note gets a \"Bookmarks\" tag. The import deletes nothing. Only http and https links come over; everything else is counted in the preview before the import. You can undo the import with one click, but only until you lock or close the app.",
+      pickButton: "Choose an HTML file…",
+      previewRunning: "Reading bookmarks…",
+      columnSource: "In the file",
+      columnPlanned: "Imported",
+      rowBookmarks: "Bookmarks",
+      rowFolders: "Notes (folders)",
+      skipsTitle: "What is not imported",
+      /** One sentence per `BookmarksImportSkipCode`. */
+      skips: {
+        "unsupported-url":
+          "The link is not an http or https address (javascript:, file:, data: and the like), so it is skipped.",
+      } satisfies Record<BookmarksImportSkipCode, string>,
+      /** One sentence per `BookmarksImportReadErrorCode`: the file could not be read at all. */
+      unreadable: {
+        "too-large": "The file is past the safety limits, so it was refused.",
+        "not-bookmarks": "This file is not a bookmarks export from a browser.",
+      } satisfies Record<BookmarksImportReadErrorCode, string>,
+      applyButton: "Import",
+      applying: "Importing…",
+      applied: "The bookmarks were imported. The app is refreshing…",
+      readError: "Reading the file failed. Try again.",
+      error: "The import failed. Try again.",
+      noFileError: "The file is no longer chosen. Choose it again.",
+      nothingToImport: "There is nothing to import from this file — the reasons are listed above.",
+      /** The post-reload banner (App.tsx) when the undo slot holds a bookmarks import. */
+      undoBanner: "The notes were imported from bookmarks.",
+    },
+    /**
      * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose
      * „reader" is a person and a chat window.
      *
@@ -7994,7 +8118,7 @@ export const en = {
     quickActionsGroup: "Quick actions",
     emptyResults: "No results.",
     /** Shown instead of `emptyResults` when the fetch itself rejected — a failure is not an empty result and must not read as one. */
-    searchError: "Search is not working right now. Try again.",
+    searchError: "Search is not working right now.",
     hint: "↑↓ move · Enter open · Esc close",
     /**
      * SRCH-009: the profile's remembered QUERIES, which are a different list
@@ -8098,6 +8222,7 @@ export const en = {
       /** Shown instead of an exact count once candidate sourcing hit its bound. */
       truncatedNote: "The first 500 results are shown — narrow the search for a more precise list.",
       showMore: "Show more",
+      retry: "Try again",
       emptyTitle: "No results",
       emptyDescription: "Try another word or remove a filter.",
     },
@@ -8161,14 +8286,19 @@ export const en = {
     dialogTitle: "Keyboard shortcuts",
     dialogClose: "Close",
     groups: {
+      assistant: "Assistant",
       global: "Global",
       modules: "Modules",
       palette: "Palette",
+      rail: "Sidebar",
       tasks: "Tasks",
       calendar: "Calendar",
       study: "Study",
       notes: "Notes",
       notesFind: "Find in note",
+      timers: "Timers",
+      miniapps: "Mini apps",
+      signals: "Signals",
     },
     /** The reserved Ctrl+1…Ctrl+9 family: positional, so it is described rather than named. */
     moduleNavLabel: "Switch module in order",
@@ -8179,11 +8309,16 @@ export const en = {
       notes: "At the start of a line in the note editor.",
       /** The find bar's keys work anywhere in the note, unlike the markdown shortcuts above them — hence a group of its own. */
       notesFind: "While a note is open; searches only that note.",
+      timers: "On the timers page, outside a text field.",
+      miniapps: "While a mini app is open.",
+      signals: "While the Morse lamp covers the screen.",
     },
     reference: {
       paletteMove: "Move through the results",
       paletteOpen: "Open a result or run a command",
       paletteClose: "Close the palette",
+      railMove: "Move a pinned module up or down",
+      assistantDock: "Open or close the assistant beside this page",
       tasksSubtask: "Add a subtask from the entry row",
       tasksCancel: "Cancel the entry in the row or close the question",
       tasksExitSelection: "Leave Select mode",
@@ -8206,6 +8341,11 @@ export const en = {
       notesFindOpen: "Open the find bar in the note",
       notesFindStep: "Next or previous match",
       notesFindClose: "Close the bar and put the cursor back on the match",
+      timersStartPause: "Start or pause the stopwatch",
+      timersLap: "Take a lap",
+      timersReset: "Reset the stopwatch",
+      miniappsClose: "Close the open mini app",
+      signalsLampStop: "Stop the Morse lamp",
     },
   },
 } as const;

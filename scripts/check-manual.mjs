@@ -20,6 +20,14 @@
 //     place that does not open, and the user is the one who finds out.
 //   - **A `related` id is a link.** An id that no page carries is a dead end in
 //     the one surface whose whole job is finding your way.
+//   - **Every module has a page.** A module the registry declares and the
+//     manual is silent about is a module the assistant cannot answer a
+//     question about, and nothing about the tree says so: the page list here
+//     would be complete-looking, the census would count pages that exist, and
+//     the one person who notices is the user asking about a screen they are
+//     looking at. So the coverage rule counts what is MISSING
+//     (`validateCoverage`), and a module that genuinely has no page yet needs a
+//     line in `COVERAGE_ALLOWLIST` with the reason beside it.
 //
 // THE SHAPE, stated once (the format the knowledge run parses):
 //
@@ -78,6 +86,20 @@ export const MANUAL_DIR = "apps/desktop/src/main/assistant/manual";
  * rather than naming a place the assistant cannot open.
  */
 export const BUILT_IN_PAGES = ["search"];
+
+/**
+ * The modules that may ship with no manual page, and the reason each one may.
+ *
+ * Empty on purpose: every module the registry declares has a page today, and
+ * this list exists for the one case the rule cannot decide by itself — a module
+ * whose screen is not real yet, which the assistant must not be asked about.
+ * An entry is keyed by the module id and its value is the REASON, in the same
+ * shape `check:reachable`'s exemption list uses, because the next reader has to
+ * be able to tell a deliberate silence from a forgotten page. An entry naming
+ * an id no manifest declares is itself a finding: a module renamed without its
+ * exemption moving would silently exempt whatever took its name.
+ */
+export const COVERAGE_ALLOWLIST = {};
 
 /** The heading a page's last line uses to list the ids it is related to. */
 export const RELATED_HEADINGS = { sr: "Povezano", en: "Related" };
@@ -309,6 +331,61 @@ export function readManual(root = REPO_ROOT) {
 }
 
 /**
+ * Which modules each locale's pages cover, by the `location` they carry.
+ *
+ * The `location` rather than the page's `id`, though the two agree on every
+ * page in the tree today: `location` is the field that says where the page's
+ * SUBJECT lives, so "the assistant can open this module from that page" is
+ * exactly what it records. A module's page renamed for its subject — the day
+ * `timers.md` becomes `timers-countdowns.md` — would still cover the module.
+ */
+function coveredModules(pages) {
+  const covered = new Map(MANUAL_LOCALES.map((locale) => [locale, new Set()]));
+  for (const page of pages) {
+    const module = page.location?.module;
+    if (module !== undefined && module !== null) covered.get(page.locale).add(module);
+  }
+  return covered;
+}
+
+/**
+ * The coverage rule: every module the registry declares has a page in both
+ * languages, or a line in `COVERAGE_ALLOWLIST` that says why it does not.
+ *
+ * The finding lands on the locale's DIRECTORY rather than on a page, because
+ * the page that is missing is what the finding is about and there is no file to
+ * point at. A module missing from one language only is reported against that
+ * language: the half that exists is not the defect.
+ */
+export function validateCoverage(pages, vocabulary, allowlist = COVERAGE_ALLOWLIST) {
+  const findings = [];
+  const covered = coveredModules(pages);
+  for (const moduleId of vocabulary.moduleIds) {
+    if (Object.hasOwn(allowlist, moduleId)) continue;
+    for (const locale of MANUAL_LOCALES) {
+      if (covered.get(locale).has(moduleId)) continue;
+      findings.push({
+        file: `${MANUAL_DIR}/${locale}`,
+        locale,
+        line: 1,
+        message: `module \`${moduleId}\` has no page in \`${locale}\``,
+      });
+    }
+  }
+  for (const moduleId of Object.keys(allowlist)) {
+    if (!vocabulary.moduleIds.has(moduleId)) {
+      findings.push({
+        file: MANUAL_DIR,
+        locale: MANUAL_LOCALES[0],
+        line: 1,
+        message: `the coverage allowlist names \`${moduleId}\`, which is not a module`,
+      });
+    }
+  }
+  return findings;
+}
+
+/**
  * The four cross-page rules, over pages that already parsed: unique ids, ids
  * paired across the two languages, a location the app can honour, and related
  * ids that exist.
@@ -359,7 +436,12 @@ export function validateManual(pages, vocabulary) {
 export function scanRepo(root = REPO_ROOT) {
   const { pages, findings } = readManual(root);
   const vocabulary = knownVocabulary(root);
-  const all = [...findings, ...validateManual(pages, vocabulary)];
+  const all = [
+    ...findings,
+    ...validateManual(pages, vocabulary),
+    ...validateCoverage(pages, vocabulary),
+  ];
+  const covered = coveredModules(pages);
   return {
     findings: all,
     census: {
@@ -367,6 +449,10 @@ export function scanRepo(root = REPO_ROOT) {
       ids: new Set(pages.map((page) => page.id)).size,
       relatedEdges: pages.reduce((total, page) => total + page.related.length, 0),
       moduleIds: vocabulary.moduleIds.size,
+      documented: [...vocabulary.moduleIds].filter((moduleId) =>
+        MANUAL_LOCALES.every((locale) => covered.get(locale).has(moduleId)),
+      ).length,
+      exempt: Object.keys(COVERAGE_ALLOWLIST).length,
       settingsCategories: vocabulary.settingsCategories.size,
     },
   };
@@ -377,8 +463,9 @@ function main() {
   const [srPages, enPages] = census.pages;
   const line =
     `check-manual: ${srPages} sr + ${enPages} en page(s), ${census.ids} paired id(s), ` +
-    `${census.relatedEdges} related link(s), against ${census.moduleIds} module id(s) and ` +
-    `${census.settingsCategories} Settings categor(y|ies).`;
+    `${census.relatedEdges} related link(s), ${census.documented} of ${census.moduleIds} ` +
+    `module(s) documented (${census.exempt} exempt), against ${census.settingsCategories} ` +
+    `Settings categor(y|ies).`;
   if (findings.length > 0) {
     console.error(`check-manual: ${findings.length} finding(s).\n`);
     for (const finding of findings) {
@@ -387,7 +474,9 @@ function main() {
     console.error(
       "\nThe manual is read by the assistant and quoted back as a citation, so a page\n" +
         "that names a place, an id or a category the app does not have teaches the user\n" +
-        "something false. Fix the page, or add the missing module to the tree.",
+        "something false — and a module with no page teaches them nothing at all. Fix the\n" +
+        "page, write the missing page in both languages, or, for a module whose screen is\n" +
+        "not real yet, add it to COVERAGE_ALLOWLIST with the reason beside it.",
     );
     process.exit(1);
   }

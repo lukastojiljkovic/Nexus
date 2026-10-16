@@ -22,7 +22,7 @@ import { PRO_TOOL_SURFACES } from "./proToolSurfaces.js";
 import { ToolFinder } from "./ToolFinder.js";
 import { filterTools, type SearchableTool } from "./toolSearch.js";
 import { buildToolCatalogue, DRAWER_MODULES, type ToolCatalogueEntry } from "./toolCatalogue.js";
-import { TOOL_SURFACES } from "./toolSurfaces.js";
+import { TOOL_SURFACES, ToolPrefillProvider } from "./toolSurfaces.js";
 import { activeLocale, countUnit, fill, strings } from "./strings.js";
 import { moduleName } from "./moduleName.js";
 import { ModuleSettingsGear } from "./moduleSettingsGear.js";
@@ -137,6 +137,11 @@ function resolveKey(key: string): string | undefined {
 export interface ToolsIntent {
   readonly kind: "open";
   readonly toolId: string;
+  /**
+   * Fields to fill in on open, by the names the tool's runner gives them — what the
+   * assistant's `drawer.open` asked for. Absent for an ordinary open.
+   */
+  readonly values?: Readonly<Record<string, string>>;
 }
 
 export interface ToolsPageProps {
@@ -278,6 +283,16 @@ export function ToolsPage({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickingPacks, setPickingPacks] = useState(false);
+  /**
+   * The values an intent opened its tool with, and a counter that remounts the
+   * surface when a new set arrives for a tool that is already open — the fields read
+   * their opening text once, on mount.
+   */
+  const [prefill, setPrefill] = useState<{
+    readonly toolId: string;
+    readonly values: Readonly<Record<string, string>>;
+    readonly epoch: number;
+  } | null>(null);
   const [recent, setRecent] = useState<readonly string[]>(() => readRecentTools(profileId));
   /**
    * WHICH DRAWER THIS STATE BELONGS TO, and the one place a switch between them
@@ -320,6 +335,11 @@ export function ToolsPage({
     if (intent === null) return;
     setSelectedId(intent.toolId);
     setRecent(rememberRecentTool(profileId, intent.toolId));
+    setPrefill((current) =>
+      intent.values === undefined
+        ? null
+        : { toolId: intent.toolId, values: intent.values, epoch: (current?.epoch ?? 0) + 1 },
+    );
     onIntentHandled();
   }, [intent, profileId, onIntentHandled]);
 
@@ -369,6 +389,7 @@ export function ToolsPage({
   function openTool(id: string): void {
     setSelectedId(id);
     setRecent(rememberRecentTool(profileId, id));
+    setPrefill(null);
   }
 
   /**
@@ -635,7 +656,11 @@ export function ToolsPage({
                         wherever it sits inside whichever tool is open. */}
                     <ToolRiskProvider value={selected.riskClass}>
                       <div className="tool__body">
-                        <Surface />
+                        <ToolPrefillProvider
+                          value={prefill !== null && prefill.toolId === surfaceId ? prefill.values : undefined}
+                        >
+                          <Surface key={prefill?.epoch ?? 0} />
+                        </ToolPrefillProvider>
                       </div>
                     </ToolRiskProvider>
                     {/* Under the answer, where the professional checking it is

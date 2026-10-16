@@ -63,6 +63,10 @@ export const sr = {
     moves: "Potezi: {count}",
     againstComputer: "Protiv računara, nivo {level}",
     againstHuman: "Dve osobe na istom računaru",
+    discard: "Odbaci",
+    discardTitle: "Odbaciti sačuvanu partiju?",
+    discardQuestion: "Položaj i potezi se brišu, pa se partija posle ne može nastaviti.",
+    keep: "Zadrži",
   },
   cell: {
     human: "osoba",

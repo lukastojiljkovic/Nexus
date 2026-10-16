@@ -119,7 +119,15 @@ interface View {
     pagesRead: number | null;
     passes: { id: string; seq: number; startedOn: string | null; finishedOn: string | null }[];
     thoughts: { id: string; entryDate: string; text: string }[];
+    loans: {
+      id: string;
+      to: string;
+      lentOn: string;
+      dueOn: string | null;
+      returnedOn: string | null;
+    }[];
   }[];
+  readonly goals: { id: string; kind: string | null; target: number }[];
   readonly collections: {
     id: string;
     name: string;
@@ -184,6 +192,9 @@ describe("the library handler surface", () => {
       "library:restoreItem",
       "library:addPass",
       "library:removePass",
+      "library:lendItem",
+      "library:returnLoan",
+      "library:setGoal",
       "library:addThought",
       "library:updateThought",
       "library:removeThought",
@@ -412,6 +423,51 @@ describe("works, passes and thoughts", () => {
 
     const restored = await call<View>(host, "library:restoreItem", { profileId, id });
     expect(restored.items[0]?.thoughts.map((thought) => thought.text)).toEqual(["Klasičan."]);
+  });
+});
+
+describe("loans and reading goals", () => {
+  it("lends a work to one person at a time, keeps the history, and sets a goal per scope", async () => {
+    const { host } = harness();
+    const profileId = createProfile();
+    const added = await call<View>(host, "library:addItem", { profileId, kind: "book", title: "Čića Gorio" });
+    const itemId = added.items[0]?.id ?? "";
+
+    const lent = await call<View>(host, "library:lendItem", {
+      profileId,
+      itemId,
+      to: "Marko",
+      lentOn: "2026-10-01",
+      dueOn: "2026-10-15",
+    });
+    expect(lent.items[0]?.loans).toMatchObject([{ to: "Marko", lentOn: "2026-10-01", dueOn: "2026-10-15", returnedOn: null }]);
+    await expect(
+      call(host, "library:lendItem", { profileId, itemId, to: "Ana", lentOn: "2026-10-02", dueOn: null }),
+    ).rejects.toThrow();
+
+    const loanId = lent.items[0]?.loans[0]?.id ?? "";
+    const returned = await call<View>(host, "library:returnLoan", {
+      profileId,
+      itemId,
+      id: loanId,
+      returnedOn: "2026-10-05",
+    });
+    expect(returned.items[0]?.loans[0]?.returnedOn).toBe("2026-10-05");
+
+    const again = await call<View>(host, "library:lendItem", {
+      profileId,
+      itemId,
+      to: "Ana",
+      lentOn: "2026-10-06",
+      dueOn: null,
+    });
+    expect(again.items[0]?.loans.map((loan) => loan.to)).toEqual(["Marko", "Ana"]);
+
+    const goal = await call<View>(host, "library:setGoal", { profileId, kind: null, target: 12 });
+    expect(goal.goals).toEqual([expect.objectContaining({ kind: null, target: 12 })]);
+    const edited = await call<View>(host, "library:setGoal", { profileId, kind: null, target: 20 });
+    expect(edited.goals.map((entry) => entry.target)).toEqual([20]);
+    await expect(call(host, "library:setGoal", { profileId, kind: null, target: 0 })).rejects.toThrow();
   });
 });
 

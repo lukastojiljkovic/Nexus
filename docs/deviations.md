@@ -6,6 +6,7 @@ architecture is logged here and needs founder confirmation before merging.
 ## DEV-001 — Token build: zero-dep generator instead of Style Dictionary
 
 - **Date:** 2026-07-05 · **Status:** **confirmed by founder 2026-07-12**
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** ADR-006 names Style Dictionary as the token compiler.
   `packages/tokens/build.mjs` is instead a ~100-line zero-dependency
   generator (JSON → CSS custom properties + typed TS module).
@@ -28,6 +29,7 @@ architecture is logged here and needs founder confirmation before merging.
   until it is ticked, and the confirmation consumed with the export rather than
   left standing to arm the next one). See the closing note at the end of this
   entry.
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** PRD 14 IMEX-001 and ADR-009 both specify export encrypted by
   default (SEC-DAR-02), with plaintext requiring an explicit user
   confirmation. The IMEX slice a1 full-export archive (`.nexus.zip`,
@@ -69,6 +71,7 @@ architecture is logged here and needs founder confirmation before merging.
 ## DEV-003 — Forgotten-passcode recovery is a Recovery Kit, not the OS credential
 
 - **Date:** 2026-07-26 · **Status:** **decided by founder 2026-07-26**
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** SEC-LOC-03 (and AUTH-005) specify that forgotten-PIN recovery goes
   "via the OS device credential (BiometricPrompt/device PIN, Windows Hello),
   never security questions, never a backdoor code". ADR-018 instead recovers a
@@ -120,6 +123,7 @@ architecture is logged here and needs founder confirmation before merging.
   super"). The founder's one ask — tell the user WHAT was not imported — is
   already the shipped behaviour: the import report names per-kind counts
   („N slika, M zvučnih zapisa nije uvezeno"). No further work.
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** PRD 15 STUDY-011 says "media included" and its acceptance line asks
   for "reviewable cards **with media**". ADR-052's importer instead STRIPS
   `<img>` and `[sound:…]` references from imported fields, with per-kind named
@@ -143,6 +147,7 @@ architecture is logged here and needs founder confirmation before merging.
   2026-07-31** — asked directly, the founder answered "Ne znam sta me pitas";
   per the working agreement the technical call falls to engineering and is
   recorded here so it can be revisited).
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** SEC-FILE-01's spirit prefers hostile file formats parsed away from
   privileged processes. ADR-052's Anki importer instead deserializes a foreign
   SQLite collection INSIDE the Electron main process — readonly, from memory
@@ -164,6 +169,7 @@ architecture is logged here and needs founder confirmation before merging.
 - **Date:** 2026-08-19 · **Status:** **confirmed by founder 2026-08-19**
   (asked as one of four questions opening ADR-085; answer: *„Domenske boje su
   izuzetak SAMO unutar platna"*).
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** `CLAUDE.md`'s design rules ban blue and orange as system hues. The
   Elektronika canvas uses both: a wire is red for 5 V, black for ground, blue
   very often for I²C SDA, yellow for signal; an Arduino UNO's silkscreen is
@@ -201,6 +207,7 @@ architecture is logged here and needs founder confirmation before merging.
 - **Date:** 2026-08-19 · **Status:** **confirmed by founder 2026-08-19**
   (*„I stvarno pokretanje (ros2/gazebo/docker) iz Nexusa"*, chosen over the
   in-app-simulation-only option that was recommended).
+- **Shipped in:** `v1.4.0` and every release since.
 - **What:** ADR-085 §5. Until now the main process contained **no
   `child_process` call at all** — the product had exactly one capability
   boundary, the network one, and `apps/desktop/src/main/net/offline.ts` plus
@@ -270,8 +277,9 @@ the user is not sitting at.
 
 ### Amendment, 2026-10-09 — the updater starts the installer it verified
 
-- **Status:** recorded by Claude for the taskbar-pin fix Luka asked for on
-  2026-10-08; awaiting his confirmation in the pull request.
+- **Status:** in force. Shipped in `v2.0.0` and in every release since; the
+  founder's confirmation that this amendment asked for is not recorded in this
+  file.
 - **What:** the update check's last step (ADR-089) starts the downloaded
   installer from `apps/desktop/src/main/update/launch.ts` with
   `--updated /S --force-run`, instead of `shell.openPath`. That is a second file
@@ -295,10 +303,13 @@ the user is not sitting at.
 - **Date:** 2026-10-02 · **Status:** **confirmed by founder 2026-10-02**
   (*„Napravi release i kaži da je signing trenutno stopiran ali da je projekat
   sada open source za sve koji žele da se uvere da je sa kodom sve u redu"*).
+- **Shipped in:** `v1.4.0` through `v2.0.3`, all unsigned.
 - **What:** SEC-EL-07 requires releases to be code-signed, and SEC-SC-05
-  releases only CI-built, signed artifacts. The 1.4.0 and 1.5.0 Windows
-  installers and the Linux files are CI-built but carry no Authenticode
-  signature, and Windows shows a SmartScreen warning on first run.
+  releases only CI-built, signed artifacts. Every release from 1.4.0 to 2.0.3
+  is CI-built but unsigned: the Windows installers and the Linux files carry no
+  Authenticode signature, and Windows shows a SmartScreen warning on first run.
+  The macOS dmg, first released with 2.0.0, is unsigned and not notarised, so
+  SEC-EL-07's macOS notarisation clause is open here too.
 - **Why accepted:** no signing route is in place yet, and the source of the
   release is public. Anyone can read what the installer does, and the files can
   be tied to the code they came from without trusting a publisher name.
@@ -308,12 +319,12 @@ the user is not sitting at.
   2. **Verifiable provenance.** Every file ships with `SHA256SUMS.txt`, a
      CycloneDX SBOM and a build-provenance attestation
      (`gh attestation verify <file> --repo lukastojiljkovic/Nexus`).
-  3. **Said where it is downloaded.** The release notes, the README and the
-     website state that signing is paused.
+  3. **Said where it is downloaded.** The release notes state that signing is
+     paused, and the macOS notes say the dmg is unsigned and un-notarised.
   4. **Updates are gated by a key, not by the certificate.** ADR-089 (2026-10-07)
      replaced the updater rather than re-arming one: 1.4.0 shipped
-     `electron-updater` as a dependency but never called it, and 1.5.0 removes
-     the dependency. The update check verifies a detached Ed25519 signature
+     `electron-updater` as a dependency but never called it, and the 2026-10-08
+     release removes the dependency. The update check verifies a detached Ed25519 signature
      against a public key compiled into the app, over a checksum file that then
      pins the installer's hash. That meets SEC-EL-07's update-verification
      clause, so the missing Authenticode certificate no longer blocks an update;

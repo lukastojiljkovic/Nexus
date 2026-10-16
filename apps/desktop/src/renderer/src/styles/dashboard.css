@@ -141,14 +141,6 @@
   flex-direction: column;
   gap: var(--nx-space-2);
 }
-/* `.nx-hint` plus the one thing that is not a hint's business: this line
-   carries a spinner or a mark beside its text. */
-.dash__status {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-}
-
 /* --- The widget grid -------------------------------------------------------
 
    An AUTHORED column grid (ADR-045 section 1): a size preset is a whole number
@@ -332,24 +324,6 @@
   }
 }
 
-/* One widget's isolated failure: this card could not read, and the way to ask
-   again. No EmptyState — that block would say the page is empty, and it isn't. */
-.dash__failure {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--nx-space-2);
-}
-
-/* A quiet line on a card that is NOT „nothing here" — the failure notice, which
-   `EmptyState` must never be used for: a card that could not READ has not been
-   told there is nothing to read. Empty states are the component's now. */
-/* `.nx-hint` with the widget body's own inset, so an empty widget's line sits
-   where a populated one's first row would. */
-.dash__quiet {
-  padding: var(--nx-space-2) 0;
-}
-
 /* --- ONE row grammar for all twelve widget bodies --------------------------
 
    Every widget row is three columns and at most three levels of type:
@@ -404,6 +378,20 @@
    overlaps itself" unrepresentable rather than merely unlikely. */
 .dash__list .nx-list-row__trailing {
   max-width: 45%;
+}
+
+/* „Brze radnje“: the quick-create buttons, wrapped so a narrow card stacks them. */
+.dash__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+/* „Statistika“: the charts stack, each one a whole card wide. */
+.dash__stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
 }
 
 /* Widget rows are read-only deep-links: a reset button wrapping a ListRow, so

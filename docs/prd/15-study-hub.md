@@ -68,6 +68,11 @@ break slots offer boosters (FUN).
 - **STUDY-007 (M)** Scheduling via FSRS with target retention setting
   (default 0.9); per-deck or per-subject override; load smoothing and a
   catch-up mode that spreads backlog (avalanche mitigation).
+  **Built 2026-10-15:** the per-subject and per-deck override (migration 094;
+  a deck, else its subject, else the profile, resolved by
+  `StudySettingsStore.retentionFor`). The catch-up mode is the capped replan
+  of ADR-063 (`packages/core/src/study/planEngine.ts`). No separate load
+  smoothing code exists in the study modules.
 - **STUDY-008 (M)** Cards link back to their source note/section when
   created inline (NOTE-006); orphan decks exist for standalone cards.
 - **STUDY-009 (M)** Review sessions: keyboard-first grading, session caps,

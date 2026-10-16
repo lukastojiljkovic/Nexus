@@ -63,6 +63,11 @@ export const sr = {
     decimal: "Decimalni zarez",
     clear: "Obriši polje",
   },
+  bases: {
+    hex: "heks",
+    octal: "okt",
+    binary: "bin",
+  },
   history: {
     title: "Istorija",
     search: "Traži u istoriji",
@@ -76,6 +81,8 @@ export const sr = {
     clear: "Obriši istoriju",
     clearTitle: "Brisanje istorije",
     clearQuestion: "Obrisati sve izraze iz istorije?",
+    removeTitle: "Brisanje unosa",
+    removeQuestion: "Obrisati ovaj unos iz istorije?",
     clearNote: "Zakačeni unosi ostaju, kao i promenljive.",
   },
   variables: {

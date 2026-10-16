@@ -16,6 +16,7 @@ import { ConversationStore, type AssistantSettings } from "@nexus/db";
 import { createKnowledgeService } from "../../../main/assistant/knowledge/index.js";
 import type { KnowledgeIndex } from "../../../main/assistant/knowledge/types.js";
 import { createToolRegistry } from "../../../main/assistant/tools/index.js";
+import { resolveShellVisibility } from "../../../main/visibility.js";
 import { createVoiceService } from "../../../main/assistant/voice/index.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import { createWebService } from "../../../main/assistant/web/index.js";
@@ -160,8 +161,15 @@ export class AssistantProfile {
       now: () => this.services.now(),
       search: this.services.search,
       packs: this.services.packs,
+      tools: this.services.tools,
       timers: this.timers,
+      focus: this.services.focus,
+      notifications: this.services.notifications,
+      dictionary: this.services.dictionary,
       modules: this.services.modules,
+      visibility: () => resolveShellVisibility(this.services.userData()),
+      userData: () => this.services.userData(),
+      appVersion: () => this.services.appVersion(),
       web: this.webService(),
     });
     return this.toolRegistry.tools({ web });

@@ -1,9 +1,17 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Icon } from "@nexus/ui";
 
-import { firstFocusableIndex, lastFocusableIndex, nextFocusableIndex } from "./focusOrder.js";
-import { elementToFocusCandidate } from "./useFocusTrap.js";
+import { firstFocusableIndex, lastFocusableIndex, nextFocusableIndex, type FocusCandidate } from "./focusOrder.js";
 import { useAnchoredPosition } from "./useAnchoredPosition.js";
+
+/** A real element, measured into the plain shape `focusOrder.ts` reasons over. */
+function elementToFocusCandidate(element: HTMLElement): FocusCandidate {
+  return {
+    tabIndex: element.tabIndex,
+    disabled: element.matches(":disabled"),
+    hidden: element.hidden || element.closest("[hidden]") !== null,
+  };
+}
 
 export interface NotePopoverProps {
   /** Accessible label for the trigger button. */

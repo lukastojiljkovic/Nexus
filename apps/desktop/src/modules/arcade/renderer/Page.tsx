@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { MinesweeperPresetId } from "@nexus/core";
 import { Button, Card, EmptyState, Icon, ListRow, LoadingState, PageHeader } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
@@ -13,6 +14,7 @@ import { copy } from "./copy.js";
 import { boardFacts, boardHeadline, gameName, shelfDetail, shelfFigure } from "./labels.js";
 import { minesweeperBoardVariants, rowFor } from "./stats.js";
 import { boardLabel } from "./variants.js";
+import { arcadeTargetOf } from "./target.js";
 import { BlocksGame } from "./games/Blocks.js";
 import { BricksGame } from "./games/Bricks.js";
 import { MinesweeperGame } from "./games/Minesweeper.js";
@@ -62,10 +64,13 @@ import "./arcade.css";
  * preference to switch.
  */
 
-export default function ArcadePage({ profileId }: ModulePageProps) {
+export default function ArcadePage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<ArcadeView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ArcadeGameId>(ARCADE_GAME_IDS[0] ?? "minesweeper");
+  const [preset, setPreset] = useState<MinesweeperPresetId>("beginner");
+  /** Counts the requests that opened a game, so a game the request restarts is a fresh mount. */
+  const [openings, setOpenings] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -103,6 +108,26 @@ export default function ArcadePage({ profileId }: ModulePageProps) {
     },
     [profileId],
   );
+
+  /**
+   * An assistant request to open a game, on the board it names.
+   *
+   * The same effect-over-the-prop as the wiki page's reveal: the shell holds the
+   * request until this page reports it consumed. An item that names no game this
+   * page knows is reported handled and changes nothing, and so is an action, which
+   * is another module's verb.
+   */
+  useEffect(() => {
+    if (intent?.kind === "reveal") {
+      const target = arcadeTargetOf(intent.item);
+      if (target !== null) {
+        setSelected(target.game);
+        if (target.preset !== null) setPreset(target.preset);
+        setOpenings((count) => count + 1);
+      }
+    }
+    if (intent !== null && intent !== undefined) onIntentHandled?.();
+  }, [intent, onIntentHandled]);
 
   return (
     <div className="arcade">
@@ -144,11 +169,13 @@ export default function ArcadePage({ profileId }: ModulePageProps) {
             </div>
           </Card>
           <StatsCard view={view} game={selected} />
-          {selected === "minesweeper" && <MinesweeperGame onFinish={record} />}
-          {selected === "blocks" && <BlocksGame onFinish={record} />}
-          {selected === "snake" && <SnakeGame onFinish={record} />}
-          {selected === "bricks" && <BricksGame onFinish={record} />}
-          {selected === "tile2048" && <Tile2048Game onFinish={record} />}
+          {selected === "minesweeper" && (
+            <MinesweeperGame key={openings} preset={preset} onFinish={record} />
+          )}
+          {selected === "blocks" && <BlocksGame key={openings} onFinish={record} />}
+          {selected === "snake" && <SnakeGame key={openings} onFinish={record} />}
+          {selected === "bricks" && <BricksGame key={openings} onFinish={record} />}
+          {selected === "tile2048" && <Tile2048Game key={openings} onFinish={record} />}
         </>
       )}
     </div>
@@ -173,7 +200,7 @@ function StatsCard({ view, game }: { readonly view: ArcadeView; readonly game: A
   const rows = boards.length === 0 ? [game === "tile2048" ? "4x4" : "standard"] : boards;
 
   return (
-    <Card className="arcade__card" title={copy.stats.title}>
+    <Card className="arcade__card nx-measure" title={copy.stats.title}>
       {/* The trailing figure per row is named once, above the rows: a time and a
           score are read differently, and a bare number with no word beside it
           would be a reader's guess. */}

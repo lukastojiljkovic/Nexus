@@ -1,6 +1,11 @@
 # ADR-007 — File Preview Pipeline
 
-**Status:** accepted (draft pending founder sign-off) · 2026-07-05
+**Status:** accepted (draft pending founder sign-off) · 2026-07-05 ·
+**Superseded on 2026-10-15 by [ADR-064](064-file-preview.md)** for the pipeline
+and the engine table below: the shipped preview is a dependency-free tier 0 plus
+PDFium in a dedicated window, and Office preview is out by name. The sandbox
+rules this ADR sets out (SEC-FILE-01/02) were carried into ADR-064 and still
+stand.
 **Drives:** DOC PRD (DOC-001..011), decision #11 (PDF annotation v1.x);
 SEC-FILE-01..05. Fully local for local accounts — no cloud conversion.
 

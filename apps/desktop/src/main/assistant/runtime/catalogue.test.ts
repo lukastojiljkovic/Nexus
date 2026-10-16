@@ -184,4 +184,39 @@ describe("the bundled catalogue", () => {
     // assuming it fits.
     expect(fitOf(imported)).toBeNull();
   });
+
+  it("reads the per-model policy an entry states, and refuses the values the runtime cannot act on", () => {
+    const entry = {
+      id: "policy-model-1a2b3c4d",
+      origin: "file",
+      title: "Policy model",
+      family: "policy",
+      repo: "",
+      file: "policy.gguf",
+      sha256: "c".repeat(64),
+      sizeBytes: 1024,
+      contextTokens: 32768,
+      capabilities: ["chat"],
+      languages: [],
+      licence: { name: "", url: "" },
+      path: "D:\\models\\policy.gguf",
+    };
+    const stated = {
+      contextCap: 16384,
+      thoughtTokens: 1024,
+      sampling: { temperature: 0.6, topP: 0.95, topK: 20, repeatPenalty: 1.05 },
+    };
+    expect(parseEntry({ ...entry, ...stated }, "the installed registry")).toMatchObject(stated);
+    // An empty block is accepted: it states nothing, so the library's defaults stand.
+    expect(parseEntry({ ...entry, sampling: {} }, "the installed registry").sampling).toEqual({});
+
+    expect(() => parseEntry({ ...entry, contextCap: 0 }, "the registry")).toThrow(/contextCap/);
+    expect(() => parseEntry({ ...entry, contextCap: 1.5 }, "the registry")).toThrow(/contextCap/);
+    expect(() => parseEntry({ ...entry, thoughtTokens: 0 }, "the registry")).toThrow(/thoughtTokens/);
+    expect(() => parseEntry({ ...entry, sampling: { temperature: 9 } }, "the registry")).toThrow(/temperature/);
+    expect(() => parseEntry({ ...entry, sampling: { topP: 1.5 } }, "the registry")).toThrow(/topP/);
+    expect(() => parseEntry({ ...entry, sampling: { topK: -1 } }, "the registry")).toThrow(/topK/);
+    expect(() => parseEntry({ ...entry, sampling: { repeatPenalty: 0.5 } }, "the registry")).toThrow(/repeatPenalty/);
+    expect(() => parseEntry({ ...entry, sampling: { mirostat: 2 } }, "the registry")).toThrow(/unknown field/);
+  });
 });

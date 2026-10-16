@@ -3,6 +3,7 @@ import type { LibraryItemView } from "../shared/ipc.js";
 import {
   KIND_ICONS,
   NO_FILTER,
+  activeLoan,
   blankToNull,
   formatDay,
   formatListField,
@@ -58,6 +59,7 @@ function item(overrides: Partial<LibraryItemView> = {}): LibraryItemView {
     updatedAt: "2026-06-01T08:00:00.000Z",
     passes: [],
     thoughts: [],
+    loans: [],
     ...overrides,
   };
 }
@@ -340,6 +342,38 @@ describe("the filter", () => {
     expect(works.filter((work) => matchesFilter(work, { ...NO_FILTER, query: "retro" }))).toEqual([
       works[2],
     ]);
+  });
+
+  it("keeps only the works lent out when the loan filter is set to out", () => {
+    const loan = {
+      id: "loan-1",
+      to: "Marko",
+      lentOn: "2026-10-01",
+      dueOn: null,
+      returnedOn: null,
+      createdAt: "2026-10-01T08:00:00.000Z",
+      updatedAt: "2026-10-01T08:00:00.000Z",
+    };
+    const lent = item({ id: "4", loans: [loan] });
+    const returned = item({ id: "5", loans: [{ ...loan, id: "loan-2", returnedOn: "2026-10-05" }] });
+    const all = [...works, lent, returned];
+    expect(all.filter((work) => matchesFilter(work, { ...NO_FILTER, loan: "out" }))).toEqual([lent]);
+    expect(all.filter((work) => matchesFilter(work, NO_FILTER))).toEqual(all);
+  });
+
+  it("reads the open loan of a work and ignores the returned ones", () => {
+    const returned = {
+      id: "loan-1",
+      to: "Ana",
+      lentOn: "2026-09-01",
+      dueOn: "2026-09-15",
+      returnedOn: "2026-09-14",
+      createdAt: "2026-09-01T08:00:00.000Z",
+      updatedAt: "2026-09-14T08:00:00.000Z",
+    };
+    const open = { ...returned, id: "loan-2", returnedOn: null, lentOn: "2026-10-01" };
+    expect(activeLoan(item({ loans: [returned] }))).toBeNull();
+    expect(activeLoan(item({ loans: [returned, open] }))).toEqual(open);
   });
 
   it("treats a punctuation-only query as no query at all, and filters by kind and status", () => {

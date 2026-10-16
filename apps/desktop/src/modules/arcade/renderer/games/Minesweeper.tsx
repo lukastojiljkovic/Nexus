@@ -13,6 +13,7 @@ import {
   revealCell,
   type MinesweeperConfig,
   type MinesweeperFace,
+  type MinesweeperPresetId,
   type MinesweeperState,
 } from "@nexus/core";
 import { Button, Chip, Select, TextField } from "@nexus/ui";
@@ -55,19 +56,22 @@ import { aControlHasFocus, type BoardGameProps } from "./props.js";
 
 const BOARD_BOX = { maxWidth: 620, maxHeight: 360, maxCell: 34 } as const;
 
-/** Where a game starts, and the numbers the custom form opens with: the beginner board. */
-const FIRST_LEVEL: MinesweeperLevel = "beginner";
+/** Where a game starts when the page asks for no board, and the numbers the custom form opens with: the beginner board. */
+const FIRST_LEVEL: MinesweeperPresetId = "beginner";
 const FIRST_FIELDS = { columns: "9", rows: "9", mines: "10" };
 
 /** What a press asks for, from either hand. */
 type CellAction = "open" | "mark" | "chord";
 
-export function MinesweeperGame({ onFinish }: BoardGameProps) {
-  const [level, setLevel] = useState<MinesweeperLevel>(FIRST_LEVEL);
+export function MinesweeperGame({
+  onFinish,
+  preset = FIRST_LEVEL,
+}: BoardGameProps & { readonly preset?: MinesweeperPresetId }) {
+  const [level, setLevel] = useState<MinesweeperLevel>(preset);
   const [fields, setFields] = useState(FIRST_FIELDS);
-  const [config, setConfig] = useState<MinesweeperConfig>(MINESWEEPER_PRESETS.beginner);
+  const [config, setConfig] = useState<MinesweeperConfig>(MINESWEEPER_PRESETS[preset]);
   const [state, setState] = useState<MinesweeperState>(() =>
-    createMinesweeper(MINESWEEPER_PRESETS.beginner, { questions: true }),
+    createMinesweeper(MINESWEEPER_PRESETS[preset], { questions: true }),
   );
   const [problem, setProblem] = useState(false);
   const [cursor, setCursor] = useState(0);

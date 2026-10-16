@@ -98,6 +98,8 @@ export default function CalculatorPage({ profileId }: ModulePageProps) {
   const [recall, setRecall] = useState(-1);
   const [query, setQuery] = useState("");
   const [confirming, setConfirming] = useState<Confirming | null>(null);
+  /** The history row whose delete is waiting for an answer. */
+  const [removing, setRemoving] = useState<CalcHistoryEntryView | null>(null);
   const [keypadOpen, setKeypadOpen] = useState(false);
   const [variablesOpen, setVariablesOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -474,9 +476,7 @@ export default function CalculatorPage({ profileId }: ModulePageProps) {
                         api.setPinned({ profileId, id: entry.id, pinned: !entry.pinned }),
                       )
                     }
-                    onRemove={() =>
-                      void mutate((api) => api.removeEntry({ profileId, id: entry.id }))
-                    }
+                    onRemove={() => setRemoving(entry)}
                   />
                 ))}
               </div>
@@ -584,6 +584,22 @@ export default function CalculatorPage({ profileId }: ModulePageProps) {
           onCancel={() => setConfirming(null)}
         />
       )}
+      {removing !== null && (
+        <ConfirmDialog
+          title={copy.history.removeTitle}
+          name={removing.expression}
+          question={copy.history.removeQuestion}
+          confirmLabel={copy.history.remove}
+          cancelLabel={copy.confirm.cancel}
+          destructive
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const id = removing.id;
+            setRemoving(null);
+            void mutate((api) => api.removeEntry({ profileId, id }));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -612,9 +628,9 @@ function Answer({ preview, line }: { preview: Preview; line: string }) {
         <p className="calculator__value">{outcome.display}</p>
         {outcome.programmer !== null && (
           <div className="calculator__bases">
-            <Chip>hex {outcome.programmer.hex}</Chip>
-            <Chip>oct {outcome.programmer.octal}</Chip>
-            <Chip>bin {outcome.programmer.binary}</Chip>
+            <Chip>{`${copy.bases.hex} ${outcome.programmer.hex}`}</Chip>
+            <Chip>{`${copy.bases.octal} ${outcome.programmer.octal}`}</Chip>
+            <Chip>{`${copy.bases.binary} ${outcome.programmer.binary}`}</Chip>
           </div>
         )}
       </>

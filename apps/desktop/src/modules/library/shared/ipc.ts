@@ -43,6 +43,24 @@ export interface LibraryPassView {
   readonly updatedAt: string;
 }
 
+/** One lending of a work, as it crosses the wire. `returnedOn` is null while the loan is active. */
+export interface LibraryLoanView {
+  readonly id: string;
+  readonly to: string;
+  readonly lentOn: string;
+  readonly dueOn: string | null;
+  readonly returnedOn: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** One reading goal: a target count for the year, over every kind (`kind` null) or for one kind. */
+export interface LibraryGoalView {
+  readonly id: string;
+  readonly kind: LibraryKind | null;
+  readonly target: number;
+}
+
 /** One dated thought about a work, in the order it was written. */
 export interface LibraryThoughtView {
   readonly id: string;
@@ -82,6 +100,8 @@ export interface LibraryItemView {
   readonly updatedAt: string;
   readonly passes: readonly LibraryPassView[];
   readonly thoughts: readonly LibraryThoughtView[];
+  /** Every lending of the work, oldest first; the one without a `returnedOn`, if any, is the loan out now. */
+  readonly loans: readonly LibraryLoanView[];
 }
 
 /** One of the user's own collections, with the computed progress and the works it holds, in the user's own order. */
@@ -137,6 +157,8 @@ export interface LibraryView {
   readonly collections: readonly LibraryCollectionView[];
   /** What the installed `dataset` packs offer, in pack order; empty when none is installed. */
   readonly suggestions: readonly LibrarySuggestionView[];
+  /** The reading goals the profile has set, the every-kind goal first. The page works out their progress for the year. */
+  readonly goals: readonly LibraryGoalView[];
 }
 
 /** One read: whose view is being asked for. */
@@ -200,6 +222,30 @@ export interface LibraryPassPayload {
   startedOn: string | null;
   finishedOn: string | null;
   rating: number | null;
+}
+
+/** Lending a work to someone. The days are the form's own, so a due day is `null` when nobody set one. */
+export interface LibraryLendPayload {
+  profileId: string;
+  itemId: string;
+  to: string;
+  lentOn: string;
+  dueOn: string | null;
+}
+
+/** Marking one loan of a work as returned on a day. */
+export interface LibraryReturnLoanPayload {
+  profileId: string;
+  itemId: string;
+  id: string;
+  returnedOn: string;
+}
+
+/** Setting the goal for one scope: every kind (`kind` null), or one kind. */
+export interface LibrarySetGoalPayload {
+  profileId: string;
+  kind: LibraryKind | null;
+  target: number;
 }
 
 /** One thought, dated. */
@@ -275,6 +321,9 @@ type LibraryOps = {
   removeFromCollection: { request: LibraryCollectionItemPayload; response: LibraryView };
   moveCollectionItem: { request: LibraryMoveCollectionItemPayload; response: LibraryView };
   adoptSuggestion: { request: LibraryAdoptSuggestionPayload; response: LibraryView };
+  lendItem: { request: LibraryLendPayload; response: LibraryView };
+  returnLoan: { request: LibraryReturnLoanPayload; response: LibraryView };
+  setGoal: { request: LibrarySetGoalPayload; response: LibraryView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -305,6 +354,9 @@ export const contract = defineModuleContract<"library", LibraryOps>("library", [
   "removeFromCollection",
   "moveCollectionItem",
   "adoptSuggestion",
+  "lendItem",
+  "returnLoan",
+  "setGoal",
 ]);
 
 /**

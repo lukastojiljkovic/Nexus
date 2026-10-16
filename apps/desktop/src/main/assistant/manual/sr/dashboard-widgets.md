@@ -4,7 +4,7 @@ title: Kartice na kontrolnoj tabli
 location: { module: dashboard }
 keywords: [vidžet, kartica, kontrolna tabla, raspored, tabla]
 ---
-Vidžeti su kartice na kontrolnoj tabli: „Danas“, „Predstojeći zadaci“, „Hitno i kasni“, „Nedavne beleške“, „Ispiti“, „Učenje“, „Predstojeće naplate“, „Navike danas“, „Ishrana danas“, „Trening“, „Trening u toku“, „Dokumenta koja ističu“, „Nedavne datoteke“, „Nedavne table“, „Nedavna kola“, „Fokus“ i „Tvoje stručne alatke“.
+Vidžeti su kartice na kontrolnoj tabli: „Danas“, „Predstojeći zadaci“, „Hitno i kasni“, „Nedavne beleške“, „Ispiti“, „Učenje“, „Predstojeće naplate“, „Navike danas“, „Ishrana danas“, „Trening“, „Trening u toku“, „Dokumenta koja ističu“, „Nedavne datoteke“, „Nedavne table“, „Nedavna kola“, „Fokus“, „Tvoje stručne alatke“, „Podsetnici“, „Brze radnje“ i „Statistika“.
 
 Kako se dodaje i menja:
 

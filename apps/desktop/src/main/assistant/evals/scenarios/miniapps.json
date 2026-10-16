@@ -1,0 +1,155 @@
+{
+  "scenarios": [
+    {
+      "id": "miniapps-counter-sr",
+      "title": "Postavljanje brojača kafe na novu vrednost",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Postavi brojač kafe na 5." }
+      ],
+      "tools": [
+        {
+          "name": "miniapps.counter",
+          "effect": "write",
+          "summary": { "sr": "Postaviti brojač „Kafa“ sa 3 na 5?", "en": "Set the counter “Kafa” from 3 to 5?" },
+          "content": "Brojač „Kafa“ je sada na 5.",
+          "navigateTo": { "module": "miniapps", "item": "tally" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "miniapps.counter", "args": { "name": { "contains": "Kafa" }, "value": { "eq": 5 } } }
+        ],
+        "navigatesTo": [{ "module": "miniapps", "item": "tally" }],
+        "claimsOnlyWhatRan": true,
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "miniapps.counter", "arguments": { "name": "Kafa", "value": 5 } }] },
+        { "text": "Brojač kafe je sada na 5." }
+      ]
+    },
+    {
+      "id": "miniapps-counter-declined-en",
+      "title": "A counter is not set when the user declines",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Set my coffee counter to 5." }
+      ],
+      "tools": [
+        {
+          "name": "miniapps.counter",
+          "effect": "write",
+          "summary": { "sr": "Postaviti brojač „Kafa“ sa 3 na 5?", "en": "Set the counter “Kafa” from 3 to 5?" },
+          "content": "The counter “Kafa” is now at 5."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "miniapps.counter", "args": { "name": { "contains": "Kafa" } } }
+        ],
+        "answerContains": ["declined"],
+        "answerNotContains": ["now at 5"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "miniapps.counter", "arguments": { "name": "Kafa", "value": 5 } }] },
+        { "text": "The counter was not changed, because you declined." }
+      ]
+    },
+    {
+      "id": "miniapps-city-en",
+      "title": "Putting Tokyo on the world clock",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Put Tokyo on my world clock." }
+      ],
+      "tools": [
+        {
+          "name": "miniapps.city",
+          "effect": "write",
+          "summary": { "sr": "Staviti Asia/Tokyo na svetski sat?", "en": "Put Asia/Tokyo on the world clock?" },
+          "content": "Asia/Tokyo is on the world clock.",
+          "navigateTo": { "module": "miniapps", "item": "worldclock" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "miniapps.city", "args": { "zone": { "eq": "Asia/Tokyo" } } }
+        ],
+        "navigatesTo": [{ "module": "miniapps", "item": "worldclock" }],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "miniapps.city", "arguments": { "zone": "Asia/Tokyo" } }] },
+        { "text": "Tokyo is on your world clock now." }
+      ]
+    },
+    {
+      "id": "miniapps-dates-sr",
+      "title": "Koliko dana ima između dva datuma",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koliko dana ima od 10. oktobra do 25. decembra 2026?" }
+      ],
+      "tools": [
+        { "name": "miniapps.dates", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "miniapps.dates", "args": { "from": { "eq": "2026-10-10" }, "to": { "eq": "2026-12-25" } } }
+        ],
+        "answerContains": ["76 dana"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "miniapps.dates", "arguments": { "from": "2026-10-10", "to": "2026-12-25" } }] },
+        { "text": "Između 10. oktobra i 25. decembra 2026. ima 76 dana." }
+      ]
+    },
+    {
+      "id": "miniapps-dates-en",
+      "title": "A date a span after another",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What date is three weeks after 2026-03-10?" }
+      ],
+      "tools": [
+        { "name": "miniapps.dates", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "miniapps.dates", "args": { "from": { "eq": "2026-03-10" }, "add": { "eq": { "weeks": 3 } } } }
+        ],
+        "answerContains": ["2026-03-31"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "miniapps.dates", "arguments": { "from": "2026-03-10", "add": { "weeks": 3 } } }] },
+        { "text": "Three weeks after 2026-03-10 is 2026-03-31." }
+      ]
+    }
+  ]
+}

@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { CardsViewConfig, CollectionSchema } from "@nexus/core";
+import { noteOutlineItems, noteOutlineSketch } from "@nexus/core";
+import { openAppLocation } from "../../modules/assistant/renderer/location.js";
 import {
+  AsyncSurface,
   Button,
   CardsView,
   Disclosure,
   EmptyState,
   Icon,
-  LoadingState,
+  Notice,
   PageHeader,
+  Toast,
+  type AsyncState,
 } from "@nexus/ui";
+import { MAX_CANVAS_BOARD_NAME_LENGTH } from "../../shared/ipc.js";
 import type {
   NoteCardDisposition,
   NoteCategory,
@@ -312,6 +318,7 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
   // Why the last „Dupliraj" did not produce a copy, or null when nothing is
   // wrong — the transient error line the folder/tag panes already use.
   const [duplicateError, setDuplicateError] = useState<"generic" | "tooLarge" | null>(null);
+  const [visualizeError, setVisualizeError] = useState(false);
   // The note whose checklist is being converted (NOTE §6), with the row count
   // the probe returned; null whenever nothing is being asked.
   const [pendingChecklist, setPendingChecklist] = useState<
@@ -740,6 +747,28 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
    * The copy lands in the source's folder and carries its tags, so the current
    * selection always contains it — no filter reset, unlike the „reveal" intent.
    */
+  /**
+   * „Vizuelizuj na tabli" (NOTE-007): the note drawn on a new board, its headings
+   * as a tree and its wiki-links as arrows. The stored document is read here, and
+   * the Canvas page draws the outline in the scene it owns — the same hand-off the
+   * assistant's `canvas.visualize` makes.
+   */
+  async function visualizeOnCanvas(note: NoteMeta): Promise<void> {
+    try {
+      const doc = await window.nexus.loadNote(profileId, note.id);
+      const title = doc.title.trim() || strings.notes.untitled;
+      const board = await window.nexus.createCanvasBoard(
+        profileId,
+        title.slice(0, MAX_CANVAS_BOARD_NAME_LENGTH),
+      );
+      const sketch = noteOutlineSketch(title, noteOutlineItems(doc.snapshot, doc.updates));
+      openAppLocation({ module: "canvas", item: board.id, action: { name: "sketch", payload: sketch } });
+    } catch (error) {
+      setVisualizeError(true);
+      console.error("Nexus: failed to visualize a note on a canvas:", error);
+    }
+  }
+
   async function duplicate(note: NoteMeta): Promise<void> {
     try {
       const result = await window.nexus.duplicateNote(profileId, note.id);
@@ -1128,6 +1157,18 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
               >
                 {strings.notes.checklistTasks.action}
               </button>
+              <button
+                className="note__menu-item"
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  setVisualizeError(false);
+                  void visualizeOnCanvas(note);
+                  close();
+                }}
+              >
+                {strings.notes.visualize}
+              </button>
               {/* Only while the private section is unlocked (ADR-057 §5): a
                   locked section cannot seal anything, and offering the row
                   just to refuse it would be a lie about what is possible. */}
@@ -1161,6 +1202,20 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
         </NotePopover>
       </>
     );
+  }
+
+  const listState: AsyncState<NoteMeta[]> = failed
+    ? { status: "failed" }
+    : notes === null
+      ? { status: "loading" }
+      : { status: "ready", data: notes };
+
+  // A retry takes the failure down and draws the skeleton again: a failed read
+  // that is asked again must not keep its old line on screen while it runs.
+  function retryNotes(): void {
+    setFailed(false);
+    setNotes(null);
+    void loadNotes();
   }
 
   return (
@@ -1285,136 +1340,138 @@ export function NotesPage({ profileId, intent, onIntentHandled }: NotesPageProps
           </div>
 
           {pendingUndo != null && (
-            <div className="note__undo" role="status">
-              <span className="note__undo-text">
-                {pendingUndo.withCards
+            <Toast
+              message={
+                pendingUndo.withCards
                   ? strings.notes.deletedWithCardsNotice
-                  : strings.notes.deletedNotice}
-              </span>
-              <Button size="sm" className="note__undo-action" onClick={() => void undo()}>
-                {strings.notes.undo}
-              </Button>
-              <Button
-                size="sm"
-                className="note__undo-dismiss"
-                aria-label={strings.notes.dismiss}
-                onClick={() => setPendingUndo(null)}
-              >
-                <Icon name="close" size={14} />
-              </Button>
-            </div>
+                  : strings.notes.deletedNotice
+              }
+              undo={{ label: strings.notes.undo, onUndo: () => void undo() }}
+              dismissLabel={strings.notes.dismiss}
+              onDismiss={() => setPendingUndo(null)}
+            />
           )}
 
           {duplicateError !== null && (
-            <p className="note__list-error" role="status">
-              {duplicateError === "tooLarge"
-                ? strings.notes.duplicateTooLarge
-                : strings.notes.duplicateError}
-            </p>
+            <Notice
+              kind="danger"
+              message={
+                duplicateError === "tooLarge"
+                  ? strings.notes.duplicateTooLarge
+                  : strings.notes.duplicateError
+              }
+            />
           )}
+
+          {visualizeError && <Notice kind="danger" message={strings.notes.visualizeError} />}
 
           {checklistNotice !== null &&
             (checklistNotice.kind === "error" ? (
-              <p className="note__list-error" role="status">
-                {strings.notes.checklistTasks.error}
-              </p>
+              <Notice kind="danger" message={strings.notes.checklistTasks.error} />
             ) : (
-              <p className="nx-hint note__list-notice" role="status">
-                {checklistNotice.kind === "empty"
-                  ? strings.notes.checklistTasks.empty
-                  : formatChecklistResult(checklistNotice.result)}
-              </p>
+              <Notice
+                kind="info"
+                message={
+                  checklistNotice.kind === "empty"
+                    ? strings.notes.checklistTasks.empty
+                    : formatChecklistResult(checklistNotice.result)
+                }
+              />
             ))}
 
-          {failed ? (
-            // No sigil: a module's own mark above a failure would say „there is
-            // nothing here", and what happened is that we could not find out.
-            <EmptyState title={strings.notes.listEmptyTitle} description={strings.notes.loadError} />
-          ) : notes === null ? (
-            <LoadingState label={strings.app.loading} rows={6} />
-          ) : notes.length === 0 ? (
-            <EmptyState
-              sigil="notes"
-              title={strings.notes.listEmptyTitle}
-              description={strings.notes.listEmptyDescription}
-            />
-          ) : visibleNotes.length === 0 ? (
-            // Two filters, two sentences: the description has to name the one
-            // the user actually set, and only the tag filter is on when both are
-            // off. With both on, the tag line is the more specific of the two.
-            //
-            // No `sigil`, and that is still deliberate: the module is NOT empty,
-            // one filter matched nothing, and a 48px module mark here would be
-            // the surface claiming a state it is not in.
-            //
-            // It is the PAGE shape now, against the earlier reasoning, and the
-            // reason is the action. `inline` has no room for one and drops it on
-            // the floor (`EmptyState` says so in its own prop doc), so the pane
-            // stated a dead end and offered no way out of it — while the only
-            // two „Poništi" links live in the organizer rail, which below
-            // 1345px is a drawer that is closed. „Datoteke" already draws this
-            // exact moment correctly (`FilesPage`'s `noMatchTitle` +
-            // `clearFilters`); this is that rule, applied here too.
-            <EmptyState
-              title={strings.notes.filterEmptyTitle}
-              description={
-                tagFilter.length === 0
-                  ? strings.notes.categoryFilterEmptyDescription
-                  : strings.notes.tagFilterEmptyDescription
-              }
-              action={
-                <Button size="sm" onClick={clearNoteFilters}>
-                  {strings.notes.filterEmptyClear}
-                </Button>
-              }
-            />
-          ) : view === "list" ? (
-            // Sticky groups, never a flat run of fifty rows. Each group is one
-            // item of the outer list, so its heading sticks against the pane's
-            // scroll and leaves exactly when its last row does — see `.note__group`.
-            <ul className="note__list">
-              {noteGroups.map((group) => (
-                <li key={group.key} className="note__group">
-                  <h3 className="note__group-head">
-                    {groupLabel(group)}
-                    {/* A number, not „12 beležaka" repeated down the pane. */}
-                    <span className="note__group-count">{group.notes.length}</span>
-                  </h3>
-                  <ul className="note__group-items">
-                    {group.notes.map((note) => (
-                      <li key={note.id} className="note__item-row">
-                        {renderNoteEntry(note, rowTimestamp(note, group.kind))}
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            // The same notes, one card each, in the same order (the config
-            // carries no sort — see CARDS_CONFIG). The wrapper owns the scroll the
-            // <ul> owns in the other shape; the grid, the card frame and its
-            // padding are the UI package's.
-            //
-            // NO GROUPS HERE, deliberately. A card grid is a gallery, and a
-            // gallery cut by five headings is five short galleries; the shape
-            // exists precisely for the case where you are looking rather than
-            // scanning. The date on a card is the fuller instant label for the
-            // same reason — nothing above it has said the day.
-            <div className="note__cards">
-              <CardsView<NoteFields>
-                items={visibleNotes}
-                schema={NOTE_SCHEMA}
-                config={CARDS_CONFIG}
-                itemKey={(note) => note.id}
-                renderItem={(note) => (
-                  <div className="note__item-row">
-                    {renderNoteEntry(note, formatNotificationWhen(note.updatedAt))}
-                  </div>
-                )}
-              />
-            </div>
-          )}
+          <AsyncSurface
+            state={listState}
+            loadingLabel={strings.app.loading}
+            loadingRows={6}
+            failureTitle={strings.notes.loadFailedTitle}
+            failureMessage={strings.notes.loadError}
+            retry={{ label: strings.notes.retry, onClick: retryNotes }}
+          >
+            {(list) =>
+              list.length === 0 ? (
+                <EmptyState
+                  sigil="notes"
+                  title={strings.notes.listEmptyTitle}
+                  description={strings.notes.listEmptyDescription}
+                />
+              ) : visibleNotes.length === 0 ? (
+                // Two filters, two sentences: the description has to name the one
+                // the user actually set, and only the tag filter is on when both are
+                // off. With both on, the tag line is the more specific of the two.
+                //
+                // No `sigil`, and that is still deliberate: the module is NOT empty,
+                // one filter matched nothing, and a 48px module mark here would be
+                // the surface claiming a state it is not in.
+                //
+                // It is the PAGE shape now, against the earlier reasoning, and the
+                // reason is the action. `inline` has no room for one and drops it on
+                // the floor (`EmptyState` says so in its own prop doc), so the pane
+                // stated a dead end and offered no way out of it — while the only
+                // two „Poništi" links live in the organizer rail, which below
+                // 1345px is a drawer that is closed. „Datoteke" already draws this
+                // exact moment correctly (`FilesPage`'s `noMatchTitle` +
+                // `clearFilters`); this is that rule, applied here too.
+                <EmptyState
+                  title={strings.notes.filterEmptyTitle}
+                  description={
+                    tagFilter.length === 0
+                      ? strings.notes.categoryFilterEmptyDescription
+                      : strings.notes.tagFilterEmptyDescription
+                  }
+                  action={
+                    <Button size="sm" onClick={clearNoteFilters}>
+                      {strings.notes.filterEmptyClear}
+                    </Button>
+                  }
+                />
+              ) : view === "list" ? (
+                // Sticky groups, never a flat run of fifty rows. Each group is one
+                // item of the outer list, so its heading sticks against the pane's
+                // scroll and leaves exactly when its last row does — see `.note__group`.
+                <ul className="note__list">
+                  {noteGroups.map((group) => (
+                    <li key={group.key} className="note__group">
+                      <h3 className="note__group-head">
+                        {groupLabel(group)}
+                        {/* A number, not „12 beležaka" repeated down the pane. */}
+                        <span className="note__group-count">{group.notes.length}</span>
+                      </h3>
+                      <ul className="note__group-items">
+                        {group.notes.map((note) => (
+                          <li key={note.id} className="note__item-row">
+                            {renderNoteEntry(note, rowTimestamp(note, group.kind))}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                // The same notes, one card each, in the same order (the config
+                // carries no sort — see CARDS_CONFIG). The wrapper owns the scroll the
+                // <ul> owns in the other shape; the grid, the card frame and its
+                // padding are the UI package's.
+                //
+                // NO GROUPS HERE, deliberately. A card grid is a gallery, and a
+                // gallery cut by five headings is five short galleries; the shape
+                // exists precisely for the case where you are looking rather than
+                // scanning. The date on a card is the fuller instant label for the
+                // same reason — nothing above it has said the day.
+                <div className="note__cards">
+                  <CardsView<NoteFields>
+                    items={visibleNotes}
+                    schema={NOTE_SCHEMA}
+                    config={CARDS_CONFIG}
+                    itemKey={(note) => note.id}
+                    renderItem={(note) => (
+                      <div className="note__item-row">
+                        {renderNoteEntry(note, formatNotificationWhen(note.updatedAt))}
+                      </div>
+                    )}
+                  />
+                </div>
+              )}
+          </AsyncSurface>
         </div>
 
         <div className="note__editor-pane">

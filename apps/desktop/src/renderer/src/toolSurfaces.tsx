@@ -13,8 +13,8 @@ import {
   PDV_RATES,
   type UnitKind,
 } from "@nexus/core";
-import { Button, Icon, Select, TextField } from "@nexus/ui";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { Button, Field, FieldError, Icon, Select, TextField } from "@nexus/ui";
+import { createContext, useContext, useState, type ComponentType, type ReactNode } from "react";
 
 import {
   formatToolAmount,
@@ -44,6 +44,15 @@ import { lookup, strings } from "./strings.js";
  * and restoring yesterday's half-typed sum would be clutter pretending to be
  * memory.
  */
+
+/**
+ * The fields the assistant opened this tool with (`drawer.open`'s `values`), keyed by
+ * the names `drawer.run` gives them, or nothing. A surface reads its opening text from
+ * here when it mounts, and keeps its own default for every field left out.
+ */
+const ToolPrefillContext = createContext<Readonly<Record<string, string>> | undefined>(undefined);
+
+export const ToolPrefillProvider = ToolPrefillContext.Provider;
 
 /** A unit's Serbian name, falling back to its own id — an id is at least true. */
 function unitName(id: string): string {
@@ -118,9 +127,10 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
   const s = strings.tools;
   const units = unitsOfKind(kind);
   const options = units.map((unit) => ({ id: unit.id, label: unitName(unit.id) }));
-  const [fromId, setFromId] = useState(from);
-  const [toId, setToId] = useState(to);
-  const [text, setText] = useState("1");
+  const prefill = useContext(ToolPrefillContext);
+  const [fromId, setFromId] = useState(prefill?.from ?? from);
+  const [toId, setToId] = useState(prefill?.to ?? to);
+  const [text, setText] = useState(prefill?.value ?? "1");
 
   const value = parseToolNumber(text);
   const result = value === null ? null : convertUnit(value, fromId, toId);
@@ -129,15 +139,17 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
   return (
     <>
       {kind === "data" && <p className="nx-hint nx-hint--prose">{s.dataNote}</p>}
-      <TextField
-        label={s.convert.valueLabel}
-        value={text}
-        inputMode="decimal"
-        autoComplete="off"
-        onChange={(event) => {
-          setText(event.target.value);
-        }}
-      />
+      <Field className="tool__field" error={typedButUnreadable ? s.convert.invalid : undefined}>
+        <TextField
+          label={s.convert.valueLabel}
+          value={text}
+          inputMode="decimal"
+          autoComplete="off"
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
+        />
+      </Field>
       <div className="tool__pair">
         <ToolSelect label={s.convert.fromLabel} value={fromId} options={options} onChange={setFromId} />
         <Button
@@ -153,14 +165,12 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
         </Button>
         <ToolSelect label={s.convert.toLabel} value={toId} options={options} onChange={setToId} />
       </div>
-      {typedButUnreadable ? (
-        <p className="tool__error">{s.convert.invalid}</p>
-      ) : result !== null ? (
+      {result !== null && (
         <p className="tool__figure">
           <span className="tool__figure-value">{formatToolNumber(result)}</span>
           <span className="tool__figure-unit">{unitName(toId)}</span>
         </p>
-      ) : null}
+      )}
     </>
   );
 }
@@ -282,9 +292,10 @@ function PdvTool() {
     { id: "extract", label: s.pdv.directionExtract },
   ] as const;
 
-  const [text, setText] = useState("");
-  const [rate, setRate] = useState(() => String(readStoredDefaultVatRate()));
-  const [direction, setDirection] = useState<string>("add");
+  const prefill = useContext(ToolPrefillContext);
+  const [text, setText] = useState(prefill?.amount ?? "");
+  const [rate, setRate] = useState(() => prefill?.rate ?? String(readStoredDefaultVatRate()));
+  const [direction, setDirection] = useState<string>(prefill?.direction ?? "add");
 
   const amount = parseToolNumber(text);
   const rateValue = Number(rate);
@@ -332,9 +343,10 @@ function LoanTool() {
   // Read on every render, not at module scope, so a language switch relabels
   // the tool instead of freezing it at import.
   const s = strings.tools;
-  const [principal, setPrincipal] = useState("");
-  const [rate, setRate] = useState("");
-  const [months, setMonths] = useState("");
+  const prefill = useContext(ToolPrefillContext);
+  const [principal, setPrincipal] = useState(prefill?.principal ?? "");
+  const [rate, setRate] = useState(prefill?.rate ?? "");
+  const [months, setMonths] = useState(prefill?.months ?? "");
 
   const principalValue = parseToolNumber(principal);
   const rateValue = parseToolNumber(rate);
@@ -387,7 +399,7 @@ function LoanTool() {
           <ResultRow label={s.loan.totalInterestLabel} value={formatToolAmount(plan.totalInterest)} />
         </div>
       ) : allTyped ? (
-        <p className="tool__error">{s.loan.invalid}</p>
+        <FieldError>{s.loan.invalid}</FieldError>
       ) : null}
       <p className="nx-hint nx-hint--prose">{s.loan.caveat}</p>
     </>
@@ -517,7 +529,7 @@ function UnitPriceTool() {
           ))}
         </div>
       ) : anyTyped && complete.length < offers.length ? (
-        <p className="tool__error">{s.unitPrice.invalid}</p>
+        <FieldError>{s.unitPrice.invalid}</FieldError>
       ) : null}
       <p className="nx-hint nx-hint--prose">{s.unitPrice.note}</p>
     </>

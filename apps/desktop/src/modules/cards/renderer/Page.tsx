@@ -28,6 +28,7 @@ import { manifest } from "../shared/manifest.js";
 import type { CardsSaveView, CardsStatView, CardsView } from "../shared/ipc.js";
 import { useAiClient } from "./ai/client.js";
 import { copy } from "./copy.js";
+import { startDealOf } from "./cardsIntent.js";
 import { describeMove } from "./moves.js";
 import type { CardSelection } from "./moves.js";
 import {
@@ -87,7 +88,7 @@ function randomSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0] ?? 1;
 }
 
-export default function CardsPage({ profileId }: ModulePageProps) {
+export default function CardsPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<CardsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<CardSession | null>(null);
@@ -191,22 +192,25 @@ export default function CardsPage({ profileId }: ModulePageProps) {
 
   // --- Starting, resuming and ending ----------------------------------------
 
-  function deal(game: CardGameId, variant: CardGameVariant, seed: number, level: CardOpponentLevel): void {
-    try {
-      const fresh = startGame(game, variant, seed, level);
-      setDraft(null);
-      setSelection(null);
-      setPassSelection([]);
-      setVerdict(null);
-      setError(null);
-      startedAt.current = Date.now();
-      setTick(Date.now());
-      commit(fresh);
-    } catch (failure) {
-      setError(copy.errors.seed);
-      console.error("Nexus: a card game could not be dealt:", failure);
-    }
-  }
+  const deal = useCallback(
+    (game: CardGameId, variant: CardGameVariant, seed: number, level: CardOpponentLevel): void => {
+      try {
+        const fresh = startGame(game, variant, seed, level);
+        setDraft(null);
+        setSelection(null);
+        setPassSelection([]);
+        setVerdict(null);
+        setError(null);
+        startedAt.current = Date.now();
+        setTick(Date.now());
+        commit(fresh);
+      } catch (failure) {
+        setError(copy.errors.seed);
+        console.error("Nexus: a card game could not be dealt:", failure);
+      }
+    },
+    [commit],
+  );
 
   function resume(save: CardsSaveView): void {
     try {
@@ -259,10 +263,40 @@ export default function CardsPage({ profileId }: ModulePageProps) {
     setThinking(false);
   }
 
+  // What the assistant asked of this page: a deal (`cards.start`), or a change to the
+  // saved games (`cards.clear`), which re-reads the list. Reported handled either way.
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    if (intent.kind === "action" && intent.action === "start") {
+      const start = startDealOf(intent.payload);
+      if (start !== null) deal(start.game, start.variant, start.seed, start.level);
+    } else {
+      void refresh();
+    }
+    onIntentHandled?.();
+  }, [intent, deal, refresh, onIntentHandled]);
+
+  // One header for every state of the page: it is a sibling of the body, never a
+  // condition on it (docs/design/patterns.md, PageHeader).
+  const header = (
+    <PageHeader
+      title={declaredText(manifest.copy?.name)}
+      subtitle={copy.page.subtitle}
+      sigil="cards"
+      actions={
+        session === null ? undefined : (
+          <Button variant="quiet" onClick={() => void record(false)}>
+            {copy.play.giveUp}
+          </Button>
+        )
+      }
+    />
+  );
+
   if (view === null) {
     return (
       <div className="cards">
-        <PageHeader title={declaredText(manifest.copy?.name)} subtitle={copy.page.subtitle} sigil="cards" />
+        {header}
         {error !== null ? (
           <p className="cards__error" role="alert">
             {error}
@@ -281,18 +315,7 @@ export default function CardsPage({ profileId }: ModulePageProps) {
 
   return (
     <div className="cards">
-      <PageHeader
-        title={declaredText(manifest.copy?.name)}
-        subtitle={copy.page.subtitle}
-        sigil="cards"
-        actions={
-          session === null ? undefined : (
-            <Button variant="quiet" onClick={() => void record(false)}>
-              {copy.play.giveUp}
-            </Button>
-          )
-        }
-      />
+      {header}
       {error !== null && (
         <p className="cards__error" role="alert">
           {error}

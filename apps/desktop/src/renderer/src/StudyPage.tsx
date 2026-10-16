@@ -14,6 +14,7 @@ import {
 } from "@nexus/core";
 import type { ClozeSegment } from "@nexus/core";
 import {
+  AsyncSurface,
   Button,
   Checkbox,
   Chip,
@@ -21,12 +22,14 @@ import {
   EmptyState,
   Icon,
   ListRow,
+  LoadingState,
   PageHeader,
   ProportionBar,
   Select,
   StatBand,
   TextArea,
   TextField,
+  Toast,
 } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
 import type {
@@ -66,7 +69,7 @@ import type {
   SubjectColor,
   SubjectFieldChanges,
 } from "../../shared/ipc.js";
-import { CARD_TEXT_MAX_LENGTH } from "../../shared/ipc.js";
+import { CARD_TEXT_MAX_LENGTH, MAX_TARGET_RETENTION, MIN_TARGET_RETENTION } from "../../shared/ipc.js";
 import { AttachmentPreviewDialog } from "./attachmentPreview.js";
 import { attachmentPreviewKind, type AttachmentPreviewKind } from "./attachmentPreviewKind.js";
 import {
@@ -134,6 +137,25 @@ function formatBytes(sizeBytes: number): string {
   const kb = sizeBytes / 1024;
   if (kb < 1024) return `${numberFormat({ maximumFractionDigits: 1 }).format(kb)} KB`;
   return `${numberFormat({ maximumFractionDigits: 1 }).format(kb / 1024)} MB`;
+}
+
+/**
+ * What a retention field holds: `null` when it is empty (inherit), the number
+ * when it is a target retention in the profile setting's window, and `undefined`
+ * for anything else. A decimal comma reads as a point, the way Serbian writes it.
+ */
+function readRetentionField(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+  const value = Number(trimmed.replace(",", "."));
+  return Number.isFinite(value) && value >= MIN_TARGET_RETENTION && value <= MAX_TARGET_RETENTION
+    ? value
+    : undefined;
+}
+
+/** The value an empty retention field inherits, drawn as its placeholder. */
+function retentionPlaceholder(inherited: number | null | undefined): string | undefined {
+  return inherited == null ? undefined : inherited.toFixed(2);
 }
 
 /** Shared empty lists, so a subject with neither materials nor linked notes allocates nothing per render. */
@@ -561,6 +583,12 @@ export interface StudyPageProps {
   onIntentHandled?: () => void;
 }
 
+/** A delete that can still be taken back, and which kind of row it removed. */
+interface PendingUndo {
+  readonly kind: "subject" | "exam" | "deck" | "plan" | "focus" | "card";
+  readonly id: string;
+}
+
 /**
  * The STUDY module page: a subject hub (subjects, exams, decks, study plans),
  * a deck drill-in for card management, and a keyboard-first review session —
@@ -578,8 +606,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
   const [exams, setExams] = useState<Exam[] | null>(null);
   const [decks, setDecks] = useState<Deck[] | null>(null);
+  const [profileRetention, setProfileRetention] = useState<number | null>(null);
   const [deckCounts, setDeckCounts] = useState<DeckCounts[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const { revealedId, reveal } = useRevealedRow();
   // Shared refusal line for the subject/exam/deck/focus-session/card delete
@@ -587,6 +617,9 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // writes with no validation of their own, so one slot covers all of them,
   // cleared before each new attempt (the HABIT `actionError` shape).
   const [actionError, setActionError] = useState<string | null>(null);
+  // The one delete that can still be taken back. A fresh delete replaces the
+  // offer, so the page never stacks undo bars: one slot, one Toast.
+  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
 
   // One form serves both add + edit; a non-null id means "editing that subject".
   //
@@ -601,7 +634,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [subjectName, setSubjectName] = useState("");
   const [subjectColor, setSubjectColor] = useState<SubjectColor>("jade");
   const [subjectSemester, setSubjectSemester] = useState("");
-  const [pendingUndoSubjectId, setPendingUndoSubjectId] = useState<string | null>(null);
+  const [subjectRetention, setSubjectRetention] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
 
   // The exam form is an inline reveal scoped to one subject at a time; a
@@ -611,7 +644,6 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [examType, setExamType] = useState<ExamType>("pismeni");
   const [examDate, setExamDate] = useState("");
   const [examScope, setExamScope] = useState("");
-  const [pendingUndoExamId, setPendingUndoExamId] = useState<string | null>(null);
 
   // Materijali + Povezane beleške (STUDY-001, migration 035). Both are kept
   // loaded for every ACTIVE subject, exactly as `blocksByPlan` is for every
@@ -673,7 +705,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [deckFormSubjectId, setDeckFormSubjectId] = useState<string | null>(null);
   const [editingDeckId, setEditingDeckId] = useState<string | null>(null);
   const [deckName, setDeckName] = useState("");
-  const [pendingUndoDeckId, setPendingUndoDeckId] = useState<string | null>(null);
+  const [deckRetention, setDeckRetention] = useState("");
 
   // Study plans (Planovi učenja): every plan's blocks are kept loaded so each
   // card can show its progress; expansion is a pure UI toggle. The plan form is
@@ -712,7 +744,6 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // = "svaki dan isto").
   const [planWeekdays, setPlanWeekdays] = useState<string[] | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
-  const [pendingUndoPlanId, setPendingUndoPlanId] = useState<string | null>(null);
   // Set when a plan restore fails — unlike the other restore paths, a stale
   // plan-undo offer can never succeed on retry (see `undoPlan`), so it is
   // cleared and replaced by a visible message in the same toast slot.
@@ -730,7 +761,6 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   const [statsYear, setStatsYear] = useState<StudyStats | null>(null);
   const [statsRecent, setStatsRecent] = useState<StudyStats | null>(null);
   const [focusSessions, setFocusSessions] = useState<FocusSession[] | null>(null);
-  const [pendingUndoFocusId, setPendingUndoFocusId] = useState<string | null>(null);
   // „Odbaci" writes nothing at all and offers no undo afterwards — the same
   // running phase „Fokus" shows, so it asks the same confirm that page does.
   const [confirmingFocusDiscard, setConfirmingFocusDiscard] = useState(false);
@@ -750,6 +780,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
 
   const [cards, setCards] = useState<Card[] | null>(null);
   const [cardsFailed, setCardsFailed] = useState(false);
+  const [cardsAttempt, setCardsAttempt] = useState(0);
   const [cardFormVisible, setCardFormVisible] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [cardFront, setCardFront] = useState("");
@@ -772,7 +803,6 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
   // deletion, or any other save failure) — the study page has no toast slot
   // for a form, and a silent console error would look like a dead button.
   const [cardFormError, setCardFormError] = useState<string | null>(null);
-  const [pendingUndoCardId, setPendingUndoCardId] = useState<string | null>(null);
   // What the cloze text currently makes, read by the SAME grammar the store
   // derives the rows with, so the live line can never promise a count the store
   // would not produce. Blanks and cards are two numbers since ADR-068: two runs
@@ -821,6 +851,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           nextStatsYear,
           nextStatsRecent,
           nextFocusSessions,
+          nextStudySettings,
         ] = await Promise.all([
           window.nexus.listSubjects(profileId),
           window.nexus.listExams(profileId),
@@ -833,6 +864,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           window.nexus.studyStats(profileId, shiftDayKey(today, -365), today),
           window.nexus.studyStats(profileId, shiftDayKey(today, -29), today),
           window.nexus.listFocusRange(profileId, shiftDayKey(today, -6), today),
+          window.nexus.studySettings(profileId),
         ]);
         // Both fan-outs wait on the list they key off — plans for their blocks,
         // active subjects for their materials and linked notes (STUDY-001).
@@ -871,6 +903,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         setProfileNotes(nextNotes);
         setExams(nextExams);
         setDecks(nextDecks);
+        setProfileRetention(nextStudySettings.targetRetention);
         setDeckCounts(nextCounts);
         setPlans(nextPlans);
         setTodayBlocks(nextTodayBlocks);
@@ -895,7 +928,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, loadAttempt]);
 
   // Consumes a pending deep-link (021-e): reveals one study entity that a
   // global-search result pointed at. Keyed on the intent plus every list and
@@ -1108,7 +1141,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     return () => {
       active = false;
     };
-  }, [profileId, activeDeckId]);
+  }, [profileId, activeDeckId, cardsAttempt]);
 
   /**
    * The subject list plus the two panels that hang off it. Both are re-read
@@ -1164,6 +1197,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName("");
     setSubjectColor("jade");
     setSubjectSemester("");
+    setSubjectRetention("");
   }
 
   /** „Dodaj predmet" from the page header: an empty form, opened. */
@@ -1172,6 +1206,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName("");
     setSubjectColor("jade");
     setSubjectSemester("");
+    setSubjectRetention("");
     setSubjectFormOpen(true);
     nameRef.current?.focus();
   }
@@ -1181,6 +1216,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setSubjectName(subject.name);
     setSubjectColor(subject.color);
     setSubjectSemester(subject.semester ?? "");
+    setSubjectRetention(String(subject.targetRetention ?? ""));
     setSubjectFormOpen(true);
     // Focuses the field when the form is ALREADY open; when this call is what
     // mounts it, the field's own `autoFocus` does the job on mount instead.
@@ -1192,6 +1228,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     const trimmedName = subjectName.trim();
     if (trimmedName.length === 0) return;
     const trimmedSemester = subjectSemester.trim();
+    const retention = readRetentionField(subjectRetention);
+    if (retention === undefined) {
+      setActionError(strings.study.retentionProblem);
+      return;
+    }
 
     try {
       if (editingSubjectId != null) {
@@ -1199,12 +1240,17 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           name: trimmedName,
           color: subjectColor,
           semester: trimmedSemester.length > 0 ? trimmedSemester : null,
+          targetRetention: retention,
         };
         const updated = await window.nexus.updateSubject(profileId, editingSubjectId, changes);
         setSubjects((prev) => prev && prev.map((s) => (s.id === updated.id ? updated : s)));
         resetSubjectForm();
       } else {
-        const fields: NewSubjectFields = { name: trimmedName, color: subjectColor };
+        const fields: NewSubjectFields = {
+          name: trimmedName,
+          color: subjectColor,
+          targetRetention: retention,
+        };
         // Only send semester when present (exactOptionalPropertyTypes).
         if (trimmedSemester.length > 0) fields.semester = trimmedSemester;
         const created = await window.nexus.createSubject(profileId, fields);
@@ -1215,6 +1261,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         setSubjectName("");
         setSubjectColor("jade");
         setSubjectSemester("");
+        setSubjectRetention("");
         nameRef.current?.focus();
       }
     } catch (error) {
@@ -1260,19 +1307,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         if (openDeck?.subjectId === subject.id) setRoute({ kind: "hub" });
       }
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoSubjectId(subject.id);
+      setPendingUndo({ kind: "subject", id: subject.id });
     } catch (error) {
       setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete subject:", error);
     }
   }
 
-  async function undoSubject(): Promise<void> {
-    if (!pendingUndoSubjectId) return;
+  async function undoSubject(id: string): Promise<void> {
     setActionError(null);
     try {
-      await window.nexus.restoreSubject(profileId, pendingUndoSubjectId);
-      setPendingUndoSubjectId(null);
+      await window.nexus.restoreSubject(profileId, id);
+      setPendingUndo(null);
       await reloadSubjects();
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -1447,19 +1493,18 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       setExams((prev) => prev && prev.filter((e) => e.id !== exam.id));
       if (editingExamId === exam.id) closeExamForm();
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoExamId(exam.id);
+      setPendingUndo({ kind: "exam", id: exam.id });
     } catch (error) {
       setActionError(strings.study.actionError);
       console.error("Nexus: failed to delete exam:", error);
     }
   }
 
-  async function undoExam(): Promise<void> {
-    if (!pendingUndoExamId) return;
+  async function undoExam(id: string): Promise<void> {
     setActionError(null);
     try {
-      await window.nexus.restoreExam(profileId, pendingUndoExamId);
-      setPendingUndoExamId(null);
+      await window.nexus.restoreExam(profileId, id);
+      setPendingUndo(null);
       await reloadExams();
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -1471,18 +1516,21 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     setDeckFormSubjectId(null);
     setEditingDeckId(null);
     setDeckName("");
+    setDeckRetention("");
   }
 
   function startAddDeck(subjectId: string): void {
     setDeckFormSubjectId(subjectId);
     setEditingDeckId(null);
     setDeckName("");
+    setDeckRetention("");
   }
 
   function startEditDeck(deck: Deck): void {
     setDeckFormSubjectId(deck.subjectId);
     setEditingDeckId(deck.id);
     setDeckName(deck.name);
+    setDeckRetention(String(deck.targetRetention ?? ""));
   }
 
   async function submitDeckForm(
@@ -1492,14 +1540,19 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     event.preventDefault();
     const trimmedName = deckName.trim();
     if (trimmedName.length === 0) return;
+    const retention = readRetentionField(deckRetention);
+    if (retention === undefined) {
+      setActionError(strings.study.retentionProblem);
+      return;
+    }
 
     try {
       if (editingDeckId != null) {
-        const changes: DeckFieldChanges = { name: trimmedName };
+        const changes: DeckFieldChanges = { name: trimmedName, targetRetention: retention };
         const updated = await window.nexus.updateDeck(profileId, editingDeckId, changes);
         setDecks((prev) => prev && prev.map((d) => (d.id === updated.id ? updated : d)));
       } else {
-        const fields: NewDeckFields = { subjectId, name: trimmedName };
+        const fields: NewDeckFields = { subjectId, name: trimmedName, targetRetention: retention };
         const created = await window.nexus.createDeck(profileId, fields);
         setDecks((prev) => (prev ? [...prev, created] : [created]));
         await reloadDeckCounts();
@@ -1524,7 +1577,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       if (editingDeckId === deck.id) closeDeckForm();
       if (route.kind === "deck" && route.deckId === deck.id) setRoute({ kind: "hub" });
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoDeckId(deck.id);
+      setPendingUndo({ kind: "deck", id: deck.id });
       await reloadDeckCounts();
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -1532,12 +1585,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
   }
 
-  async function undoDeck(): Promise<void> {
-    if (!pendingUndoDeckId) return;
+  async function undoDeck(id: string): Promise<void> {
     setActionError(null);
     try {
-      await window.nexus.restoreDeck(profileId, pendingUndoDeckId);
-      setPendingUndoDeckId(null);
+      await window.nexus.restoreDeck(profileId, id);
+      setPendingUndo(null);
       await Promise.all([reloadDecks(), reloadDeckCounts()]);
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -1679,7 +1731,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       if (expandedPlanId === planId) setExpandedPlanId(null);
       // One pending undo at a time — a fresh delete replaces the previous offer
       // (and any error left over from a previous restore attempt).
-      setPendingUndoPlanId(planId);
+      setPendingUndo({ kind: "plan", id: planId });
       setPlanUndoError(null);
       await refreshPlans();
     } catch (error) {
@@ -1691,11 +1743,10 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
   }
 
-  async function undoPlan(): Promise<void> {
-    if (!pendingUndoPlanId) return;
+  async function undoPlan(id: string): Promise<void> {
     try {
-      await window.nexus.restorePlan(profileId, pendingUndoPlanId);
-      setPendingUndoPlanId(null);
+      await window.nexus.restorePlan(profileId, id);
+      setPendingUndo(null);
       setPlanUndoError(null);
       await refreshPlans();
     } catch (error) {
@@ -1704,7 +1755,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       // the same exam (PlanValidationError) — so the offer is cleared and a
       // visible message takes its place instead of leaving a dead button up.
       console.error("Nexus: failed to restore study plan:", error);
-      setPendingUndoPlanId(null);
+      setPendingUndo(null);
       setPlanUndoError(planRestoreErrorMessage(error));
     }
   }
@@ -1962,7 +2013,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     try {
       await window.nexus.deleteFocus(profileId, id);
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoFocusId(id);
+      setPendingUndo({ kind: "focus", id });
       await refreshStats();
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -1970,12 +2021,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
   }
 
-  async function undoFocusSession(): Promise<void> {
-    if (!pendingUndoFocusId) return;
+  async function undoFocusSession(id: string): Promise<void> {
     setActionError(null);
     try {
-      await window.nexus.restoreFocus(profileId, pendingUndoFocusId);
-      setPendingUndoFocusId(null);
+      await window.nexus.restoreFocus(profileId, id);
+      setPendingUndo(null);
       await refreshStats();
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -2171,7 +2221,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
       setCards((prev) => prev && prev.filter((c) => c.id !== card.id));
       if (editingCardId === card.id) closeCardForm();
       // One pending undo at a time — a fresh delete replaces the previous offer.
-      setPendingUndoCardId(card.id);
+      setPendingUndo({ kind: "card", id: card.id });
       await reloadDeckCounts();
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -2179,12 +2229,12 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     }
   }
 
-  async function undoCard(): Promise<void> {
-    if (!pendingUndoCardId || activeDeckId == null) return;
+  async function undoCard(id: string): Promise<void> {
+    if (activeDeckId == null) return;
     setActionError(null);
     try {
-      await window.nexus.restoreCard(profileId, pendingUndoCardId);
-      setPendingUndoCardId(null);
+      await window.nexus.restoreCard(profileId, id);
+      setPendingUndo(null);
       await Promise.all([reloadCards(activeDeckId), reloadDeckCounts()]);
     } catch (error) {
       setActionError(strings.study.actionError);
@@ -2212,6 +2262,55 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
     // Grades just landed in `review_log`, which is a column of today's study
     // log row (STUDY-014) — re-read it if one is open behind this session.
     setLogRevision((revision) => revision + 1);
+  }
+
+  const undoRestore: Record<PendingUndo["kind"], (id: string) => Promise<void>> = {
+    subject: undoSubject,
+    exam: undoExam,
+    deck: undoDeck,
+    plan: undoPlan,
+    focus: undoFocusSession,
+    card: undoCard,
+  };
+  const undoNotice: Record<PendingUndo["kind"], string> = {
+    subject: strings.study.deletedNotice,
+    exam: strings.study.deletedExamNotice,
+    deck: strings.study.deletedDeckNotice,
+    plan: strings.study.deletedPlanNotice,
+    focus: strings.study.deletedFocusSessionNotice,
+    card: strings.study.deletedCardNotice,
+  };
+  // A failed read is asked again by bumping its attempt counter, which re-runs
+  // the load effect that owns it.
+  const retryLoad = {
+    label: strings.study.retry,
+    onClick: () => {
+      setFailed(false);
+      setLoadAttempt((attempt) => attempt + 1);
+    },
+  };
+  const retryCards = {
+    label: strings.study.retry,
+    onClick: () => {
+      setCardsFailed(false);
+      setCardsAttempt((attempt) => attempt + 1);
+    },
+  };
+  // The one undo offer, drawn by the route that owns its row: a card's offer
+  // sits in the deck drill-in, every other offer on the hub.
+  function undoOffer(scope: "hub" | "deck") {
+    if (pendingUndo === null || (pendingUndo.kind === "card") !== (scope === "deck")) return null;
+    return (
+      <Toast
+        message={undoNotice[pendingUndo.kind]}
+        undo={{
+          label: strings.study.undo,
+          onUndo: () => void undoRestore[pendingUndo.kind](pendingUndo.id),
+        }}
+        dismissLabel={strings.study.dismiss}
+        onDismiss={() => setPendingUndo(null)}
+      />
+    );
   }
 
   const loading =
@@ -2461,45 +2560,28 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           )}
         </div>
 
-        {pendingUndoCardId != null && (
-          <div className="study__undo" role="status">
-            <span className="study__undo-text">{strings.study.deletedCardNotice}</span>
-            <Button size="sm" className="study__undo-action" onClick={() => void undoCard()}>
-              {strings.study.undo}
-            </Button>
-            <Button
-              size="sm"
-              className="study__undo-dismiss"
-              aria-label={strings.study.dismiss}
-              onClick={() => setPendingUndoCardId(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
-        )}
+        {undoOffer("deck")}
 
         {actionError != null && (
-          <div className="study__undo study__undo--error" role="alert">
-            <span className="study__undo-text">{actionError}</span>
-            <Button
-              size="sm"
-              className="study__undo-dismiss"
-              aria-label={strings.study.dismiss}
-              onClick={() => setActionError(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
+          <Toast
+            kind="error"
+            message={actionError}
+            dismissLabel={strings.study.dismiss}
+            onDismiss={() => setActionError(null)}
+          />
         )}
 
-        {cardsFailed ? (
-          <EmptyState
-            sigil="study"
-            title={strings.study.cardsEmptyTitle}
-            description={strings.study.loadCardsError}
-          />
-        ) : cards === null ? (
-          <p className="nx-hint">{strings.app.loading}</p>
+        {cards === null || cardsFailed ? (
+          <AsyncSurface
+            state={cardsFailed ? { status: "failed" } : { status: "loading" }}
+            loadingLabel={strings.app.loading}
+            loadingRows={4}
+            failureTitle={strings.study.cardsLoadFailedTitle}
+            failureMessage={strings.study.loadCardsError}
+            retry={retryCards}
+          >
+            {() => null}
+          </AsyncSurface>
         ) : (
           <>
             {cards.length === 0 ? (
@@ -2806,7 +2888,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           </Button>
         </div>
         {materialError !== null && (
-          <p className="study__material-error" role="status">
+          <p className="study__material-error" role="alert">
             {materialError === "tooLarge" ? copy.tooLarge : copy.actionError}
           </p>
         )}
@@ -2953,7 +3035,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
           </NotePopover>
         </div>
         {linkedNoteError && (
-          <p className="study__linked-error" role="status">
+          <p className="study__linked-error" role="alert">
             {copy.actionError}
           </p>
         )}
@@ -3034,7 +3116,11 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
               {copy.loadError}
             </p>
           ) : logDays.length === 0 ? (
-            <p className="nx-hint study__log-empty">{logLoading ? strings.app.loading : copy.empty}</p>
+            logLoading ? (
+              <LoadingState label={strings.app.loading} rows={2} />
+            ) : (
+              <p className="nx-hint study__log-empty">{copy.empty}</p>
+            )
           ) : (
             <>
               <div className="study__log-list">
@@ -3114,6 +3200,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
             value={subjectSemester}
             onChange={(event) => setSubjectSemester(event.target.value)}
           />
+          <TextField
+            className="study__retention-input"
+            label={strings.study.retentionOverrideLabel}
+            placeholder={retentionPlaceholder(profileRetention)}
+            inputMode="decimal"
+            value={subjectRetention}
+            onChange={(event) => setSubjectRetention(event.target.value)}
+          />
           <Button type="submit" variant="primary">
             {editingSubjectId != null ? strings.study.save : strings.study.add}
           </Button>
@@ -3123,127 +3217,37 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
         </form>
       )}
 
-      {pendingUndoSubjectId != null && (
-        <div className="study__undo" role="status">
-          <span className="study__undo-text">{strings.study.deletedNotice}</span>
-          <Button size="sm" className="study__undo-action" onClick={() => void undoSubject()}>
-            {strings.study.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setPendingUndoSubjectId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
-      )}
-
-      {pendingUndoExamId != null && (
-        <div className="study__undo" role="status">
-          <span className="study__undo-text">{strings.study.deletedExamNotice}</span>
-          <Button size="sm" className="study__undo-action" onClick={() => void undoExam()}>
-            {strings.study.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setPendingUndoExamId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
-      )}
-
-      {pendingUndoDeckId != null && (
-        <div className="study__undo" role="status">
-          <span className="study__undo-text">{strings.study.deletedDeckNotice}</span>
-          <Button size="sm" className="study__undo-action" onClick={() => void undoDeck()}>
-            {strings.study.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setPendingUndoDeckId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
-      )}
-
-      {pendingUndoPlanId != null && (
-        <div className="study__undo" role="status">
-          <span className="study__undo-text">{strings.study.deletedPlanNotice}</span>
-          <Button size="sm" className="study__undo-action" onClick={() => void undoPlan()}>
-            {strings.study.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setPendingUndoPlanId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
-      )}
+      {undoOffer("hub")}
 
       {planUndoError != null && (
-        <div className="study__undo study__undo--error" role="alert">
-          <span className="study__undo-text">{planUndoError}</span>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setPlanUndoError(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+        <Toast
+          kind="error"
+          message={planUndoError}
+          dismissLabel={strings.study.dismiss}
+          onDismiss={() => setPlanUndoError(null)}
+        />
       )}
 
       {actionError != null && (
-        <div className="study__undo study__undo--error" role="alert">
-          <span className="study__undo-text">{actionError}</span>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setActionError(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
-      )}
-
-      {pendingUndoFocusId != null && (
-        <div className="study__undo" role="status">
-          <span className="study__undo-text">{strings.study.deletedFocusSessionNotice}</span>
-          <Button size="sm" className="study__undo-action" onClick={() => void undoFocusSession()}>
-            {strings.study.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="study__undo-dismiss"
-            aria-label={strings.study.dismiss}
-            onClick={() => setPendingUndoFocusId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
-      )}
-
-      {failed ? (
-        <EmptyState
-          sigil="study"
-          title={strings.study.emptyTitle}
-          description={strings.study.loadError}
+        <Toast
+          kind="error"
+          message={actionError}
+          dismissLabel={strings.study.dismiss}
+          onDismiss={() => setActionError(null)}
         />
-      ) : loading ? (
-        <p className="nx-hint">{strings.app.loading}</p>
+      )}
+
+      {failed || loading ? (
+        <AsyncSurface
+          state={failed ? { status: "failed" } : { status: "loading" }}
+          loadingLabel={strings.app.loading}
+          loadingRows={6}
+          failureTitle={strings.study.loadFailedTitle}
+          failureMessage={strings.study.loadError}
+          retry={retryLoad}
+        >
+          {() => null}
+        </AsyncSurface>
       ) : sortedSubjects.length === 0 ? (
         // The subject column in its EMPTY shape — the same box the cards are
         // drawn in below, because that is what this arm is: the list area with
@@ -3578,6 +3582,14 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                         value={deckName}
                         autoFocus
                         onChange={(event) => setDeckName(event.target.value)}
+                      />
+                      <TextField
+                        className="study__deck-retention-input"
+                        label={strings.study.retentionOverrideLabel}
+                        placeholder={retentionPlaceholder(subject.targetRetention ?? profileRetention)}
+                        inputMode="decimal"
+                        value={deckRetention}
+                        onChange={(event) => setDeckRetention(event.target.value)}
                       />
                       <Button type="submit" variant="primary" size="sm">
                         {editingDeckId != null ? strings.study.saveDeck : strings.study.addDeck}
@@ -3989,7 +4001,7 @@ export function StudyPage({ profileId, onOpenNote, intent, onIntentHandled }: St
                     <h4 className="study__topics-heading">{strings.study.topics.title}</h4>
                     <p className="study__topics-hint">{strings.study.topics.hint}</p>
                     {formTopics === null ? (
-                      <p className="nx-hint">{strings.app.loading}</p>
+                      <LoadingState label={strings.app.loading} rows={2} />
                     ) : (
                       <>
                         {formTopics.length === 0 ? (
@@ -4716,7 +4728,7 @@ function ScopeCutDialog({ proposal, rows, failed, onAccept, onClose }: ScopeCutD
             {s.loadError}
           </p>
         ) : proposal === null ? (
-          <p className="nx-hint">{strings.app.loading}</p>
+          <LoadingState label={strings.app.loading} rows={3} />
         ) : !acceptable ? (
           <p className="nx-hint">{s.empty}</p>
         ) : (
@@ -4966,7 +4978,7 @@ function ReviewSession({ profileId, scope, practice, decks, onExit }: ReviewSess
   if (queue === null) {
     return (
       <div className="review">
-        <p className="nx-hint">{strings.app.loading}</p>
+        <LoadingState label={strings.app.loading} rows={3} />
       </div>
     );
   }

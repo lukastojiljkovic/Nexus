@@ -59,6 +59,7 @@ export interface ScenarioHit {
 export interface ScenarioTool {
   readonly name: string;
   readonly effect: ToolEffect;
+  readonly synthetic?: boolean;
   readonly summary?: { readonly sr: string; readonly en: string };
   readonly content?: string;
   readonly citations?: readonly ScenarioCitation[];
@@ -80,10 +81,22 @@ export interface ToolCallExpectation {
   readonly args?: Readonly<Record<string, ArgumentConstraint>>;
 }
 
+/**
+ * Where the turn is expected to have moved the page. `module` is exact, and the
+ * two optional fields are checked only when the scenario writes them: `{ module:
+ * "tasks" }` says the module and nothing else about the location.
+ */
+export interface ExpectedLocation {
+  readonly module: string;
+  readonly item?: string;
+  readonly settings?: string;
+}
+
 /** Everything a scenario asserts about the turn. Every key is optional; an empty object asserts nothing. */
 export interface ScenarioExpectation {
   readonly toolsCalled?: readonly ToolCallExpectation[];
   readonly toolsNotCalled?: readonly string[];
+  readonly navigatesTo?: readonly ExpectedLocation[];
   readonly cites?: readonly string[];
   readonly safetyNotice?: boolean;
   readonly language?: AssistantLocale;
@@ -164,6 +177,7 @@ const MAX_ID_CHARS = 200;
 const EXPECT_KEYS = [
   "toolsCalled",
   "toolsNotCalled",
+  "navigatesTo",
   "cites",
   "safetyNotice",
   "language",
@@ -192,6 +206,7 @@ const SCENARIO_KEYS = [
 const TOOL_KEYS = [
   "name",
   "effect",
+  "synthetic",
   "summary",
   "content",
   "citations",
@@ -382,9 +397,12 @@ function parseTool(value: unknown, field: string): ScenarioTool {
   const content = asOptionalString(record["content"], `${field}.content`);
   const declined = asOptionalString(record["declined"], `${field}.declined`);
   const fail = asOptionalString(record["fail"], `${field}.fail`);
+  const synthetic =
+    record["synthetic"] === undefined ? undefined : asBoolean(record["synthetic"], `${field}.synthetic`);
   return {
     name,
     effect,
+    ...optional(synthetic, "synthetic"),
     ...optional(summary, "summary"),
     ...optional(content, "content"),
     ...optional(citations, "citations"),
@@ -465,6 +483,13 @@ function parseExpectation(value: unknown, field: string): ScenarioExpectation {
           parseToolCallExpectation(entry, `${field}.toolsCalled[${index}]`),
         );
   const languageRaw = record["language"];
+  const navigatesRaw = record["navigatesTo"];
+  const navigatesTo =
+    navigatesRaw === undefined
+      ? undefined
+      : asArray(navigatesRaw, `${field}.navigatesTo`).map((entry, index) =>
+          parseLocation(entry, `${field}.navigatesTo[${index}]`),
+        );
   const scriptRaw = record["script"];
   const claimsRaw = record["claimsOnlyWhatRan"];
   // `claimsOnlyWhatRan` is asked for, never denied: the negative form of it is
@@ -478,6 +503,7 @@ function parseExpectation(value: unknown, field: string): ScenarioExpectation {
   return {
     ...optional(toolsCalled, "toolsCalled"),
     ...optional(strings("toolsNotCalled"), "toolsNotCalled"),
+    ...optional(navigatesTo, "navigatesTo"),
     ...optional(strings("cites"), "cites"),
     ...(record["safetyNotice"] === undefined
       ? {}

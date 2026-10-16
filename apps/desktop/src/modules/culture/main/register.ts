@@ -18,12 +18,14 @@ import {
   type CultureVisit,
   type CultureVenue,
   type CultureTrack,
+  type CulturePlanTicket,
 } from "@nexus/db";
 import type { ModuleCall, ModuleHostSurface, ModuleSession } from "../../../main/moduleIpc.js";
 import {
   contract,
   type CultureArtView,
   type CultureEntryView,
+  type CulturePlanTicketView,
   type CulturePlanView,
   type CultureSettingsView,
   type CultureTrackView,
@@ -88,7 +90,7 @@ export function register(host: ModuleHostSurface): void {
     return {
       visits: culture.listVisits().map(toVisitView(culture)),
       venues: culture.listVenues().map(toVenueView),
-      plans: culture.listPlans().map(toPlanView),
+      plans: culture.listPlans().map(toPlanView(culture)),
       tracks: culture.listTracks().map(toTrackView),
       entries: culture.listEntries().map(toEntryView),
       playlists: culture.listPlaylists().map((playlist) => ({
@@ -148,8 +150,8 @@ export function register(host: ModuleHostSurface): void {
     };
   }
 
-  function toPlanView(plan: CulturePlan): CulturePlanView {
-    return {
+  function toPlanView(culture: CultureStore) {
+    return (plan: CulturePlan): CulturePlanView => ({
       id: plan.id,
       kind: plan.kind,
       title: plan.title,
@@ -161,8 +163,21 @@ export function register(host: ModuleHostSurface): void {
       link: plan.link,
       notes: plan.notes,
       visitId: plan.visitId,
+      tickets: culture.listPlanTickets(plan.id).map(toPlanTicketView),
       createdAt: plan.createdAt,
       updatedAt: plan.updatedAt,
+    });
+  }
+
+  function toPlanTicketView(ticket: CulturePlanTicket): CulturePlanTicketView {
+    return {
+      id: ticket.id,
+      planId: ticket.planId,
+      fileName: ticket.fileName,
+      mime: ticket.mime,
+      sizeBytes: ticket.sizeBytes,
+      sha256: ticket.sha256,
+      createdAt: ticket.createdAt,
     };
   }
 
@@ -350,6 +365,60 @@ export function register(host: ModuleHostSurface): void {
       instant(call.now()),
     );
     return viewOf(call, profileId);
+  });
+
+  // A ticket is a photo's arrangement on a plan: the same type rule, the same
+  // blob write-then-row, the same orphan check on the way out.
+  ctx.handle("addPlanTicket", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const id = call.as.asId(payload.id, "id");
+    const fileName = call.as.asCappedChars(
+      call.as.asNonEmptyString(payload.fileName, "fileName"),
+      "fileName",
+      255,
+    );
+    const bytes = asBytes(payload.bytes, "bytes", MAX_CULTURE_PHOTO_BYTES);
+    // SEC-FILE-02, as for a visit's photo: the type comes from the bytes.
+    const mime = sniffMime(bytes);
+    if (!PHOTO_MIMES.has(mime)) {
+      throw new Error(
+        'Invalid IPC payload: "bytes" must be a PNG, JPEG, GIF, WebP or PDF file.',
+      );
+    }
+    const culture = store(call, profileId);
+    const services = cultureServices();
+    const { sha256 } = await services.saveBlob(bytes);
+    try {
+      culture.addPlanTicket(
+        id,
+        { fileName, mime, sizeBytes: bytes.byteLength, sha256 },
+        instant(call.now()),
+      );
+    } catch (error) {
+      await collectBlob(profileId, sha256);
+      throw error;
+    }
+    return viewOf(call, profileId);
+  });
+
+  ctx.handle("removePlanTicket", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const removed = store(call, profileId).removePlanTicket(
+      call.as.asId(payload.id, "id"),
+      call.as.asId(payload.ticketId, "ticketId"),
+    );
+    await collectBlob(profileId, removed.sha256);
+    return viewOf(call, profileId);
+  });
+
+  ctx.handle("openPlanTicket", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const ticket = store(call, profileId).planTicket(
+      call.as.asId(payload.id, "id"),
+      call.as.asId(payload.ticketId, "ticketId"),
+    );
+    await cultureServices().openBlob(ticket.sha256, ticket.fileName);
+    return null;
   });
 
   // --- the library ----------------------------------------------------------

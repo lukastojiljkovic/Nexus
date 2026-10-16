@@ -30,7 +30,8 @@ history, not a live link.
 | [OVERVIEW.md](OVERVIEW.md) | The product in everyday language, module by module. Start here if you have just heard of Nexus. |
 | [SPECIFICATION.md](SPECIFICATION.md) | The full specification behind the product: architecture, data model, security posture, module contracts. Read it after `OVERVIEW.md` when you need the detail a feature rests on. |
 | [VISION.md](VISION.md) | The founder-approved north star, and the one document the others may not contradict. Read it first when a decision looks arbitrary. |
-| [prd/00-overview.md](prd/00-overview.md) | The module registry and the way into `prd/` — 37 numbered requirements documents plus a glossary. Read the overview, then the module you care about; the requirement IDs there are what the ADRs and tests cite. |
+| [prd/00-overview.md](prd/00-overview.md) | The module registry, as planned in July 2026, and the way into `prd/` — 36 numbered requirements documents plus a glossary. Read the overview, then the module you care about; the requirement IDs there are what the ADRs and tests cite. |
+| [packs/README.md](packs/README.md) | The public knowledge the app installs beside itself — content packs, their licences and their builders. Read it when you want to know what a user can install, or how a pack is made and signed. |
 | [roadmap.md](roadmap.md) | What order the work happens in, and why. Read it for sequence; `STATUS.md` is what is true today. |
 
 ## Understand the architecture
@@ -65,18 +66,36 @@ history, not a live link.
 | Read | What it is, and when |
 | --- | --- |
 | [design/direction-brief.md](design/direction-brief.md) | The 2026-07-05 visual direction brief and its four mockups. Read it before changing the design system; the direction that won is now the token set in `packages/tokens`. |
+| [design/patterns.md](design/patterns.md) | The page patterns the 2.0 wave follows — page header, empty states, detail and build list, forms, confirmation and undo. Read it before building a new page or a new module's screens. |
+
+## Policies and the public record
+
+The repository is public, so its policies are files beside the code rather than
+pages somewhere else. These live at the root, one level above `docs/`.
+
+| Read | What it is, and when |
+| --- | --- |
+| [../README.md](../README.md) | The front door: what Nexus is, what a release contains, and how the record is laid out. |
+| [../LICENSE](../LICENSE) and [../NOTICE](../NOTICE) | Apache-2.0, and the third-party notices that travel with it. |
+| [../SECURITY.md](../SECURITY.md) | How to report a vulnerability, what is in scope, and which releases are supported. |
+| [../PRIVACY.md](../PRIVACY.md) | Exactly what is stored where, what a network mode permits, and what leaves the machine (nothing, unless a download is turned on). |
+| [../TERMS.md](../TERMS.md) | The terms the distributed binaries are offered under. |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Build commands, the rules the gates enforce, and what has to pass before a pull request. |
+| [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) and [../SUPPORT.md](../SUPPORT.md) | How participants are expected to behave, and where to ask a question. |
+| [../CHANGELOG.md](../CHANGELOG.md) | What each release changed, newest first. |
+| [../PRODUCT.md](../PRODUCT.md) and [../DESIGN.md](../DESIGN.md) | The durable product record, and the visual system as implemented. |
 
 ## Research
 
 | Read | What it is, and when |
 | --- | --- |
-| [research/](research/) | Nine domain research passes from 2026-07 (offline sync, private-note crypto, the design system, the canvas, file preview, finance, study, nutrition, onboarding) that fed the ADRs. Read a pass when an ADR's conclusion is not enough and you want the workings. |
+| [research/](research/) | Nine domain research passes from 2026-07 (offline sync, private-note crypto, the design system, the canvas, file preview, finance, study, nutrition, onboarding) that fed the ADRs. Read a pass when an ADR's conclusion is not enough and you want the workings: [design-system](research/design-system.md), [file-preview](research/file-preview.md), [finance](research/finance.md), [infinite-canvas](research/infinite-canvas.md), [nutrition-data](research/nutrition-data.md), [offline-sync](research/offline-sync.md), [onboarding-ux](research/onboarding-ux.md), [private-notes-crypto-ux](research/private-notes-crypto-ux.md), [study-hub](research/study-hub.md). |
 
 ## How the specification was produced
 
 | Read | What it is, and when |
 | --- | --- |
-| [prompts/README.md](prompts/README.md) | The prompt pipeline that produced `prd/`, `research/`, `architecture/` and `roadmap.md` in 2026-07. Read it to see how the specification was written; it has done its job and is not re-run. |
+| [prompts/README.md](prompts/README.md) | The prompt pipeline that produced `prd/`, `research/`, `architecture/` and `roadmap.md` in 2026-07, in its six steps: [research](prompts/01-research.md), [PRD system](prompts/02-prd-system.md), [PRD module](prompts/03-prd-module.md), [architecture](prompts/04-architecture.md), [roadmap](prompts/05-roadmap.md) and [implementation template](prompts/06-implementation-template.md). Read it to see how the specification was written; it has done its job and is not re-run. |
 
 ## Operations
 

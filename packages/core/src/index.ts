@@ -194,6 +194,34 @@ export {
   parseCanvasRef,
 } from "./canvas/canvasRef.js";
 export type { CanvasRef, CanvasRefKind } from "./canvas/canvasRef.js";
+// The sketch an assistant describes and the app lays out (`canvasSketch.ts`),
+// and a note's outline drawn as one (`noteOutline.ts`, NOTE-007).
+export {
+  CANVAS_SKETCH_LAYOUTS,
+  CANVAS_SKETCH_SHAPES,
+  CANVAS_SKETCH_TONES,
+  MAX_CANVAS_SKETCH_NODES,
+  parseCanvasSketch,
+  positionCanvasSketch,
+} from "./canvas/canvasSketch.js";
+export type {
+  CanvasSketch,
+  CanvasSketchArrow,
+  CanvasSketchBox,
+  CanvasSketchEdge,
+  CanvasSketchLayout,
+  CanvasSketchNode,
+  CanvasSketchShape,
+  CanvasSketchTone,
+  PositionedCanvasSketch,
+} from "./canvas/canvasSketch.js";
+export {
+  MAX_OUTLINE_HEADINGS,
+  MAX_OUTLINE_LINKS,
+  noteOutlineItems,
+  noteOutlineSketch,
+} from "./canvas/noteOutline.js";
+export type { NoteOutlineItem } from "./canvas/noteOutline.js";
 
 // --- FIT (the nutrition and training module, migration 058) -----------------
 //
@@ -267,6 +295,7 @@ export {
   ONE_RM_FORMULAS,
   ONE_RM_MAX_REPS,
   sessionTonnage,
+  SET_FIELDS,
   SET_KINDS,
   setTonnage,
   trendChange,
@@ -277,6 +306,7 @@ export type {
   LoggedSet,
   OneRepMaxEstimate,
   OneRepMaxFormula,
+  SetField,
   SetKind,
   TonnageTotal,
   TrendChange,
@@ -555,6 +585,12 @@ export {
   suggestCsvFinanceMapping,
   translateCsvFinance,
 } from "./imex/csvFinance.js";
+export {
+  decimalLiteral,
+  formatMinorUnits,
+  minorUnitsFromText,
+  moneyFormatOptions,
+} from "./finance/money.js";
 export type {
   CsvFinanceAmountFormat,
   CsvFinanceAmountReading,
@@ -812,6 +848,17 @@ export type {
   IcsSkippedComponent,
   IcsTranslateTarget,
 } from "./imex/icsImport.js";
+
+export { parseBookmarksHtml, translateBookmarks } from "./imex/bookmarksImport.js";
+export type {
+  BookmarkEntry,
+  BookmarkFolder,
+  BookmarksImportSkip,
+  BookmarksImportSkipCode,
+  BookmarksParseResult,
+  BookmarksTranslateTarget,
+  ParsedBookmarks,
+} from "./imex/bookmarksImport.js";
 
 export {
   MAX_ARCHIVE_PASSPHRASE_LENGTH,
@@ -1078,6 +1125,28 @@ export {
   COMPONENT_CATALOGUE,
   componentsOfKind,
 } from "./electronics/catalogue.js";
+// The palette's search, and the assistant's component lookup, read one answer.
+export { filterComponents, matchesComponentQuery } from "./electronics/search.js";
+export {
+  findComponent,
+  findPin,
+  gridCell,
+  parseComponentValue,
+  planBuild,
+  splitEnd,
+  wireColourFor,
+} from "./electronics/build.js";
+export type {
+  BuildInput,
+  BuildPartInput,
+  BuildPlan,
+  BuildProblem,
+  BuildResult,
+  BuildWireInput,
+  PlannedEnd,
+  PlannedPart,
+  PlannedWire,
+} from "./electronics/build.js";
 export {
   circuitProblems,
   MAX_PART_COORDINATE,
@@ -1457,6 +1526,15 @@ export { LIBRARY_MAX_SUGGESTION_ITEMS, validateSuggestedCollection } from "./lib
 export type { SuggestedCollectionItemV1, SuggestedCollectionV1, SuggestedTitle } from "./library/suggested.js";
 export { libraryYearStats } from "./library/stats.js";
 export type { LibraryStatsItem, LibraryStatsPass, LibraryYearStats } from "./library/stats.js";
+export {
+  LIBRARY_MAX_GOAL_TARGET,
+  LIBRARY_MIN_GOAL_TARGET,
+  isLibraryGoalTarget,
+  libraryGoalProgress,
+} from "./library/goals.js";
+export type { LibraryGoal, LibraryGoalProgress } from "./library/goals.js";
+export { LIBRARY_MAX_LOAN_TO_LENGTH, isLibraryLoanOverdue } from "./library/loans.js";
+export type { LibraryLoan } from "./library/loans.js";
 export { normalizeLibraryTitle, titleMatchKey } from "./library/title.js";
 export { collectionProgress } from "./library/collections.js";
 export type {
@@ -1732,11 +1810,13 @@ export { buildShoppingList } from "./cookbook/shopping.js";
 export type { ShoppingLine } from "./cookbook/shopping.js";
 export {
   COOKBOOK_COURSES,
+  MAX_COLLECTION_NAME_LENGTH,
   PUBLIC_DOMAIN_LICENCE_ID,
   RECIPE_SOURCES,
   isRecipeLicenceId,
 } from "./cookbook/recipe.js";
 export type {
+  CookbookCollection,
   CookbookCourse,
   RecipeLicence,
   RecipeSource,
@@ -2326,6 +2406,44 @@ export type {
   TablicReplay,
   TablicState,
 } from "./games/cards/tablic.js";
+
+// --- GAMES: cards, the turn logic (AG-22) ------------------------------------
+//
+// The dispatcher the cards page and the assistant share: one function per
+// question, answered by the nine engines above. `legalCardMoves` is named apart from
+// the chess `legalMoves` that this index already exports.
+export type { CardSession } from "./games/cards/dispatch.js";
+export {
+  LEVELS,
+  DEFAULT_LEVEL_NAME,
+  GAME_ORDER,
+  variantsOf,
+  isComputerGame,
+  seatCount,
+  listIsValid,
+  startGame,
+  resumeGame,
+  legalCardMoves,
+  hasMovesLeft,
+  isWon,
+  isFinished,
+  seatToAct,
+  seatNow,
+  undoEntry,
+  stepSession,
+  canUndo,
+  undoSession,
+  hintMove,
+  safeMoves,
+  canSolve,
+  solveVerdict,
+  spiderRows,
+  playedMoves,
+  moveSeed,
+  computerMove,
+  isMoveFor,
+  cardCodeOf,
+} from "./games/cards/dispatch.js";
 
 // --- GAMES / CHESS (stage 1) -------------------------------------------------
 //
@@ -3055,6 +3173,41 @@ export {
 export type { OffGridDevice } from "./lab/offgrid.js";
 
 export { lampOnAt } from "./lab/lamps.js";
+export {
+  LITRES_PER_US_GALLON,
+  DRINKING_GALLONS_PER_PERSON_DAY,
+  MAX_DAYS,
+  MAX_PEOPLE,
+  MIN_DAYS,
+  MIN_PEOPLE,
+  WATER_GALLONS_PER_PERSON_DAY,
+  isRationCount,
+  rationPlan,
+} from "./lab/ration.js";
+export type { RationPlan } from "./lab/ration.js";
+export {
+  KIT72_DEFAULT_IDS,
+  MAX_KIT_ENTRIES,
+  MAX_KIT_TEXT_LENGTH,
+  addKitEntry,
+  defaultKit,
+  parseKit,
+  removeKitEntry,
+  toggleKitEntry,
+} from "./lab/kit72.js";
+export type { KitDefaultId, KitEntry } from "./lab/kit72.js";
+export { decodeNato, encodeNato, natoWordFor } from "./signals/nato.js";
+export type { NatoDecoding, NatoEncoding } from "./signals/nato.js";
+export {
+  BRAILLE_CAPITAL,
+  BRAILLE_NUMERIC,
+  BRAILLE_SPACE,
+  decodeBraille,
+  encodeBraille,
+} from "./signals/braille.js";
+export type { BrailleDecoding, BrailleEncoding } from "./signals/braille.js";
+export { ELEMENTS } from "./reference/periodicTable.js";
+export type { Element, ElementCategory } from "./reference/periodicTable.js";
 
 export {
   BATTERY_REPORT_FLAGS,
@@ -3125,8 +3278,17 @@ export {
   renderKnowledgeBlock,
 } from "./assistant/prompts.js";
 export type { SystemPromptOptions } from "./assistant/prompts.js";
-export { contentWords, replyLanguage, transliterateToLatin } from "./assistant/language.js";
-export type { ReplyLanguage } from "./assistant/language.js";
+export {
+  contentWords,
+  detectAnswerLanguage,
+  detectAnswerScript,
+  replyLanguage,
+  transliterateToCyrillic,
+  transliterateToLatin,
+} from "./assistant/language.js";
+export type { AnswerLanguage, AnswerScript, ReplyLanguage } from "./assistant/language.js";
+export { claimsCompletion, verifyAnswer } from "./assistant/verify.js";
+export type { VerificationFinding, VerifiedCall, VerifyAnswerInput } from "./assistant/verify.js";
 export { MIN_SHARED_WORDS, filterAnswer } from "./assistant/citations.js";
 export type { AnswerCitations, FilteredAnswer } from "./assistant/citations.js";
 export {
@@ -3139,6 +3301,7 @@ export {
   toolSpecTokens,
 } from "./assistant/toolChoice.js";
 export type { ToolChoiceInput } from "./assistant/toolChoice.js";
+export { ToolMeaningIndex } from "./assistant/toolMeaning.js";
 export {
   countBoundary,
   createFenceBoundary,

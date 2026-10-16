@@ -1,0 +1,224 @@
+{
+  "scenarios": [
+    {
+      "id": "timers-presets-sr",
+      "title": "Koje tajmere imam sačuvane",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Koje tajmere imam sačuvane?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "timers.presets",
+          "effect": "read",
+          "content": "Sačuvani tajmeri (2):\n- 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a11 Kafa (4 min)\n- 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a12 Čaj (10 min)"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "timers.presets"
+          }
+        ],
+        "answerContains": [
+          "Kafa",
+          "Čaj"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "timers.presets",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "Imaš dva sačuvana tajmera: Kafa na 4 minuta i Čaj na 10 minuta."
+        }
+      ]
+    },
+    {
+      "id": "timers-pause-en",
+      "title": "Pause the pasta countdown",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Pause the pasta timer, I need to stir something."
+        }
+      ],
+      "tools": [
+        {
+          "name": "timers.pause",
+          "effect": "write",
+          "summary": {
+            "sr": "Pauziraj odbrojavanje „Pasta“",
+            "en": "Pause the countdown “Pasta”"
+          },
+          "content": "Paused countdown “Pasta” (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a21), 6 min left."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "timers.pause",
+            "args": {
+              "countdown": {
+                "contains": "Pasta"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "6 min"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "timers.pause",
+              "arguments": {
+                "countdown": "Pasta"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I paused the pasta timer; 6 min are left on it."
+        }
+      ]
+    },
+    {
+      "id": "timers-stopwatch-sr",
+      "title": "Pusti štopericu",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Pusti štopericu."
+        }
+      ],
+      "tools": [
+        {
+          "name": "timers.stopwatch",
+          "effect": "navigate",
+          "content": "Poslato štoperici: pokreni."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "timers.stopwatch",
+            "args": {
+              "action": {
+                "eq": "start"
+              }
+            }
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "timers.stopwatch",
+              "arguments": {
+                "action": "start"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Štoperica je pokrenuta na stranici tajmera."
+        }
+      ]
+    },
+    {
+      "id": "timers-preset-save-sr",
+      "title": "Sačuvaj tajmer za kafu",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Sačuvaj mi tajmer za kafu na 4 minuta."
+        }
+      ],
+      "tools": [
+        {
+          "name": "timers.preset",
+          "effect": "write",
+          "summary": {
+            "sr": "Sačuvaj tajmer „kafa“ na 4 min",
+            "en": "Save the preset “kafa” as 4 min"
+          },
+          "content": "Sačuvan tajmer „kafa“ (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a13), 4 min."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "timers.preset",
+            "args": {
+              "action": {
+                "eq": "save"
+              },
+              "seconds": {
+                "eq": 240
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "kafa"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "timers.preset",
+              "arguments": {
+                "action": "save",
+                "name": "kafa",
+                "seconds": 240
+              }
+            }
+          ]
+        },
+        {
+          "text": "Sačuvao sam tajmer „kafa“ na 4 minuta."
+        }
+      ]
+    }
+  ]
+}

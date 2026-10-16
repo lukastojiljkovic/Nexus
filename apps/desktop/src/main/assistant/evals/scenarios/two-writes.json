@@ -1,0 +1,146 @@
+{
+  "scenarios": [
+    {
+      "id": "two-writes-two-tasks-sr",
+      "title": "Dva zadatka u jednoj poruci",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Dodaj dva zadatka: da kupim hleb i da pozovem servis."
+        }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću zadatak.",
+            "en": "I will add a task."
+          },
+          "content": "Napravljeni zadaci: Kupi hleb, Pozovi servis."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true,
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "hleb"
+              }
+            }
+          },
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "servis"
+              }
+            }
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Kupi hleb"
+              }
+            },
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Pozovi servis"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Dodao sam dva zadatka: da kupiš hleb i da pozoveš servis."
+        }
+      ]
+    },
+    {
+      "id": "two-writes-two-tasks-en",
+      "title": "Two tasks in one message",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Add two tasks: buy bread and call the service."
+        }
+      ],
+      "tools": [
+        {
+          "name": "tasks.create",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću zadatak.",
+            "en": "I will add a task."
+          },
+          "content": "Created tasks: Buy bread, Call the service."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true,
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "bread"
+              }
+            }
+          },
+          {
+            "name": "tasks.create",
+            "args": {
+              "title": {
+                "contains": "service"
+              }
+            }
+          }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Buy bread"
+              }
+            },
+            {
+              "name": "tasks.create",
+              "arguments": {
+                "title": "Call the service"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I added both tasks: buy bread and call the service."
+        }
+      ]
+    }
+  ]
+}

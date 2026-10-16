@@ -26,8 +26,10 @@ import {
 } from "./mahjong.js";
 import {
   ActionRow,
+  NewGameButton,
   Readout,
   initialGame,
+  savedFor,
   useElapsedClock,
   variantLabel,
   type PanelProps,
@@ -57,9 +59,16 @@ import { newSeed } from "./seed.js";
 
 const PUZZLE = "mahjong";
 
-export function MahjongPanel({ saves, variants, onSave, onFinish, onClear }: PanelProps) {
+export function MahjongPanel({
+  saves,
+  variants,
+  onSave,
+  onFinish,
+  onClear,
+  opening,
+}: PanelProps) {
   const engine = useEngine();
-  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed));
+  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed, opening));
   const [seed, setSeed] = useState(initial.seed);
   const [board, setBoard] = useState<MahjongStateView | null>(
     initial.saved === null ? null : (initial.saved.state as MahjongStateView),
@@ -322,9 +331,7 @@ export function MahjongPanel({ saves, variants, onSave, onFinish, onClear }: Pan
         <Button size="sm" onClick={stepForward} disabled={redoStack.length === 0}>
           {copy.common.redo}
         </Button>
-        <Button size="sm" variant="primary" onClick={newGame}>
-          {copy.common.newGame}
-        </Button>
+        <NewGameButton saved={savedFor(saves, PUZZLE, "turtle") !== null} primary onNew={newGame} />
       </ActionRow>
 
       {hinting && <p className="pz__note">{copy.page.stages.search}</p>}

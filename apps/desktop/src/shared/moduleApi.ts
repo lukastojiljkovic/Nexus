@@ -113,18 +113,32 @@ export interface ModuleApis {}
 export type NexusModules = ModuleApis;
 
 /**
- * What a LOCATION asks a kit module's page to reveal (ADR-114).
+ * What a LOCATION asks a kit module's page to do (ADR-114, ADR-117).
  *
- * ONE arm, and the payload is the ITEM the location named rather than a field
- * per module: the shell cannot know what a module's own ids look like, and a
- * shell that guessed them would hold a second opinion about another module's
- * shapes. Reading the item is the module's own job, exactly as reading its own
- * ids on its own page is.
+ * TWO arms, and the payload is the ITEM or the ACTION the location named rather
+ * than a field per module: the shell cannot know what a module's own ids look
+ * like, and a shell that guessed them would hold a second opinion about another
+ * module's shapes. Reading either is the module's own job, exactly as reading
+ * its own ids on its own page is.
+ *
+ * **Why an action exists beside a reveal.** A store-backed module is written
+ * from main and its page only has to show the row; a page-held one - Canvas
+ * holds its scene in memory and autosaves it, a device preference lives in the
+ * renderer's `localStorage` - can only be changed by the page itself. So the
+ * tool that means "start a sketch" answers with the page's own verb instead of
+ * pretending main could write that state. A page that does not know an action
+ * ignores it and still reports it handled, so the queue moves on rather than
+ * parking a page that will never act.
  */
-export interface ModulePageIntent {
-  readonly kind: "reveal";
-  readonly item: string;
-}
+export type ModulePageIntent =
+  | { readonly kind: "reveal"; readonly item: string }
+  | {
+      readonly kind: "action";
+      readonly action: string;
+      readonly payload: unknown;
+      /** The item the same location named, when it named one: the action applies to that row. */
+      readonly item?: string;
+    };
 
 /**
  * What a kit module's page is given.
@@ -138,12 +152,15 @@ export interface ModulePageIntent {
  * was opened from, if any. It is a VALUE the shell holds in state rather than an
  * event, so a page that mounts long after the request still sees it; the page
  * reports it consumed through `onIntentHandled`, which is what keeps a later,
- * ordinary visit from revealing it again. Both members are optional, and a module
- * that reads neither behaves exactly as it did before they existed.
+ * ordinary visit from revealing it again. The shell holds a QUEUE per module
+ * (`renderer/src/moduleKit/itemIntent.ts`), so two requests for one page are two
+ * intents it consumes in turn rather than one that overwrites the other. Both
+ * members are optional, and a module that reads neither behaves exactly as it
+ * did before they existed.
  */
 export interface ModulePageProps {
   readonly profileId: string;
-  /** The item a location asked this page to reveal, or `null`/absent when nothing did. */
+  /** What a location asked this page to do, or `null`/absent when nothing did. */
   readonly intent?: ModulePageIntent | null;
   /** Reports that `intent` above has been acted on, so the shell can clear it. */
   readonly onIntentHandled?: () => void;

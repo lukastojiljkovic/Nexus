@@ -4,10 +4,42 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2026-10-16
+
+The assistant reaches every module. It reads and changes your tasks, notes,
+calendar, money, studies, training, habits, timers, settings, dashboard,
+drawings, circuits and games, asking before every change, and it can sit beside
+any page and know which one that is. The pages share one way of drawing a
+header, an empty list, a failed read, a question and an undo.
 
 ### Added
 
+- **The assistant works in every module.** It has tools for:
+  - tasks: lists, projects and their sections, tags, templates, dependencies,
+    and moving or re-dating several tasks at once;
+  - notes: folders, tags, categories, versions, templates, checklists turned
+    into tasks, and flashcard decks;
+  - calendar: events, repeating series, templates and the semester;
+  - finance, study, fitness, habits, timers, focus, notifications and settings;
+  - the dashboard and its boards;
+  - canvas (it can draw a sketch, or turn a note into a diagram) and
+    electronics (it can build, wire and simulate a circuit);
+  - chess, cards, board games, puzzles, the arcade and the mini-apps;
+  - people and documents, files and packs, the translator, the calculator, the
+    workshop and the scanner.
+
+  Every change asks first. Some things stay with you by design: grading a study
+  card, the private vault, a note's attachments, and the network, passcode and
+  privacy settings.
+- **The assistant beside any page.** Ctrl+J or the title bar opens it as a
+  resizable panel next to the page you are on, sharing its conversations with
+  the full page. Docked, it opens each place a tool names as the result
+  arrives, the page beside it reads again after a turn that changed it, and the
+  assistant is told which page is open, so "this" and "here" mean something.
+- **The Tools drawer from the chat.** The assistant finds a tool by name or
+  purpose, opens it with its fields filled, and runs the eleven everyday tools
+  and thirteen of the developer tools in place, through the same functions
+  their pages use, so the figures agree.
 - **The assistant shows what each tool did.** Every tool call in a turn is a
   line in plain words, such as "Add a task" or "Read the tasks", marked as
   running, done or not done. The mark comes from the tool's own result, not
@@ -16,9 +48,43 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   conversation and carried in its backup.
 - **A Wikipedia citation opens the article.** A source the assistant cited from
   a downloaded Wikipedia opens that article in the Wiki module.
+- **Reading goals and loans.** The library keeps a yearly goal per kind or
+  overall, and records whom a book was lent to, when, an optional due date and
+  its return. A culture plan carries its tickets, as a photo or a PDF.
+- **Recipe collections.** A recipe can sit on several shelves of the cookbook,
+  and a pack that names a collection fills its shelf.
+- **Retention per subject and per deck.** A deck or a subject may set its own
+  target retention; the profile's is the default.
+- **Three dashboard cards:** Reminders, Quick actions and the week's Stats.
+- **Browser bookmarks as notes.** A bookmarks file exported from Chrome,
+  Firefox or Edge becomes one note per folder under one tag, with a preview and
+  an undo.
+- **Emergency and signals.** A 72-hour kit checklist and a water and food
+  ration calculator; NATO spelling, Grade 1 Braille and a periodic table.
+- **Smaller additions:** edit a car service entry; discard a saved board game
+  from the lobby; set a task's description and an event's notes and category in
+  their forms.
 
 ### Changed
 
+- **One way to draw each part of a page.** The pages share the kit's header
+  (one main action, with the rest folding behind a ⋯ button in a narrow
+  window), its empty states, its loading and failure states with a retry, its
+  notices, its questions and its undo offers. A question about a deletion opens
+  with focus on its cancelling answer.
+- **Deletions ask first** for a canvas board, a circuit, a pantry item or
+  location, a calculator history entry and a timer preset. New game asks before
+  it throws away a saved puzzle.
+- **The tools offered follow the page.** A turn offers the open page's tools
+  first, a Serbian word finds its tool when it is inflected or written in
+  Cyrillic, and with an embedding model installed the tools closest in meaning
+  join them.
+- **The chat model stays loaded between turns.** A model in the catalogue can
+  carry its own context cap, thinking budget and sampling.
+- **A turn ends cleanly.** When its steps or the model's window run out, a last
+  step answers without tools. Writes run one at a time, in the order the model
+  asked for them, and the answer's language, script and claims are checked, with
+  one corrective request when they are wrong.
 - **The assistant answers in the language and script you wrote in.** The app
   decides the reply's language, and for Serbian its script, from your message
   and tells the model as a fact. A Serbian Latin answer that drifts into
@@ -38,17 +104,26 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   quote it, which a small model often did not do.
 - **The assistant says when web search is off**, instead of answering a request
   to search the internet as if it had searched.
+- **Global shortcuts wait for an open dialog.** A shortcut such as Alt+2 or
+  Ctrl+J does nothing while the launcher, the palette or a question is open.
+- **A scan can be cancelled**, and leaving the scanner stops a scan in progress.
+- **The user manual covers every module**, and the specification, the product
+  documents and the architecture records were brought up to date.
 
 ### Fixed
 
 - **A tool call written loosely still runs.** Before a call is checked, a day
-  written as "sutra", "tomorrow" or "16.10.2026.", a number written as text, a
-  listed value in the wrong case and an empty optional field are read as what
-  they mean. The model may now leave an optional field out, and a day field is
-  decoded as a date. A call that is still wrong is described to the model
-  without repeating it, and after two failures the model is told to stop and
-  say why.
+  written as "sutra", "tomorrow", "za 3 dana" or "16.10.2026.", a number
+  written as text or with a decimal comma, a unit spelled out, a listed value in
+  the wrong case and an empty optional field are read as what they mean. The
+  model may now leave an optional field out, and a day field is decoded as a
+  date. A call that is still wrong is described to the model without repeating
+  it, and after two failures the model is told to stop and say why.
 - **A tool call you declined is not asked again in the same turn.**
+- **Completing a repeating task completes that occurrence.**
+- **A paused or cancelled countdown leaves no alarm behind.** The alarm fires
+  only for the end it was set for.
+- **The undo offers on Canvas and Electronics can be dismissed.**
 
 ## [2.0.3] - 2026-10-15
 

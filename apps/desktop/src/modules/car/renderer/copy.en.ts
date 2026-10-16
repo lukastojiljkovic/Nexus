@@ -126,6 +126,7 @@ export const en: typeof sr = {
     skipped: "Receipts not attached: {value} (they were too large).",
     workshop: "Garage",
     parts: "Parts",
+    edit: "Edit",
     attach: "Add a receipt",
     removeReceipt: "Delete the receipt",
     noReceipts: "No receipts.",

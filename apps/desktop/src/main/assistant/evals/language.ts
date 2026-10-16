@@ -160,6 +160,8 @@ function countSerbianLetters(text: string): number {
  * rather than a coin toss. Tests pin both directions.
  */
 export function detectLanguage(text: string): ReplyLanguage {
+  // Cyrillic is written in one of the two languages only.
+  if (detectScript(text) === "cyrillic") return "sr";
   const folded = fold(text);
   const tokens = words(folded);
   const serbianLetters = countSerbianLetters(text);

@@ -4,9 +4,12 @@ import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { manifest } from "../shared/manifest.js";
 import { AsciiTab } from "./AsciiTab.js";
+import { BrailleTab } from "./BrailleTab.js";
+import { ElementsTab } from "./ElementsTab.js";
 import { copy } from "./copy.js";
 import { MeterTab } from "./MeterTab.js";
 import { MorseTab } from "./MorseTab.js";
+import { NatoTab } from "./NatoTab.js";
 import { persistSignalsPrefs, readSignalsPrefs, type SignalsPrefs } from "./prefs.js";
 import { TunerTab } from "./TunerTab.js";
 import "./signals.css";
@@ -37,7 +40,7 @@ import "./signals.css";
  * microphone the user asks for.
  */
 
-const TABS = ["morse", "ascii", "tuner", "meter"] as const;
+const TABS = ["morse", "ascii", "nato", "braille", "elements", "tuner", "meter"] as const;
 
 type TabId = (typeof TABS)[number];
 
@@ -84,6 +87,9 @@ export default function SignalsPage({ profileId }: ModulePageProps) {
       </div>
       {tab === "morse" && <MorseTab prefs={prefs} onChange={changePrefs} />}
       {tab === "ascii" && <AsciiTab />}
+      {tab === "nato" && <NatoTab />}
+      {tab === "braille" && <BrailleTab />}
+      {tab === "elements" && <ElementsTab />}
       {tab === "tuner" && <TunerTab prefs={prefs} onChange={changePrefs} />}
       {tab === "meter" && <MeterTab />}
     </div>

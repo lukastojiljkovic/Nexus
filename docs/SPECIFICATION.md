@@ -10,9 +10,7 @@
 > detailed per-module requirements live in [prd/](prd/); the technical decisions in
 > [architecture/](architecture/).
 >
-> **Naming.** "Nexus" is a working codename. The leading candidate for the final
-> name is **Vesper** (pending trademark and domain checks). The two visual themes,
-> **Dan** (day) and **Noć** (night), rhyme with that direction.
+> **Verified on 2026-10-15** against the tree it lives in.
 
 ---
 
@@ -29,39 +27,36 @@ private by design, and never holds your data hostage.
 
 ---
 
-## 2. Current build focus (what we are making right now)
+## 2. What is built today
 
-**Plain language.** The desktop app is **done and in daily use** — fifteen
-modules, everything on your own computer, working with the network off. What we
-are building now is the other half of the promise: a **website and a phone-sized
-web app** built from the same work, and **syncing** between them, so the same
-data is on your laptop and your phone. Two rules govern all of it: the server
-only ever holds material it cannot read, and a person who never turns syncing on
-keeps exactly the app they have today, with no network involved at any point.
+**Plain language.** Nexus is a **desktop application**, and it is in daily use:
+forty modules in six groups, beside the Dashboard and Settings, all of it
+on your own computer. Everything is stored in one encrypted database that needs
+no network, and the app works with the network off. Public knowledge arrives
+beside it as **content packs** — signed folders a reader opens in the app — and
+as local language models the app's assistant runs itself.
 
-**Technical.** The Electron + React desktop client on encrypted SQLite is
-complete at **1.1.0**. Since 2026-08-08 the web app and its backend are **in
-scope**: the renderer on **Cloudflare Workers with static assets**, and
-**Supabase** for the backend. The server side is built and executed — thirteen
-migrations against a real Postgres, an RLS wall proved by pgTAP in CI, and the
-wire measured against a running PostgREST — and the client side is what remains.
-See [STATUS.md](STATUS.md) §3.
+**No cloud, no sync, no web app, by decision.** A website and a phone-sized web
+app, and a server that would carry the same data between machines, were built on
+and then **put on hold permanently on 2026-10-08**. The code stays in the repo
+and keeps building and passing in CI, and it is deliberately not described to
+users: no public surface mentions sync, cloud or a web app. Nothing in this
+document is scheduled to resume. The reason is the product's own position rather
+than a delay — an offline application whose data does not leave the machine is
+the thing being sold, and a sync service is a second product with a server to
+run, not the other half of this one. See [STATUS.md](STATUS.md) §3 for the state
+of the parked code.
 
-**Two constraints that are structural rather than aspirational.** Cloud is **off
-by default and switchable off entirely** on the desktop, and the local-only path
-must not be *able* to reach the network — there is a CI gate over it, not a
-promise. A device-level **network mode** (ADR-089) states the choice in the
-product: „Offline only" — the default — is exactly that path, with no network
-call of any kind, and „Offline + update checks" is the only mode in which Nexus
-contacts GitHub, solely to check for and download a new version of itself.
-And **content is never in the clear on the server**; metadata in the clear is
-accepted, content never is.
+**Technical.** Electron + React on encrypted SQLite, TypeScript throughout, in a
+pnpm + Turborepo monorepo (exact versions are in `apps/desktop/package.json`). The renderer is sandboxed and
+cannot reach the database except through a small, validated, allow-listed IPC
+bridge. Released binaries are built from this tree by the release workflow (`.github/workflows/release.yml`).
 
-**Not GitHub Pages, deliberately.** It cannot set HTTP response headers, so it
-can send neither a CSP nor `frame-ancestors` — and a page that decrypts user
-data in a browser without a CSP has had its primary defence removed. Workers
-rather than Cloudflare Pages because Cloudflare's own guidance now sends new
-projects to Workers.
+**What "offline" costs, stated plainly.** Because there is no server, every
+cross-device promise in this document is unmet and stays unmet: sharing,
+real-time co-editing, cloud backup and push notifications have no mechanism
+behind them. The way to move data between two machines is the export archive
+(§3, IMEX), and profiles and modules are per-device choices.
 
 **On breadth.** The founder installed the first real build on 2026-08-02 and
 judged it *raw*; since then the constraint has been **finish quality, not
@@ -93,7 +88,7 @@ tools.
   (`deleted_at`) for undo. Encryption at rest (SQLCipher-class) is **built**, keyed
   by the local account
   ([ADR-018](architecture/adr/018-local-account-passcode.md)). **Notes** are stored
-  as CRDT documents (Yjs) so they are merge-ready before sync exists; **canvas
+  as CRDT documents (Yjs), so they are merge-ready; **canvas
   boards are not** — a scene is stored verbatim, because the editor owns its own
   document format ([ADR-079](architecture/adr/079-canvas-engine.md)).
 
@@ -102,8 +97,9 @@ tools.
   server ever involved. Private notes are locked so thoroughly that **not even we
   could read them**. You can always export **all** of your data.
 - **Technical.** Local accounts derive a key from a PIN via the OS keystore. Private
-  notes are zero-knowledge encrypted (libsodium XChaCha20-Poly1305, Argon2id KDF,
-  a DEK/KEK scheme with a Recovery Kit). Security is a binding baseline
+  notes are zero-knowledge encrypted (AEAD at rest, Argon2id KDF, a DEK/KEK scheme
+  with a Recovery Kit); the shipped primitives are the local-first ones
+  ([ADR-057](architecture/adr/057-private-notes-local.md)). Security is a binding baseline
   ([security/baseline.md](security/baseline.md)), designed in from the first commit.
 
 ### 3.4 Modular by onboarding
@@ -117,8 +113,7 @@ tools.
 
 ### 3.5 One design language
 - **Plain.** Every screen looks like it belongs to the same, carefully designed app
-  — calm, distinctive, never generic. Two themes: **Dan** (light) and **Noć**
-  (dark).
+  — calm, distinctive, never generic. Two themes, **Dan** (light) and **Noć** (dark), and the system setting.
 - **Technical.** A three-tier design-token pipeline (JSON → generated CSS variables)
   drives all styling; components are token-only (no raw colours). Deliberate
   anti-"AI-slop" rules: specific banned hues, typographic (not glow/side-bar)
@@ -173,11 +168,11 @@ describes the intended product in full.
   source removes its reminders.
 - **Accounts & Auth (AUTH) — Must.** *Plain:* sign in with a nickname + password, or
   use a fully local PIN account with no server at all. *Technical:* local accounts
-  are **built** (PIN + OS-keystore key wrap). Cloud accounts are **Supabase auth**,
-  in progress: the server enforces MFA through aal2-restrictive RLS, and the
-  desktop's own key material is never derived from the web password — a separate
-  master sync key is minted and wrapped twice, so nothing about local at-rest
-  protection depends on the account.
+  are **built** (PIN + OS-keystore key wrap), and they are the shipped account
+  type. The cloud account (Supabase auth, MFA through aal2-restrictive RLS) is
+  built on the server side and **parked** with the rest of the cloud phase (§2):
+  the master sync key it mints is wrapped twice so that nothing about local
+  at-rest protection ever depends on an account.
 - **Settings & Profiles (SET) — Must.** *Plain:* control themes, accent colour,
   which modules are on, per-module preferences, and profile management. *Technical:*
   a settings contract each module contributes to; feature-flag toggles; theme/accent
@@ -194,15 +189,13 @@ describes the intended product in full.
   documents (Yjs) with markdown in/out, a derived plaintext column for search,
   version history, templates, and links with backlinks.
 - **Private Notes (PRIV) — Must (privacy flagship).** *Plain:* a vault of notes only
-  you can ever read. *Technical:* zero-knowledge encryption; syncs only as opaque
-  ciphertext; never server-readable; Recovery Kit for data recovery separate from
-  account recovery.
+  you can ever read. *Technical:* zero-knowledge encryption, local-first ([ADR-057](architecture/adr/057-private-notes-local.md)); Recovery Kit for data recovery separate from account recovery.
 - **Infinite Canvas (CANV) — Should.** *Plain:* a Milanote-style boundless board
   where notes become cards you arrange spatially, with links drawn as arrows —
   and it works offline (the market gap). *Technical:* **Excalidraw, used as a canvas
   and not as a UI** ([ADR-079](architecture/adr/079-canvas-engine.md)) — its chrome
   is hidden and a Serbian toolbar of ours drives it through the imperative API,
-  because the editor ships 54 locales, none Serbian and none addable, and its colour
+  because the editor has no Serbian locale, and its colour
   picker offers three banned hues. Nexus objects live on a board as **embeddables
   whose link is a `nexus://kind/uuid` reference**, so arrows bind to them like any
   shape. A scene is stored verbatim, not as a CRDT.
@@ -246,8 +239,7 @@ describes the intended product in full.
   actually sticks, in dinars and euros. *Technical:* zero-based/envelope budgeting as
   an optional retention engine, tracking-only mode first-class; manual-first entry
   (no bank aggregation in Serbia); **multi-currency by keeping each currency
-  separate — Nexus never converts** (founder, 2026-08-01: *„nema konverzije,
-  beleži se posebno svaka valuta"*); bank sync is future work. *This line used to
+  separate — Nexus never converts** (founder, 2026-08-01: *„nema konverzije, beleži se posebno svaka valuta” (“no conversion: each currency is recorded separately”)*); bank sync is future work. *This line used to
   read „multi-currency with explicit NBS rates" — a capability that was never
   built and that FIN deliberately refuses, since a rate the app cannot verify
   silently misstates money. Amounts in different currencies are tracked and shown
@@ -261,14 +253,13 @@ describes the intended product in full.
 - **Utility Belt (UTIL) — Could.** *Plain:* a drawer of everyday tools — unit
   converters, calculators, and profession-specific calculators. *Technical:*
   a tool registry; each utility is a small, self-contained tool contract.
-  **No currency converter** (founder, 2026-08-01: *„nema konverzije, beleži se
-  posebno svaka valuta"*) — this line previously promised one, and it was that
+  **No currency converter** (founder, 2026-08-01: *„nema konverzije, beleži se posebno svaka valuta” (“no conversion: each currency is recorded separately”)*) — this line previously promised one, and it was that
   promise, read as an existing capability, that sent a lane looking for exchange
   rates FIN deliberately does not hold. Converting money at a rate the app cannot
   verify silently misstates money, which is why FIN refuses it and why the drawer
   does too.
 - **Professional toolkits (PRO) — BUILT (2026-08-13/14).** *Plain:* a second
-  drawer, off until the user asks for it, holding eighteen toolkits for the work
+  drawer, off until the user asks for it, holding a toolkit for each subject in `TOOL_PACKS` for the work
   people actually do; you pick yours by answering what turns up in your week.
   *Technical:* one module, and a `packs` field on the tool registration decides
   which toolkits a tool appears under — so a tool serving three trades exists
@@ -280,17 +271,17 @@ describes the intended product in full.
   property of the contract and not copy somebody has to remember. Constants have
   three tiers: physical embeds, published embeds with its source on screen, and
   **regulated is never embedded and never defaulted** — the user types the rate
-  or the deadline that applies to their case. Several hundred tools; see PRD 30 and
+  or the deadline that applies to their case. See PRD 30 and
   [STATUS.md](STATUS.md) §2.
 - **Password Vault (VLT) — Later.** *Plain:* store passwords securely. *Technical:*
   built on the same zero-knowledge crypto as private notes; deferred until later.
 
 ### Collaboration (planning together, not a social network)
 - **Sharing (SHARE) — Could.** *Plain:* share a note or board (read-only first) so
-  you can plan with others. *Technical:* cloud- and sync-dependent — future work.
+  you can plan with others. *Technical:* cloud- and sync-dependent, on hold with them (§2).
 - **Shopping / Grocery (SHOP) — Could.** *Plain:* shared shopping lists, including a
   live grocery list two people can edit together. *Technical:* the grocery co-edit
-  rides the CRDT path and is the first real-time surface; cloud-dependent — future.
+  rides the CRDT path and is the first real-time surface; cloud-dependent, on hold with them (§2).
 
 ### Wellbeing & entertainment
 - **Focus (FOCUS) — Must.** *Plain:* one timer for the whole app — a Pomodoro that
@@ -298,21 +289,19 @@ describes the intended product in full.
   whether you started it in „Fokus" or in „Učenje". *Technical:* **built**, and it
   is deliberately **one** engine, not two
   ([ADR-077](architecture/adr/077-focus-timer.md)) — UTIL's Pomodoro **absorbed**
-  STUDY's `focus_sessions` on the founder's ruling *„nećemo da imamo više
-  tajmera"*. A study session and a Pomodoro phase are the same row; the running
+  STUDY's `focus_sessions` on the founder's ruling *„nećemo da imamo više tajmera” (“we will not have more timers”)*. A study session and a Pomodoro phase are the same row; the running
   timer is main-process memory, never a row.
 - **Sustainable productivity — Must (woven in, not a module screen).** *Plain:*
   during breaks, quick **productivity boosters** — a fast sudoku or card game,
   stretching and eye-rest prompts — so rest is part of the rhythm, not a
   distraction. *Technical:* break activities integrate with the focus timer above.
-  **Unbuilt.**
+  **Unbuilt as a break feature:** the games exist (the arcade and cards modules), but no booster card and no link to the focus timer's breaks.
 - **Entertainment — Could.** *Plain:* light built-in games (sudoku, card games).
   *Technical:* self-contained mini-apps; low priority, post-core.
 
 ### Long-term
-- **AI Assistant (AI) — Later.** *Plain:* an assistant that organizes, summarizes,
-  and imports on your behalf. *Technical:* an assistant layer over the module
-  contracts; long-term.
+- **AI Assistant (AI) — built, on this machine only.** *Plain:* an assistant that organizes, summarizes,
+  and imports on your behalf. *Technical:* the local Assistant module: open models run on the machine and nothing leaves it ([ADR-095](architecture/adr/095-assistant.md)); its module contract is [ADR-106](architecture/adr/106-assistant-module.md).
 - **Plugins (PLUG) — Later.** *Plain:* new capabilities added without touching the
   core. *Technical:* the module contracts are explicitly designed as the future
   plugin API. **Profession packs** (architect, developer, freelancer toolkits) ride
@@ -334,48 +323,51 @@ describes the intended product in full.
 
 ## 6. Platform & technical architecture (summary)
 
-- **Desktop:** Electron (pinned to v42 for a native-module ABI reason) + React 19 +
-  Vite. A hardened shell: the renderer is sandboxed and cannot reach the database
-  except through a small, validated, allow-listed IPC bridge.
+- **Desktop:** Electron + React + Vite. A hardened shell: the renderer is
+  sandboxed and cannot reach the database except through a small, validated,
+  allow-listed IPC bridge. The Electron version lives in
+  `apps/desktop/package.json`, so it cannot go stale here.
 - **Shared code:** a pnpm + Turborepo TypeScript monorepo, strict TypeScript.
   Packages: `tokens` (design tokens), `core` (module registry, contracts, headless
   views engine), `db` (encrypted SQLite + migrations + stores), `ui` (token-driven
-  components), and the four sync packages — `sync` (the engine), `sync-crypto`,
-  `sync-port` (the injected crypto seam), `sync-transport` (the wire). Apps:
-  `desktop`, `web`, `gallery` (a design-review harness).
-- **Web (in progress):** the same React renderer on **Cloudflare Workers with
-  static assets**, produced from this codebase rather than rewritten. `apps/web`
-  today is a shell: the desktop's own rail rendered by the same components, and a
-  typed `NexusApi` proxy that throws until something connects it.
-- **Backend (in progress): Supabase.** Thirteen migrations applied to a real
-  Postgres 17, an RLS wall proved by 109 pgTAP assertions in CI, three Edge
-  Functions, and the PostgREST wire measured rather than assumed. The server
-  holds ciphertext; metadata in the clear is accepted, content never is.
+  components), and the five parked sync packages — `sync` (collection map, change
+  journal, merge), `sync-engine` (the round loop), `sync-crypto`, `sync-port` (the
+  injected crypto seam), `sync-transport` (the wire). Apps: `desktop`, `gallery`
+  (a design-review harness), `web` (the parked shell).
+- **The parked phase, named:** the web app's renderer target, the Supabase
+  backend that was built against a real Postgres with an RLS wall proved in CI,
+  and the sync client and server above. It is not current work and is not
+  scheduled; the code stays in the repository and in CI so it keeps building and
+  passing. See [STATUS.md](STATUS.md) §3.
 - **Android (later):** React Native reusing `core`/`db` schema, gated by a kickoff
-  re-check.
+  re-check. Same hold as the rest of the cloud phase.
 - **Quality gates:** strict typecheck, lint, unit tests (TDD for data/stores), a
-  production build, an end-to-end desktop **smoke** check, and **thirteen static
-  gates** — colours, contrast, CSS, strings, tokens, invisible characters, key
-  material erased while it is still in use, the professional drawer's risk
-  notices, its arithmetic, its result flags, the third-party licence notices,
-  network egress, and the RLS wall. All green before
-  anything is committed; CI runs every one of them as its own step, so a red
-  check names the rule. Each gate exists because a class in
+  production build, an end-to-end desktop **smoke** check, and the `check:*`
+  scripts in the root `package.json` — colours, contrast, CSS, strings, tokens,
+  invisible characters, key material erased while it is still in use, the
+  professional drawer's risk notices, its arithmetic, its result flags, the
+  third-party licence notices, network egress, the RLS wall, copy and language,
+  the in-app manual, and more. The list grows as a class of defect earns a gate,
+  so the count is read from `package.json` rather than written here. All green
+  before anything is committed; CI runs every one of them as its own step, so a
+  red check names the rule. Each gate exists because a class in
   [defect-classes.md](defect-classes.md) could not be caught by review.
 - **Not yet true, and worth stating plainly:** there is no performance harness, so
   the budgets in [architecture/overview.md](architecture/overview.md) are targets
-  nothing measures; installers are **unsigned**, so nothing may be distributed
-  beyond the founder's own machines until code signing and notarization are set
-  up.
+  nothing measures. Nothing is code-signed: the release workflow signs nothing (`.github/workflows/release.yml`), so Windows shows a SmartScreen warning on first run, and the macOS build is unsigned and not notarised ([CHANGELOG.md](../CHANGELOG.md)). The integrity the signature would give is carried by
+  `SHA256SUMS.txt` and its Ed25519 signature, which every installed copy verifies
+  against a key compiled into the app before it updates.
 
 ---
 
 ## 7. Business direction (context, not current work)
 
 Free, fully unlocked beta while the product matures; premium tiers later with a
-large permanent discount for beta users. Native apps deliver depth; a landing page
-and web app drive reach. The desktop product has proved itself — it has been in
-the founder's daily use since 2026-08-02 — which is what opened the web phase.
+large permanent discount for beta users. Nexus is a free, open-source desktop
+application with no account and no server, and that is the whole of what it is
+for now: the desktop product has proved itself — it has been in the founder's
+daily use since 2026-08-02 — and the web phase it opened in August 2026 was put on hold permanently on 2026-10-08 (§2). The landing page and the desktop build
+are what carry it.
 
 ---
 

@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   Icon,
   ListRow,
   LoadingState,
@@ -19,6 +20,7 @@ import type { BoardsSaveView, BoardsView } from "../shared/ipc.js";
 import { Board } from "./Board.js";
 import { copy } from "./copy.js";
 import { useAiClient } from "./ai/client.js";
+import { startRequestOf } from "./intent.js";
 import {
   GAME_ORDER,
   awaitingHuman,
@@ -106,7 +108,7 @@ function randomSeed(): number {
  */
 const ROLL_MOTION_MS = 420;
 
-export default function BoardsPage({ profileId }: ModulePageProps) {
+export default function BoardsPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<BoardsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** The game on screen, or null for the lobby. It is the page's own state: a move is drawn before it is stored. */
@@ -281,12 +283,40 @@ export default function BoardsPage({ profileId }: ModulePageProps) {
 
   // --- Starting, resuming and ending ----------------------------------------
 
-  function startGame(game: BoardsGame, setup: ReturnType<typeof setupOf>): void {
-    setDraft(null);
-    setError(null);
-    const session = newSession(game, setup, randomSeed());
-    commit(session);
-  }
+  const startGame = useCallback(
+    (game: BoardsGame, setup: ReturnType<typeof setupOf>): void => {
+      setDraft(null);
+      setError(null);
+      const session = newSession(game, setup, randomSeed());
+      commit(session);
+    },
+    [commit],
+  );
+
+  /**
+   * What the assistant asked this page to do: start a game with the opponent and the
+   * level the request names. It waits for the view, so the form it starts from is the
+   * profile's own. Anything else is not this page's verb and is reported handled all
+   * the same, so the shell's queue moves on.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined || view === null) return;
+    if (intent.kind === "action" && intent.action === "start") {
+      const request = startRequestOf(intent.payload);
+      if (request !== null) {
+        const draft = defaultDraft(request.game, request.level);
+        startGame(
+          request.game,
+          setupOf({
+            ...draft,
+            opponent: request.opponent,
+            seatKinds: request.opponent === "computer" ? draft.seatKinds : ["human", "human"],
+          }),
+        );
+      }
+    }
+    onIntentHandled?.();
+  }, [intent, view, onIntentHandled, startGame]);
 
   function resume(save: BoardsSaveView): void {
     try {
@@ -298,6 +328,17 @@ export default function BoardsPage({ profileId }: ModulePageProps) {
       // half-drawn board: the page says so and leaves the lobby as it is.
       setError(copy.errors.position);
       console.error("Nexus: a saved board game could not be resumed:", failure);
+    }
+  }
+
+  /** Discards a saved game the lobby offers to resume. */
+  async function discard(game: BoardsGame): Promise<void> {
+    try {
+      setView(await window.nexus.modules.boards.remove({ profileId, game }));
+      setError(null);
+    } catch (failure) {
+      setError(copy.errors.mutate);
+      console.error("Nexus: a saved board game could not be discarded:", failure);
     }
   }
 
@@ -359,6 +400,7 @@ export default function BoardsPage({ profileId }: ModulePageProps) {
           statsLevel={statsLevel}
           onStatsLevel={setStatsLevel}
           onResume={resume}
+          onDiscard={(game) => void discard(game)}
           onSetup={setDraft}
           onStart={(game, setup) => startGame(game, setup)}
         />
@@ -499,6 +541,7 @@ function Lobby({
   statsLevel,
   onStatsLevel,
   onResume,
+  onDiscard,
   onSetup,
   onStart,
 }: {
@@ -507,6 +550,7 @@ function Lobby({
   statsLevel: number;
   onStatsLevel: (level: number) => void;
   onResume: (save: BoardsSaveView) => void;
+  onDiscard: (game: BoardsGame) => void;
   onSetup: (draft: SetupDraft | null) => void;
   onStart: (game: BoardsGame, setup: ReturnType<typeof setupOf>) => void;
 }) {
@@ -515,6 +559,8 @@ function Lobby({
     for (const save of view.saves) byGame.set(save.game, save);
     return byGame;
   }, [view.saves]);
+  /** The saved game a person has asked to discard, until they answer the question. */
+  const [discarding, setDiscarding] = useState<BoardsGame | null>(null);
 
   return (
     <>
@@ -529,9 +575,14 @@ function Lobby({
                 trailing={
                   <span className="boards__row-actions">
                     {save !== undefined && (
-                      <Button size="sm" variant="primary" onClick={() => onResume(save)}>
-                        {copy.lobby.resume}
-                      </Button>
+                      <>
+                        <Button size="sm" variant="primary" onClick={() => onResume(save)}>
+                          {copy.lobby.resume}
+                        </Button>
+                        <Button size="sm" variant="quiet" onClick={() => setDiscarding(game)}>
+                          {copy.lobby.discard}
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="sm"
@@ -570,6 +621,21 @@ function Lobby({
         />
       )}
       <StatsCard stats={view.stats} level={statsLevel} onLevel={onStatsLevel} />
+      {discarding !== null && (
+        <ConfirmDialog
+          title={copy.lobby.discardTitle}
+          name={copy.games[discarding].name}
+          question={copy.lobby.discardQuestion}
+          confirmLabel={copy.lobby.discard}
+          cancelLabel={copy.lobby.keep}
+          destructive
+          onCancel={() => setDiscarding(null)}
+          onConfirm={() => {
+            onDiscard(discarding);
+            setDiscarding(null);
+          }}
+        />
+      )}
     </>
   );
 }

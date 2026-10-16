@@ -49,6 +49,37 @@ export const SET_KINDS = ["warmup", "working", "drop", "failure"] as const;
 export type SetKind = (typeof SET_KINDS)[number];
 
 /**
+ * The one input a set of a given metric needs, named by what it MEANS rather
+ * than by which column it lands in.
+ *
+ * `weight` and `assist` both write `weightKg` — the schema has one column for
+ * the kilograms on the bar — and they are two names because they are two
+ * quantities: one is load added, the other is load taken away. The store keeps
+ * both as a non-negative magnitude (migration 060), so the sign lives in the
+ * metric and never in the number.
+ */
+export type SetField = "weight" | "assist" | "reps" | "seconds" | "distance";
+
+/**
+ * Which fields each metric records, in the order a form draws them — the load
+ * first, then what was done with it.
+ *
+ * This is ADR-081 §3's table, and it is the module's single answer to „what does
+ * one set of this record". Every closed metric appears; `Record` rather than a
+ * lookup with a fallback, so a metric added to `@nexus/core` fails the build here
+ * instead of quietly rendering as a set with no fields at all.
+ */
+export const SET_FIELDS: Readonly<Record<ExerciseMetric, readonly SetField[]>> = {
+  weight_reps: ["weight", "reps"],
+  reps: ["reps"],
+  weighted_reps: ["weight", "reps"],
+  assisted_reps: ["assist", "reps"],
+  time: ["seconds"],
+  weight_time: ["weight", "seconds"],
+  distance_time: ["distance", "seconds"],
+};
+
+/**
  * One logged set, as the arithmetic needs to see it.
  *
  * **It carries its own `metric`** rather than being handed the exercise's,

@@ -17,24 +17,36 @@
  * asked again. A call with DIFFERENT arguments is deliberately a different key:
  * a corrected call is a new question, and the user may well say yes to it.
  *
+ * **The arguments a key is made of are the NORMALISED ones.** A model repeats a
+ * call it was refused with the value written another way as often as with the
+ * same bytes - `{"due":"sutra"}` and then `{"due":"2026-10-16"}` - and the tool
+ * is handed the normalised value either way (`arguments.ts`). The caller
+ * normalises first and passes what the tool would receive, so the two spellings
+ * are one question and one "no". This module does no normalisation itself: it
+ * is handed the arguments the schema check saw.
+ *
  * **The memory dies with the turn.** A "no" answers a question about this turn's
  * request; the next user message may change the user's mind, so the tool asks
  * again there.
  *
  * **A "yes" is never shared.** Only a refusal is recorded, so a repeated call
- * the user approved is a fresh request they still decide. Two identical calls in
- * one model step run in parallel and park on ONE question: a "no" answers both,
- * but a "yes" authorises only the call that asked, and the other asks for itself
- * - one approval never runs a write twice.
+ * the user approved is a fresh request they still decide. Two identical write
+ * calls in one model step are run one after the other and park on ONE question:
+ * a "no" answers both, but a "yes" authorises only the call that asked, and the
+ * other asks for itself - one approval never runs a write twice.
  */
 
-import type { ConfirmRequest, ToolCall, ToolContext, ToolResult } from "./contract.js";
+import type { ConfirmRequest, ToolContext, ToolResult } from "./contract.js";
 
 export interface RefusalMemory {
-  /** What to answer a call the user already refused, or `undefined` when it may run. */
-  alreadyDeclined(call: ToolCall): ToolResult | undefined;
+  /**
+   * What to answer a call the user already refused, or `undefined` when it may
+   * run. `arguments` are the call's normalised arguments, which are what the
+   * tool would be run with.
+   */
+  alreadyDeclined(name: string, args: unknown): ToolResult | undefined;
   /** The context one call runs with: the context itself, with `confirm` learning from the answer. */
-  contextFor(call: ToolCall, context: ToolContext): ToolContext;
+  contextFor(name: string, args: unknown, context: ToolContext): ToolContext;
 }
 
 /** An empty memory: one turn, one of these. */
@@ -62,11 +74,11 @@ export function createRefusalMemory(): RefusalMemory {
   }
 
   return {
-    alreadyDeclined(call) {
-      return refused.has(callKey(call)) ? alreadyRefused(call.name) : undefined;
+    alreadyDeclined(name, args) {
+      return refused.has(callKey(name, args)) ? alreadyRefused(name) : undefined;
     },
-    contextFor(call, context) {
-      const key = callKey(call);
+    contextFor(name, args, context) {
+      const key = callKey(name, args);
       return { ...context, confirm: (request) => ask(key, context, request) };
     },
   };
@@ -87,9 +99,9 @@ function alreadyRefused(name: string): ToolResult {
   };
 }
 
-/** One call's key: the tool it named, and its arguments (see {@link canonicalJson}). */
-function callKey(call: ToolCall): string {
-  return `${call.name}|${canonicalJson(call.arguments)}`;
+/** One call's key: the tool it named, and its normalised arguments (see {@link canonicalJson}). */
+function callKey(name: string, args: unknown): string {
+  return `${name}|${canonicalJson(args)}`;
 }
 
 /**

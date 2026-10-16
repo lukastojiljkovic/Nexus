@@ -57,8 +57,10 @@ has never been observed to fail is indistinguishable from one that cannot.
 These are not style preferences, and CI will tell you when you break one:
 
 - **Design tokens only.** Every colour, space, radius and type value comes from
-  `packages/tokens` as a `--nx-*` variable. No raw hex, `rgb()`, or `hsl()`
-  outside that package.
+  `packages/tokens` as a `--nx-*` variable. Outside that package there is no hex
+  literal and no CSS colour function — `rgb()`, `hsl()`, `oklch()`, `lab()`,
+  `lch()` and `color()` are all refused by `pnpm check:colours`, and the only
+  exception is a line-scoped `nx-colour-allow: <reason>` marker.
 - **A field goes through the shared component.** Do not hand-roll an `<input>`
   when `TextField`, `Select` or `TextArea` exists.
 - **A check is `check:*`.** If you find a class of defect that a rule could
@@ -84,8 +86,8 @@ These are not style preferences, and CI will tell you when you break one:
   local database in a commit is a real leak, not a tidy-up.
 - **No secrets, no personal data, no generated artefacts.** If you need a
   fixture that looks like a key, make it obviously fake and say so.
-- **Never commit anything from `supabase/.temp/`** — the local development stack
-  writes generated secrets there.
+- **Never commit a `.temp/` directory.** Local tooling writes generated secrets
+  into it.
 
 ### Sign-off
 
@@ -95,8 +97,8 @@ reason is that a DCO is a statement you make about your own contribution — tha
 you wrote it, or have the right to submit it — while a CLA asks you to assign or
 license rights to somebody else. For a project whose licence is already
 Apache-2.0, the DCO is the lighter of the two and the one most contributors have
-already agreed to. **This is a recommendation the maintainer has not yet
-confirmed**; see the pull request that added this file.
+already agreed to. Every commit in a pull request must carry the sign-off line,
+and the pull request template asks you to confirm it.
 
 ## Translations
 

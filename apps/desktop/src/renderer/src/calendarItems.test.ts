@@ -100,6 +100,7 @@ function makeSubject(id: string): Subject {
     color: "jade",
     semester: null,
     archived: false,
+    targetRetention: null,
     createdAt: T0,
     updatedAt: T0,
   };

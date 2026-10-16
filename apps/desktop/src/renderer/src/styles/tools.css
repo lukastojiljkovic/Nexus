@@ -12,8 +12,9 @@
    it — see `.tool__item`. Every colour, space and radius below is a token;
    nothing here mints a hue.
 
-   The instrument collapses to one column under 720px, where a two-pane drawer
-   would leave both panes too narrow to read. */
+   The instrument stays two panes down to the window's 900px floor (`minWidth`
+   in the main process): the form columns fold to one at 1020px
+   (`--tool-columns`), so the surface beside the rail reads at that width. */
 .tool {
   display: flex;
   flex-direction: column;
@@ -87,15 +88,6 @@
   border-radius: var(--nx-radius-lg);
   overflow: hidden;
 }
-/* Under three columns' worth of width the rail would leave both panes too narrow
-   to read, so the instrument becomes one column: the rail keeps its own height
-   at the top and the surface takes the rest, still inside the one outline. */
-@media (max-width: 720px) {
-  .tool__layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 14rem) minmax(0, 1fr);
-  }
-}
 
 /* --- The rail ------------------------------------------------------------- */
 
@@ -105,14 +97,6 @@
   min-height: 0;
   background: var(--nx-surface);
   border-right: 1px solid var(--nx-border);
-}
-/* Stacked, the divider turns through ninety degrees rather than disappearing:
-   the two panes are still one instrument, just folded. */
-@media (max-width: 720px) {
-  .tool__list {
-    border-right: 0;
-    border-bottom: 1px solid var(--nx-border);
-  }
 }
 /*
  * The search, at the head of the rail and pinned there.

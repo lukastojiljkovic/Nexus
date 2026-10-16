@@ -95,8 +95,8 @@ export const manifest: ModuleManifest = {
   copy: {
     name: { sr: "Signali", en: "Signals" },
     description: {
-      sr: "Morse, ASCII tabela, štimer i merač nivoa zvuka — sa mikrofonom samo kad ih pokreneš.",
-      en: "Morse, an ASCII table, a tuner and a sound meter — the microphone opens only when one is started.",
+      sr: "Morse, ASCII tabela, NATO azbuka, Brajevo pismo, periodni sistem, štimer i merač nivoa zvuka — sa mikrofonom samo kad ih pokreneš.",
+      en: "Morse, an ASCII table, the NATO alphabet, Braille, the periodic table, a tuner and a sound meter — the microphone opens only when one is started.",
     },
   },
   settings: SIGNALS_SETTINGS,

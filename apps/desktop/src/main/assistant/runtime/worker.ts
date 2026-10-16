@@ -87,6 +87,9 @@ function handle(value: unknown): void {
           capabilities: request.capabilities,
           modelPath: request.modelPath,
           contextTokens: request.contextTokens,
+          ...(request.contextCap === undefined ? {} : { contextCap: request.contextCap }),
+          ...(request.thoughtTokens === undefined ? {} : { thoughtTokens: request.thoughtTokens }),
+          ...(request.sampling === undefined ? {} : { sampling: request.sampling }),
           gpuLayers: request.gpuLayers,
           threads: request.threads,
         })

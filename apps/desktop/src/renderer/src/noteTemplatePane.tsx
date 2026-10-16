@@ -3,7 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { Button, TextField } from "@nexus/ui";
+import { Button, Notice, TextField } from "@nexus/ui";
 import { NOTE_TEMPLATE_MAX_BYTES, type NoteAttachment } from "../../shared/ipc.js";
 import { AttachmentImage, NoteAttachmentProvider } from "./noteAttachmentImage.js";
 import { NoteLink, NoteLinkProvider } from "./noteLink.js";
@@ -240,11 +240,7 @@ export function NoteTemplatePane({
   };
 
   if (listFailed) {
-    return (
-      <p className="note__templates-error" role="status">
-        {strings.notes.templateError}
-      </p>
-    );
+    return <Notice kind="danger" message={strings.notes.templateError} />;
   }
 
   if (entries === null) {
@@ -293,10 +289,10 @@ export function NoteTemplatePane({
             {strings.notes.templateSaveAs}
           </Button>
         )}
-        {(failed || tooLarge) && (
-          <p className="note__templates-error" role="status">
-            {tooLarge ? strings.notes.templateTooLarge : failed}
-          </p>
+        {tooLarge ? (
+          <Notice kind="danger" message={strings.notes.templateTooLarge} />
+        ) : (
+          failed !== null && <Notice kind="danger" message={failed} />
         )}
       </div>
       <div className="note__templates-preview">

@@ -1,8 +1,11 @@
 import {
+  Suspense,
+  lazy,
   useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   // Aliased because this file also listens for the DOM's own `KeyboardEvent`
   // (`handleGlobalKeydown`), and the two are different types.
@@ -16,7 +19,16 @@ import {
   moduleNavPosition,
 } from "@nexus/core";
 import type { CanvasRef, ToolDrawer } from "@nexus/core";
-import { Button, EmptyState, Icon, NavItem, StarField } from "@nexus/ui";
+import {
+  Button,
+  EmptyState,
+  holdModalLayer,
+  Icon,
+  isModalOpen,
+  NavItem,
+  StarField,
+  Toast,
+} from "@nexus/ui";
 import type { ThemeName } from "@nexus/tokens";
 import { DEMO_PROFILE_NAME } from "../../shared/ipc.js";
 import type {
@@ -68,6 +80,7 @@ import type { NotesIntent } from "./NotesPage.js";
 import type { StudyIntent } from "./StudyPage.js";
 import type { FinanceIntent } from "./FinancePage.js";
 import type { ElecIntent } from "./ElectronicsPage.js";
+import { canvasIntentOf, type CanvasIntent } from "./canvasIntent.js";
 import type { ToolsIntent } from "./ToolsPage.js";
 import {
   CalendarPage,
@@ -112,7 +125,14 @@ import {
   type ShellVisibility,
 } from "../../shared/moduleVisibility.js";
 import { DRAWER_MODULES } from "./toolCatalogue.js";
-import { holdItemIntent, intentForPage, type HeldItemIntent } from "./moduleKit/itemIntent.js";
+import {
+  NO_ITEM_INTENTS,
+  dropIntent,
+  enqueueIntent,
+  forgetIntents,
+  intentForPage,
+  type ItemIntents,
+} from "./moduleKit/itemIntent.js";
 import { hasModulePage } from "./moduleKit/pages.js";
 import { KitModulePage } from "./moduleKit/ModulePage.js";
 import { ProfileAvatar } from "./profileAvatar.js";
@@ -133,6 +153,7 @@ import {
   type ThemePreference,
 } from "./theme.js";
 import { fill, lookup, strings } from "./strings.js";
+import { toolPrefillOf } from "./toolPrefill.js";
 
 /**
  * A pending page-level intent (021-e): one payload, tagged with the module
@@ -148,6 +169,7 @@ type PendingIntent =
   | { module: "study"; intent: StudyIntent }
   | { module: "finance"; intent: FinanceIntent }
   | { module: "electronics"; intent: ElecIntent }
+  | { module: "canvas"; intent: CanvasIntent }
   // The finder stands on BOTH drawer pages and searches both drawers at once, so
   // a result in the other one has to be able to send a tool across — one arm
   // carrying both page ids, because the two pages are one component and the
@@ -174,6 +196,52 @@ function assertNever(value: never): never {
   throw new Error(`Nexus: unhandled case ${String(value)}`);
 }
 
+/** A tool to open, and the fields its `drawer.open` asked to fill in (`toolPrefillOf`). */
+function openToolIntent(toolId: string, action: unknown): ToolsIntent {
+  const values = toolPrefillOf(action);
+  return values === undefined ? { kind: "open", toolId } : { kind: "open", toolId, values };
+}
+
+/**
+ * A COMPILED-IN page's own reveal intent, from the one thing a location can
+ * carry: `{ module: "tasks", item }` means the task with that id.
+ *
+ * The kit's modules are handed the item itself and read it their own way
+ * (`moduleKit/itemIntent.ts`); these four pages predate the kit and take a typed
+ * payload each, which the shell can build only because it holds their pages
+ * beside it. The item is read with `typeof` for the same reason the module and
+ * the settings key are: a window event's detail is a payload nobody type-checks
+ * on the way in.
+ *
+ * **What an item names, and what it cannot.** `app.open`'s own words for an item
+ * are "a note, a task, an event", so a calendar item is an event id — a calendar
+ * DOCUMENT is reachable only through the search result that knows its kind — and
+ * `study` gets nothing at all: its reveal needs `entity` and `parentId` as well
+ * as an id, and an id alone does not say which of its four kinds it names, so a
+ * location naming a study row opens the module and stops there. Every other
+ * compiled-in page takes a reveal it could not use from an id (`finance` has
+ * only `create`), and answers `null` like the rest.
+ */
+function compiledInReveal(moduleId: string, item: unknown, action: unknown): PendingIntent | null {
+  if (typeof item !== "string" || item === "") return null;
+  switch (moduleId) {
+    // A tool opens on its drawer's page, and `drawer.open` may name the fields to fill
+    // in (`toolPrefillOf`): both arrive in one intent, so the page never sees one without the other.
+    case "tools":
+      return { module: "tools", intent: openToolIntent(item, action) };
+    case "pro":
+      return { module: "pro", intent: openToolIntent(item, action) };
+    case "tasks":
+      return { module: "tasks", intent: { kind: "reveal", taskId: item } };
+    case "notes":
+      return { module: "notes", intent: { kind: "reveal", noteId: item } };
+    case "calendar":
+      return { module: "calendar", intent: { kind: "reveal-event", eventId: item } };
+    default:
+      return null;
+  }
+}
+
 /**
  * The full search page's `activeId` (ADR-039 §1). Deliberately NOT a registry
  * id: search is a system surface like the palette, so it must never show up in
@@ -182,6 +250,12 @@ function assertNever(value: never): never {
  * therefore has to exempt this one — `effectiveId` and the route guard below.
  */
 const SEARCH_PAGE_ID = "search";
+
+/**
+ * The assistant docked beside a page (`shortcutsReference.ts` lists Ctrl+J). Lazy,
+ * so the dock and its page's chunk are paid for only by a person who opens it.
+ */
+const AssistantDock = lazy(() => import("../../modules/assistant/renderer/Dock.js"));
 
 /**
  * What the one undo banner says it is offering to undo. A closed map over the
@@ -201,6 +275,7 @@ function restoreUndoBanners(): Record<RestoreUndoKind, string> {
     csv: strings.settings.csvImport.undoBanner,
     "fin-csv": strings.settings.finCsvImport.undoBanner,
     ics: strings.settings.icsImport.undoBanner,
+    bookmarks: strings.settings.bookmarksImport.undoBanner,
   };
 }
 
@@ -268,6 +343,13 @@ export function App() {
   // remounted away by the eviction). The „Profili“ card shows every other
   // error itself.
   const [profileActionError, setProfileActionError] = useState<string | null>(null);
+  // The demo profile is filled by main in one call that takes a moment (see
+  // `createDemoFromSwitcher`); the switcher says so while it runs.
+  const [demoPending, setDemoPending] = useState(false);
+  // The rail's device arrangement could not be re-read after a write that
+  // changed it; the rail says so until dismissed, rather than showing the old
+  // order with no word.
+  const [arrangementFailed, setArrangementFailed] = useState(false);
   // Per-profile module overrides (SET-007). Empty until loaded — every v0
   // module defaults enabled, so the pre-load render matches the common case.
   const [flags, setFlags] = useState<FlagState>({});
@@ -286,26 +368,36 @@ export function App() {
   const [visibility, setVisibility] = useState<ShellVisibility>(DEFAULT_SHELL_VISIBILITY);
   const [failed, setFailed] = useState(false);
   const [activeId, setActiveId] = useState("dashboard");
+  /** Whether the assistant is docked beside the page on screen. */
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  /** The page's own pane, which Escape in the dock returns focus to. */
+  const mainRef = useRef<HTMLElement | null>(null);
   // Pending page-level intent (021-e): reveal or create, tagged with the
   // module that owns it. That page consumes it on arrival and reports back
   // via onIntentHandled (`clearIntent`), so a later return to that module
   // never re-fires the same intent.
   const [pending, setPending] = useState<PendingIntent | null>(null);
   /**
-   * The item one `nexus:open-location` request named, held until the module's
-   * own page reports it consumed (ADR-114).
+   * What each module's kit page is owed: the item or the action the
+   * `nexus:open-location` requests named, held as one FIFO queue per module
+   * until that module's page reports the head consumed (ADR-114, ADR-117).
    *
    * A second state beside `pending` above, and deliberately not another arm of
    * it: that union is closed over the compiled-in pages' own payload types, so an
    * arm whose module could be any string would leave every
    * `pending?.module === "electronics"` beside it narrowed to two shapes at once.
-   * This one has a single shape — `location.item`, opaque to the shell. The rule
-   * is `pending`'s rule all the same: at most one is held, it is a VALUE rather
-   * than an event (a kit page arrives in its own chunk, so the page it is for may
-   * not be mounted when the request arrives), and it is cleared when that page
-   * says it was acted on.
+   * This one holds two shapes the shell never reads — `location.item` and
+   * `location.action`, both opaque to it.
+   *
+   * It is a VALUE rather than an event (a kit page arrives in its own chunk, so
+   * the page it is for may not be mounted when the request arrives), and it is a
+   * QUEUE rather than one slot: one turn can ask a page to do two things, and one
+   * slot answered the second request by dropping the first. It is keyed by module
+   * for the same reason — a request for one module must not clear what another is
+   * still owed. A compiled-in page reads its own typed intent instead
+   * (`pending` above), so it is handed nothing here.
    */
-  const [pendingItem, setPendingItem] = useState<HeldItemIntent | null>(null);
+  const [itemIntents, setItemIntents] = useState<ItemIntents>(NO_ITEM_INTENTS);
   /**
    * The module card a gear asked „Podešavanja" to open at
    * (`moduleSettingsGear.tsx`). The page consumes it on the mount the press
@@ -334,6 +426,14 @@ export function App() {
    * has just written the key, and this is what re-reads it.
    */
   const [navEpoch, setNavEpoch] = useState(0);
+  /**
+   * Bumped when the assistant changed what the page on screen shows: a location
+   * that opens the dashboard (its layout lives in main), or a docked turn that
+   * wrote beside the page (`AssistantSurface`'s `onPageChanged`). Every page's key
+   * carries it, so the page on screen remounts and re-reads, and only that one.
+   */
+  const [pageEpoch, setPageEpoch] = useState(0);
+  const bumpPageEpoch = useCallback(() => setPageEpoch((epoch) => epoch + 1), []);
   const [pinnedModules, setPinnedModules] = useState<readonly string[]>([]);
   /**
    * The group keys this profile has folded away (ADR-093 §2), and whether the
@@ -727,7 +827,8 @@ export function App() {
    * every page hangs off (each page carries `key={activeProfile.id}`, so it
    * remounts and re-enters the new profile cleanly), persist the device pref,
    * re-apply the profile's own accent (§3) and re-read its flags. Cross-profile
-   * leftovers — a pending intent, a seeded search query, the open palette —
+   * leftovers — a pending intent, a queued intent for a kit page, a seeded
+   * search query, the open palette —
    * are dropped: they were aimed at entities of the profile being left.
    */
   async function completeSwitch(profile: Profile): Promise<void> {
@@ -741,6 +842,9 @@ export function App() {
     // burst, because its ledger was untouched while it was inactive.
     reportActiveProfile(profile.id);
     setPending(null);
+    // The queued item/action was aimed at the profile being left too, and the
+    // pages of the new one never asked for it.
+    setItemIntents(NO_ITEM_INTENTS);
     setSearchSeed(null);
     closePalette();
     // The launcher lists the modules of the profile being LEFT, and a modal that
@@ -780,10 +884,12 @@ export function App() {
    * Main both creates AND fills it in one call (`profiles:create-demo`): the
    * data is the entire point, and a renderer loop writing it row by row would
    * be a second copy of the seeders. It takes a moment, which is why the
-   * switch is offered only once the answer is back.
+   * switch is offered only once the answer is back — and why the menu stays
+   * open, with its item disabled, until then.
    */
-  async function createDemoFromSwitcher(): Promise<void> {
+  async function createDemoFromSwitcher(close: () => void): Promise<void> {
     setProfileActionError(null);
+    setDemoPending(true);
     try {
       const created = await window.nexus.createDemoProfile();
       setProfiles((previous) => (previous === null ? [created] : [...previous, created]));
@@ -791,6 +897,9 @@ export function App() {
     } catch (error) {
       setProfileActionError(strings.profiles.createError);
       console.error("Nexus: failed to add the demo profile:", error);
+    } finally {
+      setDemoPending(false);
+      close();
     }
   }
 
@@ -898,8 +1007,9 @@ export function App() {
       // consume it and call onIntentHandled — clear it here instead, or it
       // would sit pending forever.
       setPending((current) => (current?.module === activeId ? null : current));
-      // The held item goes with it, for the same reason and by the same rule.
-      setPendingItem((current) => (current?.module === activeId ? null : current));
+      // The queued intent goes with it, for the same reason and by the same
+      // rule — that module's whole queue, and no other's.
+      setItemIntents((current) => forgetIntents(current, activeId));
     }
   }, [activeId, visibleIds]);
 
@@ -941,10 +1051,6 @@ export function App() {
   // unrelated App re-render would retrigger that effect for nothing.
   const clearIntent = useCallback(() => setPending(null), []);
 
-  // The held item's half of the same rule, and stable for the same reason: a kit
-  // page lists it in its own intent-effect's dependency array.
-  const clearPendingItem = useCallback(() => setPendingItem(null), []);
-
   /** Sets the pending intent and switches to the module that owns it — the one place both happen together. */
   function dispatchIntent(next: PendingIntent): void {
     setPending(next);
@@ -977,28 +1083,65 @@ export function App() {
    *
    * The mapping is deliberately shallow and deliberately the shell's own: the
    * module is shown, a `settings` name that matches a module publishing a card
-   * opens that card, and an `item` is held for that module's page as its intent
-   * (`moduleKit/itemIntent.ts`). What the shell does NOT do is invent an intent
-   * per module: an item is opaque here, and only the module that named it — the
-   * one whose page is drawn below — knows what it means.
+   * opens that card, and an `item` or an `action` is QUEUED for that module's kit
+   * page (`moduleKit/itemIntent.ts`). What the shell does NOT do is invent an
+   * intent per MODULE: an item is opaque here, and only the module that named it
+   * — the one whose page is drawn below — knows what it means.
+   *
+   * The four compiled-in pages are the exception that proves that rule: they take
+   * their own typed payloads (`PendingIntent`, 021-e) rather than the kit's, so
+   * the shell — which holds their pages beside it — maps the one thing a location
+   * can carry onto the shape each of them declared (`compiledInReveal`). Nothing
+   * is queued for them: a queue nothing consumes would hold the request forever.
    */
   useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (
-        event as CustomEvent<{ module?: unknown; settings?: unknown; item?: unknown }>
+        event as CustomEvent<{
+          module?: unknown;
+          settings?: unknown;
+          item?: unknown;
+          action?: unknown;
+        }>
       ).detail;
       const moduleId = detail?.module;
       if (typeof moduleId !== "string" || moduleId === "") return;
       setActiveId(moduleId);
-      // An item is HELD rather than announced (ADR-114): the request's own
-      // module gets it as its page's intent, and `intentForPage` below is what
-      // decides that — including for a page that mounts after this moment. A
-      // request naming no item drops whatever was held, because a location that
-      // does not name a place is not one this shell may still be holding.
-      setPendingItem(holdItemIntent(moduleId, detail?.item));
+      if (moduleId === "dashboard") setPageEpoch((epoch) => epoch + 1);
+      // An item or an action is QUEUED rather than announced (ADR-114, ADR-117):
+      // the request's own module gets it as the next thing its page is owed, and
+      // `intentForPage` below is what decides that — including for a page that
+      // mounts after this moment. A request naming neither queues nothing and
+      // leaves every other module's queue alone.
+      // The Settings page is compiled in, but it takes a queued action too: the
+      // assistant's `set-preference` is applied by the page that owns the setter.
+      if (hasModulePage(moduleId) || moduleId === "settings") {
+        setItemIntents((current) =>
+          enqueueIntent(current, moduleId, { item: detail?.item, action: detail?.action }),
+        );
+      } else if (moduleId === "canvas") {
+        // The board and, for the assistant, the sketch or card it asked for
+        // (`canvasIntent.ts`): the page applies it to the scene it owns.
+        const intent = canvasIntentOf({ item: detail?.item, action: detail?.action });
+        if (intent !== null) setPending({ module: "canvas", intent });
+      } else {
+        const reveal = compiledInReveal(moduleId, detail?.item, detail?.action);
+        if (reveal !== null) setPending(reveal);
+      }
       const settings = detail?.settings;
       if (typeof settings === "string" && moduleSettingsCardIds(registry).has(settings)) {
         setSettingsTarget(settings);
+      }
+      // The assistant's `settings.module` writes the device's arrangement in
+      // main and then opens the Modules card, so the rail re-reads it here.
+      if (moduleId === "settings" && settings === "modules") {
+        void window.nexus
+          .getModuleVisibility()
+          .then(setVisibility)
+          .catch((error: unknown) => {
+            console.error("Nexus: failed to reload the module arrangement:", error);
+            setArrangementFailed(true);
+          });
       }
     };
     window.addEventListener("nexus:open-location", handler);
@@ -1351,6 +1494,11 @@ export function App() {
     if (!ready) return;
     function handleGlobalKeydown(event: KeyboardEvent): void {
       if (event.repeat) return;
+      // A chord pressed over an open dialog (the launcher, the palette, a
+      // confirmation) acts on the page underneath it, which is not what was
+      // asked for. Each open modal holds a layer (`useModalLayer`), and the
+      // guard asks whether any is open. The palette's own chord still closes it.
+      if (isModalOpen() && !(paletteOpen && matchesChord(shortcuts.palette, event))) return;
       const position = moduleNavPosition(event);
       if (position !== null) {
         event.preventDefault();
@@ -1359,6 +1507,12 @@ export function App() {
         closePalette();
         setShortcutsHelpOpen(false);
         setActiveId(moduleId);
+        return;
+      }
+      // Ctrl+J is not remappable (`shortcutsReference.ts`): it opens the assistant beside the page.
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        setAssistantOpen((open) => !open);
         return;
       }
       for (const action of SHORTCUT_ACTIONS) {
@@ -1374,7 +1528,11 @@ export function App() {
     // close over nothing that changes except `activeId` and `visibleModuleIds`,
     // both listed here — everything else they touch is a stable state setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus?.state, activeProfile, shortcuts, visibleModuleIds, activeId, closePalette]);
+  }, [authStatus?.state, activeProfile, shortcuts, visibleModuleIds, activeId, closePalette, paletteOpen]);
+
+  // The palette is an overlay the shell draws itself, so it holds a modal layer
+  // the same way a kit `Dialog` does: the chord guard above stops at it.
+  useEffect(() => (paletteOpen ? holdModalLayer() : undefined), [paletteOpen]);
 
   // Rebuilt whenever the VISIBLE-module set can change (the device's
   // arrangement, ADR-101), the active
@@ -1462,6 +1620,20 @@ export function App() {
    * differ, and the screenshot sweep waits on it.
    */
   const shownId = useDeferredValue(effectiveId);
+
+  /**
+   * A kit page saying it acted on what it was handed: the queue moves on to the
+   * next request for that module, or owes it nothing.
+   *
+   * `shownId` rather than `effectiveId`, because the prop it answers was read
+   * from the page being DRAWN. Stable for as long as the shown page does not
+   * change: every kit page lists `onIntentHandled` in its own intent-effect's
+   * dependency array, and a fresh reference on every unrelated App re-render
+   * would retrigger that effect for nothing.
+   */
+  const handleIntentHandled = useCallback((): void => {
+    setItemIntents((current) => dropIntent(current, shownId));
+  }, [shownId]);
 
   /**
    * Every state of the shell, inside the same window frame.
@@ -1561,6 +1733,7 @@ export function App() {
               .then(setVisibility)
               .catch((error: unknown) => {
                 console.error("Nexus: failed to reload the module arrangement:", error);
+                setArrangementFailed(true);
               });
             // The questionnaire has just written the pinned modules for this
             // profile (ADR-086); the bump is what redraws the sidebar without
@@ -1593,6 +1766,9 @@ export function App() {
     patchActiveProfile({ pictureHash });
   }
 
+  /** Every page's key: a profile switch (ADR-058 §1) or a bumped `pageEpoch` remounts the page on screen. */
+  const pageKey = `${activeProfile?.id ?? ""}:${String(pageEpoch)}`;
+
   return (
     // The key REMOUNTS the shell when the language changes, which is deliberate
     // and is the only thing that makes the switch complete. A bare re-render
@@ -1608,6 +1784,8 @@ export function App() {
         surface={effectiveId === SEARCH_PAGE_ID ? strings.search.navLabel : moduleName(effectiveId)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        assistantOpen={assistantOpen}
+        onToggleAssistant={() => setAssistantOpen((open) => !open)}
         // The shell half of the app menu. „Prikaz" and „Prozor" belong to the
         // strip and it builds those itself; these are the four commands that
         // need the shell's own state — where to navigate, which account is
@@ -1769,6 +1947,7 @@ export function App() {
                             onKeyDown={
                               isPinned ? (event) => onPinnedRowKeyDown(event, moduleId) : undefined
                             }
+                            title={isPinned ? strings.app.pinnedMoveHint : undefined}
                           >
                             {moduleIcon(moduleId)}
                             {moduleName(moduleId)}
@@ -1942,12 +2121,12 @@ export function App() {
                           className="note__menu-item"
                           role="menuitem"
                           type="button"
-                          onClick={() => {
-                            close();
-                            void createDemoFromSwitcher();
-                          }}
+                          disabled={demoPending}
+                          onClick={() => void createDemoFromSwitcher(close)}
                         >
-                          {strings.profiles.createDemo}…
+                          {demoPending
+                            ? strings.profiles.creatingDemo
+                            : `${strings.profiles.createDemo}…`}
                         </button>
                       </>
                     )}
@@ -1955,9 +2134,20 @@ export function App() {
                 )}
               </NotePopover>
               {profileActionError != null && (
-                <p className="app__profile-error" role="alert">
-                  {profileActionError}
-                </p>
+                <Toast
+                  kind="error"
+                  message={profileActionError}
+                  dismissLabel={strings.app.dismissNotice}
+                  onDismiss={() => setProfileActionError(null)}
+                />
+              )}
+              {arrangementFailed && (
+                <Toast
+                  kind="error"
+                  message={strings.app.arrangementError}
+                  dismissLabel={strings.app.dismissNotice}
+                  onDismiss={() => setArrangementFailed(false)}
+                />
               )}
               {/* Only with somewhere to switch TO (ADR-044). Locking is the
                   whole action: AuthGate opens on the picker by itself once
@@ -1989,6 +2179,8 @@ export function App() {
         </nav>
 
         <main
+          ref={mainRef}
+          tabIndex={-1}
           className="app__main"
           // Which page is ON SCREEN, which during a navigation is still the one
           // being left (`shownId`); busy until it is the one asked for.
@@ -2038,24 +2230,26 @@ export function App() {
             <ModuleSettingsNavProvider value={settingsNav}>
               {shownId === "dashboard" && activeProfile ? (
                 <DashboardPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   profileName={activeProfile.name}
                   registry={registry}
                   enabledModules={visibleIds}
                   onOpenModule={setActiveId}
                   onOpenNote={openNote}
+                  onCreate={createInModule}
+                  onCapture={openTaskCapture}
                 />
               ) : shownId === "tasks" && activeProfile ? (
                 <TasksPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "tasks" ? pending.intent : null}
                   onIntentHandled={clearIntent}
                 />
               ) : shownId === "calendar" && activeProfile ? (
                 <CalendarPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   // CAL-005 / ADR-058 §5: the account's OTHER profile is the
                   // overlay chip's origin — v1 keeps one personal anchor plus at
@@ -2071,22 +2265,22 @@ export function App() {
                 />
               ) : shownId === "notes" && activeProfile ? (
                 <NotesPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "notes" ? pending.intent : null}
                   onIntentHandled={clearIntent}
                 />
               ) : shownId === "priv" && activeProfile ? (
-                <PrivPage key={activeProfile.id} profileId={activeProfile.id} />
+                <PrivPage key={pageKey} profileId={activeProfile.id} />
               ) : shownId === "files" && activeProfile ? (
                 <FilesPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   onOpenOwner={openAttachmentOwner}
                 />
               ) : shownId === "study" && activeProfile ? (
                 <StudyPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   onOpenNote={openNote}
                   intent={pending?.module === "study" ? pending.intent : null}
@@ -2094,7 +2288,7 @@ export function App() {
                 />
               ) : shownId === "finance" && activeProfile ? (
                 <FinancePage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "finance" ? pending.intent : null}
                   onIntentHandled={clearIntent}
@@ -2103,14 +2297,14 @@ export function App() {
                 // No `intent` pair: HABIT publishes no quick-create command in this
                 // slice (`searchCommands.ts`'s `CreatableModuleId` is untouched), so
                 // there is nothing pending for this page to consume.
-                <HabitsPage key={activeProfile.id} profileId={activeProfile.id} />
+                <HabitsPage key={pageKey} profileId={activeProfile.id} />
               ) : shownId === "fitness" && activeProfile ? (
                 // No `intent` pair, on HABIT's terms exactly: FIT publishes no
                 // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
                 // untouched) — logging a meal needs a food, an amount and a slot, and
                 // a palette line that opened an empty picker would be a command that
                 // only ever means „open the page".
-                <FitnessPage key={activeProfile.id} profileId={activeProfile.id} />
+                <FitnessPage key={pageKey} profileId={activeProfile.id} />
               ) : shownId === "focus" && activeProfile ? (
                 // `enabledModules` rather than an `intent` pair: UTIL publishes no
                 // quick-create command (`searchCommands.ts`'s `CreatableModuleId` is
@@ -2118,7 +2312,7 @@ export function App() {
                 // picker draws rows from TASK and STUDY and must not offer either
                 // while the profile has it switched off.
                 <FocusPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   enabledModules={visibleIds}
                 />
@@ -2129,13 +2323,13 @@ export function App() {
                 // this profile has switched off must go with it, exactly as that
                 // module's page and widgets do.
                 //
-                // `key={activeProfile.id}`, where the drawer used to go without
+                // `key={pageKey}`, where the drawer used to go without
                 // one: it reads nothing profile-shaped except the finder's stars
                 // and history, and those ARE per-profile state — so a switch now
                 // discards the previous person's favourites exactly as it
                 // discards every other page's half-typed work.
                 <ToolsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   drawer="utilities"
                   profileId={activeProfile.id}
                   enabledModules={visibleIds}
@@ -2157,7 +2351,7 @@ export function App() {
                 // therefore visible to everybody — passing it to both is what keeps
                 // the two pages one component.
                 <ToolsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   drawer="professional"
                   profileId={activeProfile.id}
                   enabledModules={visibleIds}
@@ -2173,19 +2367,20 @@ export function App() {
                   packEditor={{ profileId: activeProfile.id, onFlagsChanged: setFlags }}
                 />
               ) : shownId === "canvas" && activeProfile ? (
-                // No `intent` pair, and that is still true in slice c: CANV
-                // publishes no quick-create command (`searchCommands.ts`'s
-                // `CreatableModuleId` is untouched — a board is made on the page,
-                // from a name) and nothing deep-links INTO a board. The two props
-                // it does take are both outbound — `theme`, because the embedded
-                // editor's ~209 CSS variables are scoped to `.excalidraw` and never
-                // see `<html data-theme>`, and `onOpenRef`, because a card is a
-                // pointer and following one is a cross-module intent App owns.
+                // `intent` is what a location asked of the page: a board to open,
+                // and for the assistant a sketch or a card to put on it
+                // (`canvasIntent.ts`). The page owns the scene, so it applies that
+                // itself and reports it handled. `theme` is outbound because the
+                // embedded editor's ~209 CSS variables are scoped to `.excalidraw`
+                // and never see `<html data-theme>`, and `onOpenRef` because a card
+                // is a pointer and following one is a cross-module intent App owns.
                 <CanvasPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   theme={theme}
                   onOpenRef={openCanvasRef}
+                  intent={pending?.module === "canvas" ? pending.intent : null}
+                  onIntentHandled={clearIntent}
                 />
               ) : shownId === "electronics" && activeProfile ? (
                 // No `theme`: the bench is our own SVG over our own tokens, so it
@@ -2199,14 +2394,14 @@ export function App() {
                 // the page, from a name — ELEC publishes no create command — so
                 // „reveal" is the only arm.
                 <ElectronicsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   intent={pending?.module === "electronics" ? pending.intent : null}
                   onIntentHandled={clearIntent}
                 />
               ) : shownId === SEARCH_PAGE_ID && activeProfile ? (
                 <SearchPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   seed={searchSeed}
                   onSeedConsumed={clearSearchSeed}
@@ -2215,7 +2410,7 @@ export function App() {
                 />
               ) : shownId === "settings" && activeProfile ? (
                 <SettingsPage
-                  key={activeProfile.id}
+                  key={pageKey}
                   profileId={activeProfile.id}
                   profileName={activeProfile.name}
                   profilePictureHash={activeProfile.pictureHash}
@@ -2243,6 +2438,8 @@ export function App() {
                   onTargetHandled={clearSettingsTarget}
                   moduleVisibility={visibility}
                   onModuleVisibilityChanged={setVisibility}
+                  intent={intentForPage(itemIntents, "settings")}
+                  onIntentHandled={handleIntentHandled}
                 />
               ) : activeProfile !== undefined && hasModulePage(shownId) ? (
                 // The kit's ONE generic path (ADR-090): the shown id is a
@@ -2251,17 +2448,17 @@ export function App() {
                 // in. Adding a module is a folder; adding a branch here would be
                 // the twenty-way conflict the kit exists to end.
                 //
-                // The intent pair is `intentForPage`'s answer — the item the
-                // shell is holding, and ONLY if it was this module a location
-                // named (ADR-114). A page that never asked for one, and a
-                // module that ignores the prop, are handed `null` and behave
-                // exactly as they did before it existed.
+                // The intent pair is `intentForPage`'s answer — the next thing
+                // this module's own queue owes, and ONLY if it is this module a
+                // location named (ADR-114, ADR-117). A page that never asked for
+                // one, and a module that ignores the prop, are handed `null` and
+                // behave exactly as they did before it existed.
                 <KitModulePage
-                  key={activeProfile.id}
+                  key={pageKey}
                   id={shownId}
                   profileId={activeProfile.id}
-                  intent={intentForPage(pendingItem, shownId)}
-                  onIntentHandled={clearPendingItem}
+                  intent={intentForPage(itemIntents, shownId)}
+                  onIntentHandled={handleIntentHandled}
                 />
               ) : (
                 <ModulePage id={shownId} />
@@ -2269,6 +2466,18 @@ export function App() {
             </ModuleSettingsNavProvider>
           </PageSlot>
         </main>
+        {/* Not beside the assistant's own page: two copies of one conversation would each keep their own turn. */}
+        {assistantOpen && activeProfile !== undefined && shownId !== "assistant" && (
+          <Suspense fallback={null}>
+            <AssistantDock
+              profileId={activeProfile.id}
+              beside={shownId}
+              onClose={() => setAssistantOpen(false)}
+              onEscape={() => mainRef.current?.focus()}
+              onPageChanged={bumpPageEpoch}
+            />
+          </Suspense>
+        )}
       </div>
 
       {activeProfile && (

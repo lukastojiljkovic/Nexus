@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
+  Dialog,
   EmptyState,
   Icon,
   ListRow,
   LoadingState,
+  Notice,
   PageHeader,
   Select,
   TextArea,
@@ -22,9 +24,9 @@ import {
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { numberFormat } from "../../../renderer/src/intl.js";
-import { useFocusTrap } from "../../../renderer/src/useFocusTrap.js";
 import { manifest } from "../shared/manifest.js";
 import type {
+  CollectionView,
   CookbookView,
   FoodSuggestionView,
   NutritionView,
@@ -75,6 +77,9 @@ import "./cookbook.css";
  * says which read failed and what to try — never a raw exception.
  */
 
+/** One mutation: the API call, answering with the list view every mutation answers with. */
+type CookbookAction = (api: typeof window.nexus.modules.cookbook) => Promise<CookbookView>;
+
 export default function CookbookPage({ profileId }: ModulePageProps) {
   const [view, setView] = useState<CookbookView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +88,13 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   const [servings, setServings] = useState(1);
   /** What the search box found, or null while the box is empty. */
   const [hits, setHits] = useState<readonly RecipeSummaryView[] | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<null | { id: string | null }>(null);
   const [cooking, setCooking] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** The shelf the list is filtered to, or null for every recipe. */
+  const [shelf, setShelf] = useState<string | null>(null);
 
   /**
    * One read of the list, into state. Every mutation answers with the same
@@ -94,9 +102,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
    * was told, never what it hoped.
    */
   const run = useCallback(
-    async (
-      action: (api: typeof window.nexus.modules.cookbook) => Promise<CookbookView>,
-    ): Promise<void> => {
+    async (action: CookbookAction): Promise<void> => {
       try {
         setView(await action(window.nexus.modules.cookbook));
         setError(null);
@@ -143,6 +149,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
       try {
         setDetail(await window.nexus.modules.cookbook.get({ profileId, id }));
       } catch (failure) {
+        setError(copy.errors.recipe);
         console.error("Nexus: the open recipe could not be re-read:", failure);
       }
     },
@@ -153,6 +160,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   const search = useCallback(
     async (text: string): Promise<void> => {
       setQuery(text);
+      setSearchFailed(false);
       if (text.trim().length === 0) {
         setHits(null);
         return;
@@ -160,6 +168,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
       try {
         setHits(await window.nexus.modules.cookbook.search({ profileId, query: text }));
       } catch (failure) {
+        setSearchFailed(true);
         console.error("Nexus: the cookbook search failed:", failure);
       }
     },
@@ -178,7 +187,12 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   }
 
   const recipes = view?.recipes ?? [];
-  const shown = hits ?? recipes;
+  // A shelf that no longer exists (deleted in another window) filters nothing,
+  // rather than hiding every recipe behind a name the list no longer offers.
+  const shelfIds = view?.collections.find((candidate) => candidate.id === shelf)?.recipeIds;
+  const shown = (hits ?? recipes).filter(
+    (recipe) => shelfIds === undefined || shelfIds.includes(recipe.id),
+  );
 
   return (
     <div className="cookbook">
@@ -208,14 +222,37 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
               onChange={(event) => void search(event.target.value)}
             />
             <p className="nx-hint">{copy.list.searchHint}</p>
-            {recipes.length === 0 ? (
+            {view.collections.length > 0 && (
+              <Select
+                label={copy.collections.filter}
+                value={shelf ?? ""}
+                onChange={(event) => setShelf(event.target.value === "" ? null : event.target.value)}
+              >
+                <option value="">{copy.collections.all}</option>
+                {view.collections.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {searchFailed ? (
+              <Notice
+                kind="danger"
+                message={copy.errors.search}
+                action={{ label: copy.errors.retry, onClick: () => void search(query) }}
+              />
+            ) : recipes.length === 0 ? (
               <EmptyState
                 variant="inline"
                 title={copy.list.emptyTitle}
                 description={copy.list.emptyBody}
               />
             ) : shown.length === 0 ? (
-              <p className="nx-hint">{copy.list.noResults}</p>
+              <EmptyState
+                variant="inline"
+                title={shelfIds === undefined ? copy.list.noResults : copy.collections.emptyShelf}
+              />
             ) : (
               <div className="cookbook__list">
                 {shown.map((recipe) => (
@@ -278,6 +315,17 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
                 onEdit={() => setEditing({ id: detail.id })}
                 onDelete={() => setDeleting(true)}
                 onClose={() => setDetail(null)}
+                collections={view.collections}
+                onShelf={(collectionId, member) =>
+                  void run((api) =>
+                    api.setInCollection({
+                      profileId,
+                      collectionId,
+                      recipeId: detail.id,
+                      member,
+                    }),
+                  )
+                }
                 onPhoto={() =>
                   void run(async (api) => {
                     const next = await api.attachPhoto({ profileId, id: detail.id });
@@ -307,7 +355,17 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
             </>
           )}
 
-          <Packs profileId={profileId} onSaved={(id) => void open(id)} />
+          <CollectionManager profileId={profileId} collections={view.collections} onRun={run} />
+
+          <Packs
+            profileId={profileId}
+            onSaved={(id) => {
+              // A copied pack recipe lands on its pack's shelf, which the list
+              // must show: the open is not enough.
+              void refresh();
+              void open(id);
+            }}
+          />
         </>
       )}
 
@@ -325,8 +383,13 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
       )}
 
       {deleting && detail !== null && (
-        <ConfirmDelete
-          title={detail.title}
+        <ConfirmDialog
+          title={copy.confirm.title}
+          name={detail.title}
+          question={copy.confirm.question}
+          confirmLabel={copy.confirm.confirm}
+          cancelLabel={copy.confirm.cancel}
+          destructive
           onCancel={() => setDeleting(false)}
           onConfirm={() => {
             const id = detail.id;
@@ -358,6 +421,8 @@ function RecipeDetail({
   onClose,
   onPhoto,
   onRemovePhoto,
+  collections,
+  onShelf,
 }: {
   recipe: RecipeView;
   servings: number;
@@ -368,9 +433,13 @@ function RecipeDetail({
   onClose: () => void;
   onPhoto: () => void;
   onRemovePhoto: () => void;
+  collections: readonly CollectionView[];
+  onShelf: (collectionId: string, member: boolean) => void;
 }) {
   const factor = factorFor(recipe, servings);
   const total = timeOf(recipe);
+  const onThese = collections.filter((shelf) => shelf.recipeIds.includes(recipe.id));
+  const notOnThese = collections.filter((shelf) => !shelf.recipeIds.includes(recipe.id));
 
   return (
     <Card className="cookbook__card" title={copy.detail.title}>
@@ -388,6 +457,39 @@ function RecipeDetail({
             {tag}
           </Chip>
         ))}
+      </div>
+
+      <div className="cookbook__shelves">
+        {onThese.map((shelf) => (
+          <Chip key={shelf.id} variant="data">
+            {shelf.name}
+            <Button
+              size="sm"
+              variant="quiet"
+              aria-label={`${copy.collections.remove}: ${shelf.name}`}
+              onClick={() => onShelf(shelf.id, false)}
+            >
+              ×
+            </Button>
+          </Chip>
+        ))}
+        {notOnThese.length > 0 && (
+          <Select
+            label={copy.collections.addTo}
+            layout="inline"
+            value=""
+            onChange={(event) => {
+              if (event.target.value !== "") onShelf(event.target.value, true);
+            }}
+          >
+            <option value="">{copy.collections.choose}</option>
+            {notOnThese.map((shelf) => (
+              <option key={shelf.id} value={shelf.id}>
+                {shelf.name}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <div className="cookbook__servings">
@@ -858,6 +960,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
   const [opened, setOpened] = useState<PackRecipeView | null>(null);
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [browseFailed, setBrowseFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -881,6 +984,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
     async (id: string, text: string): Promise<void> => {
       setOpened(null);
       setSaved(false);
+      setBrowseFailed(false);
       if (id === "") {
         setHits([]);
         return;
@@ -888,6 +992,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
       try {
         setHits(await window.nexus.modules.cookbook.browsePack({ profileId, packId: id, query: text }));
       } catch (failure) {
+        setBrowseFailed(true);
         console.error("Nexus: a recipe pack could not be browsed:", failure);
       }
     },
@@ -925,7 +1030,13 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          {hits.length === 0 ? (
+          {browseFailed ? (
+            <Notice
+              kind="danger"
+              message={copy.errors.browse}
+              action={{ label: copy.errors.retry, onClick: () => void browse(packId, query) }}
+            />
+          ) : hits.length === 0 ? (
             <p className="nx-hint">{copy.packs.noResults}</p>
           ) : (
             <div className="cookbook__list">
@@ -1048,8 +1159,6 @@ function RecipeEditor({
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
-  const titleId = useId();
-  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
   const [title, setTitle] = useState(recipe?.title ?? "");
   const [course, setCourse] = useState<CookbookCourse>(recipe?.course ?? "main");
   const [servings, setServings] = useState(String(recipe?.servings ?? 4));
@@ -1072,16 +1181,6 @@ function RecipeEditor({
   const [notes, setNotes] = useState(recipe?.notes ?? "");
   const [problem, setProblem] = useState<"name" | "ingredients" | "steps" | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onClose]);
 
   function drafts(): RecipeIngredientDraft[] | null {
     const previous = new Map(
@@ -1158,131 +1257,125 @@ function RecipeEditor({
     }
   }
 
-  return createPortal(
-    <div className="cookbook__overlay">
-      <div className="cookbook__backdrop" onClick={onClose} />
-      <div
-        ref={panelRef}
-        className="cookbook__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <h2 id={titleId} className="cookbook__panel-title">
-          {recipe === null ? copy.editor.newTitle : copy.editor.title}
-        </h2>
-        <TextField
-          label={copy.editor.name}
-          value={title}
-          maxLength={120}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-        {problem === "name" && <p className="cookbook__error">{copy.editor.errorName}</p>}
-        <Select
-          label={copy.editor.course}
-          value={course}
-          onChange={(event) => setCourse(event.target.value as CookbookCourse)}
-        >
-          {COOKBOOK_COURSES.map((value) => (
-            <option key={value} value={value}>
-              {courseLabel(value)}
-            </option>
-          ))}
-        </Select>
-        <div className="cookbook__triple">
-          <TextField
-            label={copy.editor.servings}
-            inputMode="numeric"
-            value={servings}
-            onChange={(event) => setServings(event.target.value)}
-          />
-          <TextField
-            label={copy.editor.prep}
-            inputMode="numeric"
-            value={prep}
-            onChange={(event) => setPrep(event.target.value)}
-          />
-          <TextField
-            label={copy.editor.cook}
-            inputMode="numeric"
-            value={cook}
-            onChange={(event) => setCook(event.target.value)}
-          />
-        </div>
-        <TextArea
-          label={copy.editor.ingredients}
-          rows={6}
-          value={ingredients}
-          onChange={(event) => setIngredients(event.target.value)}
-        />
-        <p className="nx-hint">{copy.editor.ingredientsHint}</p>
-        {problem === "ingredients" && (
-          <p className="cookbook__error">{copy.editor.errorIngredients}</p>
-        )}
-        <div className="cookbook__step-editor">
-          <h3 className="cookbook__section-title">{copy.editor.steps}</h3>
-          {steps.map((step, index) => (
-            <div key={index} className="cookbook__step-row">
-              <TextField
-                label={`${copy.cooking.step} ${numberFormat().format(index + 1)}`}
-                value={step.text}
-                onChange={(event) =>
-                  setSteps((current) =>
-                    current.map((entry, at) =>
-                      at === index ? { ...entry, text: event.target.value } : entry,
-                    ),
-                  )
-                }
-              />
-              <TextField
-                label={copy.editor.stepTimer}
-                className="cookbook__step-minutes"
-                inputMode="numeric"
-                value={step.timerMinutes}
-                onChange={(event) =>
-                  setSteps((current) =>
-                    current.map((entry, at) =>
-                      at === index ? { ...entry, timerMinutes: event.target.value } : entry,
-                    ),
-                  )
-                }
-              />
-              <Button
-                size="sm"
-                variant="quiet"
-                onClick={() => setSteps((current) => current.filter((_entry, at) => at !== index))}
-              >
-                <Icon name="trash" />
-              </Button>
-            </div>
-          ))}
-          <Button size="sm" onClick={() => setSteps((current) => [...current, { text: "", timerMinutes: "" }])}>
-            {copy.list.add}
-          </Button>
-        </div>
-        {problem === "steps" && <p className="cookbook__error">{copy.editor.errorSteps}</p>}
-        <TextField
-          label={copy.editor.tags}
-          value={tags}
-          onChange={(event) => setTags(event.target.value)}
-        />
-        <TextArea
-          label={copy.editor.notes}
-          rows={3}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-        />
-        <div className="cookbook__actions">
+  return (
+    <Dialog
+      title={recipe === null ? copy.editor.newTitle : copy.editor.title}
+      onClose={onClose}
+      busy={busy}
+      className="cookbook__editor"
+      actions={
+        <>
           <Button variant="primary" disabled={busy} onClick={() => void save()}>
             {copy.editor.save}
           </Button>
           <Button variant="quiet" onClick={onClose}>
             {copy.editor.cancel}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <TextField
+        label={copy.editor.name}
+        value={title}
+        maxLength={120}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+      {problem === "name" && <p className="cookbook__error">{copy.editor.errorName}</p>}
+      <Select
+        label={copy.editor.course}
+        value={course}
+        onChange={(event) => setCourse(event.target.value as CookbookCourse)}
+      >
+        {COOKBOOK_COURSES.map((value) => (
+          <option key={value} value={value}>
+            {courseLabel(value)}
+          </option>
+        ))}
+      </Select>
+      <div className="cookbook__triple">
+        <TextField
+          label={copy.editor.servings}
+          inputMode="numeric"
+          value={servings}
+          onChange={(event) => setServings(event.target.value)}
+        />
+        <TextField
+          label={copy.editor.prep}
+          inputMode="numeric"
+          value={prep}
+          onChange={(event) => setPrep(event.target.value)}
+        />
+        <TextField
+          label={copy.editor.cook}
+          inputMode="numeric"
+          value={cook}
+          onChange={(event) => setCook(event.target.value)}
+        />
       </div>
-    </div>,
-    document.body,
+      <TextArea
+        label={copy.editor.ingredients}
+        rows={6}
+        value={ingredients}
+        onChange={(event) => setIngredients(event.target.value)}
+      />
+      <p className="nx-hint">{copy.editor.ingredientsHint}</p>
+      {problem === "ingredients" && (
+        <p className="cookbook__error">{copy.editor.errorIngredients}</p>
+      )}
+      <div className="cookbook__step-editor">
+        <h3 className="cookbook__section-title">{copy.editor.steps}</h3>
+        {steps.map((step, index) => (
+          <div key={index} className="cookbook__step-row">
+            <TextField
+              label={`${copy.cooking.step} ${numberFormat().format(index + 1)}`}
+              value={step.text}
+              onChange={(event) =>
+                setSteps((current) =>
+                  current.map((entry, at) =>
+                    at === index ? { ...entry, text: event.target.value } : entry,
+                  ),
+                )
+              }
+            />
+            <TextField
+              label={copy.editor.stepTimer}
+              className="cookbook__step-minutes"
+              inputMode="numeric"
+              value={step.timerMinutes}
+              onChange={(event) =>
+                setSteps((current) =>
+                  current.map((entry, at) =>
+                    at === index ? { ...entry, timerMinutes: event.target.value } : entry,
+                  ),
+                )
+              }
+            />
+            <Button
+              size="sm"
+              variant="quiet"
+              onClick={() => setSteps((current) => current.filter((_entry, at) => at !== index))}
+            >
+              <Icon name="trash" />
+            </Button>
+          </div>
+        ))}
+        <Button size="sm" onClick={() => setSteps((current) => [...current, { text: "", timerMinutes: "" }])}>
+          {copy.list.add}
+        </Button>
+      </div>
+      {problem === "steps" && <p className="cookbook__error">{copy.editor.errorSteps}</p>}
+      <TextField
+        label={copy.editor.tags}
+        value={tags}
+        onChange={(event) => setTags(event.target.value)}
+      />
+      <TextArea
+        label={copy.editor.notes}
+        rows={3}
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+      />
+    </Dialog>
   );
 }
 
@@ -1295,56 +1388,109 @@ function minuteOf(text: string): number | null {
   return Math.min(10_080, Math.round(value));
 }
 
-// --- Potvrda brisanja ---------------------------------------------------------
+// --- Zbirke -------------------------------------------------------------------
 
-/** The house confirmation, drawn with this module's own classes so the dialog needs no stylesheet it did not load. */
-function ConfirmDelete({
-  title,
-  onConfirm,
-  onCancel,
+/**
+ * The manage view for the shelves: create one, rename one, delete one. A shelf
+ * goes through the kit's confirm dialog, because the one fact a person needs
+ * before answering is that the recipes on it stay.
+ */
+function CollectionManager({
+  profileId,
+  collections,
+  onRun,
 }: {
-  title: string;
-  onConfirm: () => void;
-  onCancel: () => void;
+  profileId: string;
+  collections: readonly CollectionView[];
+  onRun: (action: CookbookAction) => Promise<void>;
 }) {
-  const titleId = useId();
-  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState<CollectionView | null>(null);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onCancel]);
-
-  return createPortal(
-    <div className="cookbook__overlay">
-      <div className="cookbook__backdrop" onClick={onCancel} />
-      <div
-        ref={panelRef}
-        className="cookbook__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
+  return (
+    <Card className="cookbook__card" title={copy.collections.title}>
+      <p className="nx-hint">{copy.collections.intro}</p>
+      <form
+        className="cookbook__shelves"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const name = draft.trim();
+          if (name === "") return;
+          setDraft("");
+          void onRun((api) => api.createCollection({ profileId, name }));
+        }}
       >
-        <h2 id={titleId} className="cookbook__panel-title">
-          {copy.confirm.title}
-        </h2>
-        <p className="cookbook__panel-name">„{title}“</p>
-        <p className="nx-hint">{copy.confirm.question}</p>
-        <div className="cookbook__actions">
-          <Button variant="danger" onClick={onConfirm}>
-            {copy.confirm.confirm}
-          </Button>
-          <Button variant="quiet" onClick={onCancel}>
-            {copy.confirm.cancel}
-          </Button>
+        <TextField
+          label={copy.collections.newName}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <Button type="submit" variant="primary">
+          {copy.collections.create}
+        </Button>
+      </form>
+      {collections.length === 0 ? (
+        <EmptyState variant="inline" title={copy.collections.empty} />
+      ) : (
+        <div className="cookbook__list">
+          {collections.map((shelf) => (
+            <ShelfRow
+              key={shelf.id}
+              name={shelf.name}
+              onRename={(name) =>
+                void onRun((api) => api.renameCollection({ profileId, id: shelf.id, name }))
+              }
+              onDelete={() => setPending(shelf)}
+            />
+          ))}
         </div>
-      </div>
-    </div>,
-    document.body,
+      )}
+      {pending !== null && (
+        <ConfirmDialog
+          title={copy.collections.deleteTitle}
+          name={pending.name}
+          question={copy.collections.deleteQuestion}
+          confirmLabel={copy.confirm.confirm}
+          cancelLabel={copy.confirm.cancel}
+          destructive
+          onCancel={() => setPending(null)}
+          onConfirm={() => {
+            const id = pending.id;
+            setPending(null);
+            void onRun((api) => api.removeCollection({ profileId, id }));
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** One shelf's name, editable in place; the draft is a copy, so a rename is one explicit save. */
+function ShelfRow({
+  name,
+  onRename,
+  onDelete,
+}: {
+  name: string;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const [text, setText] = useState(name);
+  const trimmed = text.trim();
+
+  return (
+    <div className="cookbook__shelves">
+      <TextField
+        label={copy.collections.name}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+      />
+      <Button size="sm" disabled={trimmed === "" || trimmed === name} onClick={() => onRename(trimmed)}>
+        {copy.collections.rename}
+      </Button>
+      <Button size="sm" variant="danger" onClick={onDelete}>
+        {copy.collections.delete}
+      </Button>
+    </div>
   );
 }

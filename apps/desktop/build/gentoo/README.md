@@ -63,8 +63,8 @@ need network access on the first run.
 ## 2. The AppImage
 
 ```sh
-chmod +x Nexus-1.5.0-x86_64.AppImage
-./Nexus-1.5.0-x86_64.AppImage
+chmod +x Nexus-<version>-x86_64.AppImage
+./Nexus-<version>-x86_64.AppImage
 ```
 
 **No FUSE required.** The build pins electron-builder's static AppImage runtime
@@ -137,7 +137,7 @@ app-office/nexus-bin ~amd64
 
 `SRC_URI` names the GitHub release, so portage fetches the tarball itself, and
 the committed `Manifest` beside the ebuild is the digest of exactly that file:
-`nexus-1.5.0-linux-x64.tar.gz` as the release workflow published it, the same
+`nexus-<version>-linux-x64.tar.gz` as the release workflow published it, the same
 bytes `SHA256SUMS.txt` and the build attestation on the release describe.
 
 **A version bump regenerates the Manifest from the published tarball, never
@@ -148,7 +148,7 @@ something. Once the new release is out:
 
 ```sh
 cd /var/db/repos/nexus/app-office/nexus-bin
-sudo ebuild nexus-bin-1.5.0.ebuild manifest
+sudo ebuild nexus-bin-<version>.ebuild manifest
 ```
 
 ### 3.4 Install
@@ -181,8 +181,10 @@ ebuild's `RDEPEND` lists them; the AppImage assumes they are already there,
 which on a desktop system they are.
 
 User data lives in `~/.config/Nexus` — an SQLCipher-encrypted database plus the
-key-chain files. Cloud sync is off by default and the local-only path makes no
-network calls at all.
+key-chain files. Network use is a mode of the whole device: **Offline only** is
+the default and makes no network call at all, **Offline + update checks** adds
+the update check against GitHub, and **Downloads** adds the content you choose
+to fetch. The mode is asked once at first start and can be changed in Settings.
 
 ---
 

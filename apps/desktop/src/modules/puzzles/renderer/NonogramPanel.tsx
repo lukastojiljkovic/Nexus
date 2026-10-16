@@ -31,9 +31,11 @@ import {
 } from "./nonogram.js";
 import {
   ActionRow,
+  NewGameButton,
   Readout,
   VariantChips,
   initialGame,
+  savedFor,
   variantLabel,
   useElapsedClock,
   type PanelProps,
@@ -59,9 +61,16 @@ import { newSeed } from "./seed.js";
  * only progress readout a nonogram has.
  */
 
-export function NonogramPanel({ saves, variants, onSave, onFinish, onClear }: PanelProps) {
+export function NonogramPanel({
+  saves,
+  variants,
+  onSave,
+  onFinish,
+  onClear,
+  opening,
+}: PanelProps) {
   const engine = useEngine();
-  const [initial] = useState(() => initialGame(saves, "nonogram", variants, newSeed));
+  const [initial] = useState(() => initialGame(saves, "nonogram", variants, newSeed, opening));
   const [variant, setVariant] = useState(initial.variant);
   const [seed, setSeed] = useState(initial.seed);
   const [board, setBoard] = useState<History<NonogramStateView> | null>(
@@ -304,9 +313,7 @@ export function NonogramPanel({ saves, variants, onSave, onFinish, onClear }: Pa
         <Button size="sm" disabled={!canRedo(board)} onClick={() => step(false)}>
           {copy.common.redo}
         </Button>
-        <Button size="sm" variant="primary" onClick={newGame}>
-          {copy.common.newGame}
-        </Button>
+        <NewGameButton saved={savedFor(saves, "nonogram", variant) !== null} primary onNew={newGame} />
       </ActionRow>
 
       {isSolved(marks, puzzle) && (

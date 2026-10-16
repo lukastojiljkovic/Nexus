@@ -5,6 +5,9 @@
 "is a problem card" is `problem_steps IS NOT NULL` and that `dueQueue` gaining a
 kind/steps predicate is this ADR's business).
 
+**Status 2026-10-15:** per-deck retention (STUDY-007), recorded as out of
+scope in §1, was built later: migration 094 and `StudySettingsStore.retentionFor`.
+
 ## 1. What the PRD asks, read against what exists
 
 PRD 15:75-76: *"Interleaved practice sets: user selects topics → mixed,

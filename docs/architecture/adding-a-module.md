@@ -10,6 +10,9 @@ kit's own proof.
 Read [ADR-090](adr/090-module-kit.md) first: it says WHY each piece is where it
 is. This file says what to type.
 
+A module that the assistant should be able to act on also gets its tools, which
+follow [`assistant-tools.md`](assistant-tools.md) (ADR-117).
+
 ## What you create
 
 ```text
@@ -300,7 +303,22 @@ widget pairing), `renderer/src/moduleSettings.test.ts`,
 and `shared/onboardingPresets.ts` — the questionnaire's own table must decide
 every selectable module.
 
-## 8. The gates
+## 8. The manual page
+
+The assistant answers questions about your module from the in-app manual
+(`apps/desktop/src/main/assistant/manual/`), so the module is not done until its
+page exists, in both languages: `manual/sr/<id>.md` and `manual/en/<id>.md`, the
+same `id` in the front matter of both, and the labels spelled exactly as your
+screen prints them. The page format is described in
+[that folder's README](../../apps/desktop/src/main/assistant/manual/README.md).
+
+`check:manual` fails on a module the registry declares that has no page in
+either language, which is what stops a module from shipping undocumented in
+silence. The one case it exempts is a module whose screen is genuinely not real
+yet: that one goes into `COVERAGE_ALLOWLIST` in `scripts/check-manual.mjs`, one
+line per module with the reason beside it.
+
+## 9. The gates
 
 Run what your change can affect; every one of these must be clean.
 

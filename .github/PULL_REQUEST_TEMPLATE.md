@@ -6,6 +6,7 @@
 ## Checklist
 
 - [ ] `make verify` passes locally (build, typecheck, lint, tests and every `check:*` gate)
+- [ ] Every commit is signed off (`git commit -s`) — see CONTRIBUTING.md
 - [ ] Styling uses design tokens only — no raw colors outside `packages/tokens`
 - [ ] No new runtime dependencies (or justified below)
 - [ ] IPC / preload / CSP changes reviewed against the SEC-EL hardening rules

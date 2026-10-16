@@ -34,30 +34,18 @@
  * the same money.
  */
 
-import { currencyMinorDigits } from "@nexus/core";
+import {
+  currencyMinorDigits,
+  decimalLiteral,
+  formatMinorUnits,
+  minorUnitsFromText,
+  moneyFormatOptions,
+} from "@nexus/core";
 import { decimalSeparator, decimalSeparators, numberFormat } from "./intl.js";
 
-/**
- * The currency formatter for a currency, from `intl.ts`'s per-locale memo.
- *
- * The fraction digits are STATED, from the same table `decimalLiteral` splits
- * the integer with, rather than left to the formatter's own CLDR default. Left
- * to itself, `Intl` writes a currency the way the LOCALE writes it, and for RSD
- * under Chromium's ICU that is zero decimals — Serbia stopped writing para long
- * ago. This module stores 100 minor units to the dinar (migration 051, and this
- * file's own header), so a formatter rounding to zero decimals would silently
- * drop the para off every amount. Passing the digits in is what makes the split
- * and the rendering the same decision instead of two that happen to agree.
- */
+/** The currency formatter for a currency, from `intl.ts`'s per-locale memo; the options and the split are `@nexus/core`'s, shared with the assistant's tools. */
 function formatterFor(currency: string): Intl.NumberFormat {
-  const digits = currencyMinorDigits(currency);
-  return numberFormat({
-    style: "currency",
-    currency,
-    currencyDisplay: "code",
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
+  return numberFormat(moneyFormatOptions(currency, true));
 }
 
 /**
@@ -71,43 +59,17 @@ function formatterFor(currency: string): Intl.NumberFormat {
 export { currencyMinorDigits };
 
 /**
- * The exact decimal `Intl` is handed. Total by construction: `minorUnits` is an
- * integer, `digits` is a non-negative integer, so the output always matches
- * `-?\d+(\.\d+)?` — which IS the `${number}` grammar the assertion claims. The
- * assertion is what TypeScript's modelling of Intl's string input costs; there
- * is no runtime-built string that could satisfy that literal type statically.
- *
- * The split is integer arithmetic on purpose: `abs - (abs % scale)` is exact
- * for every safe integer, and dividing that by `scale` yields an exact integer
- * quotient — no float ever holds the amount.
- */
-function decimalLiteral(minorUnits: number, digits: number): `${number}` {
-  const negative = minorUnits < 0;
-  const abs = Math.abs(minorUnits);
-  const sign = negative ? "-" : "";
-  if (digits === 0) return `${sign}${abs}` as `${number}`;
-  const scale = 10 ** digits;
-  const fraction = abs % scale;
-  const whole = (abs - fraction) / scale;
-  return `${sign}${whole}.${String(fraction).padStart(digits, "0")}` as `${number}`;
-}
-
-/**
  * An amount of minor units as the active locale's currency text — „12,34 RSD"
  * in Serbian, „RSD 12.34" in English. The only function in the app that
  * produces a decimal point.
  */
 export function formatMoney(minorUnits: number, currency: string): string {
-  return formatterFor(currency).format(decimalLiteral(minorUnits, currencyMinorDigits(currency)));
+  return formatMinorUnits(minorUnits, currency, formatterFor(currency));
 }
 
 /** The code-free formatter for a currency — the currency still decides the fraction digits. */
 function plainFormatterFor(currency: string): Intl.NumberFormat {
-  const digits = currencyMinorDigits(currency);
-  return numberFormat({
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
+  return numberFormat(moneyFormatOptions(currency, false));
 }
 
 /**
@@ -125,9 +87,7 @@ function plainFormatterFor(currency: string): Intl.NumberFormat {
  * all in it.
  */
 export function formatMoneyPlain(minorUnits: number, currency: string): string {
-  return plainFormatterFor(currency).format(
-    decimalLiteral(minorUnits, currencyMinorDigits(currency)),
-  );
+  return formatMinorUnits(minorUnits, currency, plainFormatterFor(currency));
 }
 
 /**
@@ -159,33 +119,8 @@ export function moneyInputValue(minorUnits: number, currency: string): string {
  * user has to say again.
  */
 export function parseMoneyInput(text: string, currency: string): number | null {
-  const match = new RegExp(`^([+-]?)(\\d+)(?:[${decimalClass()}](\\d+))?$`).exec(text.trim());
-  if (match === null) return null;
-  const [, sign = "", whole = "", fraction] = match;
-
-  const digits = currencyMinorDigits(currency);
-  if (fraction !== undefined && fraction.length > digits) return null;
-
-  const scale = 10 ** digits;
-  const minorUnits =
-    Number(whole) * scale + (fraction === undefined ? 0 : Number(fraction.padEnd(digits, "0")));
-  // The store's own bound (`isMinorUnits`), checked here so the field can say
-  // so rather than letting a value that cannot survive SQLite reach the wire.
-  if (!Number.isSafeInteger(minorUnits)) return null;
-  return sign === "-" ? -minorUnits : minorUnits;
-}
-
-/**
- * The decimal marks a typed amount may use, as a regex character class body.
- *
- * The union of the shipped locales' marks, because text in a field could have
- * been written by the formatter under either language — the parser has no way to
- * tell, and accepting both is what makes a round trip safe in Serbian AND
- * English. Every character is escaped for a class, so a locale whose mark is a
- * regex metacharacter still works.
- */
-function decimalClass(): string {
-  return decimalSeparators()
-    .map((separator) => separator.replace(/[\\\]^-]/g, "\\$&"))
-    .join("");
+  // The union of the shipped locales' marks: text in a field could have been
+  // written by the formatter under either language, and accepting both is what
+  // makes a round trip safe in Serbian AND English.
+  return minorUnitsFromText(text, currency, decimalSeparators());
 }

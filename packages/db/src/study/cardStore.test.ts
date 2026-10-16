@@ -622,6 +622,21 @@ describe("CardStore", () => {
       expect(cards.previewIntervals(card.id, T0).good > before).toBe(true);
     });
 
+    it("schedules a card at its deck's own retention, ahead of the profile's", () => {
+      const { cards, profileId, deckId } = fixture();
+      const settings = new StudySettingsStore(db.raw, profileId);
+      const card = cards.create({ deckId, front: "a", back: "a" }, T0);
+      makeReviewState(card.id);
+
+      settings.save({ targetRetention: 0.97, newPerDay: 20, maxReviewsPerDay: null }, T0);
+      const strict = cards.previewIntervals(card.id, T0).good;
+
+      db.raw.prepare("UPDATE decks SET target_retention = ? WHERE id = ?").run(0.7, deckId);
+      const relaxed = cards.previewIntervals(card.id, T0).good;
+
+      expect(relaxed > strict).toBe(true);
+    });
+
     it("never retro-reschedules an existing card when the retention changes", () => {
       const { cards, profileId, deckId } = fixture();
       const settings = new StudySettingsStore(db.raw, profileId);

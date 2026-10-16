@@ -6,7 +6,7 @@ import { Collaboration } from "@tiptap/extension-collaboration";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
 import { isInlineImageMime, mergeNoteState, replaceNoteContent } from "@nexus/core";
-import { EmptyState, SaveIndicator, type SaveStatus } from "@nexus/ui";
+import { AsyncSurface, Notice, SaveIndicator, type SaveStatus } from "@nexus/ui";
 import {
   PRIV_ATTACHMENTS_MAX_COUNT,
   PRIV_PLAINTEXT_MAX_BYTES,
@@ -128,6 +128,8 @@ export interface PrivNoteEditorProps {
 export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: PrivNoteEditorProps) {
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  // Bumped by the retry, so the load effect runs again for the same note.
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saveError, setSaveError] = useState<"generic" | "tooLarge" | null>(null);
   /**
    * What this editor says about its own persistence — `SaveIndicator`'s two
@@ -355,7 +357,7 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
       if (created !== null) created.destroy();
       if (docRef.current === created) docRef.current = null;
     };
-  }, [profileId, noteId, scheduleFlush]);
+  }, [profileId, noteId, scheduleFlush, loadAttempt]);
 
   /**
    * Restore (ADR-057): flush the pending keystrokes so the checkpoint below
@@ -444,18 +446,21 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
     [attachments],
   );
 
-  if (loadFailed) {
+  if (loadFailed || doc === null) {
     return (
       <div className="note__editor-empty">
-        <EmptyState title={strings.notes.untitled} description={strings.priv.editor.loadError} />
-      </div>
-    );
-  }
-
-  if (doc === null) {
-    return (
-      <div className="note__editor-empty">
-        <p className="nx-hint">{strings.app.loading}</p>
+        <AsyncSurface
+          state={loadFailed ? { status: "failed" } : { status: "loading" }}
+          loadingLabel={strings.app.loading}
+          failureTitle={strings.priv.editor.loadErrorTitle}
+          failureMessage={strings.priv.editor.loadError}
+          retry={{
+            label: strings.priv.editor.retry,
+            onClick: () => setLoadAttempt((attempt) => attempt + 1),
+          }}
+        >
+          {() => null}
+        </AsyncSurface>
       </div>
     );
   }
@@ -476,11 +481,7 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
         }
       />
 
-      {restoreError && (
-        <div className="note__history-error" role="status">
-          {strings.priv.editor.history.error}
-        </div>
-      )}
+      {restoreError && <Notice kind="danger" message={strings.priv.editor.history.error} />}
       <div className="note__editor-body">
         <div className="note__editor-tools">
           <button
@@ -526,13 +527,16 @@ export function PrivNoteEditor({ profileId, noteId, onSaved, onMaybeLocked }: Pr
                 {strings.priv.editor.attachmentsNote}
               </p>
               {attachmentError !== null && (
-                <div className="note__attachment-error" role="status">
-                  {attachmentError === "tooLarge"
-                    ? strings.priv.editor.attachmentTooLarge
-                    : attachmentError === "tooMany"
-                      ? strings.notes.moveToPriv.tooManyAttachments
-                      : strings.priv.editor.attachmentError}
-                </div>
+                <Notice
+                  kind="danger"
+                  message={
+                    attachmentError === "tooLarge"
+                      ? strings.priv.editor.attachmentTooLarge
+                      : attachmentError === "tooMany"
+                        ? strings.notes.moveToPriv.tooManyAttachments
+                        : strings.priv.editor.attachmentError
+                  }
+                />
               )}
               {attachments.map((ref) => (
                 <div key={ref.id} className="note__attachment">

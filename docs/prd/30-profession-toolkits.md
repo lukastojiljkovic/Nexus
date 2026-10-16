@@ -28,7 +28,9 @@ existed) plus 17 built for this: gradnja, računovodstvo, foto, pravo, transport
 kuhinja, muzika, zanat, agro, trening, prosveta, dizajn, nekretnine, event,
 inženjering, tekst, biznis. Sharing is a longer array rather than a mechanism,
 so **PRO-004's namespacing is not needed** — a tool with three packs exists
-once, with one id.
+once, with one id. *Correction 2026-10-15: `TOOL_PACKS` now lists 32 pack ids
+(`packages/core/src/contracts/tools.ts`); the eighteen above are the count on
+2026-08-14.*
 
 **PRO-002 shipped, changed:** selection happens in the questionnaire („Šta se
 sve nađe u tvojoj nedelji?"), in a dialog off the drawer's header, and in

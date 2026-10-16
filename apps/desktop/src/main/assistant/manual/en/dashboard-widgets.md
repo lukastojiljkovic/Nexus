@@ -4,7 +4,7 @@ title: Cards on the dashboard
 location: { module: dashboard }
 keywords: [widget, card, dashboard, layout, board]
 ---
-Widgets are the cards on the dashboard: "Today", "Upcoming tasks", "Urgent and late", "Recent notes", "Exams", "Study", "Upcoming charges", "Habits today", "Nutrition today", "Workout", "Workout in progress", "Expiring documents", "Recent files", "Recent boards", "Recent circuits", "Focus" and "Your professional tools".
+Widgets are the cards on the dashboard: "Today", "Upcoming tasks", "Urgent and late", "Recent notes", "Exams", "Study", "Upcoming charges", "Habits today", "Nutrition today", "Workout", "Workout in progress", "Expiring documents", "Recent files", "Recent boards", "Recent circuits", "Focus", "Your professional tools", "Reminders", "Quick actions" and "Stats".
 
 How to add and change them:
 

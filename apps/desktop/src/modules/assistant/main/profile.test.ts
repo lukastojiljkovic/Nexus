@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import type { ModelHost } from "@nexus/core";
 import type { NexusDatabase } from "@nexus/db";
 import type { SearchResult } from "../../../shared/ipc.js";
@@ -10,7 +11,9 @@ import {
   tempDatabase,
 } from "../../../main/assistant/knowledge/testFixtures.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
+import { createModuleRegistry } from "../../../shared/modules.js";
 import type { TimerHost } from "../../../main/assistant/tools/timers.js";
+import { createDictionaryReader } from "../../translator/main/dictionary.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import { AssistantProfile } from "./profile.js";
 import type { AssistantServices } from "./services.js";
@@ -91,9 +94,13 @@ function services(wiki: WikiSource | null): AssistantServices {
     profileDb: (id, open) => open(db.raw, id),
     now: () => Date.parse(NOW),
     search: async (): Promise<readonly SearchResult[]> => [],
-    packs: { list: async () => [] },
+    packs: { list: async () => [], catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
+    dictionary: createDictionaryReader(() => tmpdir()),
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     zimWiki: () => wiki,
-    modules: { all: () => [], get: () => undefined },
+    focus: { start: () => { throw new Error("not expected"); }, stop: () => { throw new Error("not expected"); }, cancel: () => undefined, pause: () => { throw new Error("not expected"); }, resume: () => { throw new Error("not expected"); }, status: () => null },
+    notifications: { list: () => [], snooze: () => { throw new Error("not expected"); }, dismiss: () => undefined, settings: () => { throw new Error("not expected"); }, updateSettings: () => { throw new Error("not expected"); }, setSourceEnabled: () => undefined, upcoming: () => [] },
+    modules: createModuleRegistry(),
   };
 }
 
@@ -138,6 +145,15 @@ function timers(): TimerHost {
       throw new Error("this test builds no timers");
     },
     listCountdowns: () => [],
+    pauseCountdown: () => {
+      throw new Error("this test builds no timers");
+    },
+    resumeCountdown: () => {
+      throw new Error("this test builds no timers");
+    },
+    cancelCountdown: () => {
+      throw new Error("this test builds no timers");
+    },
   };
 }
 

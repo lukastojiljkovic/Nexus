@@ -20,18 +20,21 @@
  * mention "task" or "record" make a worse menu than the four a question is
  * about.
  *
- * **The choice is deterministic and lexical.** The same turn gives the same
- * tools, in the registry's order, because a prompt prefix that changes between
- * two identical turns is a prompt that cannot be cached and a behaviour that
- * cannot be reproduced. Ranking needs no embedding model - the app runs offline
- * on a laptop, and calling one here would cost more than the tools it saved -
- * so a tool is scored by the words its name and its own descriptions share with
- * the question, with the two languages stemmed the crude way a prefix test can
- * (see {@link scoreTool}).
+ * **The choice is deterministic and lexical by default.** The same turn gives the
+ * same tools, in the registry's order, because a prompt prefix that changes
+ * between two identical turns is a prompt that cannot be cached and a behaviour
+ * that cannot be reproduced. A tool is scored by the words its name and its own
+ * descriptions share with the question, with both languages folded to Latin and
+ * inflection stripped by a light stemmer (see {@link scoreTool}). When an
+ * embedder is loaded the caller may add a meaning score per tool
+ * (`toolMeaning.ts`); without one this module is exactly the lexical choice.
+ *
+ * The page the user has open comes first: its module's tools are what "this"
+ * and "here" refer to, so they are offered before the question is read.
  */
 
 import { CHARACTERS_PER_TOKEN_STRUCTURED } from "./budget.js";
-import type { ToolSpec } from "./contract.js";
+import type { ChatMessage, ToolSpec } from "./contract.js";
 
 /**
  * How many tools one turn may offer.
@@ -52,8 +55,14 @@ export const MAX_TOOLS_PER_TURN = 8;
  * before anything else is placed - and it is deliberately less than half: the
  * prompt, the history, the knowledge passages and the question all have to fit
  * in what is left, and only the question is never allowed to give way.
+ *
+ * Lowered from 0.4 on 2026-10-16. Measured with the registry at 148 tools on an
+ * 8 192-token window: a turn that filled 0.4 of the ceiling (2 867 tokens) with
+ * the headroom query's prompt (1 365 tokens) left 2 936 for the conversation,
+ * under the 3 000 the tools test (`index.test.ts`) requires. The number is still
+ * a policy choice; the measurement is why it moved.
  */
-export const TOOL_BUDGET_SHARE = 0.4;
+export const TOOL_BUDGET_SHARE = 0.35;
 
 /**
  * The tools a turn keeps when nothing in it scores and the budget allows.
@@ -64,6 +73,33 @@ export const TOOL_BUDGET_SHARE = 0.4;
  * `Tool`s, because this module is platform-free and works from specs.
  */
 export const CORE_TOOLS: readonly string[] = ["app.search", "app.open"];
+
+/**
+ * How many of the open page's own tools a turn offers first.
+ *
+ * A POLICY number. Three is what a page's everyday verbs need (a list, a create,
+ * an update), and it leaves the rest of the cap for the question's own tools.
+ */
+export const LOCATION_TOOL_LIMIT = 3;
+
+/**
+ * The cosine a tool's meaning must reach before it counts at all.
+ *
+ * A POLICY number, not a measurement. Without a floor every tool has some
+ * similarity to every question, and those small positive scores would outrank
+ * the lexical answer. It has NOT been tuned against an installed embedding model;
+ * the tests use a fake embedder, so this is a value to revisit with a real one.
+ */
+export const MEANING_FLOOR = 0.5;
+
+/**
+ * Points a meaning score adds per unit of cosine above {@link MEANING_FLOOR}.
+ *
+ * A POLICY number on the same scale as the lexical score, where a word of the
+ * question is worth two points: at the floor a tool gets nothing, and a cosine of
+ * 1 (identical text) is worth four, two shared words.
+ */
+export const MEANING_WEIGHT = 8;
 
 /**
  * What the template's own scaffolding costs per function, in tokens.
@@ -105,11 +141,37 @@ const MAX_RECENT_TOOLS = 4;
  * Four is where Serbian inflection and English pluralisation stop being
  * coincidence: `zadatke` and `zadatak` share `zadat`, `task` and `tasks` share
  * `task`, and below four characters `rok`/`red` and `due`/`dug` would start
- * matching each other. A prefix test rather than a stemmer because the app
- * ships no stemmer for either language, and a table of suffixes is a table that
- * goes stale.
+ * matching each other. The prefix test is what carries the matching; the suffix
+ * table below only makes the stems it compares shorter.
  */
 const MIN_PREFIX_LENGTH = 4;
+
+/**
+ * Word endings stripped before two words are compared: Serbian noun, adjective
+ * and plural endings, and the English plural `s` is left alone on purpose.
+ *
+ * A HEURISTIC, not a stemmer. It knows which endings are common, not which words
+ * a language has, so it can shorten a word a prefix test would then match
+ * wrongly; {@link MIN_STEM_LENGTH} is what keeps that rare. Longest first, so
+ * `ama` is taken before `a`.
+ */
+const ENDINGS: readonly string[] = [
+  "ama", "ima", "ovi", "evi", "ove", "ega", "oga", "om", "em", "og", "oj", "ih", "ak", "a", "e", "i", "u", "o",
+];
+
+/** A stem a suffix may not shorten below: `zadatak` gives `zadat`, `tasks` stays whole. */
+const MIN_STEM_LENGTH = 4;
+
+/**
+ * Cyrillic letters folded to the Latin spelling the Serbian Latin alphabet uses,
+ * so a question typed in Cyrillic finds the tools whose descriptions are Latin.
+ * Lower case only: the text is lower-cased first.
+ */
+const CYRILLIC: Readonly<Record<string, string>> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", ђ: "dj", е: "e", ж: "z", з: "z", и: "i", ј: "j",
+  к: "k", л: "l", љ: "lj", м: "m", н: "n", њ: "nj", о: "o", п: "p", р: "r", с: "s", т: "t",
+  ћ: "c", у: "u", ф: "f", х: "h", ц: "c", ч: "c", џ: "dz", ш: "s",
+};
 
 /**
  * Words that carry no topic in either language: articles, pronouns, auxiliaries
@@ -149,6 +211,13 @@ export interface ToolChoiceInput {
   readonly recent: readonly string[];
   /** Tokens the offered tools may take ({@link TOOL_BUDGET_SHARE} of the ceiling). */
   readonly budgetTokens: number;
+  /** The module the user has open beside the assistant, if any: its tools are offered first. */
+  readonly location?: string;
+  /**
+   * How close each tool's description is to the question, as a cosine per tool
+   * name, when an embedder is loaded. Absent means the lexical choice alone.
+   */
+  readonly meaning?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -156,9 +225,10 @@ export interface ToolChoiceInput {
  *
  * The fast path comes first: a set that is small enough and cheap enough is
  * handed on whole, which is what a workflow's two to four tools are and what
- * every small registry is. Otherwise the candidates are ordered - the recent
- * calls, then the tools the question scores, then the core tools, then the area
- * siblings of everything already chosen - and the walk takes each one that fits
+ * every small registry is. Otherwise the candidates are ordered - the open
+ * page's tools, then the recent calls, then the tools the question scores, then
+ * the core tools, then the area siblings of everything already chosen - and the
+ * walk takes each one that fits
  * what is left of the budget, skipping the ones that do not rather than
  * stopping, so an expensive favourite does not hide a cheap answer.
  *
@@ -178,7 +248,34 @@ export function chooseTools(input: ToolChoiceInput): readonly ToolSpec[] {
     if (byName.has(name) && !ordered.includes(name)) ordered.push(name);
   };
 
-  // (a) What the last turn already used. A follow-up ("i jos jedan") names no
+  const query = [...new Set(tokens(input.query))];
+  const queryStems = new Set(query.map(stem));
+  // An earlier word the question already says is not counted twice (see scoreTool).
+  const earlier = input.earlier
+    .slice(0, MAX_EARLIER_MESSAGES)
+    .flatMap(tokens)
+    .filter((token) => !queryStems.has(stem(token)));
+  const vocabularies = tools.map((tool) => ({
+    tool,
+    vocabulary: vocabularyOf([tool.name, tool.description.sr, tool.description.en]),
+  }));
+  const ranked = vocabularies
+    .map(({ tool, vocabulary }, index) => ({
+      tool,
+      index,
+      score: scoreTool(vocabulary, query, earlier, input.meaning?.get(tool.name)),
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+
+  // (a) The open page's own tools, best first. Module ids and tool areas are the
+  //     same names, so the area of a location is the location itself.
+  if (input.location !== undefined) {
+    for (const entry of ranked.filter((item) => areaOf(item.tool.name) === input.location).slice(0, LOCATION_TOOL_LIMIT)) {
+      add(entry.tool.name);
+    }
+  }
+
+  // (b) What the last turns already used. A follow-up ("i jos jedan") names no
   //     subject of its own, and the tool that answered the previous message is
   //     the best guess at what it means.
   const recent = input.recent.filter((name) => byName.has(name)).slice(0, MAX_RECENT_TOOLS);
@@ -186,19 +283,15 @@ export function chooseTools(input: ToolChoiceInput): readonly ToolSpec[] {
     add(name);
   }
 
-  // (b) What the question names, best score first, ties in registry order.
-  const query = new Set(words(input.query));
-  const earlier = new Set(input.earlier.slice(0, MAX_EARLIER_MESSAGES).flatMap(words));
-  const scored = tools
-    .map((tool, index) => ({ tool, index, score: scoreTool(tool, query, earlier) }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.index - right.index);
-  for (const entry of scored) add(entry.tool.name);
+  // (c) What the question names, best score first, ties in registry order.
+  for (const entry of ranked) {
+    if (entry.score > 0) add(entry.tool.name);
+  }
 
-  // (c) The two tools that answer "where is" and "show me" when nothing scored.
+  // (d) The two tools that answer "where is" and "show me" when nothing scored.
   for (const name of CORE_TOOLS) add(name);
 
-  // (d) Every area already in play, registry order. Adding siblings adds no new
+  // (e) Every area already in play, registry order. Adding siblings adds no new
   //     area, so one pass is the whole of it.
   const areas = new Set(ordered.map(areaOf));
   for (const tool of tools) {
@@ -229,36 +322,115 @@ function areaOf(name: string): string {
 /**
  * What a tool is worth to this question.
  *
- * A word of the question is two points, a word of an earlier message one, and a
- * word is counted once however many of the tool's words it matches: a tool
- * whose description says "zadatak" three times is not three times the answer.
- * Words the question already counted are not counted again from the earlier
- * messages, or a follow-up repeating the question's own subject would weigh
- * twice.
+ * A word of the question is two points, a word of an earlier message one, each
+ * scaled by how exactly the tool spells it (see {@link fitOf}), and a word is
+ * counted once however many of the tool's words it matches: a tool whose
+ * description says "zadatak" three times is not three times the answer. Earlier
+ * words the question already names are dropped before this (in `chooseTools`),
+ * or a follow-up repeating the question's own subject would weigh twice. The
+ * meaning score, when there is one, is added on the same scale.
+ *
+ * No word is weighted by how rare it is. A rarity weight (inverse document
+ * frequency) was tried and reverted: it let a rare word of the question ("račun")
+ * outrank the word that names the tool's own area ("zadatak") on the request set
+ * in `offering.requests.json`.
  */
-function scoreTool(tool: ToolSpec, query: ReadonlySet<string>, earlier: ReadonlySet<string>): number {
-  const vocabulary = toolVocabulary(tool);
+function scoreTool(
+  vocabulary: Vocabulary,
+  query: readonly string[],
+  earlier: readonly string[],
+  meaning: number | undefined,
+): number {
   let score = 0;
-  for (const word of query) if (matches(word, vocabulary)) score += 2;
-  for (const word of earlier) if (!query.has(word) && matches(word, vocabulary)) score += 1;
+  for (const token of query) score += 2 * fitOf(token, vocabulary);
+  for (const token of earlier) score += fitOf(token, vocabulary);
+  if (meaning !== undefined) score += MEANING_WEIGHT * Math.max(0, meaning - MEANING_FLOOR);
   return score;
 }
 
 /**
- * The words a tool can be recognised by: its name's area and verb, and both
- * halves of its description.
+ * The words a tool can be recognised by, in the two forms the matcher reads:
+ * `forms` are the words as the text spells them, `stems` the same words with
+ * their endings stripped.
+ */
+interface Vocabulary {
+  readonly forms: ReadonlySet<string>;
+  readonly stems: ReadonlySet<string>;
+}
+
+/**
+ * How much one word of the question counts for a tool. A word the tool spells
+ * the same way counts in full; a word that matches only after its endings are
+ * stripped counts half, so `zadatak` does not tie with every tool that says
+ * `zadatke` - the exact spelling outranks the inflection. The 1 and the 0.5 are
+ * POLICY numbers, chosen so an exact match beats a stem match and a stem match
+ * still beats nothing.
+ */
+function fitOf(token: string, vocabulary: Vocabulary): number {
+  if (vocabulary.forms.has(token)) return 1;
+  return matches(stem(token), vocabulary.stems) ? 0.5 : 0;
+}
+
+/**
+ * The user messages of a history, newest first: what the tool chooser reads as
+ * the conversation's subject.
+ */
+export function earlierUserMessages(history: readonly ChatMessage[]): readonly string[] {
+  const texts: string[] = [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message !== undefined && message.role === "user") texts.push(message.content);
+  }
+  return texts;
+}
+
+/** How many of the newest turns {@link recentSuccessfulTools} reads. */
+const RECENT_TURNS = 2;
+
+/**
+ * The tools the assistant called successfully in the last {@link RECENT_TURNS}
+ * turns, newest first, in each step's own order.
+ *
+ * A turn starts at a user message, so the window opens at the second-newest one.
+ * A call counts only when its result said `ok`: a tool that was refused or
+ * failed is not the one the user is continuing with.
+ */
+export function recentSuccessfulTools(history: readonly ChatMessage[]): readonly string[] {
+  let start = 0;
+  let turns = 0;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]?.role !== "user") continue;
+    turns += 1;
+    if (turns === RECENT_TURNS) {
+      start = index;
+      break;
+    }
+  }
+  const window = history.slice(start);
+  const succeeded = new Set(
+    window.filter((message) => message.role === "tool" && message.ok === true).map((message) => message.toolCallId),
+  );
+  const names: string[] = [];
+  for (let index = window.length - 1; index >= 0; index -= 1) {
+    for (const call of window[index]?.toolCalls ?? []) {
+      if (succeeded.has(call.id)) names.push(call.name);
+    }
+  }
+  return names;
+}
+
+/**
+ * The vocabulary of a tool: its name's area and verb, and both halves of its
+ * description.
  *
  * The Serbian half is here even though the model never reads it, because the
  * USER'S words are what is being matched, and a Serbian question about tasks
  * shares its words with the Serbian description far more often than with the
  * English one.
  */
-function toolVocabulary(tool: ToolSpec): ReadonlySet<string> {
-  return new Set([
-    ...words(tool.name),
-    ...words(tool.description.sr),
-    ...words(tool.description.en),
-  ]);
+function vocabularyOf(texts: readonly string[]): Vocabulary {
+  const forms = new Set(texts.flatMap(tokens));
+  return { forms, stems: new Set([...forms].map(stem)) };
 }
 
 /** Whether two words are the same, or one of them is a prefix of the other's at least four characters long. */
@@ -273,19 +445,32 @@ function matches(word: string, vocabulary: ReadonlySet<string>): boolean {
 
 /**
  * The words of a piece of text, in the one shape the matcher compares: lower
- * case, `đ` folded to `dj`, combining marks stripped, split on anything that is
- * not a letter or a digit, words of at least three characters, stop words gone.
+ * case, Cyrillic folded to Latin, `đ` folded to `dj`, combining marks stripped,
+ * split on anything that is not a letter or a digit, words of at least three
+ * characters, stop words gone. The words as spelled; {@link stem} strips them.
  *
  * The NFD-and-strip step is what makes `zadatke` and `zadátak` one word, and
  * the explicit `đ` is there because it is the one Serbian letter NFD does not
- * decompose - it is a `d` with a stroke, not a `d` with a mark.
+ * decompose - it is a `d` with a stroke, not a `d` with a mark. The Cyrillic
+ * fold is what makes `задатак` the same word as `zadatak`.
  */
-function words(text: string): readonly string[] {
+function tokens(text: string): readonly string[] {
   return text
     .toLowerCase()
+    .replace(/\p{Script=Cyrillic}/gu, (letter) => CYRILLIC[letter] ?? "")
     .replace(/đ/g, "dj")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .split(/[^a-z0-9]+/)
     .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
+}
+
+/** The word without its first matching {@link ENDINGS} entry, if what remains is at least {@link MIN_STEM_LENGTH} long. */
+function stem(word: string): string {
+  for (const ending of ENDINGS) {
+    if (word.length - ending.length >= MIN_STEM_LENGTH && word.endsWith(ending)) {
+      return word.slice(0, -ending.length);
+    }
+  }
+  return word;
 }

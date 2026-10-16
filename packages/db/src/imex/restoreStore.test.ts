@@ -1414,8 +1414,10 @@ describe("RestoreStore", () => {
 
     // Exactly the archive's rows, and nothing B held before.
     expect(new TaskStore(db.raw, profileB).listActive()).toEqual(withProfile(fresh.tasks, profileB));
+    // The archive does not carry a subject's own retention (STUDY-007), so every
+    // restored subject inherits the profile's.
     expect(new SubjectStore(db.raw, profileB).listActive()).toEqual(
-      withProfile(fresh.subjects, profileB),
+      withProfile(fresh.subjects, profileB).map((subject) => ({ ...subject, targetRetention: null })),
     );
     expect(new NoteTemplateStore(db.raw, profileB).list()).toEqual(
       withProfile(fresh.noteTemplates, profileB),
@@ -1741,6 +1743,10 @@ describe("RestoreStore", () => {
       "library_thoughts",
       "library_collections",
       "library_collection_items",
+      // Loans and goals (migration 096) are not in the library archive yet: a loan
+      // goes with the work it belongs to, and the goals stay, as the migration says.
+      "library_loans",
+      "library_goals",
       "culture_visits",
       "culture_visit_photos",
       "culture_venues",
@@ -1749,6 +1755,8 @@ describe("RestoreStore", () => {
       "culture_playlists",
       "culture_playlist_items",
       "culture_plans",
+      // Tickets (migration 097) go with their plan: the culture import empties them first.
+      "culture_plan_tickets",
       "culture_settings",
       "vehicles",
       "odometer_readings",
@@ -1843,6 +1851,14 @@ describe("RestoreStore", () => {
       //    that list, because a kit module may not edit `@nexus/sync`.
       "cookbook_settings",
       "cookbook_food_matches",
+      //  - cookbook_collections / cookbook_collection_recipes (migration 095):
+      //    the COOKBOOK's shelves, exempt on the sequencing terms the recipe
+      //    tables above carry. The archive does not carry shelves yet (see
+      //    migration 095), so a restore neither writes nor wipes them. The
+      //    memberships go with the recipes `RecipeStore.importData` replaces,
+      //    through the foreign key, so no shelf can name a recipe it no longer has.
+      "cookbook_collections",
+      "cookbook_collection_recipes",
       // The MINI-APPS module's one table (migration 083). A kit module's tables
       // are NOT in `RESTORE_WIPE_TABLES` for the TIMERS reason stated above:
       // that list is derived into `@nexus/sync`'s collection map, and this

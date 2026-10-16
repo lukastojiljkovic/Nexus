@@ -76,6 +76,7 @@ export const en: typeof sr = {
   },
   errors: {
     load: "The recordings could not be loaded.",
+    retry: "Try again",
     mutate: "The change was not saved.",
     tags: "Too many tags — shorten the list.",
     date: "Choose a date to file the entry under.",

@@ -4,6 +4,7 @@ import {
   computeHabitStreak,
   computeStreak,
   countsAsDone,
+  isAlwaysOnSource,
   matchesSmartList,
   mondayOf,
   parseWidgetConfig,
@@ -13,9 +14,10 @@ import {
   widgetTaskLists,
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
-import { Button, Checkbox, Chip, EmptyState, Icon, ListRow, LoadingState } from "@nexus/ui";
+import { Button, Checkbox, Chip, ColumnPlot, EmptyState, Icon, ListRow, LoadingState, Notice } from "@nexus/ui";
 import type { IconName } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
+import { NOTIFICATION_SOURCE_MODULE } from "../../shared/notificationModules.js";
 import { createModuleRegistry } from "../../shared/modules.js";
 import { packInventory, resolvePackSelection } from "../../shared/onboardingPresets.js";
 import type { Event, Exam, Subject } from "../../shared/ipc.js";
@@ -23,8 +25,12 @@ import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
 import {
   capTodayGroups,
+  dailyTotals,
   expiringDocumentRows,
   horizonWindowDays,
+  recentDays,
+  reminderInstant,
+  reminderRows,
   upcomingTaskRows,
   urgentTaskRows,
 } from "./dashboardWidgetRows.js";
@@ -52,6 +58,7 @@ import {
 import { habitPeriodPhrase } from "./habitFormat.js";
 import { formatMoney } from "./money.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
+import type { CreatableModuleId } from "./searchCommands.js";
 import { kitWidgetRenderer, kitWidgetIds } from "./moduleKit/widgets.js";
 import { countUnit, dayUnit, strings } from "./strings.js";
 import { readStoredWeekStart, toWeekStart } from "./weekStart.js";
@@ -260,14 +267,7 @@ function WidgetSkeleton() {
 /** One widget's isolated failure: this card could not read, and the way to ask again. */
 function WidgetFailure({ onRetry }: { onRetry: () => void }) {
   const s = strings.dashboard.widget;
-  return (
-    <div className="dash__failure" role="alert">
-      <p className="nx-hint dash__quiet">{s.error}</p>
-      <Button size="sm" onClick={onRetry}>
-        {s.retry}
-      </Button>
-    </div>
-  );
+  return <Notice kind="danger" message={s.error} action={{ label: s.retry, onClick: onRetry }} />;
 }
 
 /** Skeleton, isolated failure, or the body — the three states every widget has. */
@@ -309,6 +309,10 @@ export interface DashboardWidgetBodyProps {
    * has an intent saying so.
    */
   onOpenNote: (noteId: string) => void;
+  /** Starts a fresh entity in a module, as the palette's quick-create does (021-e) — „Brze radnje“'s buttons. */
+  onCreate: (moduleId: CreatableModuleId) => void;
+  /** The in-app quick capture: ZADACI with its quick-add focused — the palette's own „Brzi unos zadatka“. */
+  onCapture: () => void;
 }
 
 /**
@@ -1469,6 +1473,170 @@ function ProPacksWidget({ profileId, onOpenModule }: DashboardWidgetBodyProps) {
   );
 }
 
+/**
+ * „Podsetnici“ — NTF's centre as a card: the reminders waiting on the user,
+ * oldest first. A row opens the module its reminder came from, through NTF's own
+ * source map. A reminder whose module is switched off is left out, as the centre
+ * leaves it out of its sources; the security row is never gated (NTF-007).
+ */
+function RemindersWidget({ profileId, enabledModules, contract, config, onOpenModule }: DashboardWidgetBodyProps) {
+  const load = useCallback(() => window.nexus.listCenterNotifications(profileId), [profileId]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.reminders;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {(notifications) => {
+        const cfg = parseWidgetConfig(contract, config);
+        const rows = reminderRows(
+          notifications,
+          (source) =>
+            isAlwaysOnSource(source) || enabledModules.has(NOTIFICATION_SOURCE_MODULE[source]),
+          widgetCount(cfg, "count"),
+        );
+        if (rows.length === 0) return <EmptyState variant="inline" title={s.empty} />;
+        return (
+          <div className="dash__list">
+            {rows.map((notification) => (
+              <DashRow
+                key={notification.id}
+                onClick={() => onOpenModule(NOTIFICATION_SOURCE_MODULE[notification.source])}
+                leading={
+                  <RowMark name="bell" label={strings.notifications.sourceTag[notification.source]} />
+                }
+                trailing={
+                  <span className="dash__num">
+                    {formatNotificationWhen(reminderInstant(notification))}
+                  </span>
+                }
+              >
+                <RowText title={notification.title} />
+              </DashRow>
+            ))}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
+/**
+ * „Brze radnje“ — the palette's quick-creates as buttons. Each dispatches the
+ * same intent its palette command does (`App.tsx`), so a button and the command
+ * it mirrors cannot disagree about what they start. A button whose module is off
+ * is left out, as the palette leaves out its command.
+ */
+function QuickActionsWidget({ enabledModules, onCreate, onCapture }: DashboardWidgetBodyProps) {
+  const s = strings.dashboard.quickActions;
+  const c = strings.search.commands;
+  const actions = [
+    { key: "task", module: "tasks", label: c.newTask, run: () => onCreate("tasks") },
+    { key: "event", module: "calendar", label: c.newEvent, run: () => onCreate("calendar") },
+    { key: "note", module: "notes", label: c.newNote, run: () => onCreate("notes") },
+    { key: "capture", module: "tasks", label: s.capture, run: onCapture },
+  ];
+  return (
+    <div className="dash__actions">
+      {actions
+        .filter((action) => enabledModules.has(action.module))
+        .map((action) => (
+          <Button key={action.key} size="sm" variant="ghost" onClick={action.run}>
+            {action.label}
+          </Button>
+        ))}
+    </div>
+  );
+}
+
+/** The local day a stored instant falls on — the day a chart bucket counts it under. */
+function localDayOf(iso: string): string {
+  return localTodayKey(new Date(iso));
+}
+
+/** „3.8.“ — one day's label on a seven-slot axis, short enough that seven of them share a 320-unit card. */
+function dayAxisLabel(day: string): string {
+  const [, month, date] = day.split("-");
+  return `${String(Number(date))}.${String(Number(month))}.`;
+}
+
+function sumOf(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+/**
+ * „Statistika“ — two small charts over the last seven days, from stores the app
+ * already keeps: tasks completed (by the local day of `completedAt`) and focus
+ * time (by the local day each session started). They are two charts and not one
+ * with two lines because their units differ: a count and a duration on one axis
+ * would be a number nobody could read.
+ *
+ * The focus series is read only while FOKUS is on, like every other card's data.
+ * A chart with nothing in its window draws its reason instead of a row of zeros.
+ */
+function StatsWidget({ profileId, enabledModules }: DashboardWidgetBodyProps) {
+  const focusEnabled = enabledModules.has("focus");
+  const load = useCallback(async () => {
+    const today = localTodayKey();
+    const [tasks, sessions] = await Promise.all([
+      window.nexus.listTasks(profileId),
+      focusEnabled ? window.nexus.listFocusRange(profileId, shiftDayKey(today, -6), today) : [],
+    ]);
+    return { today, tasks, sessions };
+  }, [profileId, focusEnabled]);
+  const { state, retry } = useWidgetData(load);
+  const s = strings.dashboard.stats;
+
+  return (
+    <WidgetData state={state} retry={retry}>
+      {({ today, tasks, sessions }) => {
+        const days = recentDays(today, 7);
+        const slots = days.map((day) => ({ key: day, label: dayAxisLabel(day) }));
+        const completed = dailyTotals(
+          days,
+          tasks.flatMap((task) =>
+            task.completedAt === null ? [] : [{ day: localDayOf(task.completedAt), amount: 1 }],
+          ),
+        );
+        const focus = focusEnabled
+          ? dailyTotals(
+              days,
+              sessions.map((session) => ({
+                day: localDayOf(session.startedAt),
+                amount: focusSessionMinutes(session),
+              })),
+            )
+          : null;
+        // The sentences are built from the very arrays the bars are drawn from,
+        // as `ChartFrame` requires, so they cannot name a total the chart lacks.
+        const completedTotal = sumOf(completed);
+        const focusTotal = focus === null ? 0 : sumOf(focus);
+        return (
+          <div className="dash__stats">
+            <ColumnPlot
+              title={s.tasks.heading}
+              description={`${s.tasks.lead}: ${String(completedTotal)}.`}
+              empty={completedTotal === 0 ? { reason: s.tasks.empty } : null}
+              slots={slots}
+              series={[{ key: "completed", tone: "data", values: completed }]}
+              height={120}
+            />
+            {focus !== null && (
+              <ColumnPlot
+                title={s.focus.heading}
+                description={`${s.focus.lead}: ${formatDurationMinutes(focusTotal)}.`}
+                empty={focusTotal === 0 ? { reason: s.focus.empty } : null}
+                slots={slots}
+                series={[{ key: "focus", tone: "accent", values: focus }]}
+                height={120}
+              />
+            )}
+          </div>
+        );
+      }}
+    </WidgetData>
+  );
+}
+
 // --- The registry-driven map (ADR-045 section 3) ----------------------------
 
 /** How the page draws one placement: the body, and whether it draws at all. */
@@ -1520,6 +1688,9 @@ export const DASHBOARD_WIDGETS: Record<string, DashboardWidgetRenderer> = {
     visible: (enabled) => enabled.has("electronics"),
   },
   "pro:paketi": { Body: ProPacksWidget, visible: (enabled) => enabled.has("pro") },
+  "calendar:podsetnici": { Body: RemindersWidget, visible: (enabled) => enabled.has("calendar") },
+  "tasks:brze-radnje": { Body: QuickActionsWidget, visible: (enabled) => enabled.has("tasks") },
+  "tasks:statistika": { Body: StatsWidget, visible: (enabled) => enabled.has("tasks") },
 };
 
 /**

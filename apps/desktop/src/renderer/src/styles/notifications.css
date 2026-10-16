@@ -87,9 +87,8 @@
   display: flex;
   flex-direction: column;
 }
-/* The centre's loading and failure lines. Same rule as `.dash__quiet` and named
-   the same way on purpose — an empty list is `EmptyState`, and these two are not
-   empty lists. */
+/* The centre's loading and failure lines — an empty list is `EmptyState`, and
+   these two are not empty lists. */
 /* `.nx-hint` with the centre's own padding: this line replaces the whole list,
    so it is inset like the panel rather than like a row. */
 .ntf__quiet {

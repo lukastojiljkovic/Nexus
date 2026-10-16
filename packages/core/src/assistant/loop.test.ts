@@ -512,7 +512,7 @@ describe("the loop's scripted conversations", () => {
     expect(of(events, "tool-result")[1]?.result).toEqual({ ok: true, content: "created" });
   });
 
-  it("asks once for two identical calls in one step, and answers both with it", async () => {
+  it("asks once for two identical write calls in one step, and runs the second one at a time", async () => {
     const create = makeAskingTool("tasks.create");
     const model = createScriptedModel([
       {
@@ -533,17 +533,23 @@ describe("the loop's scripted conversations", () => {
       },
     });
 
-    // One question for the one call the two ask for, and both calls take its
-    // answer: nothing ran, because the answer was no.
+    // The two writes wait for one another, so the first is asked and answered
+    // "no" before the second is read at all: the second is then the SAME call
+    // with the same arguments, which the refusal memory answers rather than
+    // asks about a second time. The user sees one question and one answer.
     expect(asked).toHaveLength(1);
     expect(create.seen).toEqual([]);
     expect(of(events, "tool-result").map((event) => event.result)).toEqual([
       { ok: false, content: "The user declined." },
-      { ok: false, content: "The user declined." },
+      {
+        ok: false,
+        content:
+          "The user already refused tasks.create with these arguments in this turn. Do not call it again: tell the user it was not done.",
+      },
     ]);
   });
 
-  it("asks the second identical call of one step for itself when the first was answered yes", async () => {
+  it("asks the second write of one step for itself when the first was approved", async () => {
     const create = makeAskingTool("tasks.create", { ok: true, content: "created" });
     const model = createScriptedModel([
       {
@@ -552,23 +558,29 @@ describe("the loop's scripted conversations", () => {
           { id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu" } },
         ],
       },
-      { text: "Dodao sam." },
+      { text: "Dodao sam jedan zadatak." },
     ]);
     const asked: ConfirmRequest[] = [];
     const events = await turn({
       model,
       tools: [create],
-      // Yes to the first question, no to the second.
+      // Yes to the first question, no to the second. A "no" is what the refusal
+      // memory records, so the run's own log is the only place this second
+      // question leaves a trace.
       confirm: async (request) => {
         asked.push(request);
         return asked.length === 1;
       },
     });
 
-    // One approval runs one write: the twin asked for itself and was refused.
+    // One approval runs one write: the second write is asked about on its own
+    // turn, because a "yes" authorises one call and never a pair.
     expect(asked).toHaveLength(2);
     expect(create.seen).toEqual([{ title: "Kupi vodu" }]);
     expect(of(events, "tool-result").map((event) => event.result.ok)).toEqual([true, false]);
+    // One write succeeded, so the claim in the answer is backed by the turn.
+    expect(of(events, "message").at(-1)?.message.content).toBe("Dodao sam jedan zadatak.");
+    expect(of(events, "message").at(-1)?.verification).toBeUndefined();
   });
 
   it("asks again on the next turn, because a refusal belongs to one turn", async () => {
@@ -671,18 +683,166 @@ describe("the loop's scripted conversations", () => {
     expect(list.seen).toEqual([{}]);
   });
 
-  it("stops at the step limit, having run the last call it was asked for", async () => {
+  it("corrects a call that fails on a different field each time, and runs the valid one", async () => {
+    const create = makeTool("tasks.create", { ok: true, content: "created" }, {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1 },
+        count: { type: "integer" },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    });
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: 7 } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: { title: "Kupi", count: "mnogo" } }] },
+      { toolCalls: [{ id: "c3", name: "tasks.create", arguments: { title: "Kupi", count: 3 } }] },
+      { text: "Gotovo." },
+    ]);
+    const events = await turn({ model, tools: [create] });
+
+    // Two different mistakes are two different keys, so neither is cut off as
+    // "failed twice" and the third, valid call runs.
+    const results = of(events, "tool-result").map((event) => event.result);
+    expect(results.map((result) => result.ok)).toEqual([false, false, true]);
+    expect(results[1]?.content).toContain("Invalid arguments for tasks.create:");
+    expect(results[1]?.content).not.toBe(
+      "tasks.create failed twice this turn. Do not call it again: tell the user it was not done and why.",
+    );
+    expect(create.seen).toEqual([{ title: "Kupi", count: 3 }]);
+  });
+
+  it("answers a repeat of a refused call as refused when only its day word was spelled out", async () => {
+    const create: FakeTool = {
+      ...makeAskingTool("tasks.create"),
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        },
+        required: ["title"],
+        additionalProperties: false,
+      },
+    };
+    const model = createScriptedModel([
+      { toolCalls: [{ id: "c1", name: "tasks.create", arguments: { title: "Kupi vodu", due: "sutra" } }] },
+      { toolCalls: [{ id: "c2", name: "tasks.create", arguments: { title: "Kupi vodu", due: "2026-10-15" } }] },
+      { text: "Nisam dodao." },
+    ]);
+    const asked: ConfirmRequest[] = [];
+    const events = await turn({
+      model,
+      tools: [create],
+      confirm: async (request) => {
+        asked.push(request);
+        return false;
+      },
+    });
+
+    // "sutra" and the date it names are one question: the user is asked once.
+    expect(asked).toHaveLength(1);
+    expect(of(events, "tool-result")[1]?.result.content).toBe(
+      "The user already refused tasks.create with these arguments in this turn. Do not call it again: tell the user it was not done.",
+    );
+  });
+
+  it("strips a quoted tool call from a step that also reported its calls", async () => {
+    const tasks = makeTool("tasks.list", { ok: true, content: "two tasks" });
+    const model = createScriptedModel([
+      {
+        text: 'Provericu. <tool_call>{"name": "tasks.list", "arguments": {}}</tool_call>',
+        toolCalls: [{ id: "c1", name: "tasks.list", arguments: {} }],
+      },
+      { text: "Imas dva zadatka." },
+    ]);
+    const events = await turn({ model, tools: [tasks] });
+
+    // The runtime's own call is the one that runs; the block quoted in the prose
+    // is not a second call, and it does not reach the visible preamble.
+    expect(tasks.seen).toEqual([{}]);
+    const preamble = of(events, "message")[0]?.message.content;
+    expect(preamble).toContain("Provericu.");
+    expect(preamble).not.toContain("tool_call");
+  });
+
+  it("runs the writes of one step one at a time, in the model's order", async () => {
+    const log: string[] = [];
+    const write = (name: string): Tool => ({
+      name,
+      description: { sr: `Alatka ${name}.`, en: `Tool ${name}.` },
+      parameters: { type: "object", additionalProperties: true },
+      effect: "write",
+      async run() {
+        log.push(`${name} starts`);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        log.push(`${name} ends`);
+        return { ok: true, content: `${name} ok` };
+      },
+    });
+    const model = createScriptedModel([
+      {
+        toolCalls: [
+          { id: "c1", name: "notes.save", arguments: {} },
+          { id: "c2", name: "tasks.create", arguments: {} },
+        ],
+      },
+      { text: "Gotovo." },
+    ]);
+    await turn({ model, tools: [write("notes.save"), write("tasks.create")] });
+
+    // The second write does not start until the first has finished: the user
+    // is asked one question at a time, and the second may depend on the first.
+    expect(log).toEqual(["notes.save starts", "notes.save ends", "tasks.create starts", "tasks.create ends"]);
+  });
+
+  it("re-asks once when the answer claims a write that no write tool made", async () => {
+    const list = makeTool("tasks.list");
+    const model = createScriptedModel([
+      { text: "Dodao sam zadatak." },
+      { text: "Nisam dodao zadatak, nijedan alat nije uspeo." },
+    ]);
+    const events = await turn({ model, tools: [list] });
+
+    // The first answer claims a write that never ran; the one corrective re-ask
+    // names it, and the tools stay offered for it.
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]?.tools).toHaveLength(1);
+    expect(model.requests[1]?.messages.at(-1)?.content).toContain(
+      "Your previous answer said something was created",
+    );
+    expect(of(events, "message")[0]?.message.content).toBe(
+      "Nisam dodao zadatak, nijedan alat nije uspeo.",
+    );
+    expect(of(events, "message")[0]?.verification).toEqual({
+      findings: ["completion-claim"],
+      corrected: 1,
+      transliterated: false,
+    });
+  });
+
+  it("answers from what it gathered when the step limit is reached", async () => {
     const tasks = makeTool("tasks.list");
     const model = createScriptedModel([
       { toolCalls: [{ id: "c1", name: "tasks.list", arguments: {} }] },
       { toolCalls: [{ id: "c2", name: "tasks.list", arguments: {} }] },
-      { toolCalls: [{ id: "c3", name: "tasks.list", arguments: {} }] },
+      { text: "Imam dve stavke: dve liste zadataka." },
     ]);
     const events = await turn({ model, tools: [tasks], maxSteps: 2 });
 
-    expect(model.requests).toHaveLength(2);
+    // Two steps ran the calls they were asked for, and the closing step is the
+    // one that answers: a turn out of steps ends in a message, not in silence.
+    expect(model.requests).toHaveLength(3);
     expect(tasks.seen).toHaveLength(2);
-    expect(types(events).slice(-2)).toEqual(["error", "done"]);
+    expect(tasks.seen).toEqual([{}, {}]);
+    expect(of(events, "tool-result")).toHaveLength(2);
+    const closing = model.requests[2];
+    expect(closing?.tools).toEqual([]);
+    expect(closing?.messages.at(-1)?.content).toContain("No more tool calls are available in this turn.");
+    expect(types(events).slice(-3)).toEqual(["message", "error", "done"]);
+    expect(of(events, "message").at(-1)?.message.content).toBe(
+      "Imam dve stavke: dve liste zadataka.",
+    );
     expect(of(events, "error")[0]?.code).toBe("step-limit");
     expect(of(events, "done")[0]?.stopReason).toBe("length");
   });
@@ -835,16 +995,63 @@ describe("the loop's scripted conversations", () => {
     expect(knowledge.queries).toHaveLength(0);
   });
 
-  it("reports a completion that threw, and ends the turn", async () => {
-    const model = createScriptedModel([{ fail: "the runtime lost the model" }]);
+  it("retries a completion that threw, once, and answers on the retry", async () => {
+    const model = createScriptedModel([
+      { fail: "the runtime lost the model" },
+      { text: "Tu sam." },
+    ]);
     const events = await turn({ model });
 
+    // A transient runtime failure costs a retry and not the user's turn: the
+    // same request goes out again, and what comes back is the answer.
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]).toEqual(model.requests[0]);
+    expect(types(events)).toEqual(["token", "token", "message", "done"]);
+    expect(of(events, "message")[0]?.message.content).toBe("Tu sam.");
+    expect(of(events, "error")).toEqual([]);
+    expect(of(events, "done")[0]?.stopReason).toBe("end");
+  });
+
+  it("gives up after one retry, and reports the runtime's own sentence", async () => {
+    const model = createScriptedModel([
+      { fail: "the runtime lost the model" },
+      { fail: "the runtime lost the model" },
+      { text: "nikad" },
+    ]);
+    const events = await turn({ model });
+
+    // Exactly one retry, and no third call: a model that failed twice is not
+    // asked for a closing answer that would end under the wrong error.
+    expect(model.requests).toHaveLength(2);
+    // The retry's failure is the one reported; the first is retried silently.
     expect(types(events)).toEqual(["error", "done"]);
-    expect(of(events, "error")[0]?.code).toBe("model-failed");
+    expect(of(events, "error").map((event) => event.code)).toEqual(["model-failed"]);
     // The runtime's own sentence rides along for the log: the code alone cannot
     // say whether llama.cpp refused a schema or ran out of memory.
     expect(of(events, "error")[0]?.detail).toBe("the runtime lost the model");
     expect(of(events, "done")[0]?.stopReason).toBe("end");
+  });
+
+  it("does not retry after an abort", async () => {
+    const controller = new AbortController();
+    const model = createScriptedModel([
+      {
+        fail: "the runtime lost the model",
+        delayMs: 30,
+      },
+      { text: "nikad" },
+    ]);
+    const running = turn({ model, signal: controller.signal });
+    setTimeout(() => {
+      controller.abort();
+    }, 10);
+    const events = await running;
+
+    // An abort is the user's own decision, and a retry would be a second
+    // completion nobody asked for.
+    expect(model.requests).toHaveLength(1);
+    expect(of(events, "error")[0]?.code).toBe("aborted");
+    expect(of(events, "done")[0]?.stopReason).toBe("aborted");
   });
 
   it("does nothing at all when the turn starts already aborted", async () => {
@@ -917,9 +1124,16 @@ describe("the loop's scripted conversations", () => {
     expect(model.requests[0]?.messages.map((entry) => entry.role)).toEqual(["system", "user"]);
   });
 
-  it("answers in English, in the Latin script, when the user wrote English and the passages are Cyrillic", async () => {
+  it("re-asks once for the English answer, and transliterates what is still Serbian", async () => {
     const knowledge = makeKnowledge([hit("tesla", "Никола Тесла је рођен у Смиљану.")]);
     const model = createScriptedModel([
+      {
+        text: "Никола Тесла је рођен у Смиљану.",
+        tokens: ["Никола", " Тесла", " је рођен", " у Смиљану."],
+      },
+      // The re-ask comes back in the same Cyrillic Serbian - a small model does
+      // that - so the loop spends its one corrective re-ask and then repairs the
+      // script itself.
       {
         text: "Никола Тесла је рођен у Смиљану.",
         tokens: ["Никола", " Тесла", " је рођен", " у Смиљану."],
@@ -937,11 +1151,20 @@ describe("the loop's scripted conversations", () => {
       "The user wrote in English. Answer in English",
     );
     expect(model.requests[0]?.messages[1]?.content).toContain("The user wrote in English.");
-    // The script is ENFORCED: every streamed chunk is Latin, and the message the
-    // page stores carries the same text.
-    const streamed = of(events, "token").map((event) => event.text);
-    expect(streamed.join("")).toBe("Nikola Tesla je rođen u Smiljanu.");
+    // Exactly one corrective re-ask, and it names the problem.
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]?.messages.at(-1)?.content).toContain(
+      "Your previous answer was written in the wrong language.",
+    );
+    // The script is ENFORCED, and the event says what the check found and what
+    // the loop did about it: the re-ask for the language, the repair for the
+    // script.
     expect(of(events, "message")[0]?.message.content).toBe("Nikola Tesla je rođen u Smiljanu.");
+    expect(of(events, "message")[0]?.verification).toEqual({
+      findings: ["language", "script"],
+      corrected: 1,
+      transliterated: true,
+    });
     // The passage's own Cyrillic is what the answer was transliterated TO share
     // words with, so it is what the answer is shown with.
     expect(of(events, "message")[0]?.citations.map((citation) => citation.id)).toEqual(["tesla"]);
@@ -961,6 +1184,32 @@ describe("the loop's scripted conversations", () => {
     expect(model.requests[0]?.messages[0]?.content).toContain(
       "The user wrote in Serbian (Cyrillic script)",
     );
+  });
+
+  it("answers in Latin when the user wrote Latin and the answer streams in Cyrillic, chunk by chunk", async () => {
+    const knowledge = makeKnowledge([hit("tesla", "Никола Тесла је рођен у Смиљану.")]);
+    const model = createScriptedModel([
+      { text: "Никола Тесла је рођен у Смиљану.", tokens: ["Никола", " Тесла", " је рођен", " у Смиљану."] },
+    ]);
+    const events = await turn({
+      model,
+      knowledge,
+      user: { role: "user", content: "Ko je Nikola Tesla?" },
+    });
+
+    // The script is ENFORCED, not requested: every streamed chunk is Latin, the
+    // message the page stores carries the same text, and a script is repaired
+    // without a second completion.
+    expect(model.requests).toHaveLength(1);
+    expect(of(events, "token").map((event) => event.text).join("")).toBe(
+      "Nikola Tesla je rođen u Smiljanu.",
+    );
+    expect(of(events, "message")[0]?.message.content).toBe("Nikola Tesla je rođen u Smiljanu.");
+    expect(of(events, "message")[0]?.verification).toEqual({
+      findings: ["script"],
+      corrected: 0,
+      transliterated: true,
+    });
   });
 
   it("lists only the passage the answer cites, renumbered, and drops the unrelated ones", async () => {
@@ -993,7 +1242,10 @@ describe("the loop's scripted conversations", () => {
       hit("tesla", "Никола Тесла је рођен у Смиљану и умро у Њујорку.", { title: "Никола Тесла" }),
       hit("novine", "Данас (новине) су дневне новине.", { title: "Данас (новине)" }),
     ]);
-    const model = createScriptedModel([{ text: "Nikola Tesla je rodjen u Smiljanu." }]);
+    const model = createScriptedModel([
+      { text: "Nikola Tesla je rodjen u Smiljanu." },
+      { text: "Nikola Tesla je rodjen u Smiljanu." },
+    ]);
     const events = await turn({
       model,
       knowledge,

@@ -56,6 +56,9 @@ export const sr = {
   },
   common: {
     newGame: "Nova igra",
+    cancel: "Otkaži",
+    discardTitle: "Pokrenuti novu igru?",
+    discardQuestion: "Partija u toku se odbacuje: potezi i vreme se ne čuvaju.",
     undo: "Nazad",
     redo: "Napred",
     hint: "Pomoć",

@@ -35,7 +35,7 @@ that evidence is not used.
 
 | Source | Licence | Evidence page |
 | --- | --- | --- |
-| Protomaps basemap daily build (`build.protomaps.com/<date>.pmtiles`) | ODbL-1.0 | `protomaps/docs` `basemaps/downloads.md`: "distributed as an [Open Database License](…) Produced Work (OpenStreetMap attribution required)" |
+| Protomaps basemap daily build (`build.protomaps.com/<date>.pmtiles`) | ODbL-1.0 | `protomaps/docs` `basemaps/downloads.md`: "distributed as an Open Database License Produced Work (OpenStreetMap attribution required)" |
 | Geofabrik Serbia extract (`download.geofabrik.de/europe/serbia-latest.osm.pbf`) | ODbL-1.0 | `download.geofabrik.de`: "License: ODbL 1.0" |
 | Geofabrik index (`index-v1.json`) | ODbL-1.0 | same page |
 | `@protomaps/basemaps` 5.7.2 | BSD-3-Clause (visual design CC0) | `protomaps/basemaps` `LICENSE.md` |

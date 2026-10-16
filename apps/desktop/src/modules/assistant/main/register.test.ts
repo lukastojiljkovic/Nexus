@@ -17,12 +17,14 @@ import type { VoiceReply, VoiceRequest } from "../../../main/assistant/voice/pro
 import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
 import { baseManifest, entry, makeKey, writePack } from "../../../main/packs/fixtures.js";
 import { packVersionDir } from "../../../main/packs/registry.js";
+import { createDictionaryReader } from "../../translator/main/dictionary.js";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { AssistantTurnEventEntry } from "../shared/ipc.js";
 import { TurnBusyError } from "./turns.js";
 import { register } from "./register.js";
 import { assistantMicArmedAt } from "./micAccess.js";
 import { setAssistantServicesForTest, type AssistantServices } from "./services.js";
+import { createModuleRegistry } from "../../../shared/modules.js";
 
 /**
  * THE ASSISTANT THROUGH THE KIT (ADR-106): its ops, one real turn end to end
@@ -235,11 +237,15 @@ function services(): AssistantServices {
     profileDb: (profile, open) => open(db.raw, profile),
     now: () => NOW,
     search: async (): Promise<readonly SearchResult[]> => [],
-    packs: { list: async () => [] },
+    packs: { list: async () => [], catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
+    dictionary: createDictionaryReader(() => tmpdir()),
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     // No ZIM service in this harness: the wiki kind answers nothing, which is
     // the state `knowledge/index.ts` describes for a build without one.
     zimWiki: () => null,
-    modules: { all: () => [], get: () => undefined },
+    focus: { start: () => { throw new Error("not expected"); }, stop: () => { throw new Error("not expected"); }, cancel: () => undefined, pause: () => { throw new Error("not expected"); }, resume: () => { throw new Error("not expected"); }, status: () => null },
+    notifications: { list: () => [], snooze: () => { throw new Error("not expected"); }, dismiss: () => undefined, settings: () => { throw new Error("not expected"); }, updateSettings: () => { throw new Error("not expected"); }, setSourceEnabled: () => undefined, upcoming: () => [] },
+    modules: createModuleRegistry(),
   };
 }
 

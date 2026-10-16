@@ -4,6 +4,7 @@ import {
   Card,
   Checkbox,
   Chip,
+  ConfirmDialog,
   EmptyState,
   Icon,
   ListRow,
@@ -12,6 +13,7 @@ import {
   Select,
   TextArea,
   TextField,
+  useFocusTrap,
 } from "@nexus/ui";
 import {
   MUSIC_LOG_KINDS,
@@ -225,6 +227,45 @@ function useEscape(onClose: () => void, active = true): void {
   }, [active, onClose]);
 }
 
+/**
+ * A row's remove button, which asks first in the house dialog. Every removal in
+ * this module goes through it: a delete that answers one row with a confirmation
+ * and its neighbour with none is a rule the user has to learn row by row.
+ */
+function RemoveButton({
+  label,
+  name,
+  onRemove,
+}: {
+  label: string;
+  name: string;
+  onRemove: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="quiet" onClick={() => setAsking(true)}>
+        {label}
+      </Button>
+      {asking && (
+        <ConfirmDialog
+          title={copy.removeAsk.title}
+          name={name}
+          question={copy.removeAsk.question}
+          confirmLabel={copy.confirm}
+          cancelLabel={copy.cancel}
+          destructive
+          onConfirm={() => {
+            setAsking(false);
+            onRemove();
+          }}
+          onCancel={() => setAsking(false)}
+        />
+      )}
+    </>
+  );
+}
+
 // --- visits -----------------------------------------------------------------
 
 function VisitsSection({
@@ -384,7 +425,6 @@ function VisitRow({
   run: Run;
   onEdit: () => void;
 }) {
-  const [confirming, setConfirming] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [photoProblem, setPhotoProblem] = useState(false);
 
@@ -415,26 +455,11 @@ function VisitRow({
           <Button size="sm" onClick={onEdit}>
             {copy.visits.edit}
           </Button>
-          {confirming ? (
-            <>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() =>
-                  void run((culture) => culture.removeVisit({ profileId, id: visit.id }))
-                }
-              >
-                {copy.confirm}
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => setConfirming(false)}>
-                {copy.cancel}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="quiet" onClick={() => setConfirming(true)}>
-              {copy.visits.remove}
-            </Button>
-          )}
+          <RemoveButton
+            label={copy.visits.remove}
+            name={visit.title}
+            onRemove={() => void run((culture) => culture.removeVisit({ profileId, id: visit.id }))}
+          />
         </span>
       }
     >
@@ -780,15 +805,13 @@ function VenuesSection({
                   <Button size="sm" onClick={() => setEditing(venue)}>
                     {copy.venues.edit}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    onClick={() =>
+                  <RemoveButton
+                    label={copy.venues.remove}
+                    name={venue.name}
+                    onRemove={() =>
                       void run((culture) => culture.removeVenue({ profileId, id: venue.id }))
                     }
-                  >
-                    {copy.venues.remove}
-                  </Button>
+                  />
                 </span>
               }
             >
@@ -930,15 +953,11 @@ function ProgrammeSection({
                   >
                     {copy.programme.went}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    onClick={() =>
-                      void run((culture) => culture.removePlan({ profileId, id: plan.id }))
-                    }
-                  >
-                    {copy.programme.didNotGo}
-                  </Button>
+                  <RemoveButton
+                    label={copy.programme.didNotGo}
+                    name={plan.title}
+                    onRemove={() => void run((culture) => culture.removePlan({ profileId, id: plan.id }))}
+                  />
                 </span>
               }
             >
@@ -1004,13 +1023,11 @@ function PlanRow({
               {copy.programme.openLink}
             </ExternalLink>
           )}
-          <Button
-            size="sm"
-            variant="quiet"
-            onClick={() => void run((culture) => culture.removePlan({ profileId, id: plan.id }))}
-          >
-            {copy.programme.remove}
-          </Button>
+          <RemoveButton
+            label={copy.programme.remove}
+            name={plan.title}
+            onRemove={() => void run((culture) => culture.removePlan({ profileId, id: plan.id }))}
+          />
         </span>
       }
     >
@@ -1021,7 +1038,87 @@ function PlanRow({
         {` \u00b7 ${plan.venue}`}
         {plan.city === null ? "" : `, ${plan.city}`}
       </span>
+      <PlanTickets profileId={profileId} plan={plan} run={run} />
     </ListRow>
+  );
+}
+
+/**
+ * A programme entry's tickets: the files it came with. A ticket opens in the OS
+ * viewer (main's `openPlanTicket`, the notes' "Otvori" path), and a removal asks
+ * first, as every removal on this page does.
+ */
+function PlanTickets({
+  profileId,
+  plan,
+  run,
+}: {
+  profileId: string;
+  plan: CulturePlanView;
+  run: Run;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function attach(files: FileList | null): Promise<void> {
+    if (files === null) return;
+    setProblem(null);
+    for (const file of Array.from(files)) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      try {
+        await run((culture) =>
+          culture.addPlanTicket({ profileId, id: plan.id, fileName: file.name, bytes }),
+        );
+      } catch (failure) {
+        setProblem(copy.errors.photoType);
+        console.error("Nexus: the ticket could not be attached:", failure);
+      }
+    }
+    if (fileRef.current !== null) fileRef.current.value = "";
+  }
+
+  async function open(ticketId: string): Promise<void> {
+    try {
+      await window.nexus.modules.culture.openPlanTicket({ profileId, id: plan.id, ticketId });
+    } catch (failure) {
+      setProblem(copy.errors.ticketOpen);
+      console.error("Nexus: the ticket could not be opened:", failure);
+    }
+  }
+
+  return (
+    <span className="culture__row-meta culture__tickets">
+      {plan.tickets.length === 0 ? copy.programme.noTickets : copy.programme.tickets}
+      {plan.tickets.map((ticket) => (
+        <span key={ticket.id} className="culture__ticket">
+          <Button size="sm" variant="quiet" onClick={() => void open(ticket.id)}>
+            {ticket.fileName}
+          </Button>
+          <RemoveButton
+            label={copy.programme.removeTicket}
+            name={ticket.fileName}
+            onRemove={() =>
+              void run((culture) =>
+                culture.removePlanTicket({ profileId, id: plan.id, ticketId: ticket.id }),
+              )
+            }
+          />
+        </span>
+      ))}
+      <Button size="sm" variant="quiet" onClick={() => fileRef.current?.click()}>
+        {copy.programme.attachTicket}
+      </Button>
+      {/* The same OS picker the visit's photos use: `type="file"` is the one input a surface may draw itself. */}
+      <input
+        ref={fileRef}
+        className="culture__file"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+        aria-label={copy.programme.attachTicket}
+        onChange={(event) => void attach(event.target.files)}
+      />
+      {problem !== null && <span className="culture__field-error">{problem}</span>}
+    </span>
   );
 }
 
@@ -1147,9 +1244,11 @@ function ArtSection() {
   const close = useCallback(() => setOpen(null), []);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   useEscape(close, open !== null);
-  useEffect(() => {
-    if (open !== null) closeRef.current?.focus();
-  }, [open]);
+  // The viewer claims to be modal, so it holds focus the way every dialog does.
+  const viewerRef = useFocusTrap<HTMLDivElement>({
+    open: open !== null,
+    initialFocusRef: closeRef,
+  });
 
   const works = useMemo(
     () => (art === null ? [] : filterArtWorks(art.works, filter)),
@@ -1288,6 +1387,7 @@ function ArtSection() {
 
       {open !== null && (
         <div
+          ref={viewerRef}
           className="culture__viewer"
           role="dialog"
           aria-modal="true"
@@ -1674,7 +1774,6 @@ function TrackRow({
   playing: boolean;
   onPlay: () => void;
 }) {
-  const [confirming, setConfirming] = useState(false);
   return (
     <ListRow
       leading={<Icon name={playing ? "pause" : "play"} />}
@@ -1684,26 +1783,11 @@ function TrackRow({
           <Button size="sm" onClick={onPlay}>
             {playing ? copy.music.pause : copy.music.play}
           </Button>
-          {confirming ? (
-            <>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() =>
-                  void run((culture) => culture.removeTrack({ profileId, id: track.id }))
-                }
-              >
-                {copy.confirm}
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => setConfirming(false)}>
-                {copy.cancel}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="quiet" onClick={() => setConfirming(true)}>
-              {copy.music.removeTrack}
-            </Button>
-          )}
+          <RemoveButton
+            label={copy.music.removeTrack}
+            name={track.title}
+            onRemove={() => void run((culture) => culture.removeTrack({ profileId, id: track.id }))}
+          />
         </span>
       }
     >
@@ -1824,16 +1908,14 @@ function PlaylistControls({
                 >
                   {copy.music.rename}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => {
+                <RemoveButton
+                  label={copy.music.deletePlaylist}
+                  name={playlist.name}
+                  onRemove={() => {
                     onSelect(null);
                     void run((culture) => culture.removePlaylist({ profileId, id: playlist.id }));
                   }}
-                >
-                  {copy.music.deletePlaylist}
-                </Button>
+                />
               </>
             )}
             <Select
@@ -1948,17 +2030,13 @@ function PlaylistItemRow({
           >
             {copy.music.moveDown}
           </Button>
-          <Button
-            size="sm"
-            variant="quiet"
-            onClick={() =>
-              void run((culture) =>
-                culture.removePlaylistItem({ profileId, id: playlist.id, itemId }),
-              )
+          <RemoveButton
+            label={copy.music.removeItem}
+            name={title}
+            onRemove={() =>
+              void run((culture) => culture.removePlaylistItem({ profileId, id: playlist.id, itemId }))
             }
-          >
-            {copy.music.removeItem}
-          </Button>
+          />
         </span>
       }
     >
@@ -1983,13 +2061,11 @@ function EntryRow({
         <span className="culture__row-actions">
           <Chip>{copy.music.kinds[entry.kind]}</Chip>
           <Chip variant={entry.rating !== null ? "data" : "neutral"}>{ratingText(entry.rating)}</Chip>
-          <Button
-            size="sm"
-            variant="quiet"
-            onClick={() => void run((culture) => culture.removeEntry({ profileId, id: entry.id }))}
-          >
-            {copy.music.removeEntry}
-          </Button>
+          <RemoveButton
+            label={copy.music.removeEntry}
+            name={`${entry.artist} - ${entry.title}`}
+            onRemove={() => void run((culture) => culture.removeEntry({ profileId, id: entry.id }))}
+          />
         </span>
       }
     >

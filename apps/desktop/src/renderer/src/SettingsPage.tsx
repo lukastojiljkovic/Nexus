@@ -6,11 +6,14 @@ import {
   Card,
   Checkbox,
   Chip,
+  ConfirmDialog,
   Disclosure,
   EmptyState,
+  Field,
   Icon,
   ListRow,
   NavItem,
+  Notice,
   PageHeader,
   Select,
   TextArea,
@@ -57,6 +60,8 @@ import type {
   CsvImportPlanPreview,
   CsvImportPreview,
   FlagState,
+  BookmarksImportPreview,
+  BookmarksImportSkip,
   IcsImportPreview,
   IcsImportSkip,
   IcsImportSkippedComponent,
@@ -106,6 +111,8 @@ import { ProfileAvatar } from "./profileAvatar.js";
 import { ProPackList } from "./ProPacks.js";
 import { ModuleVisibilityCard } from "./ModuleVisibilityCard.js";
 import { visibleModuleSet, type ShellVisibility } from "../../shared/moduleVisibility.js";
+import type { ModulePageIntent } from "../../shared/moduleApi.js";
+import { parseDevicePreference, type DevicePreferenceKey } from "../../shared/devicePreferences.js";
 import { resolveModuleSelection } from "../../shared/onboardingPresets.js";
 import { heardTrades, planReasonLines } from "./profilePlanCopy.js";
 import { clearStoredSignals, readStoredSignals } from "./signalPrefs.js";
@@ -127,7 +134,6 @@ import {
   type ClockPreference,
   type EventDurationMinutes,
 } from "./calendarPrefs.js";
-import { SettingsResetDialog } from "./SettingsResetDialog.js";
 import {
   buildSettingsIndex,
   foldSettingsQuery,
@@ -514,7 +520,7 @@ function ProfileSection({
           {strings.settings.profile.save}
         </Button>
       </div>
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
 
       <div className="set__avatar-row">
         {/* Live: the avatar shows the name being typed, so the initials
@@ -544,7 +550,7 @@ function ProfileSection({
             )}
           </div>
           <p className="nx-hint">{s.pictureCaption}</p>
-          {pictureError != null && <p className="set__error">{pictureError}</p>}
+          {pictureError != null && <Notice kind="danger" message={pictureError} />}
         </div>
       </div>
     </>
@@ -622,19 +628,16 @@ function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: Prof
             if (match && !busy) onConfirm();
           }}
         >
-          <TextField
-            label={s.deleteConfirmLabel}
-            placeholder={s.deleteConfirmPlaceholder}
-            value={confirmText}
-            maxLength={NAME_MAX}
-            required
-            onChange={(event) => setConfirmText(event.target.value)}
-          />
-          {error != null && (
-            <p className="set__error" role="alert">
-              {error}
-            </p>
-          )}
+          <Field required>
+            <TextField
+              label={s.deleteConfirmLabel}
+              placeholder={s.deleteConfirmPlaceholder}
+              value={confirmText}
+              maxLength={NAME_MAX}
+              onChange={(event) => setConfirmText(event.target.value)}
+            />
+          </Field>
+          {error != null && <Notice kind="danger" message={error} />}
           <div className="recur-dialog__actions app__profile-dialog-actions">
             <Button type="button" className="recur-dialog__cancel" disabled={busy} onClick={onCancel}>
               {s.deleteCancel}
@@ -772,7 +775,7 @@ function ProfilesSection({
           </Button>
         </div>
       )}
-      {createError != null && <p className="set__error">{createError}</p>}
+      {createError != null && <Notice kind="danger" message={createError} />}
 
       {deleting !== null && (
         <ProfileDeleteDialog
@@ -1006,11 +1009,16 @@ function BackupSection({ profileId }: BackupSectionProps) {
         </p>
       )}
       {saved != null && saved.missingAttachments > 0 && (
-        <p className="set__error">
-          {s.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
-          {dayUnit(saved.missingAttachments, s.missingAttachmentsUnitOne, s.missingAttachmentsUnitMany)}{" "}
-          {s.missingAttachmentsSuffix}
-        </p>
+        <Notice
+          kind="warning"
+          message={
+            <>
+              {s.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
+              {dayUnit(saved.missingAttachments, s.missingAttachmentsUnitOne, s.missingAttachmentsUnitMany)}{" "}
+              {s.missingAttachmentsSuffix}
+            </>
+          }
+        />
       )}
       {/* ADR-057 §6: the private section's fate, stated whenever there was one
           to decide about — included with its count, or excluded with the named
@@ -1021,13 +1029,16 @@ function BackupSection({ profileId }: BackupSectionProps) {
         </p>
       )}
       {saved != null && saved.privateNotesSkipped != null && (
-        <p className="set__error">
-          {saved.privateNotesSkipped === "locked"
-            ? s.privateNotesSkippedLocked
-            : s.privateNotesSkippedPlaintext}
-        </p>
+        <Notice
+          kind="warning"
+          message={
+            saved.privateNotesSkipped === "locked"
+              ? s.privateNotesSkippedLocked
+              : s.privateNotesSkippedPlaintext
+          }
+        />
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </>
   );
 }
@@ -1260,17 +1271,22 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       {settings.lastRunAt === null ? (
         <p className="nx-hint">{s.lastRunNever}</p>
       ) : settings.lastStatus === "failed" ? (
-        <p className="set__error">
-          {s.lastRunPrefix} {s.lastRunFailed} —{" "}
-          {lookup(s.runErrors, settings.lastError ?? "unknown") ?? s.runErrors.unknown},{" "}
-          {formatArchiveInstant(settings.lastRunAt)}
-        </p>
+        <Notice
+          kind="danger"
+          message={
+            <>
+              {s.lastRunPrefix} {s.lastRunFailed} —{" "}
+              {lookup(s.runErrors, settings.lastError ?? "unknown") ?? s.runErrors.unknown},{" "}
+              {formatArchiveInstant(settings.lastRunAt)}
+            </>
+          }
+        />
       ) : (
         <p className="nx-hint">
           {s.lastRunPrefix} {s.lastRunOk} — {formatArchiveInstant(settings.lastRunAt)}
         </p>
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </div>
   );
 }
@@ -1352,7 +1368,7 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
             : `${count} ${countUnit(count, s.countOne, s.countFew, s.countMany)}`}
         </p>
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </div>
   );
 }
@@ -1422,12 +1438,17 @@ function CalendarExportSection({
         </p>
       )}
       {saved != null && saved.skipped > 0 && (
-        <p className="set__error">
-          {s.skippedPrefix} {saved.skipped} {dayUnit(saved.skipped, s.eventsUnitOne, s.eventsUnitMany)}{" "}
-          {s.skippedSuffix}
-        </p>
+        <Notice
+          kind="warning"
+          message={
+            <>
+              {s.skippedPrefix} {saved.skipped} {dayUnit(saved.skipped, s.eventsUnitOne, s.eventsUnitMany)}{" "}
+              {s.skippedSuffix}
+            </>
+          }
+        />
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </div>
   );
 }
@@ -1637,7 +1658,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -1665,7 +1686,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
             </form>
           )}
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -1745,7 +1766,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
             </p>
           )}
           {state.preview.privateNotes != null && !state.preview.privateNotes.willRestore && (
-            <p className="set__error">{s.privateNotesSkippedNotice}</p>
+            <Notice kind="danger" message={s.privateNotesSkippedNotice} />
           )}
 
           <div className="set__restore-actions">
@@ -1768,7 +1789,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
           </div>
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2091,7 +2112,7 @@ function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -2119,7 +2140,7 @@ function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps
             </form>
           )}
           {state.busy && <p className="nx-hint">{shared.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2259,7 +2280,7 @@ function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {replanning && <p className="nx-hint">{shared.previewRunning}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2484,7 +2505,7 @@ function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectio
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -2492,7 +2513,7 @@ function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectio
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2631,7 +2652,7 @@ function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectio
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {replanning && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2676,6 +2697,229 @@ interface ApkgImportSectionProps {
   hits: ReadonlySet<string>;
   /** SET-015: Settings now draws this flow's heading as the card's own title, so the heading is suppressed there. */
   showTitle?: boolean;
+}
+
+/**
+ * The bookmarks flow's state (IMEX-007). The `.ics` machine without its
+ * duplicate question: a bookmark folder always becomes a new note, so the
+ * preview has no answer to change and no re-preview to offer.
+ */
+type BookmarksState =
+  | { phase: "idle"; error: string | null }
+  | { phase: "picked"; fileName: string; busy: boolean; error: string | null }
+  | { phase: "ready"; fileName: string; preview: BookmarksImportPreview; error: string | null }
+  | { phase: "applying"; fileName: string; preview: BookmarksImportPreview }
+  | { phase: "applied" };
+
+/** One named group of links the file carried and this import does not keep: its Serbian reason, then how many. */
+function BookmarksSkipRow({ skip }: { skip: BookmarksImportSkip }) {
+  const s = strings.settings.bookmarksImport;
+  return (
+    <li className="set__import-skip">
+      {s.skips[skip.code]} <span className="set__import-skip-meta">{skip.count}</span>
+    </li>
+  );
+}
+
+interface BookmarksImportSectionProps {
+  profileId: string;
+  /** SET-014 search hits; the section reads only its own entry id out of it. */
+  hits: ReadonlySet<string>;
+  /** SET-015: Settings draws this flow's heading as the card's own title, so the heading is suppressed there. */
+  showTitle?: boolean;
+}
+
+/**
+ * Uvoz obeleživača (IMEX-007) — the `.ics` section's twin: pick → preview →
+ * confirm, the same busy and error states, the same shared undo banner
+ * afterwards. The preview's table says how many links the file holds and how
+ * many arrive, and how many notes that becomes; below it, every named skip.
+ */
+function BookmarksImportSection({ profileId, hits, showTitle = true }: BookmarksImportSectionProps) {
+  const s = strings.settings.bookmarksImport;
+  // The half of the flow identical to a restore's, read from where it is already spelled.
+  const shared = strings.settings.restore;
+
+  const [state, setState] = useState<BookmarksState>({ phase: "idle", error: null });
+  // Read by the unmount cleanup only: an apply in flight must never be cancelled
+  // from here, because main is writing the very plan `cancelBookmarksImport` drops.
+  const applying = useRef(false);
+
+  // Releasing the pick on unmount, as the calendar's section does: main holds
+  // somebody's parsed browsing history until it is told to let go.
+  useEffect(() => {
+    return () => {
+      if (applying.current) return;
+      void window.nexus.cancelBookmarksImport().catch((error: unknown) => {
+        console.error("Nexus: failed to release the picked bookmarks file:", error);
+      });
+    };
+  }, []);
+
+  async function runPreview(fileName: string): Promise<void> {
+    try {
+      const result = await window.nexus.previewBookmarksImport(profileId);
+      switch (result.status) {
+        case "ready":
+          setState({ phase: "ready", fileName, preview: result.preview, error: null });
+          return;
+        case "unreadable":
+          setState({ phase: "picked", fileName, busy: false, error: s.unreadable[result.code] });
+          return;
+        case "no-file":
+          setState({ phase: "idle", error: s.noFileError });
+          return;
+      }
+    } catch (previewError) {
+      setState({ phase: "picked", fileName, busy: false, error: s.readError });
+      console.error("Nexus: failed to preview a bookmarks file:", previewError);
+    }
+  }
+
+  /** Picking from any phase starts over; main drops the superseded pick itself. */
+  async function choose(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      const picked = await window.nexus.pickBookmarksFile();
+      if (picked.canceled) return;
+      setState({ phase: "picked", fileName: picked.fileName, busy: true, error: null });
+      await runPreview(picked.fileName);
+    } catch (pickError) {
+      setState({ phase: "idle", error: s.readError });
+      console.error("Nexus: failed to pick a bookmarks file:", pickError);
+    }
+  }
+
+  async function apply(fileName: string, preview: BookmarksImportPreview): Promise<void> {
+    applying.current = true;
+    setState({ phase: "applying", fileName, preview });
+    try {
+      await window.nexus.applyBookmarksImport(profileId, preview.token);
+      // Main reloads this renderer moments after the reply lands, so the success
+      // line simply stands until the whole screen is replaced.
+      setState({ phase: "applied" });
+    } catch (applyError) {
+      // A failed apply leaves the plan, and the token main accepts, untouched.
+      setState({ phase: "ready", fileName, preview, error: s.error });
+      console.error("Nexus: failed to apply a bookmarks import:", applyError);
+    } finally {
+      applying.current = false;
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    setState({ phase: "idle", error: null });
+    try {
+      await window.nexus.cancelBookmarksImport();
+    } catch (cancelError) {
+      console.error("Nexus: failed to release the picked bookmarks file:", cancelError);
+    }
+  }
+
+  const previewing = state.phase === "ready" || state.phase === "applying";
+
+  return (
+    <div className="set__import-block">
+      {showTitle && (
+        <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("backup-bookmarks"))}>
+          {s.title}
+        </h3>
+      )}
+      <p className="nx-hint">{s.description}</p>
+
+      {!previewing && state.phase !== "applied" && (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={state.phase === "picked" && state.busy}
+          onClick={() => void choose()}
+        >
+          {s.pickButton}
+        </Button>
+      )}
+
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
+
+      {state.phase === "picked" && (
+        <>
+          <p className="nx-hint">
+            {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
+          </p>
+          {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
+        </>
+      )}
+
+      {previewing && (
+        <>
+          <div className="set__restore-head">
+            <span className="app__path">{state.preview.fileName}</span>
+          </div>
+
+          <table className="set__restore-table">
+            <thead>
+              <tr>
+                <td />
+                <th scope="col">{s.columnSource}</th>
+                <th scope="col">{s.columnPlanned}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">{s.rowBookmarks}</th>
+                <td>{state.preview.bookmarks + state.preview.skips.reduce((total, skip) => total + skip.count, 0)}</td>
+                <td>{state.preview.bookmarks}</td>
+              </tr>
+              <tr>
+                <th scope="row">{s.rowFolders}</th>
+                <td />
+                <td>{state.preview.folders}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {state.preview.skips.length > 0 && (
+            <>
+              <h4 className="nx-eyebrow set__module-group-title">{s.skipsTitle}</h4>
+              <ul className="set__restore-problems">
+                {state.preview.skips.map((skip) => (
+                  <BookmarksSkipRow key={skip.code} skip={skip} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {state.preview.folders === 0 && <p className="nx-hint">{s.nothingToImport}</p>}
+
+          <div className="set__restore-actions">
+            {state.preview.folders > 0 && (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={state.phase === "applying"}
+                onClick={() => void apply(state.fileName, state.preview)}
+              >
+                {s.applyButton}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={state.phase === "applying"}
+              onClick={() => void cancel()}
+            >
+              {shared.cancelButton}
+            </Button>
+          </div>
+
+          {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
+        </>
+      )}
+
+      {state.phase === "applied" && <p className="nx-hint">{s.applied}</p>}
+    </div>
+  );
 }
 
 /**
@@ -2919,7 +3163,7 @@ function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSect
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -2927,7 +3171,7 @@ function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSect
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3036,7 +3280,7 @@ function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSect
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {state.phase === "ready" && state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3265,7 +3509,7 @@ function CsvMappingDialog({
             )}
           </div>
 
-          {error != null && <p className="set__error">{error}</p>}
+          {error != null && <Notice kind="danger" message={error} />}
         </div>
 
         <div className="recur-dialog__actions csv-map__actions">
@@ -3484,7 +3728,7 @@ function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectio
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -3492,7 +3736,7 @@ function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectio
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.reading}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3657,7 +3901,7 @@ function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectio
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {state.phase === "planned" && state.error != null && (
-            <p className="set__error">{state.error}</p>
+            <Notice kind="danger" message={state.error} />
           )}
         </>
       )}
@@ -4030,7 +4274,7 @@ function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectio
         </Button>
       </div>
       <p className="nx-hint">{s.copyHint}</p>
-      {copyError && <p className="set__error">{s.copyError}</p>}
+      {copyError && <Notice kind="danger" message={s.copyError} />}
 
       {showPrompt && (
         // A named, focusable region: the block scrolls, and a scroll container
@@ -4157,7 +4401,7 @@ function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectio
 
       {state.phase === "editing" && state.busy && <p className="nx-hint">{s.previewRunning}</p>}
       {state.phase === "editing" && state.error != null && (
-        <p className="set__error">{state.error}</p>
+        <Notice kind="danger" message={state.error} />
       )}
 
       {previewing && (
@@ -4274,7 +4518,7 @@ function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectio
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {replanning && <p className="nx-hint">{shared.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && (
-            <p className="set__error">{state.error}</p>
+            <Notice kind="danger" message={state.error} />
           )}
         </>
       )}
@@ -4385,7 +4629,7 @@ function MarkdownImportSection({ profileId, hits, showTitle = true }: MarkdownIm
       <p className="nx-hint">{s.folderHint}</p>
 
       {busy && <p className="nx-hint">{s.running}</p>}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
 
       {report !== null && (
         <>
@@ -4420,7 +4664,7 @@ function MarkdownImportSection({ profileId, hits, showTitle = true }: MarkdownIm
   );
 }
 
-/** A settings-form result line: green-ish caption on success, `.set__error` on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
+/** A settings-form result line: an `info` notice on success, a `danger` notice on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
 interface SecurityMessage {
   text: string;
   failed: boolean;
@@ -4509,35 +4753,36 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
           {s.changeTitle}
         </h3>
         <form className="set__security-form" onSubmit={(event) => void submitChange(event)}>
-          <TextField
-            type="password"
-            label={s.currentLabel}
-            value={currentPasscode}
-            required
-            onChange={(event) => setCurrentPasscode(event.target.value)}
-          />
-          <TextField
-            type="password"
-            label={s.newLabel}
-            value={nextPasscode}
-            required
-            onChange={(event) => setNextPasscode(event.target.value)}
-          />
-          <TextField
-            type="password"
-            label={s.confirmLabel}
-            value={confirmPasscode}
-            required
-            onChange={(event) => setConfirmPasscode(event.target.value)}
-          />
+          <Field required>
+            <TextField
+              type="password"
+              label={s.currentLabel}
+              value={currentPasscode}
+              onChange={(event) => setCurrentPasscode(event.target.value)}
+            />
+          </Field>
+          <Field required>
+            <TextField
+              type="password"
+              label={s.newLabel}
+              value={nextPasscode}
+              onChange={(event) => setNextPasscode(event.target.value)}
+            />
+          </Field>
+          <Field required>
+            <TextField
+              type="password"
+              label={s.confirmLabel}
+              value={confirmPasscode}
+              onChange={(event) => setConfirmPasscode(event.target.value)}
+            />
+          </Field>
           <Button type="submit" size="sm" variant="primary" disabled={changing}>
             {s.save}
           </Button>
         </form>
         {changeMessage != null && (
-          <p className={changeMessage.failed ? "set__error" : "nx-hint"}>
-            {changeMessage.text}
-          </p>
+          <Notice kind={changeMessage.failed ? "danger" : "info"} message={changeMessage.text} />
         )}
       </div>
 
@@ -4553,7 +4798,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
             <Button size="sm" variant="primary" disabled={regenerating} onClick={() => void regenerate()}>
               {s.regenerate}
             </Button>
-            {recoveryError != null && <p className="set__error">{recoveryError}</p>}
+            {recoveryError != null && <Notice kind="danger" message={recoveryError} />}
           </>
         )}
       </div>
@@ -4694,13 +4939,14 @@ function AskPasscodeRow({ hits }: { hits: ReadonlySet<string> }) {
               void store(draft, passcode);
             }}
           >
-            <TextField
-              type="password"
-              label={s.askPasscodePasscodeLabel}
-              value={passcode}
-              required
-              onChange={(event) => setPasscode(event.target.value)}
-            />
+            <Field required>
+              <TextField
+                type="password"
+                label={s.askPasscodePasscodeLabel}
+                value={passcode}
+                onChange={(event) => setPasscode(event.target.value)}
+              />
+            </Field>
             <Button type="submit" size="sm" variant="primary" disabled={saving}>
               {s.save}
             </Button>
@@ -4708,7 +4954,7 @@ function AskPasscodeRow({ hits }: { hits: ReadonlySet<string> }) {
         </>
       )}
       {message != null && (
-        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
+        <Notice kind={message.failed ? "danger" : "info"} message={message.text} />
       )}
     </div>
   );
@@ -4853,19 +5099,16 @@ function ShortcutsSection({
                 </div>
               </div>
               {isCapturing && (
-                <p className={refusal !== null ? "set__error" : "nx-hint"} role="status">
-                  {refusal ?? s.captureHint}
-                </p>
+                <Notice
+                  kind={refusal !== null ? "danger" : "info"}
+                  message={refusal ?? s.captureHint}
+                />
               )}
               {/* The „globalna" marker, said rather than drawn: what makes this
                   row different is a behaviour, so it is written out under it
                   instead of dressed up as a badge. */}
               {action.global && <p className="nx-hint">{s.globalHint}</p>}
-              {action.global && globalTaken && (
-                <p className="set__error" role="status">
-                  {s.globalTaken}
-                </p>
-              )}
+              {action.global && globalTaken && <Notice kind="danger" message={s.globalTaken} />}
             </div>
           );
         })}
@@ -5031,9 +5274,7 @@ function LicencesSection() {
     <>
       <p className="nx-hint">{s.caption}</p>
       {failed && (
-        <p className="nx-hint" role="alert">
-          {s.loadError}
-        </p>
+        <Notice kind="danger" message={s.loadError} />
       )}
       {!failed && loaded === null && <p className="nx-hint">{s.loading}</p>}
       {loaded !== null && (
@@ -5208,6 +5449,14 @@ export interface SettingsPageProps {
    */
   moduleVisibility: ShellVisibility;
   onModuleVisibilityChanged: (next: ShellVisibility) => void;
+  /**
+   * The next queued intent for this page (`moduleKit/itemIntent.ts`). The
+   * assistant's `set-preference` arrives through it, and the page applies it with
+   * the setter its own control uses. Every intent is reported handled, as a kit
+   * page reports its own.
+   */
+  intent?: ModulePageIntent | null;
+  onIntentHandled?: () => void;
 }
 
 /**
@@ -5267,6 +5516,8 @@ export function SettingsPage({
   onTargetHandled,
   moduleVisibility,
   onModuleVisibilityChanged,
+  intent,
+  onIntentHandled,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -5329,6 +5580,57 @@ export function SettingsPage({
       console.error("Nexus: failed to apply notification preset:", error);
     }
   }
+
+  // The four device controls the assistant can also change. Each is the one
+  // function its row calls, so a change made by the assistant and one made by
+  // hand cannot leave the page's state and its storage disagreeing.
+  function changeLanguage(next: Locale): void {
+    persistLocale(next);
+    applyLocale(next);
+    reportLocaleToMain(next);
+    setLocale(next);
+    onLocaleChanged();
+  }
+
+  function changeAccent(id: AccentId): void {
+    persistAccent(profileId, id);
+    setAccent(id);
+  }
+
+  function changeWeekStart(option: WeekStartPreference): void {
+    persistWeekStart(option);
+    setWeekStart(option);
+  }
+
+  function changeClock(next: ClockPreference): void {
+    persistClock(next);
+    setClock(next);
+  }
+
+  /**
+   * One setter per allowed key, typed so that a key added to
+   * `DEVICE_PREFERENCE_VALUES` without its setter is a compile error here.
+   */
+  const devicePreferenceSetters: Record<DevicePreferenceKey, (value: string) => void> = {
+    theme: (value) => onPreferenceChange(value as ThemePreference),
+    accent: (value) => changeAccent(value as AccentId),
+    language: (value) => changeLanguage(value as Locale),
+    "week-start": (value) => changeWeekStart(value as WeekStartPreference),
+    clock: (value) => changeClock(value as ClockPreference),
+    "auto-lock": (value) => onAutoLockChange(Number(value) as AutoLockMinutes),
+  };
+
+  // An intent is consumed on the render that first hands it over: the queue gives
+  // the same object until it moves, so the effect is keyed on the intent alone,
+  // and a second run would report the next request handled too.
+  useEffect(() => {
+    if (intent?.kind === "action" && intent.action === "set-preference") {
+      const change = parseDevicePreference(intent.payload);
+      if (change !== null) devicePreferenceSetters[change.key](change.value);
+    }
+    if (intent !== null && intent !== undefined) onIntentHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, onIntentHandled]);
 
   /**
    * SET §5. A card's reset clears exactly ITS OWN keys — each enumerated in
@@ -5817,14 +6119,7 @@ export function SettingsPage({
                 layout="inline"
                 className="set__select"
                 value={locale}
-                onChange={(event) => {
-                  const next = event.target.value as Locale;
-                  persistLocale(next);
-                  applyLocale(next);
-                  reportLocaleToMain(next);
-                  setLocale(next);
-                  onLocaleChanged();
-                }}
+                onChange={(event) => changeLanguage(event.target.value as Locale)}
               >
                 {availableLocales().map((code) => (
                   <option key={code} value={code}>
@@ -5870,10 +6165,7 @@ export function SettingsPage({
                       title={name}
                       aria-label={name}
                       style={{ background: `var(--nx-swatch-${id})` }}
-                      onClick={() => {
-                        persistAccent(profileId, id);
-                        setAccent(id);
-                      }}
+                      onClick={() => changeAccent(id)}
                     />
                   );
                 })}
@@ -5896,10 +6188,7 @@ export function SettingsPage({
                     size="sm"
                     variant={weekStart === option ? "primary" : "ghost"}
                     aria-pressed={weekStart === option}
-                    onClick={() => {
-                      persistWeekStart(option);
-                      setWeekStart(option);
-                    }}
+                    onClick={() => changeWeekStart(option)}
                   >
                     {a.weekStartOptions[option]}
                   </Button>
@@ -5939,11 +6228,7 @@ export function SettingsPage({
                 layout="inline"
                 className="set__select"
                 value={clock}
-                onChange={(event) => {
-                  const next = event.target.value as ClockPreference;
-                  persistClock(next);
-                  setClock(next);
-                }}
+                onChange={(event) => changeClock(event.target.value as ClockPreference)}
               >
                 {CLOCK_PREFERENCES.map((option) => (
                   <option key={option} value={option}>
@@ -6146,7 +6431,7 @@ export function SettingsPage({
               </div>
               <p className="nx-hint">{strings.settings.notificationPresets.caption}</p>
             </div>
-            {presetError != null && <p className="set__error">{presetError}</p>}
+            {presetError != null && <Notice kind="danger" message={presetError} />}
             <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
           </Card>
 
@@ -6202,6 +6487,16 @@ export function SettingsPage({
             }`}
           >
             <IcsImportSection profileId={profileId} hits={hits} showTitle={false} />
+          </Card>
+
+          <Card
+            id={sectionDomId("import-bookmarks")}
+            title={s.sectionTitle["import-bookmarks"]}
+            className={`${sectionClass(visibility.cards.has("import-bookmarks"))}${
+              hitCards.has("import-bookmarks") ? " set__hit-card" : ""
+            }`}
+          >
+            <BookmarksImportSection profileId={profileId} hits={hits} showTitle={false} />
           </Card>
 
           <Card
@@ -6394,8 +6689,13 @@ export function SettingsPage({
       {/* One dialog for every resettable card — the question is the same
           question, and only the card it names differs (SET §5). */}
       {resetting !== null && (
-        <SettingsResetDialog
-          sectionTitle={resetting.title}
+        <ConfirmDialog
+          title={strings.settings.reset.title}
+          name={resetting.title}
+          question={strings.settings.reset.question}
+          confirmLabel={strings.settings.reset.confirm}
+          cancelLabel={strings.settings.reset.cancel}
+          destructive
           onConfirm={() => runReset(resetting.id)}
           onCancel={() => setResetting(null)}
         />

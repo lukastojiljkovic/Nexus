@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { Button, Disclosure } from "@nexus/ui";
+import { Button, Disclosure, Notice } from "@nexus/ui";
 
 import type {
   InstalledPackView,
@@ -292,14 +292,10 @@ export function PacksSettings() {
 
       {progressText !== null && <p className="nx-hint">{progressText}</p>}
       {problemText !== null && (
-        <p className="packs__problem" role="alert">
-          {s.problemTitle} {problemText}
-        </p>
+        <Notice kind="danger" message={<>{s.problemTitle} {problemText}</>} />
       )}
       {failed && (
-        <p className="packs__problem" role="alert">
-          {s.error}
-        </p>
+        <Notice kind="danger" message={s.error} />
       )}
 
       {packs === null ? (
@@ -362,9 +358,7 @@ export function PacksSettings() {
         {catalogueProblem === "downloads-off" ? (
           <p className="nx-hint">{s.catalogueModeOff}</p>
         ) : catalogueProblem !== null ? (
-          <p className="packs__problem" role="alert">
-            {s.problemTitle} {s.problem[catalogueProblem]}
-          </p>
+          <Notice kind="danger" message={<>{s.problemTitle} {s.problem[catalogueProblem]}</>} />
         ) : catalogue === null ? (
           <p className="nx-hint">{strings.app.loading}</p>
         ) : catalogue.length === 0 ? (

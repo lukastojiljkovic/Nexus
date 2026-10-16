@@ -16,6 +16,7 @@ import { dateTimeFormat, numberFormat } from "../../../renderer/src/intl.js";
 import type { Locale } from "../../../renderer/src/strings.js";
 import type {
   LibraryItemView,
+  LibraryLoanView,
   LibraryPassView,
   LibrarySuggestionItemView,
   LibraryUpdateItemPayload,
@@ -201,14 +202,20 @@ export function readCount(
     : { ok: false };
 }
 
-/** What the list is showing: a search text, a kind (or all of them), a status (or all of them). */
+/** What the list is showing: a search text, a kind (or all of them), a status (or all of them), and whether only the works lent out are shown. */
 export interface LibraryFilter {
   readonly query: string;
   readonly kind: LibraryKind | "all";
   readonly status: LibraryStatus | "all";
+  readonly loan: "all" | "out";
 }
 
-export const NO_FILTER: LibraryFilter = { query: "", kind: "all", status: "all" };
+export const NO_FILTER: LibraryFilter = { query: "", kind: "all", status: "all", loan: "all" };
+
+/** The loan still open on one work, or null when nothing is lent out. The store keeps at most one, so the first is the only one. */
+export function activeLoan(item: Pick<LibraryItemView, "loans">): LibraryLoanView | null {
+  return item.loans.find((loan) => loan.returnedOn === null) ?? null;
+}
 
 /**
  * Whether one work answers the filter.
@@ -223,6 +230,7 @@ export const NO_FILTER: LibraryFilter = { query: "", kind: "all", status: "all" 
 export function matchesFilter(item: LibraryItemView, filter: LibraryFilter): boolean {
   if (filter.kind !== "all" && item.kind !== filter.kind) return false;
   if (filter.status !== "all" && item.status !== filter.status) return false;
+  if (filter.loan === "out" && activeLoan(item) === null) return false;
 
   const needle = normalizeLibraryTitle(filter.query);
   if (needle.length === 0) return true;

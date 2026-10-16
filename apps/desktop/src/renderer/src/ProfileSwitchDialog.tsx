@@ -18,7 +18,7 @@ export interface ProfileSwitchDialogProps {
 
 /**
  * The passcode gate in front of every profile switch (ADR-058 / AUTH-024), on
- * the house dialog recipe (`SettingsResetDialog`'s classes): one password
+ * the house dialog recipe (the `recur-dialog__*` classes): one password
  * field, „Potvrdi“, and no path around it — Escape, the backdrop and „Otkaži“
  * all cancel, and there is deliberately no button that switches without the
  * passcode. Enter submits the FORM, which IS the gate.

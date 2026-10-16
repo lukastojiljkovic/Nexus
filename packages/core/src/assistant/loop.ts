@@ -71,6 +71,24 @@
  * beside it says which. An abort emits `error` with `aborted` and then `done`
  * with `aborted`, so a page can tell a stop it asked for from a model that
  * finished.
+ *
+ * **A turn does not end without an answer if the app can help it.** When the
+ * step limit is reached, or the request no longer fits, the loop makes one more
+ * completion WITHOUT tools and asks the model to answer from what the turn has
+ * gathered (`closingPrompt`): a turn that ran out of room still ends in a
+ * `message`, and the `error` event beside it is the honest one (`step-limit`,
+ * or `context-full` when even the closing step does not fit).
+ *
+ * **The answer is checked when it is complete.** What the model wrote is
+ * compared with what the turn did (`verify.ts`): a claim of a write that never
+ * succeeded, a reply in the wrong language or the wrong script. The language
+ * and the claim are corrected by ONE re-ask with the problem named, and the
+ * script is repaired outright (`language.ts`) because a script is decidable.
+ * The text streams as it arrives, so a draft that is re-asked has already been
+ * shown; the stored message replaces it when the turn ends. A completion that
+ * THREW is retried once with the same request before any of this, and never
+ * after an abort: a transient runtime failure should cost a retry, not the
+ * user's whole turn.
  */
 
 import {
@@ -82,21 +100,32 @@ import {
 import { DAY_PATTERN, normalizeToolArguments } from "./arguments.js";
 import { filterAnswer } from "./citations.js";
 import { createFenceBoundary, fenceUntrusted, isFenced } from "./fence.js";
-import { replyLanguage, transliterateToLatin } from "./language.js";
-import { buildSystemPrompt } from "./prompts.js";
+import {
+  detectAnswerScript,
+  replyLanguage,
+  transliterateToCyrillic,
+  transliterateToLatin,
+} from "./language.js";
+import { buildSystemPrompt, replyLanguageLine } from "./prompts.js";
 import { createRefusalMemory } from "./refusals.js";
 import { validateToolArguments } from "./schema.js";
 import { parseToolCalls } from "./toolCalls.js";
 import {
   TOOL_BUDGET_SHARE,
   chooseTools,
+  earlierUserMessages,
+  recentSuccessfulTools,
   toolSpecCharacters,
   toolSpecTokens,
 } from "./toolChoice.js";
+import { verifyAnswer } from "./verify.js";
 import type { MeasuredUsage } from "./budget.js";
 import type { RefusalMemory } from "./refusals.js";
+import type { ReplyLanguage } from "./language.js";
+import type { VerificationFinding, VerifiedCall } from "./verify.js";
 import type {
   AgentEvent,
+  AnswerVerification,
   ChatMessage,
   Citation,
   CompletionResult,
@@ -107,6 +136,7 @@ import type {
   Tool,
   ToolCall,
   ToolContext,
+  ToolEffect,
   ToolResult,
   ToolSpec,
 } from "./contract.js";
@@ -180,8 +210,6 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     const { script } = reply;
     const latin = (text: string): string =>
       script === "latin" ? transliterateToLatin(text) : text;
-    /** The turn's final answer: its text, held until the sources are settled. */
-    let answer: string | null = null;
     // One turn, one memory of what the user refused: see `refusals.ts`.
     const refusals = createRefusalMemory();
     let hits: readonly KnowledgeHit[] = [];
@@ -218,8 +246,10 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       tools: specs,
       query: input.user.content,
       earlier: earlierUserMessages(input.history),
-      recent: recentToolNames(input.history),
+      recent: recentSuccessfulTools(input.history),
       budgetTokens: Math.floor(ceiling * TOOL_BUDGET_SHARE),
+      ...(input.location === undefined ? {} : { location: input.location }),
+      ...(input.toolMeaning === undefined ? {} : { meaning: input.toolMeaning }),
     });
     const offeredNames = new Set(offered.map((spec) => spec.name));
     const offeredTools = input.tools.filter((tool) => offeredNames.has(tool.name));
@@ -236,6 +266,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       tools: offered,
       maxSteps: input.maxSteps,
       today: input.today,
+      ...(input.location === undefined ? {} : { location: input.location }),
     });
     // The loop owns the system prompt, so a system message that arrived in the
     // history would be a second, invisible instruction set beside it.
@@ -260,18 +291,59 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     let measured: MeasuredUsage | undefined;
     let counted = false;
     /**
-     * How many times this turn a tool's arguments have been refused, by tool
-     * name. The loop's own small memory, kept as its own object so a second one
-     * (another reason a call must not be repeated) can sit beside it rather
-     * than inside it.
+     * How many times a call has been refused, by the tool it named and the
+     * fields that failed ({@link argumentKey}). Keyed that way rather than by
+     * tool alone, because the model fixes one field and breaks another often
+     * enough to matter: a genuinely corrected call is a call the loop has not
+     * seen, and it is validated and given its chance to run.
      */
-    const invalidCalls = new Map<string, number>();
+    const refusedArguments = new Map<string, number>();
+    /** Every call the turn RAN, with the effect of the tool that ran it (`verify.ts`). */
+    const ran: VerifiedCall[] = [];
+    /**
+     * How many model calls the turn has made. A step and the closing completion
+     * both count, which is what makes `maxSteps` a bound on the turn's work and
+     * not only on its tool rounds.
+     */
+    let steps = 0;
+    /** Whether the plan itself refused: the closing completion is then the last thing left. */
+    let noRoom = false;
+    /** Whether the one retry a turn is allowed has been spent. */
+    let retried = false;
+    /**
+     * Corrective re-asks spent, which {@link MAX_CORRECTIONS} bounds: at most
+     * one per turn, and the answer that comes back from it is accepted as it is.
+     */
+    let corrections = 0;
+    /** What the check flagged on the draft the one corrective re-ask was spent on. */
+    let flagged: readonly VerificationFinding[] = [];
+    /**
+     * The rules offered tools carry, by name, so a result can be read for what
+     * it changed (`verify.ts` reads the effect of the tool that ran).
+     */
+    const effects = new Map(offered.map((spec) => [spec.name, spec.effect] as const));
+    /** Every token goes straight to the page, in the decided script. */
+    const showTokens = (text: string): void => {
+      emit({ type: "token", text: latin(text) });
+    };
 
-    for (let step = 0; step < input.maxSteps; step += 1) {
+    /**
+     * The closing step: one completion with NO tool offered, asking the model to
+     * answer from what the turn has gathered. A turn that ran out of steps or of
+     * context ends in an answer this way rather than in silence, and the answer
+     * goes through the same check and repair as any other.
+     */
+    const closingPrompt: ChatMessage = {
+      role: "user",
+      content: closingInstruction(reply),
+    };
+
+    while (steps < input.maxSteps) {
       if (signal.aborted) {
         stopped();
         return;
       }
+      steps += 1;
       const plan = planContext({
         system,
         knowledge: hits,
@@ -285,9 +357,8 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         estimateTool: createToolEstimator(input.locale, measured),
       });
       if (!plan.ok) {
-        emit({ type: "error", code: "context-full" });
-        finish("length");
-        return;
+        noRoom = true;
+        break;
       }
       if (!counted) {
         // Only the hits that survived the FIRST fit are sources of this answer:
@@ -296,23 +367,46 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         counted = true;
       }
 
-      let result: CompletionResult;
+      let result: CompletionResult | undefined;
       try {
-        result = await input.model.complete(
-          { messages: plan.messages, tools: offered, maxTokens: reserve },
-          signal,
-          (text) => {
-            // What a page draws as the answer arrives, transliterated like the
-            // message that replaces it (`language.ts` pins the two agreeing).
-            emit({ type: "token", text: latin(text) });
-          },
-        );
+        result = await completeOnce(plan.messages, offered, showTokens);
       } catch (error) {
         if (signal.aborted) {
           stopped();
           return;
         }
-        emit({ type: "error", code: "model-failed", detail: errorMessage(error) });
+        if (!retried) {
+          // One bounded retry, never after an abort: a runtime hiccup should
+          // cost a retry and not the user's whole turn. A failed attempt may
+          // already have streamed part of its text; the retry's own text is the
+          // one the turn goes on with.
+          retried = true;
+          try {
+            result = await completeOnce(plan.messages, offered, showTokens);
+          } catch (again) {
+            if (signal.aborted) {
+              stopped();
+              return;
+            }
+            // Both attempts failed. The turn keeps the runtime's own sentence
+            // for the log, and its last reserve - the closing step - is what
+            // gets a chance at an answer next.
+            emit({
+              type: "error",
+              code: "model-failed",
+              detail: errorMessage(again),
+            });
+            result = undefined;
+          }
+        } else {
+          emit({ type: "error", code: "model-failed", detail: errorMessage(error) });
+          result = undefined;
+        }
+      }
+      if (result === undefined) {
+        // The model failed after its one retry: a third call would fail the same
+        // way, and a closing answer would end under the wrong error. The error
+        // above says what went wrong.
         finish("end");
         return;
       }
@@ -329,44 +423,30 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         characters: requestCharacters(plan.messages) + offeredCharacters,
       };
 
-      // Some GGUF templates emit a tool call as text. The fallback only speaks
-      // when the runtime reported no calls and at least one tool was offered.
-      const recovered =
-        result.toolCalls.length === 0 && offered.length > 0 ? parseToolCalls(result.text) : null;
-      const calls: readonly ToolCall[] =
-        recovered !== null && recovered.calls.length > 0
-          ? recovered.calls.map((call) => ({
-              id: nextCallId(),
-              name: call.name,
-              arguments: call.arguments,
-            }))
-          : result.toolCalls;
-      const text =
-        recovered !== null && recovered.calls.length > 0 ? recovered.text : result.text;
+      const settled = settledCalls(result, offered, nextCallId);
+      const calls = settled.calls;
+      const text = settled.text;
 
-      if (text.trim().length > 0) {
-        if (calls.length > 0) {
-          // A step that answers AND calls tools is not an answer: what it says
-          // is the preamble to the calls ("let me look"), and no source belongs
-          // beside it. The sources are what the ANSWER draws on, and the answer
-          // is the step that calls nothing.
-          emit({
-            type: "message",
-            message: { role: "assistant", content: latin(text), toolCalls: calls },
-            citations: [],
-          });
-        } else {
-          // The final answer. Its TEXT streams below as it arrives; the event
-          // that carries it waits for the whole turn, because a citation is
-          // decided by the answer and by the citations of any result the turn
-          // has not received yet.
-          answer = text;
-        }
-      }
       if (calls.length === 0) {
-        emitAnswer(answer ?? "", passageCitations, toolCitations, latin, emit);
-        finish(result.stopReason === "length" ? "length" : "end");
-        return;
+        // The final answer. An empty step is not an answer, so the loop asks
+        // again within its step budget.
+        if (text.trim().length > 0 && acceptAnswer(text, true)) {
+          finish(result.stopReason === "length" ? "length" : "end");
+          return;
+        }
+        continue;
+      }
+      if (text.trim().length > 0) {
+        // A step that answers AND calls tools is not an answer: what it says is
+        // the preamble to the calls ("let me look"), and no source belongs beside
+        // it. The sources are what the ANSWER draws on, and the answer is the step
+        // that calls nothing. The preamble reaches the page now, streamed and again
+        // as the message, because nothing about it is going to be re-asked.
+        emit({
+          type: "message",
+          message: { role: "assistant", content: latin(text), toolCalls: calls },
+          citations: [],
+        });
       }
 
       pending.push({ role: "assistant", content: text, toolCalls: calls });
@@ -378,7 +458,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
         emit,
         input.today,
         refusals,
-        invalidCalls,
+        refusedArguments,
       );
       if (outcome.aborted) {
         stopped();
@@ -386,6 +466,11 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       }
       for (const entry of outcome.entries) {
         emit({ type: "tool-result", callId: entry.call.id, result: entry.result });
+        ran.push({
+          name: entry.call.name,
+          effect: effectOf(entry.call.name),
+          result: entry.result,
+        });
         // A result that failed is not a source: a tool that refused, threw, or
         // was called by a name the turn does not have contributed nothing the
         // answer may be shown with. A result that said `ok` did, whether or not
@@ -403,17 +488,135 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
           toolCallId: entry.call.id,
         });
       }
-      if (step === input.maxSteps - 1) {
-        emit({ type: "error", code: "step-limit" });
+    }
+
+    // A turn out of steps or out of room: one closing completion, with no tool
+    // offered, from everything the turn has gathered. The token stream carries
+    // the results the model is answering from; what it says is a candidate
+    // answer like any other, so it goes through the same check and repair.
+    const closing = planContext({
+      system,
+      knowledge: hits,
+      history,
+      pending: [...pending, closingPrompt],
+      ceiling,
+      // The offered set rides in the system prompt, and the closing step offers
+      // none: counting the tools here would hold room for a menu nobody sends.
+      fixedTokens: 0,
+      boundary,
+      reply,
+      estimate: createEstimator(input.locale, measured),
+      estimateTool: createToolEstimator(input.locale, measured),
+    });
+    if (!closing.ok) {
+      // Even the instruction does not fit: the turn keeps the error path it
+      // always had, and the page draws why. A plan that refused during the loop
+      // is `context-full`; a turn that spent its steps is `step-limit`.
+      if (noRoom) {
+        emit({ type: "error", code: "context-full" });
         finish("length");
         return;
       }
+      emit({ type: "error", code: "step-limit" });
+      finish("length");
+      return;
     }
-
-    // `maxSteps <= 0`: no model call was allowed at all.
+    if (!counted) passageCitations.push(...closing.knowledge);
+    let closingResult: CompletionResult;
+    try {
+      closingResult = await input.model.complete(
+        { messages: closing.messages, tools: [], maxTokens: reserve },
+        signal,
+        showTokens,
+      );
+    } catch (error) {
+      if (signal.aborted) {
+        stopped();
+        return;
+      }
+      emit({ type: "error", code: "model-failed", detail: errorMessage(error) });
+      finish("end");
+      return;
+    }
+    if (signal.aborted || closingResult.stopReason === "aborted") {
+      stopped();
+      return;
+    }
+    // The closing answer is the last one there is, so it is checked and repaired
+    // but never re-asked; the error beside it says why the turn ended short.
+    acceptAnswer(closingResult.text, false);
     emit({ type: "error", code: "step-limit" });
     finish("length");
+
+    /**
+     * One completion, streamed to `onToken`. Extracted so the retry and the
+     * closing step make the identical request a step does, with the only
+     * difference being what is offered.
+     */
+    async function completeOnce(
+      messages: readonly ChatMessage[],
+      tools: readonly ToolSpec[],
+      onToken: (text: string) => void,
+    ): Promise<CompletionResult> {
+      return await input.model.complete({ messages, tools, maxTokens: reserve }, signal, onToken);
+    }
+
+    /** The effect of a tool this turn offered, as the routing table knows it. */
+    function effectOf(name: string): ToolEffect {
+      return effects.get(name) ?? "read";
+    }
+
+    /**
+     * The answer as the turn ends it: the findings the loop's check produced
+     * (`verify.ts`). A wrong language or an unsupported claim may earn the one
+     * corrective re-ask, when `mayAsk` allows it; a wrong script is repaired
+     * deterministically instead (`repairScript`). Emits the answer and returns
+     * true when the turn is over; returns false when the model has been asked
+     * once more to write it. The draft has already streamed by then, so the
+     * stored message is what replaces it when the turn ends.
+     */
+    function acceptAnswer(text: string, mayAsk: boolean): boolean {
+      const findings = verifyAnswer({
+        answer: text,
+        results: ran,
+        citations: toolCitations,
+        reply,
+      });
+      const asked =
+        mayAsk &&
+        findings.some((finding) => finding.kind !== "script") &&
+        corrections < MAX_CORRECTIONS;
+      if (asked) {
+        corrections += 1;
+        flagged = findings;
+        pending.push({ role: "user", content: correctiveInstruction(findings, reply) });
+        return false;
+      }
+      // The record names everything the check flagged on this turn, the first
+      // draft included: a re-asked answer that came back clean was still corrected.
+      const kinds = [...new Set([...flagged, ...findings].map((finding) => finding.kind))];
+      const repaired = findings.some((finding) => finding.kind === "script");
+      const report: AnswerVerification | undefined =
+        kinds.length === 0
+          ? undefined
+          : { findings: kinds, corrected: corrections, transliterated: repaired };
+      const settled = repaired ? repairScript(text, reply) : text;
+      emitAnswer(settled, passageCitations, toolCitations, latin, emit, report);
+      return true;
+    }
   };
+}
+
+/**
+ * The script repair: the answer rewritten in the script the loop decided, when
+ * the answer is in the other one. Both directions, because a reply can be decided
+ * Cyrillic as well as Latin.
+ */
+function repairScript(text: string, decided: ReplyLanguage): string {
+  if (detectAnswerScript(text) === decided.script) return text;
+  return decided.script === "cyrillic"
+    ? transliterateToCyrillic(text)
+    : transliterateToLatin(text);
 }
 
 /** The production loop. */
@@ -434,21 +637,28 @@ type ToolOutcome =
   | { readonly aborted: false; readonly entries: readonly ToolEntry[] };
 
 /**
- * Run every call of one model step, in parallel, and answer in the model's own
- * order.
+ * Run the calls of one model step, and answer in the model's own order.
  *
- * Parallel because two reads have no reason to queue; ordered because a page
- * (and a test) should not see the results of a step reshuffled by whichever
- * tool was faster. A refusal is the tool's own business: `ToolContext.confirm`
- * is its question, and the tool decides what the answer means for its result.
+ * **A step is read in parallel and written one at a time.** Reads have no reason
+ * to queue, so every call whose effect is not `write` or `network` runs at once;
+ * a write or a network call waits for the ones before it in the model's own
+ * order, because both change something outside the app. Two prompts at once
+ * would ask the user two questions in one breath - which is the shape that used
+ * to hang a page holding one confirm dialog - and the second write of a pair is
+ * usually written against what the first one returned. The results are answered
+ * in the order the model asked for them either way, so a page (and a test) never
+ * sees a step reshuffled by whichever tool was faster.
+ *
+ * A refusal is the tool's own business: `ToolContext.confirm` is its question,
+ * and the tool decides what the answer means for its result.
  *
  * What this adds to that is two memories of the turn, both owned by
- * `createAgentTurn`: the refusals the user already gave (`refusals.ts`) - a call
- * they said no to is answered here, because running the tool would ask them the
- * same question a second time - and `invalidCalls`, the tools whose arguments
- * were already refused, so a third attempt is answered without being read.
- * `today` is the turn's own day, which a day word in the arguments is resolved
- * against before validation.
+ * `createAgentTurn`: the refusals the user already gave (`refusals.ts`), keyed
+ * by the NORMALISED arguments so a call they said no to is answered here rather
+ * than asked about again, and `refusedArguments`, the tool-and-fields pairs
+ * whose arguments were already refused twice, so a third attempt at the same
+ * mistake is answered without being read. `today` is the turn's own day, which a
+ * day word in the arguments is resolved against before validation.
  */
 async function runToolCalls(
   calls: readonly ToolCall[],
@@ -457,87 +667,117 @@ async function runToolCalls(
   emit: (event: AgentEvent) => void,
   today: string,
   refusals: RefusalMemory,
-  invalidCalls: Map<string, number>,
+  refusedArguments: Map<string, number>,
 ): Promise<ToolOutcome> {
   const names = tools.map((tool) => tool.name);
-  const settled = await Promise.all(
-    calls.map(async (call): Promise<{ aborted: boolean; entry: ToolEntry | ToolThrew }> => {
+  const settled: (ToolEntry | ToolThrew)[] = [];
+  const runOne = async (call: ToolCall): Promise<ToolEntry | ToolThrew | null> => {
       const tool = tools.find((candidate) => candidate.name === call.name);
       if (tool === undefined) {
         return {
-          aborted: false,
-          entry: {
-            call,
-            result: failure(
-              `Unknown tool "${call.name}". The tools this turn may use are: ${names.length > 0 ? names.join(", ") : "(none)"}. Call one of those, or answer without a tool.`,
-            ),
-          },
+          call,
+          result: failure(
+            `Unknown tool "${call.name}". The tools this turn may use are: ${names.length > 0 ? names.join(", ") : "(none)"}. Call one of those, or answer without a tool.`,
+          ),
         };
       }
+      // The arguments are normalised FIRST, because both memories of this turn
+      // and the tool itself are keyed by what normalisation makes of them: a
+      // call repeated with a day word where the first wrote a date is the same
+      // question, and asking it twice is the failure `refusals.ts` exists for.
+      const normalised = normalizeToolArguments(tool.parameters, call.arguments, today);
       // Before the schema check, because a call in this memory matched its
       // schema when the user was asked about it: what the model has to hear now
       // is that the question was answered, not that its arguments look odd.
-      const declined = refusals.alreadyDeclined(call);
-      if (declined !== undefined) {
-        return { aborted: false, entry: { call, result: declined } };
-      }
-      const refused = invalidCalls.get(call.name) ?? 0;
-      if (refused >= 2) {
-        // Not validated and not run: the model has written this same bad call
-        // twice already, and the answer it gets is the one that tells it to
-        // stop, in the same words as the second refusal.
-        return { aborted: false, entry: { call, result: failure(refusedTwice(call.name)) } };
-      }
-      const check = validateToolArguments(
-        tool.parameters,
-        normalizeToolArguments(tool.parameters, call.arguments, today),
-      );
+      const declined = refusals.alreadyDeclined(call.name, normalised);
+      if (declined !== undefined) return { call, result: declined };
+      const check = validateToolArguments(tool.parameters, normalised);
       if (!check.ok) {
-        invalidCalls.set(call.name, refused + 1);
+        // Keyed by the tool AND the fields that failed, so a call the model has
+        // meanwhile corrected is validated like any other: what the bound on
+        // trying counts is a repeated MISTAKE, not a repeated tool name. The
+        // bound is a POLICY choice - two corrections is where a small model that
+        // is going to stop has stopped - and its wording is `refusedTwice`.
+        const key = argumentKey(call.name, check.errors);
+        const refused = (refusedArguments.get(key) ?? 0) + 1;
+        refusedArguments.set(key, refused);
         return {
-          aborted: false,
-          entry: {
-            call,
-            result: failure(
-              refused + 1 >= 2
-                ? refusedTwice(call.name)
-                : refusal(call.name, tool.parameters, check.errors),
-            ),
-          },
+          call,
+          result: failure(
+            refused >= 2
+              ? refusedTwice(call.name)
+              : refusal(call.name, tool.parameters, check.errors),
+          ),
         };
       }
       try {
-        const result = await tool.run(check.value, refusals.contextFor(call, context));
-        if (context.signal.aborted) {
-          return { aborted: true, entry: { call, result } };
-        }
-        return { aborted: false, entry: { call, result } };
+        const result = await tool.run(
+          check.value,
+          refusals.contextFor(call.name, normalised, context),
+        );
+        return { call, result };
       } catch (error) {
-        if (context.signal.aborted) {
-          return { aborted: true, entry: { call, result: failure(`The tool ${call.name} was stopped.`) } };
-        }
+        if (context.signal.aborted) return null;
         return {
-          aborted: false,
-          entry: {
-            call,
-            threw: true,
-            result: failure(
-              `The tool ${call.name} failed: ${errorMessage(error)}. Do not repeat the call unchanged.`,
-            ),
-          },
+          call,
+          threw: true,
+          result: failure(
+            `The tool ${call.name} failed: ${errorMessage(error)}. Do not repeat the call unchanged.`,
+          ),
         };
       }
-    }),
-  );
-  if (settled.some((outcome) => outcome.aborted)) return { aborted: true };
-  const entries = settled.map((outcome) => outcome.entry);
-  for (const entry of entries) {
+  };
+
+  const parallel = calls.filter((call) => !changesTheWorld(call, tools));
+  const sequential = calls.filter((call) => changesTheWorld(call, tools));
+  const settledParallel = await Promise.all(parallel.map(async (call) => await runOne(call)));
+  // A group that ran together: one stopped call is a stop for the step, and its
+  // siblings are discarded rather than half-reported.
+  if (settledParallel.some((outcome) => outcome === null)) return { aborted: true };
+  for (const outcome of settledParallel) {
+    if (outcome !== null) settled.push(outcome);
+  }
+  for (const call of sequential) {
+    if (context.signal.aborted) return { aborted: true };
+    const outcome = await runOne(call);
+    if (outcome === null) return { aborted: true };
+    settled.push(outcome);
+  }
+  for (const entry of settled) {
     // Only a tool that THREW is an error the page should show. A name the
     // registry does not have and arguments the schema refused are the model's
     // own corrections, and the brief's answer to both is a tool message.
     if ("threw" in entry) emit({ type: "error", code: "tool-failed" });
   }
-  return { aborted: false, entries };
+  return { aborted: false, entries: settled };
+}
+
+/** Whether a call is one that changes something outside the app, and so waits its turn. */
+function changesTheWorld(call: ToolCall, tools: readonly Tool[]): boolean {
+  const effect = tools.find((tool) => tool.name === call.name)?.effect;
+  return effect === "write" || effect === "network";
+}
+
+/**
+ * The key one refused call is counted under: the tool it named, and the JSON
+ * pointers its arguments failed at. Two calls that failed on the same field are
+ * the same mistake however the model re-spelled them, and a call that fixed
+ * that field is a different call - which is the whole difference between this
+ * and counting by tool name.
+ */
+function argumentKey(name: string, errors: readonly string[]): string {
+  const pointers = errors.map(errorPointer).sort();
+  return `${name}|${pointers.join(",")}`;
+}
+
+/**
+ * The JSON pointer a validator's finding is about, read off the sentence
+ * `schema.ts` writes: it starts with the pointer and a colon (`/title: expected
+ * string, got number`), or with `(root)` for the arguments as a whole.
+ */
+function errorPointer(error: string): string {
+  const separator = error.indexOf(":");
+  return separator === -1 ? error : error.slice(0, separator);
 }
 
 function failure(content: string): ToolResult {
@@ -662,6 +902,7 @@ function emitAnswer(
   tools: readonly Citation[],
   latin: (text: string) => string,
   emit: (event: AgentEvent) => void,
+  verification: AnswerVerification | undefined,
 ): void {
   const content = latin(text);
   if (content.trim().length === 0) return;
@@ -670,27 +911,87 @@ function emitAnswer(
     type: "message",
     message: { role: "assistant", content: filtered.text },
     citations: filtered.citations,
+    ...(verification === undefined ? {} : { verification }),
   });
 }
 
-/** The user messages of the history, newest first: what the tool chooser reads as context. */
-function earlierUserMessages(history: readonly ChatMessage[]): readonly string[] {
-  const texts: string[] = [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (message !== undefined && message.role === "user") texts.push(message.content);
-  }
-  return texts;
+/**
+ * How many corrective re-asks one turn may spend on its answer.
+ *
+ * One, and a POLICY choice rather than a measurement: the second answer is
+ * accepted as it comes back, so a turn cannot spin on an answer the model
+ * cannot write correctly, and a model that has just been told the language
+ * still shows exactly one more completion on the wire.
+ */
+const MAX_CORRECTIONS = 1;
+
+/**
+ * The line the closing step carries: what the model must do with a turn that
+ * has no more tools to call.
+ *
+ * One sentence, in English like the rest of the prompt, with the reply language
+ * beside it as the prompt states it (`replyLanguageLine`) because this replaces
+ * the prompt's own language line as the last thing the model reads.
+ */
+function closingInstruction(reply: ReplyLanguage): string {
+  return [
+    "No more tool calls are available in this turn. Answer the user now, in one short reply, from what you already have: what you found, what you did, and what is still missing. Do not call a tool and do not ask for permission to.",
+    replyLanguageLine(reply),
+  ].join("\n");
 }
 
-/** The tools the assistant called in the history, newest first, in each step's own order. */
-function recentToolNames(history: readonly ChatMessage[]): readonly string[] {
-  const names: string[] = [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (message === undefined) continue;
-    for (const call of message.toolCalls ?? []) names.push(call.name);
+/**
+ * The one corrective re-ask: what the loop found wrong with the answer, in the
+ * model's own terms, and what to do instead. Written as a user message rather
+ * than a system one because a small model weighs the most recent text most and
+ * this has to outweigh the answer it is correcting.
+ */
+function correctiveInstruction(
+  findings: readonly VerificationFinding[],
+  reply: ReplyLanguage,
+): string {
+  const lines: string[] = [];
+  if (findings.some((finding) => finding.kind === "completion-claim")) {
+    lines.push(
+      "Your previous answer said something was created, saved, changed or started, and no write tool succeeded in this turn. Never say a change was made unless a tool result in this turn says it was.",
+    );
   }
-  return names;
+  if (findings.some((finding) => finding.kind === "language")) {
+    lines.push("Your previous answer was written in the wrong language.");
+  }
+  lines.push("Write the answer again now, correctly, using the results you already have.");
+  lines.push(replyLanguageLine(reply));
+  return lines.join("\n");
 }
+
+/**
+ * What a model step actually asked for, and what of its text may be shown.
+ *
+ * Some GGUF templates emit a tool call as text (`toolCalls.ts`), and a template
+ * the runtime parses natively can still have such a block in its prose - a Qwen
+ * model explaining the call it is about to make. So the parser runs on every
+ * non-empty text: a recognised block is always STRIPPED from what a page would
+ * show, and its calls are ADDED only when the runtime reported none, because a
+ * list the runtime already parsed is the authoritative one.
+ */
+function settledCalls(
+  result: CompletionResult,
+  offered: readonly ToolSpec[],
+  nextCallId: () => string,
+): { readonly calls: readonly ToolCall[]; readonly text: string } {
+  if (result.text.length === 0) return { calls: result.toolCalls, text: result.text };
+  const parsed = parseToolCalls(result.text);
+  if (parsed.calls.length === 0) return { calls: result.toolCalls, text: result.text };
+  if (result.toolCalls.length > 0) return { calls: result.toolCalls, text: parsed.text };
+  if (offered.length === 0) return { calls: result.toolCalls, text: result.text };
+  return {
+    calls: parsed.calls.map((call) => ({
+      id: nextCallId(),
+      name: call.name,
+      arguments: call.arguments,
+    })),
+    text: parsed.text,
+  };
+}
+
 

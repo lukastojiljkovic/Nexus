@@ -33,7 +33,19 @@ describe("SHORTCUT_REFERENCE", () => {
   it("gives every group a unique id", () => {
     const ids = SHORTCUT_REFERENCE.map((group) => group.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["palette", "tasks", "calendar", "study", "notes", "notesFind"]);
+    expect(ids).toEqual([
+      "assistant",
+      "palette",
+      "rail",
+      "tasks",
+      "calendar",
+      "study",
+      "notes",
+      "notesFind",
+      "timers",
+      "miniapps",
+      "signals",
+    ]);
   });
 
   it("titles every group from the shared group copy", () => {
@@ -71,7 +83,15 @@ describe("SHORTCUT_REFERENCE", () => {
     const captioned = SHORTCUT_REFERENCE.filter((group) => group.caption !== undefined).map(
       (group) => group.id,
     );
-    expect(captioned).toEqual(["calendar", "study", "notes", "notesFind"]);
+    expect(captioned).toEqual([
+      "calendar",
+      "study",
+      "notes",
+      "notesFind",
+      "timers",
+      "miniapps",
+      "signals",
+    ]);
     for (const group of SHORTCUT_REFERENCE) {
       if (group.caption !== undefined) expect(group.caption.length, group.id).toBeGreaterThan(0);
     }
@@ -91,6 +111,14 @@ describe("SHORTCUT_REFERENCE", () => {
       group.rows.map((row) => row.description),
     );
     expect([...printed].sort()).toEqual(Object.values(r()).sort());
+  });
+});
+
+describe("the rail group", () => {
+  it("documents the keyboard reorder of a pinned module, the one the rail offers", () => {
+    const rows = groupById("rail").rows;
+    expect(rows.map((row) => row.description)).toEqual([r().railMove]);
+    expect(rows[0]?.keys).toEqual(["Alt", "↑", "↓"]);
   });
 });
 
@@ -168,5 +196,24 @@ describe("the Pretraga u belešci group", () => {
   it("keeps its own caption — its keys work anywhere in the note, unlike the markdown group's", () => {
     expect(groupById("notesFind").caption).toBe(strings.shortcuts.captions.notesFind);
     expect(groupById("notesFind").caption).not.toBe(strings.shortcuts.captions.notes);
+  });
+});
+
+describe("the module groups", () => {
+  it("documents the stopwatch keys of the timers page, the ones the page answers to", () => {
+    const rows = groupById("timers").rows;
+    expect(rows.map((row) => row.description)).toEqual([
+      r().timersStartPause,
+      r().timersLap,
+      r().timersReset,
+    ]);
+    expect(rows.map((row) => row.keys)).toEqual([["Space"], ["L"], ["R"]]);
+  });
+
+  it("documents the Escape that closes an open mini app and the one that stops the Morse lamp", () => {
+    expect(groupById("miniapps").rows[0]?.description).toBe(r().miniappsClose);
+    expect(groupById("miniapps").rows[0]?.keys).toEqual(["Esc"]);
+    expect(groupById("signals").rows[0]?.description).toBe(r().signalsLampStop);
+    expect(groupById("signals").rows[0]?.keys).toEqual(["Esc"]);
   });
 });

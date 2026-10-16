@@ -22,16 +22,18 @@ Every release also carries `SHA256SUMS.txt` with its Ed25519 signature `SHA256SU
 
 ## What it does
 
-Forty modules in six groups, beside the **Dashboard** (today's agenda, upcoming tasks, expiring documents, exams and study time, from widgets you place yourself) and **Settings**. Each module is switched on per profile and can be hidden for the whole app.
+Forty modules in six groups, beside the **Dashboard** (today's agenda, upcoming tasks, expiring documents, exams and study time, from widgets you place yourself) and **Settings**. What the app shows is one device-level setting (ADR-101): hide a module, order the groups, order the rows.
+
+The bold name is the label the interface ships in English; the code is the module id the registry uses.
 
 | Group | Modules |
 | --- | --- |
-| Plan | **Tasks** — lists, subtasks, recurrence and dependencies, as a list, a board, a calendar or a smart list, with reminders. **Calendar** — month, week, day and agenda views, recurring events, and the documents whose expiry dates belong on it. **Habits**, **Focus** (one Pomodoro timer) and **Timers**. |
-| Knowledge | **Notes** — folders, tags, backlinks, templates, version history and inline flashcards. **Documents** — attachments with preview and content search. **Study** — exam countdowns, spaced repetition with Anki import, typeset maths, and a planner that books study time before each exam. **Reference** — Wikipedia and other Kiwix libraries, read offline by the app's own ZIM reader. **Reader**, **Translator**, **Maps**, **Astronomy**, **Recorder**, and the **Assistant** — a local model you choose, running in the app. |
-| Life | **Finance** — accounts, budgets and subscriptions, each currency kept separate, with CSV import. **Fitness** — training, personal records and a food catalogue that names the source of every number. **Private vault** — notes encrypted with a Recovery Kit of their own. **Pantry**, **Cookbook**, **Car** and the **Emergency card**. |
-| Culture | **Library** — the books, films and series you read and watch. **Culture** — museums, theatre, concerts and cinema. |
-| Make | **Electronics** — a wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit. **Canvas**, **Drawings** (DXF), **Workshop** (STL, G-code and Gerber), **Scanner**, **Calculator**, **Signals**, **The Lab**, **Mini apps**, **Tools**, and the opt-in **Professional toolkits**. |
-| Play | **Cards** (nine games), **Chess**, **Board games**, **Puzzles** and **Arcade**. |
+| Plan | **Tasks** (`tasks`) — lists, subtasks, recurrence and dependencies, as a list, a board, a calendar or a smart list, with reminders. **Calendar** (`calendar`) — month, week, day and agenda views, recurring events, and the documents whose expiry dates belong on it. **Habits** (`habits`), **Focus** (`focus`; one Pomodoro timer) and **Timers** (`timers`). |
+| Knowledge | **Notes** (`notes`) — folders, tags, backlinks, templates, version history and inline flashcards. **Files** (`files`) — attachments with preview and content search. **Study** (`study`) — exam countdowns, spaced repetition with Anki import, typeset maths, and a planner that books study time before each exam. **Reference** (`wiki`) — Wikipedia and other Kiwix libraries, read offline by the app's own ZIM reader. **Reader** (`reader`), **Translator** (`translator`), **Maps** (`maps`), **Astronomy** (`astronomy`), **Recorder** (`recorder`), and the **Assistant** (`assistant`) — a local model you choose, running in the app. |
+| Life | **Finance** (`finance`) — accounts, budgets and subscriptions, each currency kept separate, with CSV import. **Fitness** (`fitness`) — training, personal records and a food catalogue that names the source of every number. **Private** (`priv`) — notes encrypted with a Recovery Kit of their own. **Pantry** (`pantry`), **Cookbook** (`cookbook`), **Car** (`car`) and the **Emergency card** (`emergency`). |
+| Culture | **Library** (`library`) — the books, films and series you read and watch. **Culture** (`culture`) — museums, theatre, concerts and cinema. |
+| Make | **Electronics** (`electronics`) — a wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit. **Board** (`canvas`), **Drawings** (`drawings`; DXF), **Workshop** (`workshop`; STL, G-code and Gerber), **Scanner** (`scanner`), **Calculator** (`calculator`), **Signals** (`signals`), **The Lab** (`lab`), **Mini apps** (`miniapps`), **Tools** (`tools`), and the opt-in **Professional tools** (`pro`). |
+| Play | **Cards** (`cards`; nine games), **Chess** (`chess`), **Board games** (`boards`), **Puzzles** (`puzzles`) and **Arcade** (`arcade`). |
 
 Public content arrives as **content packs**: signed folders, each with its own licence and attribution, installed from the catalogue in **Settings → Content packs** or from a folder on a USB stick.
 
@@ -40,7 +42,7 @@ Public content arrives as **content packs**: signed folders, each with its own l
 - **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
 - **Offline is the default, and every connection is opt-in.** On first start Nexus asks whether it may use the network at all: **Offline only** makes no network call of any kind; **Offline + update checks** contacts GitHub for one purpose — checking for and downloading a new version of Nexus itself; **Downloads** adds the content you choose to fetch — content packs, Kiwix libraries and models from Hugging Face — each from a short, compiled-in list of hosts. Your notes and data never leave the computer. Updates and content packs are verified against a key compiled into the app. Change the mode any time in **Settings → Privacy → Network and updates**.
 - **No telemetry, no analytics, no crash reporting.**
-- **No account, no server, no cloud.** Nothing syncs; to move to another computer, export everything into one archive, protected with a password if you like, and import it there.
+- **No account, no server, nothing leaves the device.** To move to another computer, export everything into one archive, protected with a password if you like, and import it there.
 
 Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 [SECURITY.md](SECURITY.md) to report a vulnerability privately.
@@ -51,7 +53,7 @@ Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 The repository holds the full working record, and a reader can follow it end to end:
 
 - **Specification and PRDs** — [docs/SPECIFICATION.md](docs/SPECIFICATION.md) and [docs/prd/](docs/prd/): 37 numbered requirements documents plus a glossary; `prd/00-overview.md` is the module registry.
-- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for all 114 decisions and their status](docs/architecture/adr/README.md).
+- **Architecture and the ADR index** — [docs/architecture/overview.md](docs/architecture/overview.md), with [one table for every decision and its status](docs/architecture/adr/README.md).
 - **The engineering journal** — [docs/log/README.md](docs/log/README.md): four months of entries, kept by month, recording why each decision was made.
 - **The defect ledger and the gates** — [docs/defect-classes.md](docs/defect-classes.md): 149 recurring failure shapes, and the 30 `check:` scripts that enforce the ones a static check can answer.
 - **The security baseline** — [docs/security/baseline.md](docs/security/baseline.md): the binding `SEC-*` rules.
@@ -178,6 +180,10 @@ The Makefile needs GNU make and a POSIX shell, which on Windows means Git Bash
 or WSL, not cmd.exe. Nothing depends on it: every target is one documented pnpm
 script, and `pnpm --filter @nexus/desktop dist` remains the direct route.
 
+A Windows portable build, a folder and a zip with the data kept beside the
+executable, is `pnpm --filter @nexus/desktop dist:portable`. It is not published
+by the release workflow yet, so no release carries it.
+
 Tagged releases are built by CI (`.github/workflows/release.yml`), which
 produces the installers, a `SHA256SUMS` file, a CycloneDX SBOM, build-provenance
 attestations and the rendered third-party notices, and uploads them to a
@@ -192,21 +198,13 @@ requirement, and installing the Gentoo overlay — is in
 ```text
 apps/
   desktop/     Electron shell — main, preload, renderer; the database lives here
-  web/         The same renderer on a browser runtime (on hold)
   gallery/     Component gallery (design review only)
 packages/
   tokens/          Design tokens — the single source of truth for every style value
   core/            Platform-free domain: module registry, contracts, views engine
   db/              Encrypted SQLite, forward-only migrations, per-module stores
   ui/              Design-system components, token-only
-  sync/            The sync engine — collection map, change journal, merge
-  sync-crypto/     Key hierarchy, wrapping, pairing transcript
-  sync-port/       The injected crypto seam, so no package hardcodes a primitive
-  sync-transport/  The wire — PostgREST and Broadcast, no keys, no origin
 ```
-
-The four `sync` packages and `apps/web` are on hold. They were built and tested before Nexus
-chose to stay offline, no release can reach a server with them, and no work on them is planned.
 
 | Package | What it may depend on |
 | --- | --- |
@@ -214,10 +212,6 @@ chose to stay offline, no release can reach a server with them, and no work on t
 | `core` | nothing platform-specific — no React, no DOM, no Node |
 | `db` | Node + SQLite; imported only by the Electron **main** process |
 | `ui` | React + `tokens` |
-| `sync-port` | nothing — it is the interface the others are written against |
-| `sync-crypto` | `sync-port` |
-| `sync-transport` | an injected `HttpPort`; it holds no `fetch`, no `WebSocket`, no origin and no key |
-| `sync` | `core`, `sync-crypto`, `sync-transport` |
 
 Feature modules never import each other; they meet through the contracts in
 `core` (widgets, settings, search, import/export, tools).
@@ -259,12 +253,14 @@ every use is still printed.
 
 Two themes ship: **Day** (light, `dan` in code) and **Night** (dark, `noc`).
 
-The **type scale** is `11 / 13 / 15 / 18 / 24 / 32` in whole pixels, with a
-leading scale (`tight / snug / normal / loose`) beside it and a tighter tracking
-value for large type. `caption` and `label` deliberately share 11px: a label is
-a caption in uppercase with 0.12em of tracking, separated by treatment rather
-than by size. Nothing in the app sets a font size, a line height or a letter
-spacing that is not one of those tokens.
+The **type scale** has nine steps, `caption` and `label` at 11px, `bodySm` 13,
+`body` 15, `prose` 16, `title` 18, `h2` 20, `h1` 24 and `display` 32 — every one
+of them in `packages/tokens/tokens/global.json` — with a leading scale
+(`tight / snug / normal / loose`) beside it and a tighter tracking value for
+large type. `caption` and `label` deliberately share 11px: a label is a caption
+in uppercase with 0.12em of tracking, separated by treatment rather than by
+size. Nothing in the app sets a font size, a line height or a letter spacing
+that is not one of those tokens.
 
 **Selection is typographic.** „Which one of these is on" — view switchers,
 filter chips, reminder ladders, the weekday picker, the canvas tools — is accent

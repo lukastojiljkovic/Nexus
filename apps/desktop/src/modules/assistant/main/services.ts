@@ -1,9 +1,12 @@
-import type { ModelHost } from "@nexus/core";
+import type { ModelHost, ModuleRegistry } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
+import type { ModuleToolsAccess } from "../../../main/moduleTools.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
-import type { ModuleLookup } from "../../../main/assistant/tools/app.js";
-import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
+import type { FocusHost } from "../../../main/assistant/tools/focus.js";
+import type { NotificationsHost } from "../../../main/assistant/tools/notifications.js";
+import type { PackManager } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
+import type { DictionaryReader } from "../../translator/main/dictionary.js";
 import type { SecretCipher } from "../../../main/assistant/web/secrets.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import type { AssistantNetworkMode } from "../shared/ipc.js";
@@ -70,7 +73,11 @@ export interface AssistantServices {
     limit: number,
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service, for the installed list. */
-  readonly packs: PacksLookup;
+  readonly packs: PackManager;
+  /** The dictionary pack's reader (`modules/translator/main/dictionary.ts`), for the translator's word and phrase tools. */
+  readonly dictionary: DictionaryReader;
+  /** The installed tool packs (ADR-094), for the chess tools' Stockfish analysis. */
+  readonly tools: ModuleToolsAccess;
   /**
    * The offline wiki, in the shape the knowledge base reads it
    * (`main/assistant/knowledge/zimWiki.ts`), or `null` in a build with no ZIM
@@ -89,8 +96,14 @@ export interface AssistantServices {
   // against is assembled by THIS module (`main/timers.ts`), because it needs the
   // kit's own `armUntil`/`notify` - capabilities index.ts does not hold and would
   // have had to re-implement. See that file's header.
-  /** The app's module registry (`createModuleRegistry`), for navigation. */
-  readonly modules: ModuleLookup;
+  // The FOCUS and notification hosts are main's (`main/index.ts`): the running
+  // phase and the centre's writes are main-process state, so they are handed in.
+  /** The running focus phase, as main owns it. */
+  readonly focus: FocusHost;
+  /** The notification centre, its settings and the reminders due, as main owns them. */
+  readonly notifications: NotificationsHost;
+  /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
+  readonly modules: ModuleRegistry;
 }
 
 let configured: AssistantServices | null = null;

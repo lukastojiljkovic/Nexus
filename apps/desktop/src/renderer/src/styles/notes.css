@@ -247,11 +247,6 @@
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
-.note__org-error {
-  margin: var(--nx-space-2) 0 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-danger);
-}
 
 /* Inline folder create/rename form. */
 .note__folder-form {
@@ -509,47 +504,6 @@
 }
 .note__cards .note__item {
   padding: 0;
-}
-
-/* A refused list-pane action (NOTE-010's „Dupliraj") — the organizer's own
-   error line, in the middle pane. */
-.note__list-error {
-  margin: var(--nx-space-2) 0 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-danger);
-}
-/* The neutral twin of the line above: a result that is not a failure — how many
-   tasks „Pretvori u zadatke“ made, or that there was no checklist to make them
-   from. Same place as the error, quiet text instead of danger — which makes it
-   `.nx-hint`, plus the gap that separates it from the list it reports on. */
-.note__list-notice {
-  margin: var(--nx-space-2) 0 0;
-}
-
-/* Delete + undo: the inline, token-styled undo bar (mirrors the tasks pattern). */
-.note__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-}
-.note__undo-text {
-  flex: 1;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
-.note__undo-dismiss.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-  padding: 2px 8px;
-}
-.note__undo-dismiss.nx-button:hover {
-  background: var(--nx-surface);
-  color: var(--nx-text);
 }
 
 .note__list {
@@ -1384,16 +1338,6 @@
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
 }
-/* Same recipe as .note__save-error, scoped to the templates channel. */
-.note__templates-error {
-  max-width: var(--note-measure);
-  margin: 0 auto;
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-danger-soft);
-  color: var(--nx-danger);
-  border-radius: var(--nx-radius-md);
-  font-size: var(--nx-font-size-body-sm);
-}
 /* `.nx-hint` inset to the list's own row padding, so the empty line starts
    where a template's name would. */
 .note__templates-empty {
@@ -1666,17 +1610,6 @@
   gap: var(--nx-space-3);
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-muted);
-}
-/* Same recipe as .note__save-error, scoped to the cards channel — its own
-   centering too, exactly like .note__history-error above. */
-.note__cards-error {
-  max-width: var(--note-measure);
-  margin: 0 auto var(--nx-space-3);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-danger-soft);
-  color: var(--nx-danger);
-  border-radius: var(--nx-radius-md);
-  font-size: var(--nx-font-size-body-sm);
 }
 /* `.note__cards-select` lived here and is gone with the raw `<select>` it
    dressed. Its own comment said it mirrored `.study__select` — which is the

@@ -42,6 +42,9 @@ export type { DashboardWidgetBodyProps, DashboardWidgetRenderer } from "../dashb
 // `window.nexus.openExternal` itself: one door, and this is it.
 export { ExternalLink, type ExternalLinkProps } from "./ExternalLink.js";
 export { openExternal } from "../links.js";
+// The same door for a place inside the app (ADR-106): a module that names a
+// place to show asks the shell through this one event, and does not switch pages.
+export { openAppLocation } from "../../../modules/assistant/renderer/location.js";
 
 // --- What a module needs to DRAW a value (ADR-090) ---------------------------
 //
@@ -58,3 +61,21 @@ export { formatMoney, formatMoneyPlain } from "../money.js";
  * confirmation on the one action that needs one.
  */
 export { ConfirmDialog, type ConfirmDialogProps } from "../ConfirmDialog.js";
+
+// --- The shell's shared components (the kit patterns, docs/design/patterns.md) ---
+//
+// One of each pattern, from `@nexus/ui`: a module draws its dialog, its inline
+// notice, its page-level undo offer and its switchers with the same components
+// the shell does, so a module cannot ship a second version of any of them.
+export {
+  AsyncSurface,
+  Dialog,
+  EmptyState,
+  Notice,
+  Section,
+  Segmented,
+  SettingsRow,
+  Toast,
+  Toolbar,
+  useFocusTrap,
+} from "@nexus/ui";

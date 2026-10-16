@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Button, Checkbox, TextField } from "@nexus/ui";
+import { Button, Checkbox, Notice, TextField } from "@nexus/ui";
 import type { NotificationSettings, NotificationSource, SnoozePreset } from "../../shared/ipc.js";
 import {
   ALL_NOTIFICATION_SOURCES,
@@ -167,9 +167,7 @@ export function NotificationSettingsControls({
 
   if (loadFailed) {
     return (
-      <p className="ntf__settings-error" role="alert">
-        {s.settings.loadError}
-      </p>
+      <Notice kind="danger" message={s.settings.loadError} />
     );
   }
   if (settings == null) return <p className="ntf__settings-hint">{strings.app.loading}</p>;
@@ -198,7 +196,7 @@ export function NotificationSettingsControls({
           {s.settings.quietClear}
         </Button>
       </div>
-      {quietError != null && <p className="ntf__settings-error">{quietError}</p>}
+      {quietError != null && <Notice kind="danger" message={quietError} />}
       <p className="ntf__settings-hint">{s.settings.quietHint}</p>
 
       <TextField
@@ -261,7 +259,7 @@ export function NotificationSettingsControls({
       </div>
       <p className="ntf__settings-hint">{s.settings.alwaysOnCaption}</p>
 
-      {settingsError != null && <p className="ntf__settings-error">{settingsError}</p>}
+      {settingsError != null && <Notice kind="danger" message={settingsError} />}
     </div>
   );
 }

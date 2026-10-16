@@ -1,0 +1,250 @@
+{
+  "scenarios": [
+    {
+      "id": "canvas-boards-read-sr",
+      "title": "Koje table ima korisnik",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Koje table imam na Tabli?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "canvas.boards",
+          "effect": "read",
+          "content": "Table (2):\n- Plan (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, 2026-10-14)\n- Tok narudžbine (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c, 2026-10-12)"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "canvas.boards"
+          }
+        ],
+        "answerContains": [
+          "Plan",
+          "Tok narudžbine"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "canvas.boards",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "Na Tabli imaš dve table: Plan i Tok narudžbine. Plan je poslednji put menjan 14. oktobra."
+        }
+      ]
+    },
+    {
+      "id": "canvas-draw-write-sr",
+      "title": "Nacrtaj tok na tabli",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Nacrtaj mi na tabli Tok narudžbine: korpa vodi do plaćanja, a plaćanje do isporuke."
+        }
+      ],
+      "tools": [
+        {
+          "name": "canvas.draw",
+          "effect": "write",
+          "summary": {
+            "sr": "Nacrtaj na tabli „Tok narudžbine“ 3 kutije",
+            "en": "Draw 3 boxes on the board “Tok narudžbine”"
+          },
+          "content": "Poslat je crtež sa 3 kutije na tablu „Tok narudžbine“ (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "canvas.draw",
+            "args": {
+              "board": {
+                "contains": "Tok"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Tok narudžbine"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "canvas.draw",
+              "arguments": {
+                "board": "Tok narudžbine",
+                "sketch": {
+                  "nodes": [
+                    {
+                      "id": "korpa",
+                      "label": "Korpa"
+                    },
+                    {
+                      "id": "placanje",
+                      "label": "Plaćanje"
+                    },
+                    {
+                      "id": "isporuka",
+                      "label": "Isporuka"
+                    }
+                  ],
+                  "edges": [
+                    {
+                      "from": "korpa",
+                      "to": "placanje"
+                    },
+                    {
+                      "from": "placanje",
+                      "to": "isporuka"
+                    }
+                  ],
+                  "layout": "column"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "Nacrtao sam tok na tabli Tok narudžbine: korpa, plaćanje, isporuka, jedno ispod drugog."
+        }
+      ]
+    },
+    {
+      "id": "canvas-boards-read-en",
+      "title": "What is on a board",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "What is written on my Plan board?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "canvas.boards",
+          "effect": "read",
+          "content": "Board “Plan” (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b). Elements: 2 rectangle, 2 text.\nText on the board:\n- Order received\n- Shipped"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "canvas.boards",
+            "args": {
+              "board": {
+                "eq": "Plan"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Order received",
+          "Shipped"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "canvas.boards",
+              "arguments": {
+                "board": "Plan"
+              }
+            }
+          ]
+        },
+        {
+          "text": "The Plan board has two boxes and two labels: “Order received” and “Shipped”."
+        }
+      ]
+    },
+    {
+      "id": "canvas-visualize-write-en",
+      "title": "Draw a note as a diagram",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Can you draw my Project note as a diagram on a new board?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "canvas.visualize",
+          "effect": "write",
+          "summary": {
+            "sr": "Napravi tablu od beleške „Projekat“ sa 6 kutija",
+            "en": "Make a board from the note “Project” with 6 boxes"
+          },
+          "content": "Sent a drawing of 6 boxes to the board “Project” (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a7d)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "canvas.visualize",
+            "args": {
+              "note": {
+                "contains": "Project"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "Project"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "canvas.visualize",
+              "arguments": {
+                "note": "Project"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I put your Project note on a new board: its headings form a tree, and its links point to the notes they name."
+        }
+      ]
+    }
+  ]
+}

@@ -9,7 +9,15 @@ import { copy } from "./copy.js";
 import type { EngineStage } from "./engine.js";
 import { useEngine } from "./engineClient.js";
 import { formatClock, formatCount } from "./format.js";
-import { ActionRow, Readout, initialGame, useElapsedClock, type PanelProps } from "./panelKit.js";
+import {
+  ActionRow,
+  NewGameButton,
+  Readout,
+  initialGame,
+  savedFor,
+  useElapsedClock,
+  type PanelProps,
+} from "./panelKit.js";
 import { newSeed } from "./seed.js";
 
 /**
@@ -32,9 +40,16 @@ import { newSeed } from "./seed.js";
 const PUZZLE = "broj";
 const VARIANT = "six";
 
-export function BrojPanel({ saves, variants, onSave, onFinish, onClear }: PanelProps) {
+export function BrojPanel({
+  saves,
+  variants,
+  onSave,
+  onFinish,
+  onClear,
+  opening,
+}: PanelProps) {
   const engine = useEngine();
-  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed));
+  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed, opening));
   const [seed, setSeed] = useState(initial.seed);
   const [round, setRound] = useState<BrojStateView | null>(
     initial.saved === null ? null : (initial.saved.state as BrojStateView),
@@ -214,9 +229,7 @@ export function BrojPanel({ saves, variants, onSave, onFinish, onClear }: PanelP
         <Button size="sm" onClick={giveUp} disabled={over}>
           {copy.broj.giveUp}
         </Button>
-        <Button size="sm" onClick={newGame}>
-          {copy.common.newGame}
-        </Button>
+        <NewGameButton saved={savedFor(saves, PUZZLE, VARIANT) !== null} onNew={newGame} />
       </ActionRow>
 
       {result !== null && (

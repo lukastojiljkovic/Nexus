@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Button, Chip, EmptyState, Icon, ListRow, LoadingState, Select, TextField } from "@nexus/ui";
+import {
+  AsyncSurface,
+  Button,
+  Chip,
+  EmptyState,
+  Icon,
+  ListRow,
+  Select,
+  TextField,
+  Toast,
+  type AsyncState,
+} from "@nexus/ui";
 import type {
   DocumentRenewal,
   DocumentStatus,
@@ -117,6 +128,8 @@ export function DocumentsPanel({
 }: DocumentsPanelProps) {
   const [documents, setDocuments] = useState<TrackedDocument[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Bumped by the retry button: the load effect runs again from the top.
+  const [attempt, setAttempt] = useState(0);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   const { revealedId, reveal } = useRevealedRow();
 
@@ -169,7 +182,12 @@ export function DocumentsPanel({
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, attempt]);
+
+  function retryLoad(): void {
+    setFailed(false);
+    setAttempt((count) => count + 1);
+  }
 
   function resetForm(): void {
     setEditingId(null);
@@ -337,6 +355,12 @@ export function DocumentsPanel({
       (a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.id.localeCompare(b.id),
     );
 
+  const loadState: AsyncState<TrackedDocument[]> = failed
+    ? { status: "failed" }
+    : ordered === null
+      ? { status: "loading" }
+      : { status: "ready", data: ordered };
+
   return (
     <div className="documents">
       <form className="documents__form" onSubmit={submitForm}>
@@ -435,160 +459,155 @@ export function DocumentsPanel({
       </form>
 
       {pendingUndoId != null && (
-        <div className="documents__undo" role="status">
-          <span className="documents__undo-text">{strings.documents.deletedNotice}</span>
-          <Button size="sm" className="documents__undo-action" onClick={() => void undo()}>
-            {strings.documents.undo}
-          </Button>
-          <Button
-            size="sm"
-            className="documents__undo-dismiss"
-            aria-label={strings.documents.dismiss}
-            onClick={() => setPendingUndoId(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+        <Toast
+          message={strings.documents.deletedNotice}
+          undo={{ label: strings.documents.undo, onUndo: () => void undo() }}
+          dismissLabel={strings.documents.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
-      {failed ? (
-        <EmptyState
-          title={strings.documents.emptyTitle}
-          description={strings.documents.loadError}
-        />
-      ) : ordered === null ? (
-        <LoadingState label={strings.app.loading} rows={3} />
-      ) : ordered.length === 0 ? (
-        <EmptyState
-          title={strings.documents.emptyTitle}
-          description={strings.documents.emptyDescription}
-        />
-      ) : (
-        <>
-          {/* The horizon before the list it summarises. A list answers each
-              document on its own — „ističe za 41 dan", „ističe za 58 dana" —
-              and leaves the reader holding four numbers to notice that three
-              things fall due in the same fortnight. */}
-          <DocDeadlines profileId={profileId} documents={ordered} today={localTodayKey()} />
-          <div className="documents__list">
-          {ordered.map((doc) => (
-            <ListRow
-              key={doc.id}
-              leading={
-                <Chip variant={STATUS_VARIANT[doc.status]}>
-                  {strings.documents.status[doc.status]}
-                </Chip>
-              }
-              trailing={
-                renewingId === doc.id ? (
-                  <span className="documents__renew">
-                    {/* INLINE, not stacked: this row is a list row's trailing
-                        edge, and a label above the box would make one row of
-                        the list taller than the rest of it while it is open.
-                        Beside the box the name is a caption on the same line
-                        as the two buttons, and the row keeps its height. */}
-                    <TextField
-                      type="date"
-                      layout="inline"
-                      className="documents__renew-input"
-                      value={renewDate}
-                      label={strings.documents.renewLabel}
-                      onChange={(event) => setRenewDate(event.target.value)}
-                    />
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => void confirmRenew(doc)}
-                    >
-                      {strings.documents.renewConfirm}
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="documents__renew-cancel"
-                      aria-label={strings.documents.renewCancel}
-                      onClick={cancelRenew}
-                    >
-                      <Icon name="close" size={14} />
-                    </Button>
-                  </span>
-                ) : (
-                  <span className="documents__row-actions">
-                    <Button
-                      size="sm"
-                      className="documents__renew-start"
-                      onClick={() => startRenew(doc)}
-                    >
-                      {strings.documents.renew}
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="documents__edit"
-                      aria-label={strings.documents.editLabel}
-                      onClick={() => startEdit(doc)}
-                    >
-                      <Icon name="pencil" size={14} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="documents__delete"
-                      aria-label={strings.documents.deleteLabel}
-                      onClick={() => void remove(doc)}
-                    >
-                      <Icon name="trash" size={14} />
-                    </Button>
-                  </span>
-                )
-              }
-            >
-              <span
-                id={documentRowDomId(doc.id)}
-                className={
-                  revealedId === doc.id ? "documents__item nx-revealed" : "documents__item"
-                }
-              >
-                <span className="documents__heading">
-                  <span className="documents__doc-label">{doc.label}</span>
-                  <span className="documents__type">{strings.documents.type[doc.docType]}</span>
-                </span>
-                <span className="documents__meta">
-                  <span className="documents__expiry">{formatDocumentDate(doc.expiryDate)}</span>
-                  <span className="documents__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
-                </span>
-                {/* The ledger, read only while this row's renew form is open —
-                    which is the moment it is worth something, because that is
-                    when somebody is choosing the next expiry date. Loading and
-                    failure are told apart from „no renewals yet": the last of
-                    those is a real answer and the other two are not. */}
-                {renewingId === doc.id && (
-                  <span className="documents__renewals">
-                    <span className="nx-eyebrow">
-                      {strings.documents.renewalsTitle}
-                    </span>
-                    {renewalsFailed ? (
-                      <span className="documents__renewals-note" role="alert">
-                        {strings.documents.renewalsError}
-                      </span>
-                    ) : renewals === null ? (
-                      <span className="documents__renewals-note">{strings.app.loading}</span>
-                    ) : renewals.length === 0 ? (
-                      <span className="documents__renewals-note">
-                        {strings.documents.renewalsEmpty}
+      <AsyncSurface
+        state={loadState}
+        loadingLabel={strings.app.loading}
+        loadingRows={3}
+        failureTitle={strings.documents.loadFailedTitle}
+        failureMessage={strings.documents.loadError}
+        retry={{ label: strings.documents.retry, onClick: retryLoad }}
+      >
+        {(list) =>
+          list.length === 0 ? (
+            <EmptyState
+              title={strings.documents.emptyTitle}
+              description={strings.documents.emptyDescription}
+            />
+          ) : (
+            <>
+              {/* The horizon before the list it summarises. A list answers each
+                  document on its own — „ističe za 41 dan", „ističe za 58 dana" —
+                  and leaves the reader holding four numbers to notice that three
+                  things fall due in the same fortnight. */}
+              <DocDeadlines profileId={profileId} documents={list} today={localTodayKey()} />
+              <div className="documents__list">
+              {list.map((doc) => (
+                <ListRow
+                  key={doc.id}
+                  leading={
+                    <Chip variant={STATUS_VARIANT[doc.status]}>
+                      {strings.documents.status[doc.status]}
+                    </Chip>
+                  }
+                  trailing={
+                    renewingId === doc.id ? (
+                      <span className="documents__renew">
+                        {/* INLINE, not stacked: this row is a list row's trailing
+                            edge, and a label above the box would make one row of
+                            the list taller than the rest of it while it is open.
+                            Beside the box the name is a caption on the same line
+                            as the two buttons, and the row keeps its height. */}
+                        <TextField
+                          type="date"
+                          layout="inline"
+                          className="documents__renew-input"
+                          value={renewDate}
+                          label={strings.documents.renewLabel}
+                          onChange={(event) => setRenewDate(event.target.value)}
+                        />
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => void confirmRenew(doc)}
+                        >
+                          {strings.documents.renewConfirm}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="documents__renew-cancel"
+                          aria-label={strings.documents.renewCancel}
+                          onClick={cancelRenew}
+                        >
+                          <Icon name="close" size={14} />
+                        </Button>
                       </span>
                     ) : (
-                      renewals.map((renewal) => (
-                        <span key={renewal.id} className="documents__renewal">
-                          {`${formatDocumentDate(renewal.renewedAt)} — ${strings.documents.renewalsPrevious} ${formatDocumentDate(renewal.previousExpiry)}`}
+                      <span className="documents__row-actions">
+                        <Button
+                          size="sm"
+                          className="documents__renew-start"
+                          onClick={() => startRenew(doc)}
+                        >
+                          {strings.documents.renew}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="documents__edit"
+                          aria-label={strings.documents.editLabel}
+                          onClick={() => startEdit(doc)}
+                        >
+                          <Icon name="pencil" size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="documents__delete"
+                          aria-label={strings.documents.deleteLabel}
+                          onClick={() => void remove(doc)}
+                        >
+                          <Icon name="trash" size={14} />
+                        </Button>
+                      </span>
+                    )
+                  }
+                >
+                  <span
+                    id={documentRowDomId(doc.id)}
+                    className={
+                      revealedId === doc.id ? "documents__item nx-revealed" : "documents__item"
+                    }
+                  >
+                    <span className="documents__heading">
+                      <span className="documents__doc-label">{doc.label}</span>
+                      <span className="documents__type">{strings.documents.type[doc.docType]}</span>
+                    </span>
+                    <span className="documents__meta">
+                      <span className="documents__expiry">{formatDocumentDate(doc.expiryDate)}</span>
+                      <span className="documents__days">{daysUntilLabel(doc.daysUntilExpiry)}</span>
+                    </span>
+                    {/* The ledger, read only while this row's renew form is open —
+                        which is the moment it is worth something, because that is
+                        when somebody is choosing the next expiry date. Loading and
+                        failure are told apart from „no renewals yet": the last of
+                        those is a real answer and the other two are not. */}
+                    {renewingId === doc.id && (
+                      <span className="documents__renewals">
+                        <span className="nx-eyebrow">
+                          {strings.documents.renewalsTitle}
                         </span>
-                      ))
+                        {renewalsFailed ? (
+                          <span className="documents__renewals-note" role="alert">
+                            {strings.documents.renewalsError}
+                          </span>
+                        ) : renewals === null ? (
+                          <span className="documents__renewals-note">{strings.app.loading}</span>
+                        ) : renewals.length === 0 ? (
+                          <span className="documents__renewals-note">
+                            {strings.documents.renewalsEmpty}
+                          </span>
+                        ) : (
+                          renewals.map((renewal) => (
+                            <span key={renewal.id} className="documents__renewal">
+                              {`${formatDocumentDate(renewal.renewedAt)} — ${strings.documents.renewalsPrevious} ${formatDocumentDate(renewal.previousExpiry)}`}
+                            </span>
+                          ))
+                        )}
+                      </span>
                     )}
                   </span>
-                )}
-              </span>
-            </ListRow>
-          ))}
-          </div>
-        </>
-      )}
+                </ListRow>
+              ))}
+              </div>
+            </>
+          )}
+      </AsyncSurface>
     </div>
   );
 }

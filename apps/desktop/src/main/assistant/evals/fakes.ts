@@ -105,9 +105,38 @@ function summaryFor(tool: ScenarioTool, locale: AssistantLocale): string {
   return tool.summary === undefined ? tool.name : tool.summary[locale];
 }
 
-function resultOf(tool: ScenarioTool): ToolResult {
+/**
+ * Where a navigating scenario tool moved the page, or nothing.
+ *
+ * A `navigateTo` the scenario wrote is the answer. `app.open` without one is
+ * derived from the call, because that is what the real tool does — it answers
+ * the arguments it was given with `{ module, item?, settings? }` (`app.ts`'s
+ * `locationOf`) — and a scenario about navigation would otherwise have to
+ * restate, in every file, a mapping the app already owns.
+ *
+ * Deliberately NOT a check of the arguments: whether `tasks` is a module the app
+ * has is the real tool's refusal to make, and a fake that refused would turn a
+ * scenario about the model's tool CHOICE into one about the harness's opinion.
+ */
+function navigationFor(tool: ScenarioTool, args: unknown): AppLocation | undefined {
+  if (tool.navigateTo !== undefined) return tool.navigateTo;
+  if (tool.effect !== "navigate" || tool.name !== "app.open") return undefined;
+  if (typeof args !== "object" || args === null) return undefined;
+  const record = args as Record<string, unknown>;
+  const module = record["module"];
+  if (typeof module !== "string") return undefined;
+  const item = record["item"];
+  const settings = record["settings"];
+  return {
+    module,
+    ...(typeof item === "string" ? { item } : {}),
+    ...(typeof settings === "string" ? { settings } : {}),
+  };
+}
+
+function resultOf(tool: ScenarioTool, args: unknown): ToolResult {
   const citations = (tool.citations ?? []).map(toCitation);
-  const navigateTo: AppLocation | undefined = tool.navigateTo;
+  const navigateTo = navigationFor(tool, args);
   return {
     ok: true,
     content: tool.content ?? "",
@@ -127,7 +156,7 @@ export function createFakeTool(tool: ScenarioTool, specs: ToolSpecLookup = {}): 
     description: spec?.description ?? describe(tool.name),
     parameters: spec?.parameters ?? PARAMETERS,
     effect: tool.effect,
-    async run(_args: unknown, context: ToolContext): Promise<ToolResult> {
+    async run(args: unknown, context: ToolContext): Promise<ToolResult> {
       // Only `write` and `network` ask: `navigate` moves the app's own view, and
       // the contract runs a `read` without asking at all.
       if (tool.effect === "write" || tool.effect === "network") {
@@ -139,7 +168,7 @@ export function createFakeTool(tool: ScenarioTool, specs: ToolSpecLookup = {}): 
         if (!approved) return { ok: false, content: tool.declined ?? DEFAULT_DECLINED };
       }
       if (tool.fail !== undefined) throw new Error(tool.fail);
-      return resultOf(tool);
+      return resultOf(tool, args);
     },
   };
 }

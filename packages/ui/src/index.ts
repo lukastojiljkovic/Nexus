@@ -9,7 +9,12 @@ export { TextArea, type TextAreaProps } from "./components/TextArea.js";
 export { Select, type SelectProps } from "./components/Select.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
 export { LoadingState, type LoadingStateProps } from "./components/LoadingState.js";
+export { AsyncSurface, asyncSurfacePlan, type AsyncRetry, type AsyncPlan, type AsyncState, type AsyncSurfaceProps } from "./components/AsyncSurface.js";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader.js";
+export { Segmented, segmentedOptionState, type SegmentedOption, type SegmentedProps } from "./components/Segmented.js";
+export { Toolbar, toolbarAria, type ToolbarProps } from "./components/Toolbar.js";
+export { Section, sectionCaptionTag, type SectionLevel, type SectionProps } from "./components/Section.js";
+export { SettingsRow, settingsRowAria, type SettingsRowProps } from "./components/SettingsRow.js";
 export {
   StatBand,
   type Stat,
@@ -90,7 +95,9 @@ export {
   type FieldProps,
   type FieldWiring,
 } from "./components/Field.js";
-export { ConfirmDialog, dialogAria, type ConfirmDialogProps } from "./components/ConfirmDialog.js";
+export { ConfirmDialog, confirmFocus, type ConfirmDialogProps } from "./components/ConfirmDialog.js";
+export { Dialog, dialogAria, type DialogProps } from "./components/Dialog.js";
+export { Notice, noticeAnnouncement, type NoticeKind, type NoticeProps } from "./components/Notice.js";
 export {
   Toast,
   toastAnnouncement,
@@ -104,6 +111,7 @@ export {
 } from "./components/dialogFocus.js";
 export { wrappedStep } from "./focusCycle.js";
 export { useFocusTrap, type UseFocusTrapOptions } from "./components/useFocusTrap.js";
+export { holdModalLayer, isModalOpen, modalLayerDepth, useModalLayer } from "./components/useModalLayer.js";
 export { ListDetail, type ListDetailProps } from "./views/ListDetail.js";
 export {
   listDetailFocusIndex,

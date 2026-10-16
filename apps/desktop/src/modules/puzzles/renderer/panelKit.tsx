@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Button } from "@nexus/ui";
+import { Button, ConfirmDialog } from "@nexus/ui";
 import type {
   PuzzleId,
   PuzzlesSettingsView,
@@ -63,8 +63,9 @@ export function initialGame(
   puzzle: PuzzleId,
   variants: readonly string[],
   newSeed: () => number,
+  opening?: string,
 ): InitialGame {
-  const variant = initialVariant(saves, puzzle, variants);
+  const variant = opening ?? initialVariant(saves, puzzle, variants);
   const saved = savedFor(saves, puzzle, variant);
   return {
     variant,
@@ -213,6 +214,11 @@ export interface PanelProps {
    * which is the row's job to prevent, not the page's memory of it.
    */
   readonly onClear: (input: ClearInput) => void;
+  /**
+   * A grade the assistant asked the page to open on. A panel mounted with one opens on
+   * it rather than on the game it finds first; the page remounts the panel when asked again.
+   */
+  readonly opening?: string | undefined;
 }
 
 /** One line of numbers, right-aligned and tabular: the readouts a board carries. */
@@ -222,5 +228,50 @@ export function Readout({ label, value }: { readonly label: string; readonly val
       <span className="pz__readout-label">{label}</span>
       <span className="pz__readout-value">{value}</span>
     </p>
+  );
+}
+
+/**
+ * „Nova igra", asked first when the game in progress would be thrown away.
+ *
+ * The question is asked only when this profile has a saved row for the grade: a
+ * board nobody has moved on has nothing to lose, and asking about it is noise. The
+ * row is the test, the one a resume reads (`savedFor`), so the question and the
+ * resume cannot disagree about what is in progress.
+ */
+export function NewGameButton({
+  saved,
+  primary = false,
+  onNew,
+}: {
+  readonly saved: boolean;
+  readonly primary?: boolean;
+  readonly onNew: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <Button
+        size="sm"
+        variant={primary ? "primary" : "ghost"}
+        onClick={() => (saved ? setAsking(true) : onNew())}
+      >
+        {copy.common.newGame}
+      </Button>
+      {asking && (
+        <ConfirmDialog
+          title={copy.common.discardTitle}
+          question={copy.common.discardQuestion}
+          confirmLabel={copy.common.newGame}
+          cancelLabel={copy.common.cancel}
+          destructive
+          onCancel={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            onNew();
+          }}
+        />
+      )}
+    </>
   );
 }

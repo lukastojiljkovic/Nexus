@@ -1,6 +1,6 @@
 /**
  * What the assistant can do to the APP itself: open a place, list what exists,
- * run the global search.
+ * run the global search, read and forget the search history, rebuild the index.
  *
  * `app.open` is the one tool in this folder whose effect is `navigate` rather
  * than `read`: it changes no data and shows no dialog, it moves the page the
@@ -14,22 +14,43 @@
  * it exists, and an id nobody registered is refused with the ids that ARE
  * registered in the message rather than silently returning "opened".
  *
- * **Why a compiled-in module has no description here.** The shell's sixteen
- * modules keep their names and their one-line descriptions in the renderer's
- * `strings` table (`moduleName.ts`), which main cannot read — a fact, not an
- * omission. A module built on the kit carries its own copy in its manifest
- * (`ModuleManifest.copy`), so it is named and described in the active locale
- * below; for the rest this tool answers with the id, the navigation group and
- * the fact that the manual has the prose. The assistant's own manual
- * (`assistant/manual/`) is exactly that second surface, and it is the reason
- * this split is honest rather than a gap.
+ * **Where the names come from.** A kit module carries its name and one-line
+ * description in its manifest (`ModuleManifest.copy`). The shell's compiled-in
+ * modules keep theirs in the renderer's `strings`, which main cannot read, so
+ * `shared/builtinModuleCopy.ts` holds the same words for them, in both locales,
+ * pinned to the renderer's by a test. A module in neither place is printed by
+ * its id and its group alone.
+ *
+ * **Search results carry places.** A hit whose kind a page can reveal answers
+ * with a citation whose `location` opens it (`citationFor`). The kinds that
+ * cannot be opened by an id alone (documents, the study kinds, circuits) answer
+ * with no citation: their reveal intents need more than an id.
  */
 
-import type { AssistantLocale, ModuleManifest, Tool } from "@nexus/core";
-import { MAX_ID_LENGTH } from "@nexus/core";
+import type {
+  AppLocation,
+  AssistantLocale,
+  AssistantText,
+  Citation,
+  ModuleManifest,
+  Tool,
+} from "@nexus/core";
+import { foldSearchText, MAX_ID_LENGTH } from "@nexus/core";
+import { rebuildSearchIndex, SearchHistoryStore } from "@nexus/db";
 import type { SearchResult } from "../../../shared/ipc.js";
+import { BUILTIN_MODULE_COPY } from "../../../shared/builtinModuleCopy.js";
+import { isModuleVisible, type ShellVisibility } from "../../../shared/moduleVisibility.js";
 import { asArgs, asIdentifier, asOptionalCount, asOptionalText, asText } from "./args.js";
-import { assertLive, guard, okResult, phrase, text, type AssistantPhrase } from "./support.js";
+import {
+  assertLive,
+  confirmOrDecline,
+  guard,
+  okResult,
+  phrase,
+  text,
+  type AssistantPhrase,
+  type ProfileDb,
+} from "./support.js";
 
 /** What navigation needs of the app's registry — `ModuleRegistry` satisfies this, and a test can hand in a two-module stand-in. */
 export interface ModuleLookup {
@@ -37,7 +58,7 @@ export interface ModuleLookup {
   get(id: string): ModuleManifest | undefined;
 }
 
-/** The tools in this area need three things the app owns: its registry, its global search, and its clock. */
+/** The tools in this area need what the app owns: its registry, its global search, its databases, and the device's module visibility. */
 export interface AppToolDeps {
   readonly modules: ModuleLookup;
   readonly search: (
@@ -45,6 +66,9 @@ export interface AppToolDeps {
     query: string,
     limit: number,
   ) => Promise<readonly SearchResult[]>;
+  readonly profileDb: ProfileDb;
+  /** The device's module visibility (ADR-101), read per call so a switch in Settings is seen by the next question. */
+  readonly visibility: () => ShellVisibility;
 }
 
 /** How many results `app.search` answers with when the model names no cap. */
@@ -52,6 +76,9 @@ const DEFAULT_SEARCH_LIMIT = 8;
 
 /** The most results one search may ask for — `MAX_SEARCH_LIMIT`'s order of magnitude, and far below the palette's own 200: a tool result is read by a model, not scrolled by a person. */
 const MAX_SEARCH_LIMIT = 20;
+
+/** A search query's longest accepted length, in characters — the palette's own input bound, which `app.search` and the history tools share. */
+const MAX_QUERY_CHARS = 200;
 
 /** A settings card key: a shell section id (`profile`, `notifications`) or a module's own id, both kebab-case. */
 const SETTINGS_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -74,11 +101,16 @@ const MODULES_HEADING: AssistantPhrase<[count: number]> = {
   en: (count) => `Modules (${count}):`,
 };
 
-/** Says out loud where the prose for a compiled-in module is, so a model that needs to explain „Učenje" does not invent one. */
-const MODULES_MANUAL_HINT = {
-  sr: "Moduli bez opisa su ugrađeni moduli; njihove opise i namenu čitaj iz priručnika aplikacije.",
-  en: "Modules without a description are built-in ones; read what they are for from the app manual.",
-} as const;
+/** The tag a module the device hides carries in `app.modules`, and the sentence `app.open` adds when it opens one. */
+const HIDDEN_TAG: AssistantText = {
+  sr: "skriven na ovom uređaju",
+  en: "hidden on this device",
+};
+
+const HIDDEN_OPENED: AssistantText = {
+  sr: "Na ovom uređaju modul je sakriven u meniju modula.",
+  en: "On this device this module is hidden from the module menu.",
+};
 
 const OPEN_FAILED_UNKNOWN: AssistantPhrase<[id: string, known: string]> = {
   sr: (id, known) => `Nepoznat modul „${id}“. Poznati moduli: ${known}.`,
@@ -88,6 +120,46 @@ const OPEN_FAILED_UNKNOWN: AssistantPhrase<[id: string, known: string]> = {
 const OPENED: AssistantPhrase<[id: string]> = {
   sr: (id) => `Otvoren modul „${id}“.`,
   en: (id) => `Opened module “${id}”.`,
+};
+
+const HISTORY_HEADING: AssistantPhrase<[count: number]> = {
+  sr: (count) => `Zapamćene pretrage (${count}), najnovija prva:`,
+  en: (count) => `Remembered searches (${count}), newest first:`,
+};
+
+const HISTORY_EMPTY: AssistantText = {
+  sr: "Nema zapamćenih pretraga.",
+  en: "No remembered searches.",
+};
+
+const FORGET_SUMMARY: AssistantPhrase<[query: string]> = {
+  sr: (query) => `Zaboraviću pretragu „${query}“.`,
+  en: (query) => `I will forget the search “${query}”.`,
+};
+
+const FORGOTTEN: AssistantPhrase<[query: string]> = {
+  sr: (query) => `Pretraga „${query}“ je zaboravljena.`,
+  en: (query) => `The search “${query}” was forgotten.`,
+};
+
+const FORGET_UNKNOWN: AssistantPhrase<[query: string]> = {
+  sr: (query) => `Pretraga „${query}“ nije u istoriji.`,
+  en: (query) => `The search “${query}” is not in the history.`,
+};
+
+const FORGET_AMBIGUOUS: AssistantPhrase<[query: string, matches: string]> = {
+  sr: (query, matches) => `Više pretraga liči na „${query}“: ${matches}. Navedi tačnu.`,
+  en: (query, matches) => `More than one search matches “${query}”: ${matches}. Name the exact one.`,
+};
+
+const REBUILD_SUMMARY: AssistantText = {
+  sr: "Obnoviću indeks pretrage za celu aplikaciju.",
+  en: "I will rebuild the search index for the whole app.",
+};
+
+const REBUILT: AssistantText = {
+  sr: "Indeks pretrage je obnovljen.",
+  en: "The search index was rebuilt.",
 };
 
 export function appTools(deps: AppToolDeps): readonly Tool[] {
@@ -141,7 +213,9 @@ export function appTools(deps: AppToolDeps): readonly Tool[] {
         const item =
           args.item === undefined ? undefined : asIdentifier(args.item, "item");
         const settings = optionalSettingsKey(args.settings);
-        return okResult(phrase(context.locale, OPENED, moduleId), {
+        const opened = phrase(context.locale, OPENED, moduleId);
+        const hidden = !isModuleVisible(manifest, deps.visibility());
+        return okResult(hidden ? `${opened} ${text(context.locale, HIDDEN_OPENED)}` : opened, {
           navigateTo: locationOf(moduleId, item, settings),
         });
       }),
@@ -150,8 +224,8 @@ export function appTools(deps: AppToolDeps): readonly Tool[] {
   const modules: Tool = {
     name: "app.modules",
     description: {
-      sr: "Izlistava module koje Nexus ima i čemu svaki služi. Koristi ga pre nego što predložiš gde se nešto nalazi u aplikaciji, i pre app.open kada nisi siguran koji je id modula.",
-      en: "Lists the modules Nexus has and what each one is for. Use it before telling the user where something lives in the app, and before app.open when you are unsure of a module id.",
+      sr: "Izlistava module koje Nexus ima, čemu svaki služi i koji su sakriveni na ovom uređaju. Koristi ga pre nego što predložiš gde se nešto nalazi u aplikaciji, i pre app.open kada nisi siguran koji je id modula.",
+      en: "Lists the modules Nexus has, what each one is for, and which are hidden on this device. Use it before telling the user where something lives in the app, and before app.open when you are unsure of a module id.",
     },
     parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
     effect: "read",
@@ -159,11 +233,12 @@ export function appTools(deps: AppToolDeps): readonly Tool[] {
       guard(context, () => {
         assertLive(context);
         const all = deps.modules.all();
-        const lines = all.map((manifest) => describeModule(context.locale, manifest));
+        const visibility = deps.visibility();
+        const lines = all.map((manifest) =>
+          describeModule(context.locale, manifest, isModuleVisible(manifest, visibility)),
+        );
         return okResult(
-          [`${phrase(context.locale, MODULES_HEADING, all.length)}`, ...lines, text(context.locale, MODULES_MANUAL_HINT)].join(
-            "\n",
-          ),
+          [phrase(context.locale, MODULES_HEADING, all.length), ...lines].join("\n"),
         );
       }),
   };
@@ -171,13 +246,13 @@ export function appTools(deps: AppToolDeps): readonly Tool[] {
   const search: Tool = {
     name: "app.search",
     description: {
-      sr: "Pokreće globalnu pretragu aplikacije preko zadataka, događaja, beleški, predmeta, špilova i dokumenata. Koristi je kao prvi korak kada korisnik pita gde se nešto nalazi ili traži nešto što je već zapisano.",
-      en: "Runs the app's global search across tasks, events, notes, subjects, decks and documents. Use it as the first step when the user asks where something is or looks for something already recorded.",
+      sr: "Pokreće globalnu pretragu aplikacije preko zadataka, događaja, beleški, predmeta, špilova i dokumenata. Podržava filtere kao #oznaka i rok:danas. Koristi je kao prvi korak kada korisnik pita gde se nešto nalazi ili traži nešto što je već zapisano.",
+      en: "Runs the app's global search across tasks, events, notes, subjects, decks and documents. It takes the same filters as the search box, such as #tag or due:today. Use it as the first step when the user asks where something is or looks for something already recorded.",
     },
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", minLength: 1, maxLength: 200, description: "What to search for." },
+        query: { type: "string", minLength: 1, maxLength: MAX_QUERY_CHARS, description: "What to search for." },
         limit: {
           type: "integer",
           minimum: 1,
@@ -193,35 +268,140 @@ export function appTools(deps: AppToolDeps): readonly Tool[] {
       guard(context, async () => {
         assertLive(context);
         const args = asArgs(rawArgs);
-        const query = asText(args.query, "query", 200);
+        const query = asText(args.query, "query", MAX_QUERY_CHARS);
         const limit = asOptionalCount(args.limit, "limit", 1, MAX_SEARCH_LIMIT) ?? DEFAULT_SEARCH_LIMIT;
         const hits = await deps.search(context.profileId, query, limit);
         if (hits.length === 0) {
           return okResult(phrase(context.locale, SEARCH_EMPTY, query));
         }
+        const citations = hits.flatMap((hit) => {
+          const citation = citationFor(hit);
+          return citation === null ? [] : [citation];
+        });
         return okResult(
           [
             phrase(context.locale, SEARCH_RESULTS, hits.length, query),
             ...hits.map((hit) => searchLine(hit)),
           ].join("\n"),
+          { citations },
         );
       }),
   };
 
-  return [open, modules, search];
+  const history: Tool = {
+    name: "search.history",
+    description: {
+      sr: "Izlistava pretrage koje je korisnik nedavno pokretao u pretrazi aplikacije. Koristi ga kada korisnik pita šta je tražio ili traži da ponovi pretragu.",
+      en: "Lists the searches the user ran recently in the app's search. Use it when the user asks what they searched for, or wants to run a search again.",
+    },
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    effect: "read",
+    run: (_rawArgs, context) =>
+      guard(context, () => {
+        assertLive(context);
+        const entries = searchHistory(deps.profileDb, context.profileId);
+        if (entries.length === 0) return okResult(text(context.locale, HISTORY_EMPTY));
+        return okResult(
+          [
+            phrase(context.locale, HISTORY_HEADING, entries.length),
+            ...entries.map((entry) => `- ${entry.query}`),
+          ].join("\n"),
+        );
+      }),
+  };
+
+  const forget: Tool = {
+    name: "search.forget",
+    description: {
+      sr: "Briše jednu pretragu iz istorije pretrage. Koristi ga kada korisnik traži da se neka pretraga zaboravi. Ne briše celu istoriju.",
+      en: "Removes one search from the search history. Use it when the user asks to forget a particular search. It never clears the whole history.",
+    },
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          minLength: 1,
+          maxLength: MAX_QUERY_CHARS,
+          description: "The remembered search, as search.history lists it.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+    effect: "write",
+    run: (rawArgs, context) =>
+      guard(context, async () => {
+        assertLive(context);
+        const query = asText(asArgs(rawArgs).query, "query", MAX_QUERY_CHARS);
+        const folded = foldSearchText(query);
+        const [only, ...others] = searchHistory(deps.profileDb, context.profileId).filter(
+          (entry) => foldSearchText(entry.query) === folded,
+        );
+        if (only === undefined) throw new Error(phrase(context.locale, FORGET_UNKNOWN, query));
+        if (others.length > 0) {
+          const names = [only, ...others].map((entry) => `„${entry.query}“`).join(", ");
+          throw new Error(phrase(context.locale, FORGET_AMBIGUOUS, query, names));
+        }
+
+        const declined = await confirmOrDecline(
+          context,
+          "search.forget",
+          "write",
+          phrase(context.locale, FORGET_SUMMARY, only.query),
+        );
+        if (declined !== null) return declined;
+
+        deps.profileDb(context.profileId, (db, profileId) =>
+          new SearchHistoryStore(db, profileId).remove(only.query),
+        );
+        return okResult(phrase(context.locale, FORGOTTEN, only.query));
+      }),
+  };
+
+  const rebuild: Tool = {
+    name: "search.rebuild",
+    description: {
+      sr: "Ponovo gradi indeks pretrage za celu aplikaciju. Koristi ga samo kada korisnik kaže da pretraga ne nalazi ono što postoji ili da je pretraga pokvarena.",
+      en: "Rebuilds the search index for the whole app. Use it only when the user says search misses things that exist, or that search is broken.",
+    },
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    effect: "write",
+    run: (_rawArgs, context) =>
+      guard(context, async () => {
+        assertLive(context);
+        const declined = await confirmOrDecline(
+          context,
+          "search.rebuild",
+          "write",
+          text(context.locale, REBUILD_SUMMARY),
+        );
+        if (declined !== null) return declined;
+
+        deps.profileDb(context.profileId, (db) => rebuildSearchIndex(db));
+        return okResult(text(context.locale, REBUILT));
+      }),
+  };
+
+  return [open, modules, search, history, forget, rebuild];
+}
+
+/** A profile's remembered queries, newest first, read through the profile's own handle. */
+function searchHistory(profileDb: ProfileDb, profileId: string) {
+  return profileDb(profileId, (db, id) => new SearchHistoryStore(db, id).list());
 }
 
 /**
- * One module's row. A kit module carries its own words in its manifest, in both
- * languages, and they are printed in the active one; a compiled-in module has
- * none in this process (see the file header) and prints its id and its group.
+ * One module's row: its name and description in the active locale (from its
+ * manifest, or `BUILTIN_MODULE_COPY` for a compiled-in one), and a tag when the
+ * device hides it, so the model does not offer it as a place in the sidebar.
  */
-function describeModule(locale: AssistantLocale, manifest: ModuleManifest): string {
-  const copy = manifest.copy;
-  if (copy === undefined) {
-    return `- ${manifest.id} (${manifest.group})`;
-  }
-  return `- ${manifest.id} (${manifest.group}): ${copy.name[locale]} — ${copy.description[locale]}`;
+function describeModule(locale: AssistantLocale, manifest: ModuleManifest, visible: boolean): string {
+  const copy = manifest.copy ?? BUILTIN_MODULE_COPY[manifest.id];
+  const tags = [manifest.group, ...(visible ? [] : [text(locale, HIDDEN_TAG)])].join(", ");
+  const head = `- ${manifest.id} (${tags})`;
+  if (copy === undefined) return head;
+  return `${head}: ${copy.name[locale]} — ${copy.description[locale]}`;
 }
 
 /** One search hit as a line the model can quote: what it is, its title, and the snippet the index matched in. */
@@ -231,6 +411,29 @@ function searchLine(hit: SearchResult): string {
   return snippet.length === 0
     ? `- ${hit.kind} ${id}: ${hit.title}`
     : `- ${hit.kind} ${id}: ${hit.title} — ${snippet}`;
+}
+
+/**
+ * The citation a hit answers with, when the app has a place that reveals it.
+ * The places are the ones the palette opens (`App.tsx`'s search dispatch) and
+ * that the shell's `compiledInReveal` or a kit page can act on by id alone: a
+ * task, an event, a note, and an attachment through its note.
+ */
+function citationFor(hit: SearchResult): Citation | null {
+  const at = (kind: Citation["kind"], location: AppLocation | null): Citation | null =>
+    location === null ? null : { kind, id: hit.entityId, title: hit.title, location };
+  switch (hit.kind) {
+    case "task":
+      return at("task", { module: "tasks", item: hit.entityId });
+    case "event":
+      return at("event", { module: "calendar", item: hit.entityId });
+    case "note":
+      return at("note", { module: "notes", item: hit.entityId });
+    case "attachment":
+      return at("file", hit.parentId === null ? null : { module: "notes", item: hit.parentId });
+    default:
+      return null;
+  }
 }
 
 /** A settings card key, bounded to the two shapes the page's own section ids take. */
@@ -254,4 +457,3 @@ function locationOf(
   if (settings !== undefined) location.settings = settings;
   return location;
 }
-

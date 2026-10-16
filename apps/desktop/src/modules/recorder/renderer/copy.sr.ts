@@ -77,6 +77,7 @@ export const sr = {
   },
   errors: {
     load: "Nije moguće učitati snimke.",
+    retry: "Pokušaj ponovo",
     mutate: "Izmena nije sačuvana.",
     tags: "Previše oznaka — skrati spisak.",
     date: "Izaberi datum za upis u dnevnik.",

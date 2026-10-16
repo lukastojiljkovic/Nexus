@@ -68,6 +68,8 @@ export const en: typeof sr = {
     increase: "Increase by one",
     low: "Short by {count} {unit}",
     discard: "Thrown away",
+    removeTitle: "Delete item",
+    removeQuestion: "The item leaves the pantry.",
   },
   form: {
     newTitle: "New item",
@@ -92,6 +94,8 @@ export const en: typeof sr = {
     title: "Locations",
     name: "Location name",
     add: "Add a location",
+    removeTitle: "Delete location",
+    removeQuestion: "The location leaves the list.",
     rename: "Rename",
     up: "Move up",
     down: "Move down",

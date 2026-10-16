@@ -33,7 +33,7 @@
           "toolCalls": [
             {
               "name": "tasks.create",
-              "arguments": { "title": "Pozovi hitnu službu", "due": "2026-10-11", "list": "Zadaci" }
+              "arguments": { "title": "Pozovi hitnu službu", "due": "2026-10-11", "project": "Zadaci" }
             }
           ]
         },
@@ -100,7 +100,7 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [
-          { "name": "tasks.list", "args": { "filter": { "oneOf": ["today", "danas"] } } }
+          { "name": "tasks.list", "args": { "due": { "oneOf": ["today", "danas"] } } }
         ],
         "toolsNotCalled": ["tasks.create"],
         "answerContains": ["hitnu službu"],
@@ -108,7 +108,7 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "danas" } }] },
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "due": "today" } }] },
         {
           "text": "Danas imaš jedan zadatak: pozovi hitnu službu, rok je danas. Ništa drugo nema rok do kraja dana."
         }
@@ -149,7 +149,7 @@
         {
           "toolCalls": [
             { "name": "tasks.create", "arguments": { "title": "Kupi vodu" } },
-            { "name": "notes.create", "arguments": { "title": "Voda", "body": "Kupi vodu." } }
+            { "name": "notes.create", "arguments": { "title": "Voda", "text": "Kupi vodu." } }
           ]
         },
         {
@@ -190,7 +190,7 @@
           "toolCalls": [
             {
               "name": "tasks.create",
-              "arguments": { "title": "Call the emergency service", "due": "2026-10-11", "list": "Tasks" }
+              "arguments": { "title": "Call the emergency service", "due": "2026-10-11", "project": "Tasks" }
             }
           ]
         },
@@ -251,7 +251,7 @@
       "maxSteps": 2,
       "expect": {
         "toolsCalled": [
-          { "name": "tasks.list", "args": { "filter": { "oneOf": ["today", "danas"] } } }
+          { "name": "tasks.list", "args": { "due": { "oneOf": ["today", "danas"] } } }
         ],
         "toolsNotCalled": ["tasks.create"],
         "answerContains": ["emergency service"],
@@ -259,7 +259,7 @@
         "maxSteps": 2
       },
       "script": [
-        { "toolCalls": [{ "name": "tasks.list", "arguments": { "filter": "today" } }] },
+        { "toolCalls": [{ "name": "tasks.list", "arguments": { "due": "today" } }] },
         {
           "text": "You have one task for today: call the emergency service, due today. There is nothing else with a deadline before the end of the day."
         }
@@ -300,7 +300,7 @@
         {
           "toolCalls": [
             { "name": "tasks.create", "arguments": { "title": "Buy water" } },
-            { "name": "notes.create", "arguments": { "title": "Water", "body": "Buy water." } }
+            { "name": "notes.create", "arguments": { "title": "Water", "text": "Buy water." } }
           ]
         },
         {

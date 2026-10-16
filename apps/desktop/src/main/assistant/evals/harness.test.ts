@@ -68,6 +68,7 @@ describe("createHarness", () => {
     expect(result.durationMs).toBe(3);
     expect(result.finalText).toBe("Šifru menjaš u Podešavanjima, na kartici Bezbednost.");
     expect(result.expectations.map((entry) => entry.passed)).toEqual([true, true, true]);
+    expect(result.navigations).toEqual([{ module: "settings", settings: "security" }]);
     // The loop asked for the tool before answering, and the fake tool was offered.
     expect(capture.model?.requests).toHaveLength(2);
     expect(capture.model?.requests[0]?.tools.map((tool) => tool.name)).toEqual(["app.open"]);
@@ -232,6 +233,62 @@ describe("createHarness", () => {
     // The call is in the trace even though no tool answers to that name: the
     // harness scores what the model asked for, not what the fakes executed.
     expect(result.expectations[0]?.detail).toContain("tasks.list");
+  });
+
+  it("records what each request offered, so a turn that never saw a tool is visible", async () => {
+    const result = await harnessFor().runScenario(
+      scenario({
+        tools: [{ name: "app.open", effect: "navigate" }, { name: "tasks.list", effect: "read" }],
+        expect: { toolsCalled: [{ name: "app.open" }] },
+        script: [
+          { toolCalls: [{ name: "app.open", arguments: { module: "tasks" } }] },
+          { text: "Otvorio sam zadatke." },
+        ],
+      }),
+    );
+    expect(result.toolsOffered).toEqual([["app.open", "tasks.list"], ["app.open", "tasks.list"]]);
+  });
+
+  it("records where an app.open result pointed, and checks it against `navigatesTo`", async () => {
+    const found = await harnessFor().runScenario(
+      scenario({
+        expect: {
+          toolsCalled: [{ name: "app.open" }],
+          navigatesTo: [{ module: "settings", settings: "security" }],
+        },
+      }),
+    );
+    expect(found.passed).toBe(true);
+    expect(found.navigations).toEqual([{ module: "settings", settings: "security" }]);
+
+    const missed = await harnessFor().runScenario(
+      scenario({ expect: { navigatesTo: [{ module: "tasks" }] } }),
+    );
+    expect(missed.passed).toBe(false);
+    expect(missed.expectations[0]?.detail).toContain("settings/security");
+  });
+
+  it("keeps no location when the call did not run, so a refused turn navigated nowhere", async () => {
+    const result = await harnessFor().runScenario(
+      scenario({
+        tools: [
+          {
+            name: "tasks.create",
+            effect: "write",
+            summary: { sr: "Dodati zadatak.", en: "Add a task." },
+            content: "Task created.",
+          },
+        ],
+        confirmations: [false],
+        expect: { toolsCalled: [{ name: "tasks.create" }], navigatesTo: [{ module: "tasks" }] },
+        script: [
+          { toolCalls: [{ name: "tasks.create", arguments: { title: "Kupi vodu" } }] },
+          { text: "Nisam dodao zadatak." },
+        ],
+      }),
+    );
+    expect(result.navigations).toEqual([]);
+    expect(result.passed).toBe(false);
   });
 
   it("fails the scenario, with the message, when the loop throws", async () => {

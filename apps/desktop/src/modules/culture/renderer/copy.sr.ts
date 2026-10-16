@@ -39,6 +39,10 @@ export const sr = {
   cancel: "Otkaži",
   close: "Zatvori",
   confirm: "Potvrdi",
+  removeAsk: {
+    title: "Ukloniti ovo?",
+    question: "Ovo se ne može vratiti.",
+  },
   // The ten visit kinds, in `VISIT_KINDS` order (the store's and the schema's
   // own list, which the pickers render as they stand).
   kinds: {
@@ -130,6 +134,10 @@ export const sr = {
     upcoming: "Predstoji",
     past: "Prošlo",
     openLink: "Otvori link",
+    tickets: "Karte",
+    noTickets: "Bez karata",
+    attachTicket: "Dodaj kartu",
+    removeTicket: "Ukloni",
     remove: "Obriši",
     kind: "Vrsta",
     titleLabel: "Naslov",
@@ -225,6 +233,7 @@ export const sr = {
     price: "Cena mora biti iznos i valuta, na primer 1200 RSD.",
     link: "Link mora da počinje sa http:// ili https://.",
     photoType: "Prilog može biti slika ili PDF.",
+    ticketOpen: "Karta nije mogla da se otvori.",
     playback: "Numeru nije moguće pustiti.",
     audioFormat: "Podržani su MP3, FLAC, Ogg, M4A i WAV.",
     importFailed: "Fajl nije mogao da se uveze.",

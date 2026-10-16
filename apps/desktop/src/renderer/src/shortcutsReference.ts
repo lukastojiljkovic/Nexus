@@ -37,6 +37,20 @@ export interface ShortcutReferenceGroup {
  */
 export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
   {
+    id: "assistant",
+    get title() {
+      return strings.shortcuts.groups.assistant;
+    },
+    rows: [
+      {
+        keys: ["Ctrl", "J"],
+        get description() {
+          return strings.shortcuts.reference.assistantDock;
+        },
+      },
+    ],
+  },
+  {
     id: "palette",
     get title() {
       return strings.shortcuts.groups.palette;
@@ -58,6 +72,20 @@ export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
         keys: ["Esc"],
         get description() {
           return strings.shortcuts.reference.paletteClose;
+        },
+      },
+    ],
+  },
+  {
+    id: "rail",
+    get title() {
+      return strings.shortcuts.groups.rail;
+    },
+    rows: [
+      {
+        keys: ["Alt", "↑", "↓"],
+        get description() {
+          return strings.shortcuts.reference.railMove;
         },
       },
     ],
@@ -242,6 +270,69 @@ export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
         keys: ["Esc"],
         get description() {
           return strings.shortcuts.reference.notesFindClose;
+        },
+      },
+    ],
+  },
+  {
+    id: "timers",
+    get title() {
+      return strings.shortcuts.groups.timers;
+    },
+    get caption() {
+      return strings.shortcuts.captions.timers;
+    },
+    rows: [
+      {
+        keys: ["Space"],
+        get description() {
+          return strings.shortcuts.reference.timersStartPause;
+        },
+      },
+      {
+        keys: ["L"],
+        get description() {
+          return strings.shortcuts.reference.timersLap;
+        },
+      },
+      {
+        keys: ["R"],
+        get description() {
+          return strings.shortcuts.reference.timersReset;
+        },
+      },
+    ],
+  },
+  {
+    id: "miniapps",
+    get title() {
+      return strings.shortcuts.groups.miniapps;
+    },
+    get caption() {
+      return strings.shortcuts.captions.miniapps;
+    },
+    rows: [
+      {
+        keys: ["Esc"],
+        get description() {
+          return strings.shortcuts.reference.miniappsClose;
+        },
+      },
+    ],
+  },
+  {
+    id: "signals",
+    get title() {
+      return strings.shortcuts.groups.signals;
+    },
+    get caption() {
+      return strings.shortcuts.captions.signals;
+    },
+    rows: [
+      {
+        keys: ["Esc"],
+        get description() {
+          return strings.shortcuts.reference.signalsLampStop;
         },
       },
     ],

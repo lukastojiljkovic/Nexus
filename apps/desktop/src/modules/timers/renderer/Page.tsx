@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   EmptyState,
   Icon,
   ListRow,
@@ -54,10 +55,12 @@ import "./timers.css";
  * `applyLocale` walk the shell's goes through, and it arrives with this chunk.
  */
 
-export default function TimersPage({ profileId }: ModulePageProps) {
+export default function TimersPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<TimersView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /** The last stopwatch command the assistant sent; a new object each time, so the same command twice still applies twice. */
+  const [stopwatchOrder, setStopwatchOrder] = useState<StopwatchOrder | null>(null);
 
   /**
    * One read, into state. Every mutation answers with the same shape, so there is
@@ -94,6 +97,26 @@ export default function TimersPage({ profileId }: ModulePageProps) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /**
+   * What the assistant asked this page to do. A reveal scrolls to its row, and
+   * waits for the view that draws the rows; a stopwatch command is handed to the
+   * stopwatch below. Anything else is not this page's verb, and is reported handled
+   * all the same so the shell's queue moves on.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    if (intent.kind === "reveal") {
+      if (view === null) return;
+      document
+        .querySelector(`[data-item="${CSS.escape(intent.item)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    } else if (intent.action === "stopwatch") {
+      const action = stopwatchActionOf(intent.payload);
+      if (action !== null) setStopwatchOrder({ action });
+    }
+    onIntentHandled?.();
+  }, [intent, view, onIntentHandled]);
 
   useEffect(() => {
     const handle = setInterval(() => setNowMs(Date.now()), 1000);
@@ -140,7 +163,7 @@ export default function TimersPage({ profileId }: ModulePageProps) {
         error === null && <LoadingState label={copy.page.loading} rows={4} />
       ) : (
         <>
-          <StopwatchSection />
+          <StopwatchSection order={stopwatchOrder} />
           <CountdownsSection
             profileId={profileId}
             countdowns={view.countdowns}
@@ -156,6 +179,20 @@ export default function TimersPage({ profileId }: ModulePageProps) {
 
 // --- Štoperica ---------------------------------------------------------------
 
+type StopwatchAction = "start" | "stop" | "lap" | "reset";
+
+interface StopwatchOrder {
+  readonly action: StopwatchAction;
+}
+
+const STOPWATCH_ACTIONS: readonly StopwatchAction[] = ["start", "stop", "lap", "reset"];
+
+/** The stopwatch command in an action's payload, or `null` for one this page does not know. */
+function stopwatchActionOf(payload: unknown): StopwatchAction | null {
+  const action = typeof payload === "object" && payload !== null ? (payload as { action?: unknown }).action : undefined;
+  return STOPWATCH_ACTIONS.find((candidate) => candidate === action) ?? null;
+}
+
 /**
  * The stopwatch: a span the page measures itself, in `performance.now()` deltas.
  *
@@ -170,7 +207,7 @@ export default function TimersPage({ profileId }: ModulePageProps) {
  * advanced by it. Twenty renders a second, because the readout carries
  * hundredths and a coarser repaint would show the same number twice.
  */
-function StopwatchSection() {
+function StopwatchSection({ order }: { order: StopwatchOrder | null }) {
   const [running, setRunning] = useState(false);
   const [laps, setLaps] = useState<number[]>([]);
   /** Milliseconds from runs that have already been paused. */
@@ -226,6 +263,15 @@ function StopwatchSection() {
    * The listener is attached while this page is mounted, which IS "the page has
    * focus": the shell draws one page at a time.
    */
+  /** A command from the assistant: the same operation the button of that name runs. */
+  useEffect(() => {
+    if (order === null) return;
+    if (order.action === "start") start();
+    else if (order.action === "stop") pause();
+    else if (order.action === "lap") lap();
+    else reset();
+  }, [order, start, pause, lap, reset]);
+
   useEffect(() => {
     const handler = (event: KeyboardEvent): void => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -402,64 +448,65 @@ function CountdownsSection({
       </div>
 
       {countdowns.length === 0 ? (
-        <p className="nx-hint">{copy.countdowns.empty}</p>
+        <EmptyState variant="inline" title={copy.countdowns.empty} />
       ) : (
         <div className="timers__list">
           {countdowns.map((countdown) => {
             const running = isRunning(countdown);
             return (
-              <ListRow
-                key={countdown.id}
-                leading={<Icon name="clock" />}
-                // The clock is the row's subject, so it is the row's CONTENT
-                // rather than a trailing chip: a countdown is read by its time,
-                // and its name is what tells two of them apart.
-                trailing={
-                  <span className="timers__row-actions">
-                    <Chip>{running ? copy.countdowns.running : copy.countdowns.paused}</Chip>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        void run((timers) =>
-                          (running ? timers.pauseCountdown : timers.resumeCountdown)({
-                            profileId,
-                            id: countdown.id,
-                          }),
-                        )
-                      }
-                    >
-                      {running ? copy.countdowns.pause : copy.countdowns.resume}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        void run((timers) =>
-                          timers.extendCountdown({ profileId, id: countdown.id, seconds: 60 }),
-                        )
-                      }
-                    >
-                      {copy.countdowns.addMinute}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      onClick={() =>
-                        void run((timers) =>
-                          timers.cancelCountdown({ profileId, id: countdown.id }),
-                        )
-                      }
-                    >
-                      {copy.countdowns.cancel}
-                    </Button>
+              <div key={countdown.id} data-item={countdown.id}>
+                <ListRow
+                  leading={<Icon name="clock" />}
+                  // The clock is the row's subject, so it is the row's CONTENT
+                  // rather than a trailing chip: a countdown is read by its time,
+                  // and its name is what tells two of them apart.
+                  trailing={
+                    <span className="timers__row-actions">
+                      <Chip>{running ? copy.countdowns.running : copy.countdowns.paused}</Chip>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          void run((timers) =>
+                            (running ? timers.pauseCountdown : timers.resumeCountdown)({
+                              profileId,
+                              id: countdown.id,
+                            }),
+                          )
+                        }
+                      >
+                        {running ? copy.countdowns.pause : copy.countdowns.resume}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          void run((timers) =>
+                            timers.extendCountdown({ profileId, id: countdown.id, seconds: 60 }),
+                          )
+                        }
+                      >
+                        {copy.countdowns.addMinute}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        onClick={() =>
+                          void run((timers) =>
+                            timers.cancelCountdown({ profileId, id: countdown.id }),
+                          )
+                        }
+                      >
+                        {copy.countdowns.cancel}
+                      </Button>
+                    </span>
+                  }
+                  muted={!running}
+                >
+                  <span className="timers__row-label">{countdown.label}</span>
+                  <span className="timers__row-clock">
+                    {formatClock(remainingSecondsOf(countdown, nowMs))}
                   </span>
-                }
-                muted={!running}
-              >
-                <span className="timers__row-label">{countdown.label}</span>
-                <span className="timers__row-clock">
-                  {formatClock(remainingSecondsOf(countdown, nowMs))}
-                </span>
-              </ListRow>
+                </ListRow>
+              </div>
             );
           })}
         </div>
@@ -482,6 +529,8 @@ function PresetsSection({
   /** Which preset is being renamed, and what has been typed so far. */
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  /** The preset a delete is waiting on: a deleted preset is not brought back, so the act is asked first. */
+  const [removing, setRemoving] = useState<TimersPresetView | null>(null);
 
   return (
     <Card className="timers__card" title={copy.presets.title}>
@@ -528,53 +577,70 @@ function PresetsSection({
                 </div>
               </div>
             ) : (
-              <ListRow
-                key={preset.id}
-                leading={<Icon name="repeat" />}
-                trailing={
-                  <span className="timers__row-actions">
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() =>
-                        void run((timers) =>
-                          timers.createCountdown({
-                            profileId,
-                            name: preset.name,
-                            durationSeconds: preset.durationSeconds,
-                          }),
-                        )
-                      }
-                    >
-                      {copy.presets.start}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setRenaming(preset.id);
-                        setDraft(preset.name);
-                      }}
-                    >
-                      {copy.presets.rename}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      onClick={() =>
-                        void run((timers) => timers.removePreset({ profileId, id: preset.id }))
-                      }
-                    >
-                      {copy.presets.remove}
-                    </Button>
-                  </span>
-                }
-              >
-                <span className="timers__row-label">{preset.name}</span>
-                <span className="timers__row-clock">{formatClock(preset.durationSeconds)}</span>
-              </ListRow>
+              <div key={preset.id} data-item={preset.id}>
+                <ListRow
+                  leading={<Icon name="repeat" />}
+                  trailing={
+                    <span className="timers__row-actions">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() =>
+                          void run((timers) =>
+                            timers.createCountdown({
+                              profileId,
+                              name: preset.name,
+                              durationSeconds: preset.durationSeconds,
+                            }),
+                          )
+                        }
+                      >
+                        {copy.presets.start}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setRenaming(preset.id);
+                          setDraft(preset.name);
+                        }}
+                      >
+                        {copy.presets.rename}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        onClick={() => {
+                          setRemoving(preset);
+                        }}
+                      >
+                        {copy.presets.remove}
+                      </Button>
+                    </span>
+                  }
+                >
+                  <span className="timers__row-label">{preset.name}</span>
+                  <span className="timers__row-clock">{formatClock(preset.durationSeconds)}</span>
+                </ListRow>
+              </div>
             )
           ))}
         </div>
+      )}
+      {removing !== null && (
+        <ConfirmDialog
+          title={copy.presets.removeTitle}
+          name={removing.name}
+          question={copy.presets.removeQuestion}
+          confirmLabel={copy.presets.removeConfirm}
+          cancelLabel={copy.presets.cancel}
+          destructive
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const id = removing.id;
+            setRemoving(null);
+            void run((timers) => timers.removePreset({ profileId, id }));
+          }}
+        />
       )}
     </Card>
   );

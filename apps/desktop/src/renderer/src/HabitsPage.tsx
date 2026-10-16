@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
 import {
+  AsyncSurface,
   Button,
   Checkbox,
   Disclosure,
@@ -11,7 +12,6 @@ import {
   FormLayout,
   Icon,
   ListRow,
-  LoadingState,
   PageHeader,
   Select,
   StatBand,
@@ -251,6 +251,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
   const [habits, setHabits] = useState<Habit[] | null>(null);
   const [entries, setEntries] = useState<HabitEntry[]>([]);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -275,6 +276,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
 
   useEffect(() => {
     let active = true;
+    setFailed(false);
     void (async () => {
       try {
         const snapshot = await loadHabits(profileId);
@@ -289,7 +291,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, attempt]);
 
   /**
    * Re-reads the whole screen after every write. A streak, a grid cell and a
@@ -561,6 +563,9 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
    * vocabulary. Selection is a 2px text-coloured ring, never a fill or a glow.
    */
   function renderSwatchRow(): ReactNode {
+    // The palette's own names, so a swatch announces the colour in the reader's
+    // language rather than its token id.
+    const colourNames: Record<string, string> = strings.settings.appearance.accentNames;
     return (
       <div className="note__swatch-row" role="group" aria-label={s.form.colorLabel}>
         {ACCENT_IDS.map((id) => (
@@ -569,7 +574,7 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             type="button"
             className={`nx-swatch${colorDraft === id ? " nx-swatch--selected" : ""}`}
             style={{ background: `var(--nx-swatch-${id})` }}
-            aria-label={id}
+            aria-label={colourNames[id]}
             aria-pressed={colorDraft === id}
             onClick={() => setColorDraft(id as NoteFolderColor)}
           />
@@ -1045,25 +1050,51 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
 
   // --- The screen -------------------------------------------------------------
 
-  if (failed) {
-    return <EmptyState title={s.loadErrorTitle} description={s.loadError} />;
-  }
-  if (habits === null) {
-    return <LoadingState label={strings.app.loading} rows={6} />;
-  }
-
   const noHabits = habitList.length === 0;
+
+  // The header is the page's name and its one primary, so it stands above the
+  // read's three states rather than inside them: a page that is loading or has
+  // failed still says where it is.
+  const header = (
+    <PageHeader
+      title={moduleName("habits")}
+      sigil="habits"
+      primaryAction={
+        editing === null && !noHabits ? (
+          <Button variant="primary" onClick={beginNew}>
+            {s.all.newHabit}
+          </Button>
+        ) : undefined
+      }
+      actions={<ModuleSettingsGear moduleId="habits" />}
+    />
+  );
+
+  if (failed || habits === null) {
+    // The ready arm is the page below, so this surface draws only its two others.
+    return (
+      <div className="hab nx-measure">
+        {header}
+        <AsyncSurface
+          state={failed ? { status: "failed" } : { status: "loading" }}
+          loadingLabel={strings.app.loading}
+          loadingRows={6}
+          failureTitle={s.loadErrorTitle}
+          failureMessage={s.loadError}
+          retry={{ label: s.retry, onClick: () => setAttempt((value) => value + 1) }}
+        >
+          {() => null}
+        </AsyncSurface>
+      </div>
+    );
+  }
 
   return (
     // `.nx-measure`: this page is rows, and a row whose label and value are a
     // thousand pixels apart has stopped being a row. The wall inside it is
     // measured against whatever that cap leaves and fills it exactly.
     <div className="hab nx-measure">
-      <PageHeader
-        title={moduleName("habits")}
-        sigil="habits"
-        actions={<ModuleSettingsGear moduleId="habits" />}
-      />
+      {header}
       {/* The shared undo bar rather than a fifth copy of it. Same three moves
           as before — the notice, the offer, the quiet way to drop it — with the
           class names and the live region coming from the pattern, and no
@@ -1256,7 +1287,8 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
             )}
           </FormLayout>
         ) : noHabits ? (
-          // The page's ONE invitation, and its one primary. Never a sample habit.
+          // The page's ONE invitation. Never a sample habit. With habits on the
+          // page the primary is the header's, not a second copy of it below.
           <EmptyState
             sigil="habits"
             title={s.all.emptyTitle}
@@ -1267,20 +1299,19 @@ export function HabitsPage({ profileId }: HabitsPageProps) {
               </Button>
             }
           />
-        ) : (
-          <Button variant="primary" onClick={beginNew}>
-            {s.all.newHabit}
-          </Button>
-        )}
+        ) : null}
 
         {!noHabits && (
           <div className="hab__list">{habitList.map((habit) => renderHabitRow(habit))}</div>
         )}
 
         {actionError !== null && (
-          <p className="hab__error" role="status">
-            {actionError}
-          </p>
+          <Toast
+            kind="error"
+            message={actionError}
+            dismissLabel={s.dismiss}
+            onDismiss={() => setActionError(null)}
+          />
         )}
       </section>
     </div>

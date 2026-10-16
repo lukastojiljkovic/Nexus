@@ -20,11 +20,22 @@ import type {
   ExcalidrawProps,
 } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { isCanvasRefText } from "@nexus/core";
-import type { CanvasRef } from "@nexus/core";
+import type { CanvasRef, CanvasSketch } from "@nexus/core";
 import type { ThemeName } from "@nexus/tokens";
-import { Button, EmptyState, Icon, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
+import {
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+  SaveIndicator,
+  type SaveStatus,
+  TextField,
+  Toast,
+} from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { CanvasAutosave, type SceneObservation } from "./canvasAutosave.js";
@@ -42,6 +53,8 @@ import { NotePopover } from "./notePopover.js";
 import { formatNotificationWhen } from "./notificationFormat.js";
 import { formatClockTime } from "./timeFormat.js";
 import { CanvasCard } from "./CanvasCard.js";
+import { type CanvasIntent } from "./canvasIntent.js";
+import { freeSpaceOrigin, sketchSkeleton } from "./canvasSketch.js";
 import { CanvasCardPicker } from "./CanvasCardPicker.js";
 import { CanvasToolbar } from "./CanvasToolbar.js";
 import {
@@ -195,6 +208,27 @@ export interface CanvasPageProps {
    * global search, the palette and „Otvori prilog" all already ride.
    */
   onOpenRef: (ref: CanvasRef) => void;
+  /** What the assistant or a note asked of this page (`App`'s intent queue). Applied once, then reported through `onIntentHandled`. */
+  intent?: CanvasIntent | null;
+  onIntentHandled?: () => void;
+}
+
+/**
+ * Adds a sketch to the board beside what is already there. `updateScene`
+ * replaces the element list outright, so the existing elements — deleted ones
+ * included, which an undo stands on — go back in unchanged, and the capture
+ * makes the whole sketch one step Ctrl+Z takes back.
+ */
+function drawSketch(editor: ExcalidrawImperativeAPI, sketch: CanvasSketch): void {
+  const existing = editor.getSceneElementsIncludingDeleted();
+  const origin = freeSpaceOrigin(existing);
+  editor.updateScene({
+    elements: [
+      ...existing,
+      ...convertToExcalidrawElements(sketchSkeleton(sketch, origin), { regenerateIds: true }),
+    ],
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
 }
 
 /**
@@ -223,13 +257,20 @@ interface CanvasState {
   activeId: string | null;
 }
 
-export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
+export function CanvasPage({
+  profileId,
+  theme,
+  onOpenRef,
+  intent = null,
+  onIntentHandled,
+}: CanvasPageProps) {
   const s = strings.canvas;
 
   const [state, setState] = useState<CanvasState>({ boards: null, activeId: null });
   const [failed, setFailed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   /**
    * What the board says about its own persistence.
    *
@@ -582,6 +623,10 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
         version: sceneVersionOf(elements),
         scene: { elements, appState, files },
       });
+      // The first change a board reports is its scene arriving, so a request
+      // owed to this board can be applied now (see `owedRef` below).
+      loadedRef.current = activeId;
+      settleRef.current();
     },
     [activeId, autosave],
   );
@@ -653,8 +698,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
    * `IMMEDIATELY` because putting a card on a board is an edit somebody expects
    * Ctrl+Z to take back, exactly as the toolbar's colour changes are.
    */
-  const addCard = useCallback((row: CanvasPickerRow) => {
-    setPickerOpen(false);
+  const placeCard = useCallback((ref: CanvasRef) => {
     const editor = api.current;
     if (editor === null) return;
     const origin = canvasDropOrigin(
@@ -663,7 +707,7 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       CANVAS_CARD_HEIGHT,
     );
     const element = canvasCardElement({
-      ref: { kind: row.kind, id: row.id },
+      ref,
       id: crypto.randomUUID(),
       x: origin.x,
       y: origin.y,
@@ -680,6 +724,14 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
   }, []);
+
+  const addCard = useCallback(
+    (row: CanvasPickerRow) => {
+      setPickerOpen(false);
+      placeCard({ kind: row.kind, id: row.id });
+    },
+    [placeCard],
+  );
 
   /**
    * Takes one card off the board — the affordance a „missing" card carries, and
@@ -702,6 +754,61 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
   }, []);
+
+  /**
+   * The assistant's requests for this page (`intent`): a board to open, a sketch
+   * to draw on it, a card to place. A request is OWED to its board until that
+   * board's scene is in the editor, because a change made before the scene
+   * arrives is replaced by it; `onChange` (the first one after a board opens) is
+   * what says the scene is in, and `settleRef` is how it reaches this code.
+   *
+   * A board the list does not show yet was made after this page last read it, so
+   * the list is read again, once. A board still missing after that is dropped
+   * rather than asked for forever.
+   */
+  const owedRef = useRef<CanvasIntent | null>(null);
+  const reloadedForRef = useRef<CanvasIntent | null>(null);
+  const loadedRef = useRef<string | null>(null);
+  const settleRef = useRef<() => void>(() => undefined);
+  const onIntentHandledRef = useRef(onIntentHandled);
+  useEffect(() => {
+    onIntentHandledRef.current = onIntentHandled;
+  }, [onIntentHandled]);
+
+  const settle = useCallback((): void => {
+    const owed = owedRef.current;
+    if (owed === null || activeIdRef.current !== owed.boardId) return;
+    if (loadedRef.current !== owed.boardId) return;
+    owedRef.current = null;
+    const editor = api.current;
+    if (editor !== null && owed.kind === "sketch") drawSketch(editor, owed.sketch);
+    if (owed.kind === "card") placeCard(owed.ref);
+    onIntentHandledRef.current?.();
+  }, [placeCard]);
+
+  useEffect(() => {
+    settleRef.current = settle;
+  }, [settle]);
+
+  useEffect(() => {
+    if (intent === null || boards === null) return;
+    if (!boards.some((board) => board.id === intent.boardId)) {
+      if (reloadedForRef.current === intent) {
+        onIntentHandled?.();
+        return;
+      }
+      reloadedForRef.current = intent;
+      void reload();
+      return;
+    }
+    owedRef.current = intent;
+    if (activeId !== intent.boardId) {
+      void autosave.flush();
+      setState((previous) => ({ ...previous, activeId: intent.boardId }));
+    } else {
+      settle();
+    }
+  }, [intent, boards, activeId, autosave, reload, settle, onIntentHandled]);
 
   /**
    * The card the editor asks us to draw. It NEVER answers with nothing: a
@@ -819,6 +926,30 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
 
   const active = boards.find((board) => board.id === activeId) ?? null;
 
+  // Rename and delete fold behind the header's ⋯ trigger below 900px. With no
+  // board open there is nothing for them to act on, so there is no trigger either.
+  const boardTools:
+    | { secondaryActions: ReactNode[]; overflowLabel: string }
+    | { secondaryActions?: undefined; overflowLabel?: string } =
+    active === null
+      ? {}
+      : {
+          secondaryActions: [
+            <Button variant="ghost" onClick={() => setNaming({ id: active.id, draft: active.name })}>
+              {s.rename}
+            </Button>,
+            // `danger` because deleting a board is not the same kind of act as
+            // renaming it, and the confirmation names it before it goes.
+            <Button
+              variant="danger"
+              onClick={() => setPendingDelete({ id: active.id, name: active.name })}
+            >
+              {s.delete}
+            </Button>,
+          ],
+          overflowLabel: s.moreActions,
+        };
+
   return (
     <div className="canv">
       {/* The board strip used to be a row of tabs with an unlabelled „Table"
@@ -834,6 +965,11 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
         title={moduleName("canvas")}
         sigil="canvas"
         {...(active === null ? {} : { subtitle: active.name })}
+        primaryAction={
+          <Button variant="primary" onClick={() => setNaming({ id: null, draft: "" })}>
+            {s.newBoard}
+          </Button>
+        }
         actions={
           <>
             <SaveIndicator
@@ -896,29 +1032,9 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
                 </>
               )}
             </NotePopover>
-            <Button variant="ghost" onClick={() => setNaming({ id: null, draft: "" })}>
-              {s.newBoard}
-            </Button>
-            {active !== null && (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => setNaming({ id: active.id, draft: active.name })}
-                >
-                  {s.rename}
-                </Button>
-                {/* „Mermaid dijagram" is NOT here: it is a drawing action and it
-                    moved into the toolbar with the rest of them (slice b1). This
-                    header is about boards. `danger` because deleting one is not
-                    the same kind of act as renaming it, and until now the two
-                    buttons were indistinguishable. */}
-                <Button variant="danger" onClick={() => void deleteBoard(active.id)}>
-                  {s.delete}
-                </Button>
-              </>
-            )}
           </>
         }
+        {...boardTools}
       />
 
       {naming !== null && (
@@ -951,21 +1067,21 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
       )}
 
       {actionError !== null && (
-        <p className="canv__error" role="alert">
-          {actionError}
-          <Button variant="ghost" onClick={() => setActionError(null)}>
-            {s.dismiss}
-          </Button>
-        </p>
+        <Toast
+          kind="error"
+          message={actionError}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setActionError(null)}
+        />
       )}
 
       {pendingUndoId !== null && (
-        <p className="canv__notice" role="status">
-          {s.deletedNotice}
-          <Button variant="ghost" onClick={() => void undoDelete(pendingUndoId)}>
-            {s.undo}
-          </Button>
-        </p>
+        <Toast
+          message={s.deletedNotice}
+          undo={{ label: s.undo, onUndo: () => void undoDelete(pendingUndoId) }}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
       {active === null ? (
@@ -1064,6 +1180,24 @@ export function CanvasPage({ profileId, theme, onOpenRef }: CanvasPageProps) {
             </div>
           </div>
         </>
+      )}
+
+      {pendingDelete !== null && (
+        <ConfirmDialog
+          title={s.deleteTitle}
+          name={pendingDelete.name}
+          question={s.deleteQuestion}
+          note={s.deleteNote}
+          confirmLabel={s.delete}
+          cancelLabel={s.cancel}
+          destructive
+          onConfirm={() => {
+            const doomed = pendingDelete;
+            setPendingDelete(null);
+            void deleteBoard(doomed.id);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

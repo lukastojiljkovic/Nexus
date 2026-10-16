@@ -34,6 +34,7 @@ import {
 import { TESSDATA_PACK_ID, type OcrLanguage } from "./ocrConfig.js";
 import { scanPhase, type ScanOutcome } from "./ocrResult.js";
 import { createScanSession } from "./ocrSession.js";
+import { sourceOfAction } from "./intent.js";
 import "./scanner.css";
 
 /**
@@ -81,7 +82,7 @@ const LANGUAGE_ROWS: readonly { readonly code: OcrLanguage; readonly copyKey: "l
 /** What the page knows about the language pack: still asking, installed, not installed, or unreadable. */
 type PackState = "checking" | "ready" | "missing" | "unknown";
 
-export default function ScannerPage({ profileId }: ModulePageProps) {
+export default function ScannerPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   /** The picture as loaded, before any edit. */
   const [source, setSource] = useState<RgbaImage | null>(null);
   const [sourceFailed, setSourceFailed] = useState(false);
@@ -117,11 +118,15 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
   const [cameraFailure, setCameraFailure] = useState<"denied" | "unavailable" | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const cameraButton = useRef<HTMLButtonElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   /** The crop applied when the current drag began: the frame an inner rectangle is relative to. */
   const dragBase = useRef<SelectionPercent | null>(null);
   const session = useRef<ReturnType<typeof createScanSession> | null>(null);
+  /** The scan in flight, so its Cancel can stop it. */
+  const scanAbort = useRef<AbortController | null>(null);
 
   /**
    * The rotated and cropped picture - what the user framed, and what travels
@@ -163,6 +168,7 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
 
   useEffect(
     () => () => {
+      scanAbort.current?.abort();
       const active = session.current;
       session.current = null;
       void active?.dispose();
@@ -204,6 +210,21 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [loadBlob]);
+
+  /**
+   * What the assistant asked: point at a source. The control is focused and the
+   * person presses it, so an assistant action never opens the camera by itself.
+   * Any other intent is not this page's verb and is reported handled anyway.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    if (intent.kind === "action" && intent.action === "source") {
+      const source = sourceOfAction(intent.payload);
+      if (source === "file") fileInput.current?.focus();
+      if (source === "camera") cameraButton.current?.focus();
+    }
+    onIntentHandled?.();
+  }, [intent, onIntentHandled]);
 
   // --- The camera ------------------------------------------------------------
 
@@ -359,13 +380,19 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
     setSavedTitle(null);
     setCopied(false);
     setProgress({ status: "initializing tesseract", progress: 0 });
+    const scan = new AbortController();
+    scanAbort.current = scan;
     try {
       session.current ??= createScanSession();
-      setOutcome(await session.current.recognize(prepared, languages, setProgress));
+      setOutcome(await session.current.recognize(prepared, languages, setProgress, scan.signal));
     } catch (error) {
-      setFailure("read");
-      console.error("Nexus: the scan could not be recognised:", error);
+      // A cancelled scan is the person's own act, not a failure to report.
+      if (!scan.signal.aborted) {
+        setFailure("read");
+        console.error("Nexus: the scan could not be recognised:", error);
+      }
     } finally {
+      scanAbort.current = null;
       setBusy(false);
       setProgress(null);
     }
@@ -441,6 +468,7 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
           <label className="scanner__file">
             <span className="scanner__file-name">{copy.source.file}</span>
             <input
+              ref={fileInput}
               type="file"
               accept="image/png,image/jpeg,image/webp"
               aria-label={copy.source.file}
@@ -454,7 +482,7 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
             />
           </label>
           {camera === null ? (
-            <Button size="sm" onClick={() => void startCamera()}>
+            <Button ref={cameraButton} size="sm" onClick={() => void startCamera()}>
               {copy.source.camera}
             </Button>
           ) : (
@@ -640,6 +668,9 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
               value={progress.progress}
               aria-label={copy.read.reading}
             />
+            <Button size="sm" variant="quiet" onClick={() => scanAbort.current?.abort()}>
+              {copy.read.cancel}
+            </Button>
           </div>
         )}
       </Card>

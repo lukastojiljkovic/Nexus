@@ -47,6 +47,7 @@ import {
   DOWNLOAD_HOSTS,
   isRequestAllowed,
   isSessionRequestAllowed,
+  modeAllowsDownloads,
   networkChoiceRecorded,
   networkModeRequiresRestart,
   readNetworkChoice,
@@ -78,8 +79,6 @@ import {
   buildSearchSnippet,
   buildSearchTagFacets,
   catalogueComponent,
-  catalogueExercise,
-  catalogueFood,
   CHASSIS_LENGTHS,
   CHASSIS_MASSES,
   CHASSIS_MAX_CM,
@@ -87,13 +86,11 @@ import {
   chordAccelerator,
   countSearchKinds,
   dayKeyToUtcMs,
-  EXERCISE_CATALOGUE,
   EXERCISE_EQUIPMENT,
   EXERCISE_METRICS,
   exerciseRefText,
   FOCUS_PHASE_KINDS,
   foldSearchTag,
-  FOOD_CATALOGUE,
   FOOD_CATEGORIES,
   foodRefText,
   generateCode,
@@ -118,8 +115,6 @@ import {
   packFlagKey,
   PART_ROTATIONS,
   parseCanvasScene,
-  parseExerciseRef,
-  parseFoodRef,
   parseSearchQuery,
   phaseProgress,
   rankSearchResults,
@@ -128,7 +123,6 @@ import {
   searchFoods,
   serializeWidgetConfig,
   SET_KINDS,
-  shiftDayKey,
   sniffMime,
   toFtsMatchExpression,
   TOOL_PACKS,
@@ -542,6 +536,7 @@ import { releaseGlobalCapture, setGlobalCaptureAccelerator } from "./globalCaptu
 import { handleExport, handleIcsExport, writeProfileArchive, type ImexArchiveDeps } from "./imex.js";
 import { handleMarkdownImport } from "./markdownImport.js";
 import { checklistToTasks, countNoteChecklistItems } from "./noteChecklistTasks.js";
+import { applyTaskTemplate } from "./taskTemplates.js";
 import { duplicateNote } from "./noteDuplicate.js";
 import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
 // ADR-100: the Reader's two seams into this file. The pack read protocol is the
@@ -577,6 +572,8 @@ import { createModuleHost } from "./moduleHost.js";
 // store, blob-reference union, packs root). Its arts guide reads images through
 // the shell's `nx-pack:` protocol (ADR-100), like every other pack reader.
 import { configureCultureServices } from "../modules/culture/main/services.js";
+import { createDictionaryReader } from "../modules/translator/main/dictionary.js";
+import { installedPacksRoot } from "../modules/translator/main/packDir.js";
 import { packsRoot } from "./packs/registry.js";
 // The kit's attach path, implemented where it can be read on its own
 // (`moduleAttachments.ts`) — this file supplies it with what only this file
@@ -631,19 +628,30 @@ import {
   runCheckNow,
   startNotificationScheduler,
   stopNotificationScheduler,
+  upcomingReminders,
   type NotificationSchedulerDeps,
   type SecurityNotificationDeps,
 } from "./notifications.js";
 import { filterSearchHitsByModules } from "./searchGate.js";
 import { mainLocale, setMainLocale } from "./locale.js";
+import {
+  exerciseCandidates,
+  fitExerciseLookup,
+  foodCandidates,
+  resolveLoggedExercise,
+  resolveLoggedFood,
+} from "./fitness/refs.js";
 import { asCanvasRefs } from "./canvasRefs.js";
 import { focusPhaseEndCopy, restEndCopy } from "./notificationStrings.js";
 import type { SecurityNotice } from "./notificationStrings.js";
 import { shellStrings } from "./shellStrings.js";
 import { computeSnoozeUntil, resolveDefaultSnoozePreset } from "./snooze.js";
+import type { FocusHost } from "./assistant/tools/focus.js";
+import type { NotificationsHost } from "./assistant/tools/notifications.js";
 import { pickProfilePicture } from "./profilePicture.js";
 import {
   applyApkgImport,
+  applyBookmarksImport,
   applyCsvImport,
   applyFinCsvImport,
   applyIcsImport,
@@ -651,6 +659,7 @@ import {
   applyLlmImport,
   applyRestore,
   cancelApkgImport,
+  cancelBookmarksImport,
   cancelCsvImport,
   cancelFinCsvImport,
   cancelIcsImport,
@@ -661,12 +670,14 @@ import {
   mapCsvImport,
   mapFinCsvImport,
   pickApkgFile,
+  pickBookmarksFile,
   pickCsvFile,
   pickFinCsvFile,
   pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
+  previewBookmarksImport,
   previewCsvImport,
   previewFinCsvImport,
   previewIcsImport,
@@ -753,6 +764,9 @@ import {
   type GlobalShortcutChord,
   type GlobalShortcutResult,
   type IcsExportResult,
+  type BookmarksImportApplyResult,
+  type BookmarksImportPickResult,
+  type BookmarksImportPreviewResult,
   type IcsImportApplyResult,
   type IcsImportPickResult,
   type IcsImportPreviewResult,
@@ -1570,6 +1584,10 @@ function activeProfileForAttachments(): string {
   return id;
 }
 
+// The kit's tool-pack capability (ADR-094), built once and shared by the module host
+// and the assistant's tools: both read the same installed packs.
+const moduleTools = createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM });
+
 /**
  * The module kit's host: every module discovered from `src/modules/<id>/`, its
  * channels registered and its session hooks held (ADR-090). Built once, at
@@ -1646,7 +1664,7 @@ const moduleHost = createModuleHost({
   // module finds an installed pack by id, reads the licence and the source it has
   // to show, and opens a session on one — and nothing a renderer sends ever
   // reaches an argument list (`./moduleTools.ts` states the whole of that).
-  tools: createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM }),
+  tools: moduleTools,
   now: () => Date.now(),
   // The capability that gives a module a file: it prints a document MAIN built
   // and asks the USER where to put it (`cardPdf.ts`). A module never sees the
@@ -1663,6 +1681,8 @@ configureCultureServices({
   readBlob: (sha256) => readBlob(blobStorePathsFor(), requireBlobKeys(), sha256),
   deleteBlobIfOrphaned: (sha256, refCount) =>
     deleteBlobIfOrphaned(blobStorePathsFor(), requireBlobKeys(), sha256, refCount),
+  openBlob: (sha256, fileName) =>
+    openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), { fileName, sha256 }),
   blobRefCount,
   packsRoot: () => packsRoot(userDataDir()),
   releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
@@ -1692,6 +1712,151 @@ configureCookbook({
     refCount: (profileId, sha256) => blobRefCount(profileId, sha256),
   }),
 });
+
+/**
+ * The focus timer as both the FOKUS page (over `focus:*` IPC) and the assistant's
+ * `focus.*` tools drive it: one set of methods, so the two cannot disagree about
+ * whether a phase runs. Every method is keyed by profile, as the timer is.
+ */
+const focusHost: FocusHost = {
+  start(profileId, body) {
+    if (runningFocusSessions.has(profileId)) {
+      throw new Error("A focus session is already running for this profile.");
+    }
+    const rawSubjectId = body.subjectId;
+    // Validated BEFORE the phase is recorded — a running phase is never started
+    // against an unknown/foreign/soft-deleted subject. A Pomodoro phase usually
+    // names none at all, which is the ordinary case rather than the exception.
+    const subjectId =
+      rawSubjectId === undefined || rawSubjectId === null
+        ? null
+        : focusStore(profileId).resolveSubject(asId(rawSubjectId, "subjectId"));
+
+    const running: RunningFocusPhase = {
+      subjectId,
+      startedAt: new Date().toISOString(),
+      kind: asFocusPhaseKind(body.kind, "kind"),
+      plannedMinutes: asFocusPlannedMinutes(body.plannedMinutes, "plannedMinutes"),
+      cycleIndex: asFocusCycleIndex(body.cycleIndex, "cycleIndex"),
+      // Deliberately NOT resolved against `tasks`: a focus session is a
+      // historical fact about time somebody spent and must survive the deletion
+      // of whatever it pointed at (migration 057's note). Structural only.
+      taskId: body.taskId === undefined ? null : asNullableId(body.taskId, "taskId"),
+      label: asFocusLabel(body.label, "label"),
+      pausedAt: null,
+      pausedSeconds: 0,
+      timer: null,
+    };
+    runningFocusSessions.set(profileId, running);
+    armFocusAlarm(profileId, running);
+    return toRunningFocusSession(running);
+  },
+
+  // The outcome is derived from the CLOCK rather than named by the caller: a
+  // phase whose plan the wall clock says was met ends `completed`, everything
+  // else `stopped`. Letting the renderer name it would let a compromised one
+  // record a twenty-second phase as a completed Pomodoro, and the outcome is the
+  // one field of a focus row nobody should be able to assert about themselves.
+  // An open-ended phase always lands on `stopped`, for the engine's own reason
+  // (`FOCUS_OUTCOMES`): it was ended by hand, because it had no planned end.
+  stop(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    const endedAt = new Date().toISOString();
+    const met =
+      phase.plannedMinutes !== null && phaseProgress(phase, endedAt).remainingSeconds === 0;
+    return endRunningFocusPhase(profileId, met ? "completed" : "stopped", endedAt);
+  },
+
+  cancel: (profileId) => discardRunningFocusPhase(profileId),
+
+  // Both are idempotent: pausing a paused phase and resuming a running one answer
+  // the phase unchanged rather than throwing, because a double-click on a button
+  // must not be an error.
+  pause(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    if (phase.pausedAt === null) {
+      phase.pausedAt = new Date().toISOString();
+      // The alarm goes with the clock: a paused phase must not announce an end
+      // it is no longer approaching.
+      disarmFocusAlarm(phase);
+    }
+    return toRunningFocusSession(phase);
+  },
+
+  resume(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    if (!phase) {
+      throw new Error("No focus session is running for this profile.");
+    }
+    if (phase.pausedAt !== null) {
+      // The pause that just ENDED joins the accumulator; the one still running
+      // is never in it (`FocusPhaseTiming`'s rule).
+      phase.pausedSeconds += closedPauseSeconds(phase.pausedAt, new Date().toISOString());
+      phase.pausedAt = null;
+      // Re-armed for what is LEFT, not for the whole plan — `armFocusAlarm`
+      // measures the remainder off the wall clock.
+      armFocusAlarm(profileId, phase);
+    }
+    return toRunningFocusSession(phase);
+  },
+
+  status(profileId) {
+    const phase = runningFocusSessions.get(profileId);
+    return phase === undefined ? null : toRunningFocusSession(phase);
+  },
+};
+
+/**
+ * The notification centre and its settings, as the centre's IPC channels and the
+ * assistant's `notifications.*` tools drive them. Every write pushes
+ * `notifications:changed` once, so an open centre never shows a row the store has
+ * already moved on from.
+ */
+const notificationsHost: NotificationsHost = {
+  list: (profileId) => notificationStore(profileId).listCenter(),
+
+  snooze(profileId, id, preset) {
+    const store = notificationStore(profileId);
+    const settings = store.getSettings();
+    const now = new Date();
+    // An omitted preset is the center's plain „Odloži“ button (NTF-009): the
+    // profile's own default, read here rather than sent by the renderer, so the
+    // button cannot go stale against a preference changed in another window —
+    // and resolved through `resolveDefaultSnoozePreset`, so a default of
+    // „Večeras“ still works after 18:00 rather than failing every evening.
+    const resolved = preset ?? resolveDefaultSnoozePreset(settings.snoozeDefault, now);
+    const until = computeSnoozeUntil(resolved, now, settings.morningHour);
+    const record = store.snooze(id, until, now.toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    return record;
+  },
+
+  dismiss(profileId, id) {
+    notificationStore(profileId).dismiss(id, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+  },
+
+  settings: (profileId) => notificationStore(profileId).getSettings(),
+
+  updateSettings(profileId, changes) {
+    const settings = notificationStore(profileId).updateSettings(changes, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    return settings;
+  },
+
+  setSourceEnabled(profileId, source, enabled) {
+    notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+  },
+
+  upcoming: (profileId, days) => upcomingReminders(notificationSchedulerDeps(), profileId, days),
+};
 
 /**
  * What the ASSISTANT module is handed once, at launch (ADR-106).
@@ -1737,7 +1902,22 @@ configureAssistant({
   profileDb: (profileId, open) => open(requireDb().raw, profileId),
   now: () => Date.now(),
   search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
-  packs: { list: () => packs().list() },
+  // The catalogue and the removal go through the same services the Packs card
+  // calls. The mode is read per call, as the card's own download reads it.
+  packs: {
+    list: () => packs().list(),
+    catalogue: (reload) => packCatalogue().catalogue(reload),
+    download: (id) => packCatalogue().download(id),
+    remove: (id) => packs().remove(id),
+    downloadsAllowed: () =>
+      modeAllowsDownloads(activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir()))),
+  },
+  // The dictionary pack's reader, built the way the TRANSLATOR module builds its
+  // own (a second instance: the module is registered with the kit, not handed
+  // this object). It opens the pack on the first word looked up, not here.
+  dictionary: createDictionaryReader(installedPacksRoot),
+  // The same tool-pack capability the module host hands its modules (ADR-094).
+  tools: moduleTools,
   // The offline wiki, as the knowledge base reads it: the SAME service the wiki
   // page and the `nx-zim://` handler read through (`zimService` above), so a
   // citation and the page it points at can never mean two different files.
@@ -1745,6 +1925,8 @@ configureAssistant({
   // ask - `installZimProtocol(zimService())` runs before the first window, so by
   // the time a profile exists it always has been built.
   zimWiki: () => zimWikiSource(zimService()),
+  focus: focusHost,
+  notifications: notificationsHost,
   modules: moduleRegistry,
 });
 
@@ -3386,6 +3568,13 @@ function asNullableBoundedInteger(
   return value === null ? null : asBoundedInteger(value, field, min, max);
 }
 
+/** A deck's or subject's own target retention: `null` is "inherit", anything else sits in the profile setting's window (STUDY-007). */
+function asRetentionOverride(value: unknown, field: string): number | null {
+  return value === null
+    ? null
+    : asBoundedNumber(value, field, MIN_TARGET_RETENTION, MAX_TARGET_RETENTION);
+}
+
 // A person's date is (month, day) rather than a date string, so each half is
 // bounded on its own here. These are the PER-COLUMN bounds only — that the pair
 // names a real calendar day (never 30 February) and that a year falls inside
@@ -3503,6 +3692,9 @@ function asNewSubjectInput(value: unknown): CreateSubjectInput {
   if (subject.semester !== undefined) {
     input.semester = asNullableString(subject.semester, "subject.semester");
   }
+  if (subject.targetRetention !== undefined) {
+    input.targetRetention = asRetentionOverride(subject.targetRetention, "subject.targetRetention");
+  }
   return input;
 }
 
@@ -3516,6 +3708,9 @@ function asSubjectFieldChanges(value: unknown): UpdateSubjectFields {
     patch.semester = asNullableString(changes.semester, "changes.semester");
   }
   if (changes.archived !== undefined) patch.archived = asBoolean(changes.archived, "changes.archived");
+  if (changes.targetRetention !== undefined) {
+    patch.targetRetention = asRetentionOverride(changes.targetRetention, "changes.targetRetention");
+  }
   return patch;
 }
 
@@ -3662,10 +3857,14 @@ function asExamFieldChanges(value: unknown): UpdateExamFields {
  */
 function asNewDeckInput(value: unknown): CreateDeckInput {
   const deck = asRecord(value);
-  return {
+  const input: CreateDeckInput = {
     subjectId: asId(deck.subjectId, "deck.subjectId"),
     name: asNonEmptyString(deck.name, "deck.name"),
   };
+  if (deck.targetRetention !== undefined) {
+    input.targetRetention = asRetentionOverride(deck.targetRetention, "deck.targetRetention");
+  }
+  return input;
 }
 
 /** Validates a `DeckFieldChanges` payload into a store patch; an omitted key stays omitted. */
@@ -3676,6 +3875,9 @@ function asDeckFieldChanges(value: unknown): UpdateDeckFields {
     patch.subjectId = asId(changes.subjectId, "changes.subjectId");
   }
   if (changes.name !== undefined) patch.name = asNonEmptyString(changes.name, "changes.name");
+  if (changes.targetRetention !== undefined) {
+    patch.targetRetention = asRetentionOverride(changes.targetRetention, "changes.targetRetention");
+  }
   return patch;
 }
 
@@ -4414,105 +4616,6 @@ function asFitSetCount(value: unknown, field: string, max: number): number | nul
 }
 
 /**
- * Turns the reference the renderer sent into the label, the metric and the
- * muscle list the set (or routine item) will be stamped with. **The module's
- * security boundary** — see the block comment above.
- *
- * `catalogue:<slug>` is looked up in the app's own shipped data; a slug this
- * build no longer ships is refused rather than logged as a name with no meaning.
- * `user:<uuid>` goes through the exercise store, which answers only for a LIVE
- * exercise in THIS profile — so a soft-deleted exercise cannot be logged afresh,
- * while every set already logged with it stays exactly as it was.
- */
-/**
- * A catalogue or user exercise's label in the language main is serving.
- *
- * A workout set and a routine item SNAPSHOT the name they were logged under, so
- * this is written at the moment of the write, in the language `mainLocale()`
- * holds — the same source the dialogs and notifications read. A user's own
- * exercise may carry no English name, in which case its own name stands.
- */
-function localizedExerciseName(name: string, nameEn: string | undefined): string {
-  return mainLocale() === "en" && nameEn !== undefined && nameEn.trim().length > 0 ? nameEn : name;
-}
-
-function resolveLoggedExercise(
-  profileId: string,
-  reference: unknown,
-): { exerciseRef: string; label: string; metric: ExerciseMetric; primaryMuscles: MuscleGroup[] } {
-  if (typeof reference !== "string") {
-    throw new Error(`Invalid IPC payload: "exerciseRef" must be a string.`);
-  }
-  const parsed = parseExerciseRef(reference);
-  if (parsed === null) {
-    throw new Error(
-      `Invalid IPC payload: "exerciseRef" must be "catalogue:<slug>" or "user:<id>".`,
-    );
-  }
-  if (parsed.kind === "catalogue") {
-    const entry = catalogueExercise(parsed.id);
-    if (entry === undefined) {
-      throw new Error(`Invalid IPC payload: "exerciseRef" names no exercise this build ships.`);
-    }
-    return {
-      exerciseRef: reference,
-      label: localizedExerciseName(entry.name, entry.nameEn),
-      metric: entry.metric,
-      primaryMuscles: [...entry.primaryMuscles],
-    };
-  }
-  const own = fitExerciseStore(profileId).get(parsed.id);
-  return {
-    exerciseRef: reference,
-    label: localizedExerciseName(own.name, own.nameEn),
-    metric: own.metric,
-    primaryMuscles: own.primaryMuscles,
-  };
-}
-
-/**
- * The same lookup `resolveLoggedExercise` performs, in the shape a READ needs:
- * it answers `null` instead of throwing, and it reads the profile's own
- * exercises ONCE for however many references the caller is about to resolve.
- *
- * Both differences are the difference between a write and a read.
- *
- * - **A write must refuse.** Logging a set against an exercise that does not
- *   exist would put a name with no meaning in the history, so
- *   `resolveLoggedExercise` throws and the act fails.
- * - **A read must not.** A routine is allowed to name an exercise the user
- *   deleted afterwards — nothing stops them, `exercise_ref` is text with no
- *   foreign key by design — and answering that whole routine with an exception
- *   would take a working page down over one stale line. `null` is what lets
- *   „Trening" draw that one line as unusable and the other eleven as usable.
- * - **One `list()` for the batch.** `fit:routines-list` resolves every item of
- *   every routine; a per-item store call would be the N+1 `fit:last-performed`
- *   exists to avoid, on a read that happens on every mount of the page.
- */
-function fitExerciseLookup(
-  profileId: string,
-): (reference: string) => { label: string; metric: ExerciseMetric } | null {
-  let own: Map<string, FitExercise> | null = null;
-  return (reference) => {
-    const parsed = parseExerciseRef(reference);
-    if (parsed === null) return null;
-    if (parsed.kind === "catalogue") {
-      const entry = catalogueExercise(parsed.id);
-      return entry === undefined
-        ? null
-        : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
-    }
-    // Read on first use rather than eagerly: a profile with no routines, or one
-    // whose routines are all catalogue movements, never touches the table.
-    own ??= new Map(fitExerciseStore(profileId).list().map((entry) => [entry.id, entry]));
-    const entry = own.get(parsed.id);
-    return entry === undefined
-      ? null
-      : { label: localizedExerciseName(entry.name, entry.nameEn), metric: entry.metric };
-  };
-}
-
-/**
  * A stored routine as the wire declares it: every item's `label` and `metric`
  * resolved LIVE, with the stored label kept as the fallback for a reference that
  * resolves to nothing (`FitRoutineItem` carries the reasoning).
@@ -4757,7 +4860,7 @@ function readFitRoutineBody(payload: unknown): {
         : asCappedChars(body.notes, "notes", MAX_FIT_ROUTINE_NOTES_LENGTH),
     items: asFitRoutineItemInputs(body.items).map((item) => ({
       ...item,
-      label: resolveLoggedExercise(profileId, item.exerciseRef).label,
+      label: resolveLoggedExercise(fitExerciseStore(profileId), item.exerciseRef).label,
     })),
   };
 }
@@ -4883,44 +4986,6 @@ function asFitTargetGoals(value: unknown): FitTargetGoals {
     carbsG: asFitTargetGoal(goals.carbsG, "goals.carbsG"),
     fatG: asFitTargetGoal(goals.fatG, "goals.fatG"),
   };
-}
-
-/**
- * Turns the reference the renderer sent into the label and the seven numbers the
- * item will be stamped with. **The module's security boundary** — see the block
- * comment above.
- *
- * `catalogue:<id>` is looked up in the app's own shipped data; an id this build
- * no longer ships is refused rather than logged as a name with no numbers.
- * `user:<uuid>` goes through the food store, which answers only for a LIVE food
- * in THIS profile — so a soft-deleted food cannot be logged afresh, while every
- * item already logged with it stays exactly as it was.
- */
-function resolveLoggedFood(
-  profileId: string,
-  reference: unknown,
-): { foodRef: string; label: string; per100g: FoodMacros } {
-  if (typeof reference !== "string") {
-    throw new Error(`Invalid IPC payload: "foodRef" must be a string.`);
-  }
-  const parsed = parseFoodRef(reference);
-  if (parsed === null) {
-    throw new Error(`Invalid IPC payload: "foodRef" must be "catalogue:<id>" or "user:<id>".`);
-  }
-  if (parsed.kind === "catalogue") {
-    const food = catalogueFood(parsed.id);
-    if (food === undefined) {
-      throw new Error(`Invalid IPC payload: "foodRef" names no food this build ships.`);
-    }
-    // The snapshot label is what a diary row reads for the rest of its life, so
-    // it is written in the language main is serving — the same `mainLocale()`
-    // the dialogs and notifications follow. The user-food path below has no
-    // English text to choose from.
-    const label = mainLocale() === "en" ? (food.nameEn ?? food.name) : food.name;
-    return { foodRef: reference, label, per100g: food.per100g };
-  }
-  const food = fitFoodStore(profileId).get(parsed.id);
-  return { foodRef: reference, label: food.name, per100g: food.per100g };
 }
 
 /** One catalogue entry as the picker reads it — its provenance rides along, which is the reason the catalogue was built the way it was. */
@@ -5382,53 +5447,21 @@ function captureTaskTemplatePayload(profileId: string, taskId: string): TaskTemp
   };
 }
 
-/**
- * Creates a task from a template, in one transaction over the store calls: the
- * parent, its tags (get-or-created by name — which is what makes a template
- * outlive the tags it was captured with) and its subtasks are one act, and half
- * of it is a task the user did not ask for. `TaskStore.create` owns the list /
- * section / anchor rules, so this function validates none of them itself.
- *
- * The subtasks inherit their parent's placement, which `TaskStore.create`
- * enforces on its own — the `listId`/`sectionId` are deliberately not repeated
- * on them.
- */
-function applyTaskTemplate(
+/** A template applied for the page, through the one implementation the assistant's `tasks.template` shares (`taskTemplates.ts`). */
+function applyTemplateFor(
   profileId: string,
   templateId: string,
   listId: string,
   sectionId: string | null,
 ): Task {
-  const template = taskTemplateStore(profileId).get(templateId);
-  const { payload } = template;
-  const now = new Date().toISOString();
-  const dueDate =
-    payload.dueOffsetDays === null ? null : shiftDayKey(localToday(), payload.dueOffsetDays);
-  const tasks = taskStore(profileId);
-  const tags = taskTagStore(profileId);
-
-  return requireDb().raw.transaction((): Task => {
-    const parent = tasks.create({
-      title: payload.title,
-      description: payload.description,
-      priority: payload.priority,
-      dueDate,
-      recurrence: payload.recurrence,
-      reminderOffsets: payload.reminderOffsets,
-      listId,
-      sectionId,
-    });
-
-    for (const name of payload.tagNames) {
-      tags.attachTag(parent.id, tags.createTag(name, now).id);
-    }
-
-    for (const title of payload.subtaskTitles) {
-      tasks.create({ title, parentId: parent.id });
-    }
-
-    return parent;
-  })();
+  return applyTaskTemplate(
+    requireDb().raw,
+    { tasks: taskStore(profileId), tags: taskTagStore(profileId) },
+    taskTemplateStore(profileId).get(templateId),
+    { listId, sectionId },
+    localToday(),
+    new Date().toISOString(),
+  );
 }
 
 function taskDependencyStore(profileId: string): TaskDependencyStore {
@@ -7416,6 +7449,18 @@ function restoreDeps(): ImportDeps {
         : await dialog.showOpenDialog(options);
       return canceled ? null : (filePaths[0] ?? null);
     },
+    // IMEX-007's picker: the browser's HTML export, on the same terms as the
+    // calendar's — its own injection, so no surface can open another's dialog.
+    pickBookmarksFile: async () => {
+      const options: OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: shellStrings().bookmarksFilterName, extensions: ["html", "htm"] }],
+      };
+      const { canceled, filePaths } = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      return canceled ? null : (filePaths[0] ?? null);
+    },
     // The renderer comes back UNLOCKED: main keeps the open database and the
     // data key across this reload (ADR-023 section 7) — all it discards is the
     // renderer's own view of a profile that just changed under it.
@@ -8677,7 +8722,7 @@ function registerIpc(): void {
     // would be a second, drifting copy of them.
     const listId = asId(body.listId, "listId");
     const sectionId = asNullableId(body.sectionId, "sectionId");
-    return applyTaskTemplate(profileId, templateId, listId, sectionId);
+    return applyTemplateFor(profileId, templateId, listId, sectionId);
   });
 
   ipcMain.handle(IpcChannel.taskTemplatesDelete, (event, payload): void => {
@@ -9596,113 +9641,32 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.focusStart, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asId(body.profileId, "profileId");
-    if (runningFocusSessions.has(profileId)) {
-      throw new Error("A focus session is already running for this profile.");
-    }
-    const rawSubjectId = body.subjectId;
-    // Validated BEFORE the phase is recorded — a running phase is never started
-    // against an unknown/foreign/soft-deleted subject. A Pomodoro phase usually
-    // names none at all, which is the ordinary case rather than the exception.
-    const subjectId =
-      rawSubjectId === undefined || rawSubjectId === null
-        ? null
-        : focusStore(profileId).resolveSubject(asId(rawSubjectId, "subjectId"));
-
-    const running: RunningFocusPhase = {
-      subjectId,
-      startedAt: new Date().toISOString(),
-      kind: asFocusPhaseKind(body.kind, "kind"),
-      plannedMinutes: asFocusPlannedMinutes(body.plannedMinutes, "plannedMinutes"),
-      cycleIndex: asFocusCycleIndex(body.cycleIndex, "cycleIndex"),
-      // Deliberately NOT resolved against `tasks`: a focus session is a
-      // historical fact about time somebody spent and must survive the deletion
-      // of whatever it pointed at (migration 057's note). Structural only.
-      taskId: body.taskId === undefined ? null : asNullableId(body.taskId, "taskId"),
-      label: asFocusLabel(body.label, "label"),
-      pausedAt: null,
-      pausedSeconds: 0,
-      timer: null,
-    };
-    runningFocusSessions.set(profileId, running);
-    armFocusAlarm(profileId, running);
-    return toRunningFocusSession(running);
+    return focusHost.start(asId(body.profileId, "profileId"), body);
   });
 
-  // ONE stop channel, and the outcome is derived from the CLOCK rather than
-  // named by the caller: a phase whose plan the wall clock says was met ends
-  // `completed`, everything else `stopped`. Letting the renderer name it would
-  // let a compromised one record a twenty-second phase as a completed Pomodoro,
-  // and the outcome is the one field of a focus row nobody should be able to
-  // assert about themselves.
-  //
-  // An open-ended phase always lands on `stopped`, for the engine's own reason
-  // (`FOCUS_OUTCOMES`): it was ended by hand, because it had no planned end to
-  // reach.
   ipcMain.handle(IpcChannel.focusStop, (event, payload): FocusSession | null => {
     assertTrustedSender(event);
-    const body = asRecord(payload);
-    const profileId = asId(body.profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    if (!phase) {
-      throw new Error("No focus session is running for this profile.");
-    }
-    const endedAt = new Date().toISOString();
-    const met =
-      phase.plannedMinutes !== null && phaseProgress(phase, endedAt).remainingSeconds === 0;
-    return endRunningFocusPhase(profileId, met ? "completed" : "stopped", endedAt);
+    return focusHost.stop(asId(asRecord(payload).profileId, "profileId"));
   });
 
-  // Pause and resume are the only genuinely NEW acts this slice adds, which is
-  // why they are the only new channels. Both are idempotent: pausing a paused
-  // phase and resuming a running one answer the phase unchanged rather than
-  // throwing, because a double-click on a button must not be an error.
   ipcMain.handle(IpcChannel.focusPause, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    if (!phase) {
-      throw new Error("No focus session is running for this profile.");
-    }
-    if (phase.pausedAt === null) {
-      phase.pausedAt = new Date().toISOString();
-      // The alarm goes with the clock: a paused phase must not announce an end
-      // it is no longer approaching.
-      disarmFocusAlarm(phase);
-    }
-    return toRunningFocusSession(phase);
+    return focusHost.pause(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusResume, (event, payload): RunningFocusSession => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    if (!phase) {
-      throw new Error("No focus session is running for this profile.");
-    }
-    if (phase.pausedAt !== null) {
-      // The pause that just ENDED joins the accumulator; the one still running
-      // is never in it (`FocusPhaseTiming`'s rule).
-      phase.pausedSeconds += closedPauseSeconds(phase.pausedAt, new Date().toISOString());
-      phase.pausedAt = null;
-      // Re-armed for what is LEFT, not for the whole plan — `armFocusAlarm`
-      // measures the remainder off the wall clock.
-      armFocusAlarm(profileId, phase);
-    }
-    return toRunningFocusSession(phase);
+    return focusHost.resume(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusStatus, (event, payload): RunningFocusSession | null => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    const phase = runningFocusSessions.get(profileId);
-    return phase === undefined ? null : toRunningFocusSession(phase);
+    return focusHost.status(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusCancel, (event, payload): void => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    discardRunningFocusPhase(profileId);
+    focusHost.cancel(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.focusListRange, (event, payload): FocusSession[] => {
@@ -9806,8 +9770,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.notificationsCenterList, (event, payload): NotificationRecord[] => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    return notificationStore(profileId).listCenter();
+    return notificationsHost.list(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.notificationsSnooze, (event, payload): NotificationRecord => {
@@ -9815,45 +9778,27 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
     const id = asId(body.id, "id");
-    const store = notificationStore(profileId);
-    const settings = store.getSettings();
-    const now = new Date();
-    // An omitted preset is the center's plain „Odloži“ button (NTF-009): the
-    // profile's own default, read here rather than sent by the renderer, so the
-    // button cannot go stale against a preference changed in another window —
-    // and resolved through `resolveDefaultSnoozePreset`, so a default of
-    // „Večeras“ still works after 18:00 rather than failing every evening.
-    const preset =
-      body.preset === undefined
-        ? resolveDefaultSnoozePreset(settings.snoozeDefault, now)
-        : asSnoozePreset(body.preset, "preset");
-    const until = computeSnoozeUntil(preset, now, settings.morningHour);
-    const record = store.snooze(id, until, now.toISOString());
-    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
-    return record;
+    // An omitted preset means the profile's default; the host resolves it.
+    const preset = body.preset === undefined ? undefined : asSnoozePreset(body.preset, "preset");
+    return notificationsHost.snooze(profileId, id, preset);
   });
 
   ipcMain.handle(IpcChannel.notificationsDismiss, (event, payload): void => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const profileId = asId(body.profileId, "profileId");
-    const id = asId(body.id, "id");
-    notificationStore(profileId).dismiss(id, new Date().toISOString());
-    mainWindow?.webContents.send(IpcChannel.notificationsChanged);
+    notificationsHost.dismiss(asId(body.profileId, "profileId"), asId(body.id, "id"));
   });
 
   ipcMain.handle(IpcChannel.notificationsSettingsGet, (event, payload): NotificationSettings => {
     assertTrustedSender(event);
-    const profileId = asId(asRecord(payload).profileId, "profileId");
-    return notificationStore(profileId).getSettings();
+    return notificationsHost.settings(asId(asRecord(payload).profileId, "profileId"));
   });
 
   ipcMain.handle(IpcChannel.notificationsSettingsUpdate, (event, payload): NotificationSettings => {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
-    const changes = asNotificationSettingsChanges(body.changes);
-    return notificationStore(profileId).updateSettings(changes, new Date().toISOString());
+    return notificationsHost.updateSettings(profileId, asNotificationSettingsChanges(body.changes));
   });
 
   ipcMain.handle(IpcChannel.notificationsSourceToggle, (event, payload): void => {
@@ -9862,7 +9807,7 @@ function registerIpc(): void {
     const profileId = asId(body.profileId, "profileId");
     const source = asNotificationSource(body.source, "source");
     const enabled = asBoolean(body.enabled, "enabled");
-    notificationStore(profileId).setSourceEnabled(source, enabled, new Date().toISOString());
+    notificationsHost.setSourceEnabled(profileId, source, enabled);
   });
 
   /**
@@ -11081,25 +11026,7 @@ function registerIpc(): void {
     const query = asCappedChars(body.query, "query", MAX_FIT_FOOD_QUERY_LENGTH);
     const limit = Math.min(asPositiveInteger(body.limit, "limit"), MAX_FIT_FOOD_RESULTS);
 
-    type Candidate =
-      | { id: string; name: string; nameEn?: string; catalogue: FoodEntry }
-      | { id: string; name: string; nameEn?: string; user: FitFood };
-    const pool: Candidate[] = [
-      ...FOOD_CATALOGUE.map((food) => ({
-        id: foodRefText({ kind: "catalogue", id: food.id }),
-        name: food.name,
-        nameEn: food.nameEn,
-        catalogue: food,
-      })),
-      ...fitFoodStore(profileId)
-        .list()
-        .map((food) => ({
-          id: foodRefText({ kind: "user", id: food.id }),
-          name: food.name,
-          user: food,
-        })),
-    ];
-    return searchFoods(pool, query, limit).map((hit) =>
+    return searchFoods(foodCandidates(fitFoodStore(profileId)), query, limit).map((hit) =>
       "catalogue" in hit ? catalogueOption(hit.catalogue) : userFoodOption(hit.user),
     );
   });
@@ -11126,7 +11053,7 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
-    const resolved = resolveLoggedFood(profileId, body.foodRef);
+    const resolved = resolveLoggedFood(fitFoodStore(profileId), body.foodRef);
     return fitMealStore(profileId).addItem(
       {
         date: asFitDay(body.day, "day"),
@@ -11269,26 +11196,7 @@ function registerIpc(): void {
 
     // One pool, one ranking. Two lists merged by the renderer would be a second
     // definition of "best match" — `fit:food-search`'s own reason.
-    type Candidate =
-      | { id: string; name: string; nameEn: string; catalogue: ExerciseEntry }
-      | { id: string; name: string; nameEn: string; own: FitExercise };
-    const pool: Candidate[] = [
-      ...EXERCISE_CATALOGUE.map((entry) => ({
-        id: exerciseRefText({ kind: "catalogue", id: entry.id }),
-        name: entry.name,
-        nameEn: entry.nameEn,
-        catalogue: entry,
-      })),
-      ...fitExerciseStore(profileId)
-        .list()
-        .map((entry) => ({
-          id: exerciseRefText({ kind: "user", id: entry.id }),
-          name: entry.name,
-          nameEn: entry.nameEn,
-          own: entry,
-        })),
-    ];
-    return searchExercises(pool, query, limit).map((hit) =>
+    return searchExercises(exerciseCandidates(fitExerciseStore(profileId)), query, limit).map((hit) =>
       "catalogue" in hit ? catalogueExerciseOption(hit.catalogue) : userExerciseOption(hit.own),
     );
   });
@@ -11341,7 +11249,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.fitRoutinesList, (event, payload): FitRoutine[] => {
     assertTrustedSender(event);
     const profileId = asId(asRecord(payload).profileId, "profileId");
-    const lookup = fitExerciseLookup(profileId);
+    const lookup = fitExerciseLookup(fitExerciseStore(profileId));
     return fitRoutineStore(profileId)
       .list()
       .map((routine) => toWireRoutine(routine, lookup));
@@ -11355,7 +11263,7 @@ function registerIpc(): void {
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
     return toWireRoutine(
       fitRoutineStore(profileId).create({ name, notes, items }, new Date().toISOString()),
-      fitExerciseLookup(profileId),
+      fitExerciseLookup(fitExerciseStore(profileId)),
     );
   });
 
@@ -11366,7 +11274,7 @@ function registerIpc(): void {
     const { profileId, name, notes, items } = readFitRoutineBody(payload);
     return toWireRoutine(
       fitRoutineStore(profileId).update(id, { name, notes, items }, new Date().toISOString()),
-      fitExerciseLookup(profileId),
+      fitExerciseLookup(fitExerciseStore(profileId)),
     );
   });
 
@@ -11477,7 +11385,7 @@ function registerIpc(): void {
     const body = asRecord(payload);
     const profileId = asId(body.profileId, "profileId");
     const workoutId = asId(body.workoutId, "workoutId");
-    const resolved = resolveLoggedExercise(profileId, body.exerciseRef);
+    const resolved = resolveLoggedExercise(fitExerciseStore(profileId), body.exerciseRef);
     return fitWorkoutStore(profileId).logSet(
       workoutId,
       {
@@ -12451,6 +12359,37 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.imexImportIcsCancel, (event): void => {
     assertTrustedSender(event);
     cancelIcsImport();
+  });
+
+  // The browser bookmarks import (IMEX-007): the calendar's four-step shape on
+  // its own channels, for the same reason the calendar has its own. A preview
+  // takes no duplicate answer — a bookmark folder always becomes a new note.
+  ipcMain.handle(IpcChannel.imexImportBookmarksPick, (event): Promise<BookmarksImportPickResult> => {
+    assertTrustedSender(event);
+    return pickBookmarksFile(restoreDeps());
+  });
+
+  ipcMain.handle(
+    IpcChannel.imexImportBookmarksPreview,
+    (event, payload): Promise<BookmarksImportPreviewResult> => {
+      assertTrustedSender(event);
+      const body = asRecord(payload);
+      const profileId = asId(body.profileId, "profileId");
+      return previewBookmarksImport(restoreDeps(), profileId);
+    },
+  );
+
+  ipcMain.handle(IpcChannel.imexImportBookmarksApply, (event, payload): Promise<BookmarksImportApplyResult> => {
+    assertTrustedSender(event);
+    const body = asRecord(payload);
+    const profileId = asId(body.profileId, "profileId");
+    const token = asRestoreToken(body.token, "token");
+    return applyBookmarksImport(restoreDeps(), profileId, token);
+  });
+
+  ipcMain.handle(IpcChannel.imexImportBookmarksCancel, (event): void => {
+    assertTrustedSender(event);
+    cancelBookmarksImport();
   });
 
   // The LLM-assisted import (IMEX-005): no pick, because there is no file — the

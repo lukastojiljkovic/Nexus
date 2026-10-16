@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ACCENT_IDS } from "@nexus/tokens";
-import { Button, Icon, TextField } from "@nexus/ui";
+import { Button, Icon, Notice, TextField } from "@nexus/ui";
 import type { NoteCategory, NoteFolder, NoteFolderColor, NoteTag } from "../../shared/ipc.js";
 import { collator } from "./intl.js";
 import { NotePopover } from "./notePopover.js";
@@ -163,7 +163,7 @@ export function NoteOrganizer({
   // Folder/tag/category deletes have no undo (unlike a note's) — the typed-name
   // confirmation is what the rest of the app substitutes for it (see PRIV's own
   // hard-delete). Closing the dialog fires the delete; a failure surfaces in
-  // the section's existing `note__org-error` line below, exactly as a rename
+  // the section's existing refusal line below, exactly as a rename
   // or recolour failure already does.
   const [pendingDeleteFolder, setPendingDeleteFolder] = useState<NoteFolder | null>(null);
   const [pendingDeleteTag, setPendingDeleteTag] = useState<NoteTag | null>(null);
@@ -849,11 +849,7 @@ export function NoteOrganizer({
         </Button>
       )}
 
-      {failed && (
-        <p className="note__org-error" role="status">
-          {strings.notes.folderError}
-        </p>
-      )}
+      {failed && <Notice kind="danger" message={strings.notes.folderError} />}
 
       <div className="note__org-heading">
         <span>{strings.notes.tagsLabel}</span>
@@ -924,11 +920,7 @@ export function NoteOrganizer({
         </Button>
       )}
 
-      {tagFailed !== null && (
-        <p className="note__org-error" role="status">
-          {tagFailed}
-        </p>
-      )}
+      {tagFailed !== null && <Notice kind="danger" message={tagFailed} />}
 
       <div className="note__org-heading">
         <span>{strings.notes.categoriesLabel}</span>
@@ -954,11 +946,7 @@ export function NoteOrganizer({
         </Button>
       )}
 
-      {categoryFailed !== null && (
-        <p className="note__org-error" role="status">
-          {categoryFailed}
-        </p>
-      )}
+      {categoryFailed !== null && <Notice kind="danger" message={categoryFailed} />}
 
       {pendingDeleteFolder !== null && (
         <TypedConfirmDialog

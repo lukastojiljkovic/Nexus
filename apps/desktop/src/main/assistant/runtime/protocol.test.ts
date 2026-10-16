@@ -91,9 +91,20 @@ describe("parseHostRequest", () => {
     expect(parseHostRequest(loadEmbedder)).toMatchObject({ kind: "load-embedder", contextTokens: 0 });
   });
 
+  it("accepts the per-model policy of a load, and leaves it out when none is sent", () => {
+    const policy = {
+      ...loadChat,
+      contextCap: 4096,
+      thoughtTokens: 512,
+      sampling: { temperature: 0.7, topP: 0.9, topK: 40, repeatPenalty: 1.1 },
+    };
+    expect(parseHostRequest(policy)).toMatchObject(policy);
+    expect("contextCap" in parseHostRequest(loadChat)).toBe(false);
+  });
+
   it("refuses a message from another protocol version, and says which", () => {
     expect(() => parseHostRequest({ ...loadChat, v: 99 })).toThrow(ProtocolError);
-    expect(() => parseHostRequest({ ...loadChat, v: 99 })).toThrow(/protocol 1/);
+    expect(() => parseHostRequest({ ...loadChat, v: 99 })).toThrow(/protocol 2/);
   });
 
   it("refuses the shapes a caller can get wrong", () => {
@@ -116,6 +127,10 @@ describe("parseHostRequest", () => {
       { ...loadChat, threads: 5000 },
       { ...loadChat, title: "" },
       { ...loadChat, capabilities: ["telepathy"] },
+      { ...loadChat, contextCap: 0 },
+      { ...loadChat, thoughtTokens: 0 },
+      { ...loadChat, sampling: { temperature: 9 } },
+      { ...loadChat, sampling: { mirostat: 2 } },
       {
         v: PROTOCOL_VERSION,
         kind: "complete",
@@ -170,9 +185,16 @@ describe("parseHostEvent", () => {
         v: PROTOCOL_VERSION,
         kind: "loaded",
         seq: 2,
-        info: { id: "qwen3.5-2b-q4-k-m", title: "Qwen3.5 2B", capabilities: ["chat", "tools"], contextTokens: 8192 },
+        info: {
+          id: "qwen3.5-2b-q4-k-m",
+          title: "Qwen3.5 2B",
+          capabilities: ["chat", "tools"],
+          contextTokens: 8192,
+          wrapper: "Qwen3.5",
+          functionCalling: "native",
+        },
       }),
-    ).toMatchObject({ kind: "loaded" });
+    ).toMatchObject({ kind: "loaded", info: { wrapper: "Qwen3.5", functionCalling: "native" } });
 
     expect(parseHostEvent({ v: PROTOCOL_VERSION, kind: "token", callId: 4, text: "hi" })).toEqual({
       v: PROTOCOL_VERSION,
@@ -254,8 +276,9 @@ describe("parseHostEvent", () => {
         },
       },
       { v: PROTOCOL_VERSION, kind: "failed", code: "sad", message: "no" },
-      { v: PROTOCOL_VERSION, kind: "loaded", seq: 1, info: { id: "x", title: "x", capabilities: ["nope"], contextTokens: 1 } },
-      { v: PROTOCOL_VERSION, kind: "loaded", seq: 1, info: { id: "x", title: "x", capabilities: ["chat"], contextTokens: 0 } },
+      { v: PROTOCOL_VERSION, kind: "loaded", seq: 1, info: { id: "x", title: "x", capabilities: ["nope"], contextTokens: 1, wrapper: "w", functionCalling: "native" } },
+      { v: PROTOCOL_VERSION, kind: "loaded", seq: 1, info: { id: "x", title: "x", capabilities: ["chat"], contextTokens: 0, wrapper: "w", functionCalling: "native" } },
+      { v: PROTOCOL_VERSION, kind: "loaded", seq: 1, info: { id: "x", title: "x", capabilities: ["chat"], contextTokens: 1, wrapper: "w", functionCalling: "maybe" } },
     ];
     for (const value of cases) {
       expect(() => parseHostEvent(value), JSON.stringify(value)).toThrow(ProtocolError);

@@ -49,6 +49,10 @@ interface SettingsRow {
   max_reviews_per_day: number | null;
 }
 
+interface RetentionRow {
+  retention: number | null;
+}
+
 /**
  * The STUDY module's per-profile scheduling preferences (STUDY-007, migration
  * 034), over prepared, parameterized statements (SEC-API-03; every value is
@@ -74,6 +78,7 @@ interface SettingsRow {
 export class StudySettingsStore {
   private readonly selectSettings: Database.Statement;
   private readonly upsertSettings: Database.Statement;
+  private readonly selectDeckRetention: Database.Statement;
 
   constructor(
     db: DatabaseHandle,
@@ -83,6 +88,15 @@ export class StudySettingsStore {
       `SELECT target_retention, new_per_day, max_reviews_per_day
          FROM study_settings
         WHERE profile_id = ?`,
+    );
+    // The first non-NULL of deck, subject and profile. A deck the profile does
+    // not own matches no row, and `retentionFor` answers the profile's value.
+    this.selectDeckRetention = db.prepare(
+      `SELECT COALESCE(d.target_retention, s.target_retention, p.target_retention) AS retention
+         FROM decks d
+         JOIN subjects s ON s.id = d.subject_id
+         LEFT JOIN study_settings p ON p.profile_id = d.profile_id
+        WHERE d.id = ? AND d.profile_id = ?`,
     );
     // `created_at` is deliberately NOT in the update list: it records when this
     // profile first expressed a preference, and a later edit does not move that.
@@ -115,6 +129,16 @@ export class StudySettingsStore {
     };
   }
 
+  /**
+   * The retention a deck is scheduled at (STUDY-007): its own override, else its
+   * subject's, else this profile's. The scheduler asks on every grade, so a
+   * change to any of the three is in force on the next review.
+   */
+  retentionFor(deckId: string): number {
+    const row = this.selectDeckRetention.get(deckId, this.profileId) as RetentionRow | undefined;
+    return row?.retention ?? this.get().targetRetention;
+  }
+
   /** Writes all three preferences at once, creating the row on the first call, and answers with what is now stored. */
   save(settings: StudySettings, now: string): StudySettings {
     const validNow = validateDateTime(now);
@@ -142,7 +166,8 @@ function validateDateTime(value: string): string {
   return value;
 }
 
-function validateRetention(value: number): number {
+/** Accepts a target retention inside the profile setting's window; the decks' and subjects' overrides share it. */
+export function validateRetention(value: number): number {
   if (
     typeof value !== "number" ||
     !Number.isFinite(value) ||

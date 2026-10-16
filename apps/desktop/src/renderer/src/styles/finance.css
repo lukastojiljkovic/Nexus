@@ -1010,20 +1010,6 @@
   font-size: var(--nx-font-size-caption);
   color: var(--nx-text-subtle);
 }
-.doc__action-error {
-  margin: 0;
-  font-size: var(--nx-font-size-label);
-  color: var(--nx-danger);
-}
-/* The page's ONE read, with the dashboard widgets' isolated boundary: a quiet
-   placeholder while it is in flight, and a failure that offers to ask again
-   rather than an EmptyState claiming there is nothing here. */
-.doc__failure {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--nx-space-2);
-}
 /* The rows, the grid and both empty states that stand in for them — one box so
    the layout audit has something to point at (`data-nx-content`,
    `shots/audit.ts`). Declared as a copy of `.doc`'s own column ON PURPOSE: the
@@ -1272,11 +1258,6 @@
   font-size: var(--nx-font-size-caption);
   fill: var(--nx-text-subtle);
   font-variant-numeric: tabular-nums;
-}
-.hab__error {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-danger);
 }
 /* Every quiet ghost on this page — cancel, dismiss, „Svaki dan“. */
 .hab__quiet.nx-button {
@@ -1772,11 +1753,6 @@
 .foc__note--overrun {
   color: var(--nx-accent-strong);
 }
-.foc__error {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-danger);
-}
 /* Every quiet ghost on this page — dismiss, the three explicit starts. „Odbaci"
    uses `variant="danger"` instead (still an outline, still subordinate to
    „Završi"'s filled primary, but marked as the destructive one). */
@@ -1802,22 +1778,6 @@
    the wall had and reads as a graphic that has come loose from its heading. */
 .foc__lanes {
   max-width: 720px;
-}
-
-/* The single-slot undo bar, the HABIT/FIN/TASK recipe outright. */
-.foc__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-}
-.foc__undo-text {
-  flex: 1;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
 }
 
 /* The panel: the running phase, or what to start next. Both use it, so the page

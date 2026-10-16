@@ -408,6 +408,15 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       keywords: ["ics", "icalendar", "kalendar", "google", "outlook", "dogadjaji", "uvoz"],
     },
     {
+      // IMEX-007. The words are the SOURCE's — the browser's bookmark export —
+      // so somebody looking for it types „chrome“, „firefox“ or „html“, never
+      // „uvoz iz arhive“.
+      id: "backup-bookmarks",
+      section: "import-bookmarks",
+      label: s.bookmarksImport.title,
+      keywords: ["obelezivaci", "bookmarks", "chrome", "firefox", "edge", "html", "uvoz"],
+    },
+    {
       // ADR-052. The words are the SOURCE's, not the flow's — somebody looking for
       // this types „anki“ or „apkg“, never „uvoz iz arhive“ — so „arhiva“ is
       // deliberately absent, exactly as it is from the markdown entry below.

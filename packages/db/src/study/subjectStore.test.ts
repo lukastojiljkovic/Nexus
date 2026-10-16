@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   NexusDatabase,
   openDatabase,
+  StudySettingsValidationError,
   SubjectNotFoundError,
   SubjectStore,
   SubjectValidationError,
@@ -149,5 +150,31 @@ describe("SubjectStore", () => {
     expect(() => b.update(owned.id, { name: "hijack" })).toThrow(SubjectNotFoundError);
     expect(() => b.softDelete(owned.id)).toThrow(SubjectNotFoundError);
     expect(a.listActive()).toHaveLength(1);
+  });
+});
+
+describe("SubjectStore — per-subject target retention (STUDY-007)", () => {
+  it("inherits (null) unless a retention is given on create, and keeps the one given", () => {
+    const store = new SubjectStore(db.raw, createProfile());
+    expect(store.create({ name: "a" }).targetRetention).toBeNull();
+    expect(store.create({ name: "b", targetRetention: 0.95 }).targetRetention).toBe(0.95);
+  });
+
+  it("sets, changes and clears the override on update, and leaves it alone when omitted", () => {
+    const store = new SubjectStore(db.raw, createProfile());
+    const subject = store.create({ name: "a" });
+    expect(store.update(subject.id, { targetRetention: 0.9 }).targetRetention).toBe(0.9);
+    expect(store.update(subject.id, { archived: true }).targetRetention).toBe(0.9);
+    expect(store.update(subject.id, { targetRetention: null }).targetRetention).toBeNull();
+  });
+
+  it("refuses a value outside the profile setting's window", () => {
+    const store = new SubjectStore(db.raw, createProfile());
+    expect(() => store.create({ name: "low", targetRetention: 0.69 })).toThrow(
+      StudySettingsValidationError,
+    );
+    expect(() => store.create({ name: "high", targetRetention: 0.98 })).toThrow(
+      StudySettingsValidationError,
+    );
   });
 });

@@ -1089,12 +1089,6 @@
   gap: var(--nx-space-2);
   margin-top: var(--nx-space-2);
 }
-.packs__problem {
-  margin: var(--nx-space-2) 0 0;
-  color: var(--nx-danger);
-  font-size: var(--nx-font-size-body-sm);
-}
-
 /* ADR-101: THE „PRIKAZ" CARD.
    ------------------------------------------------------------------------
    It is the module gallery, grown: a heading per group and one row per module,

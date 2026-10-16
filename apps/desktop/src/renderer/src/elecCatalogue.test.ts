@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { COMPONENT_CATALOGUE, COMPONENT_KINDS, catalogueComponent } from "@nexus/core";
+import {
+  COMPONENT_CATALOGUE,
+  COMPONENT_KINDS,
+  catalogueComponent,
+  filterComponents,
+  matchesComponentQuery,
+} from "@nexus/core";
 import type { ComponentDef } from "@nexus/core";
 
 import {
-  filterComponents,
   groupComponentsByKind,
-  matchesComponentQuery,
   PALETTE_KINDS,
   partDisplayName,
 } from "./elecCatalogue.js";

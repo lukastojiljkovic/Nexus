@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CollectionStore, RecipeStore, openDatabase, uuidv7 } from "@nexus/db";
 import { baseManifest, entry, makeKey, writePack } from "../../../main/packs/fixtures.js";
 import type { PackManifest } from "../../../main/packs/manifest.js";
 import {
@@ -11,9 +12,12 @@ import {
   loadFoodsPacks,
   loadRecipesPacks,
   parseFoodsLayout,
+  parseRecipesCollection,
   parseRecipesLayout,
   readDatasetJson,
   searchPackRecipes,
+  seedPackShelf,
+  type RecipesDataset,
 } from "./packData.js";
 
 /**
@@ -298,5 +302,97 @@ describe("searchPackRecipes", () => {
       "sarma",
       "socivo",
     ]);
+  });
+});
+
+describe("the shelf a pack declares", () => {
+  const NOW = "2026-06-01T08:00:00.000Z";
+  const PRESERVING = JSON.stringify({
+    layout: DATASET_LAYOUT_VERSION,
+    collection: "Konzervisanje",
+    recipes: ["ajvar", "kiseli-kupus"].map((id) => ({
+      id,
+      title: id === "ajvar" ? "Ajvar" : "Kiseli kupus",
+      language: "sr",
+      ingredients: ["3 kg paprike"],
+      steps: ["Peći paprike."],
+      tags: ["zima"],
+      source: {
+        title: id,
+        url: "https://example.org/" + id,
+        licence: "public-domain",
+        attribution: "Javno dobro",
+      },
+    })),
+  });
+
+  it("reads the name the recipes file declares, and none when it declares none", () => {
+    expect(parseRecipesCollection(JSON.parse(PRESERVING), "recipes-preserving")).toBe("Konzervisanje");
+    expect(parseRecipesCollection(JSON.parse(RECIPES), "wikibooks")).toBeNull();
+  });
+
+  it("refuses a declared name that is blank or over the cap, rather than dropping it", () => {
+    const declaring = (collection: string) => ({ layout: 1, collection, recipes: [] });
+    expect(() => parseRecipesCollection(declaring("   "), "p")).toThrow(/"collection"/);
+    expect(() => parseRecipesCollection(declaring("n".repeat(61)), "p")).toThrow(/"collection"/);
+  });
+
+  it("seeds one shelf for a pack, and a second copy or a re-install finds it rather than making another", () => {
+    install("recipes-preserving", { "recipes.json": PRESERVING });
+    const db = openDatabase({ path: join(root, "cookbook.db") });
+    try {
+      const profileId = uuidv7();
+      db.raw
+        .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+        .run(profileId, "personal", "A", NOW);
+
+      // What `savePackRecipe` does for each copied recipe: create the copy, then
+      // put it on the pack's shelf.
+      const copyEveryRecipe = (pack: RecipesDataset): void => {
+        const recipes = new RecipeStore(db.raw, profileId);
+        const shelves = new CollectionStore(db.raw, profileId);
+        for (const recipe of pack.recipes) {
+          const copy = recipes.create(
+            { title: recipe.title, course: "preserve", servings: 2, ingredients: [], steps: [], source: "own" },
+            NOW,
+          );
+          const shelf = seedPackShelf(shelves, pack, NOW);
+          if (shelf !== null) shelves.setMember(shelf.id, copy.id, true, NOW);
+        }
+      };
+
+      const [pack] = loadRecipesPacks(root, key.publicKeyPem);
+      if (pack === undefined) throw new Error("the fixture pack did not load");
+      copyEveryRecipe(pack);
+      // A re-install is the same pack read again, copied again.
+      const [reinstalled] = loadRecipesPacks(root, key.publicKeyPem);
+      if (reinstalled === undefined) throw new Error("the fixture pack did not load");
+      copyEveryRecipe(reinstalled);
+
+      const shelves = new CollectionStore(db.raw, profileId).list();
+      expect(shelves).toHaveLength(1);
+      expect(shelves[0]).toMatchObject({ name: "Konzervisanje", sourcePack: "recipes-preserving" });
+      // Each pass copied both recipes, so the one shelf holds four copies.
+      expect(shelves[0]?.recipeIds).toHaveLength(4);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("puts nothing anywhere for a pack that declares no shelf", () => {
+    install("wikibooks", { "recipes.json": RECIPES });
+    const db = openDatabase({ path: join(root, "cookbook.db") });
+    try {
+      const profileId = uuidv7();
+      db.raw
+        .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+        .run(profileId, "personal", "A", NOW);
+      const [pack] = loadRecipesPacks(root, key.publicKeyPem);
+      if (pack === undefined) throw new Error("the fixture pack did not load");
+      expect(seedPackShelf(new CollectionStore(db.raw, profileId), pack, NOW)).toBeNull();
+      expect(new CollectionStore(db.raw, profileId).list()).toEqual([]);
+    } finally {
+      db.close();
+    }
   });
 });

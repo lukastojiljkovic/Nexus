@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ComponentType, FormEvent, InputHTMLAttributes } from "react";
 import { PDV_RATES, validateFocusConfig } from "@nexus/core";
 import type { FocusConfig } from "@nexus/core";
-import { Button, Checkbox, Select, TextField } from "@nexus/ui";
+import { Button, Checkbox, Field, Notice, Select, TextField } from "@nexus/ui";
 import {
   DEFAULT_TARGET_RETENTION,
   MAX_BACKGROUND_DIM,
@@ -175,11 +175,9 @@ interface SettingsFieldProps
 
 function SettingsField({ label, hit, hint, error, ...rest }: SettingsFieldProps) {
   return (
-    <div className="set__study-field">
+    <Field className="set__study-field" help={hint} error={error}>
       <TextField label={label} labelClassName={labelClass("set__study-label", hit)} {...rest} />
-      {hint !== undefined && <span className="nx-hint">{hint}</span>}
-      {error !== undefined && <span className="set__error">{error}</span>}
-    </div>
+    </Field>
   );
 }
 
@@ -384,7 +382,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
   }
 
   if (settings === null) {
-    return error != null ? <p className="set__error">{error}</p> : <p className="nx-hint">{strings.app.loading}</p>;
+    return error != null ? <Notice kind="danger" message={error} /> : <p className="nx-hint">{strings.app.loading}</p>;
   }
 
   const backgroundHash = settings.backgroundHash;
@@ -454,7 +452,7 @@ function DashboardSettingsPanel({ profileId, hits }: SettingsPanelProps) {
         </div>
       )}
 
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </>
   );
 }
@@ -533,7 +531,7 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   if (settings === null) {
     return error != null ? (
-      <p className="set__error">{error}</p>
+      <Notice kind="danger" message={error} />
     ) : (
       <p className="nx-hint">{strings.app.loading}</p>
     );
@@ -628,7 +626,7 @@ function StudySettingsPanel({ profileId, hits }: SettingsPanelProps) {
       </div>
 
       <p className="nx-hint">{s.retroNotice}</p>
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </>
   );
 }
@@ -713,7 +711,7 @@ function CalendarSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   if (settings === null) {
     return message !== null ? (
-      <p className="set__error">{message.text}</p>
+      <Notice kind="danger" message={message.text} />
     ) : (
       <p className="nx-hint">{strings.app.loading}</p>
     );
@@ -762,7 +760,7 @@ function CalendarSettingsPanel({ profileId, hits }: SettingsPanelProps) {
         </div>
       </form>
       {message !== null && (
-        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
+        <Notice kind={message.failed ? "danger" : "info"} message={message.text} />
       )}
     </>
   );
@@ -820,7 +818,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   if (status === null) {
     return error != null ? (
-      <p className="set__error">{error}</p>
+      <Notice kind="danger" message={error} />
     ) : (
       <p className="nx-hint">{strings.app.loading}</p>
     );
@@ -890,7 +888,7 @@ function PrivSettingsPanel({ profileId, hits }: SettingsPanelProps) {
       <p className="nx-hint">
         {status.hasRecoveryKit ? s.kitStatusSet : s.kitStatusMissing}
       </p>
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </>
   );
 }
@@ -947,7 +945,7 @@ function FinanceSettingsPanel({ hits }: SettingsPanelProps) {
         />
       </div>
       {message !== null && (
-        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
+        <Notice kind={message.failed ? "danger" : "info"} message={message.text} />
       )}
     </>
   );
@@ -1240,7 +1238,7 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
 
   if (targets === null) {
     return error != null ? (
-      <p className="set__error">{error}</p>
+      <Notice kind="danger" message={error} />
     ) : (
       <p className="nx-hint">{strings.app.loading}</p>
     );
@@ -1292,7 +1290,7 @@ function FitnessSettingsPanel({ profileId, hits }: SettingsPanelProps) {
         ))}
       </div>
       <p className="nx-hint">{s.hint}</p>
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
       {saved && error == null && <p className="nx-hint">{s.saved}</p>}
     </>
   );

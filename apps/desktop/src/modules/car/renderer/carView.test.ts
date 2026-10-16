@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { SERVICE_CATEGORIES } from "@nexus/core";
 import { applyLocale } from "../../../renderer/src/strings.js";
-import { moneyPair, parseDecimal } from "./carView.js";
+import type { CarServiceView } from "../shared/ipc.js";
+import { moneyPair, parseDecimal, serviceDraft } from "./carView.js";
 
 /**
  * The CAR page's two pure rules, with the exact answers in both shipped locales.
@@ -91,3 +93,62 @@ describe("moneyPair", () => {
     expect(moneyPair("19.99", "EUR")).toEqual({ costMinor: 1_999, currency: "EUR" });
   });
 });
+
+describe("serviceDraft", () => {
+  it("opens a new entry blank, in the first category", () => {
+    expect(serviceDraft(null)).toEqual({
+      date: "",
+      category: SERVICE_CATEGORIES[0],
+      description: "",
+      odometer: "",
+      cost: "",
+      currency: "",
+      workshop: "",
+      parts: "",
+    });
+  });
+
+  it("reads a stored row back, so saving it unchanged writes the same money", () => {
+    const service = stored({ odometer: 120_500, costMinor: 450_050, currency: "RSD", parts: "filter" });
+    applyLocale("sr");
+    expect(serviceDraft(service).cost).toBe("4500,50");
+    expect(moneyPair(serviceDraft(service).cost, serviceDraft(service).currency)).toEqual({
+      costMinor: 450_050,
+      currency: "RSD",
+    });
+    applyLocale("en");
+    expect(serviceDraft(service).cost).toBe("4500.50");
+    expect(moneyPair(serviceDraft(service).cost, "RSD")).toEqual({ costMinor: 450_050, currency: "RSD" });
+  });
+
+  it("keeps the reading as the whole number it was stored as, and an absent field absent", () => {
+    const draft = serviceDraft(stored({ odometer: 120_500, workshop: null, parts: null }));
+    expect(parseDecimal(draft.odometer)).toBe(120_500);
+    expect(draft.workshop).toBe("");
+    expect(draft.parts).toBe("");
+  });
+
+  it("leaves an unpriced, unread row unpriced", () => {
+    const draft = serviceDraft(stored({ odometer: null, costMinor: null, currency: null }));
+    expect(draft.odometer).toBe("");
+    expect(moneyPair(draft.cost, draft.currency)).toEqual({ costMinor: null, currency: null });
+  });
+});
+
+function stored(fields: Partial<CarServiceView>): CarServiceView {
+  return {
+    id: "service-1",
+    date: "2026-03-14",
+    odometer: null,
+    category: SERVICE_CATEGORIES[0],
+    description: "Oil and filter",
+    costMinor: null,
+    currency: null,
+    workshop: null,
+    parts: null,
+    receipts: [],
+    createdAt: "2026-03-14T10:00:00.000Z",
+    updatedAt: "2026-03-14T10:00:00.000Z",
+    ...fields,
+  };
+}

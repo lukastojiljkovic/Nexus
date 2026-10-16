@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Tool, WebService } from "@nexus/core";
+import { tmpdir } from "node:os";
 import { createToolRegistry, type ToolDeps } from "../../../main/assistant/tools/index.js";
+import { createDictionaryReader } from "../../translator/main/dictionary.js";
 import { createModuleRegistry } from "../../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { en } from "./copy.en.js";
 import { sr } from "./copy.sr.js";
 
@@ -43,14 +46,38 @@ function toolNames(): readonly string[] {
     },
     now: () => 0,
     search: () => Promise.resolve([]),
-    packs: { list: () => Promise.resolve([]) },
+    packs: { list: () => Promise.resolve([]), catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
+    dictionary: createDictionaryReader(() => tmpdir()),
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     timers: {
       startCountdown: () => {
         throw new Error("Test setup: no tool was run here.");
       },
       listCountdowns: () => [],
+      pauseCountdown: () => {
+        throw new Error("Test setup: no tool was run here.");
+      },
+      resumeCountdown: () => {
+        throw new Error("Test setup: no tool was run here.");
+      },
+      cancelCountdown: () => {
+        throw new Error("Test setup: no tool was run here.");
+      },
+    },
+    focus: { start: () => { throw new Error("Test setup: not expected in this test."); }, stop: () => { throw new Error("Test setup: not expected in this test."); }, cancel: () => { throw new Error("Test setup: not expected in this test."); }, pause: () => { throw new Error("Test setup: not expected in this test."); }, resume: () => { throw new Error("Test setup: not expected in this test."); }, status: () => null },
+    notifications: {
+      list: () => [],
+      snooze: () => { throw new Error("Test setup: not expected in this test."); },
+      dismiss: () => { throw new Error("Test setup: not expected in this test."); },
+      settings: () => { throw new Error("Test setup: not expected in this test."); },
+      updateSettings: () => { throw new Error("Test setup: not expected in this test."); },
+      setSourceEnabled: () => { throw new Error("Test setup: not expected in this test."); },
+      upcoming: () => [],
     },
     modules: createModuleRegistry(),
+    visibility: () => DEFAULT_SHELL_VISIBILITY,
+    userData: () => "",
+    appVersion: () => "",
     web: webService(),
   };
   return createToolRegistry(deps)

@@ -97,6 +97,7 @@ import type {
 } from "@nexus/db";
 
 import * as apkgReaderModule from "./apkgReader.js";
+import { shellStrings } from "./shellStrings.js";
 import * as archiveReaderModule from "./archiveReader.js";
 import * as csvReaderModule from "./csvReader.js";
 import * as icsReaderModule from "./icsReader.js";
@@ -105,6 +106,7 @@ import { deriveRestoredNotes, gatherProfileData, gatherProfileSettings } from ".
 import type { ProfileDataDeps } from "./profileData.js";
 import {
   applyApkgImport,
+  applyBookmarksImport,
   applyCsvImport,
   applyFinCsvImport,
   applyIcsImport,
@@ -122,12 +124,14 @@ import {
   mapCsvImport,
   mapFinCsvImport,
   pickApkgFile,
+  pickBookmarksFile,
   pickCsvFile,
   pickFinCsvFile,
   pickIcsFile,
   pickImportFile,
   pickRestoreFile,
   previewApkgImport,
+  previewBookmarksImport,
   previewCsvImport,
   previewFinCsvImport,
   previewIcsImport,
@@ -356,6 +360,8 @@ function makeTestDeps(
   finCsvPath: string | null = null,
   /** The kit's section (ADR-090), shared with whatever builds the archive under test so a section can be handed over, applied and read back. */
   modules: TestModuleSeam = moduleSeam(),
+  /** IMEX-007's picker, last so the positional callers above keep their meaning. */
+  bookmarksPath: string | null = null,
 ): TestDepsHandle {
   const blobs = new Map<string, Uint8Array>();
   const cancelFocusCalls: string[] = [];
@@ -452,6 +458,7 @@ function makeTestDeps(
     pickFinCsvFile: async () => finCsvPath,
     // ADR-061's picker, on the same terms.
     pickIcsFile: async () => icsPath,
+    pickBookmarksFile: async () => bookmarksPath,
     reloadRenderer: () => {
       reloadCount += 1;
     },
@@ -4729,5 +4736,87 @@ describe("bank statement CSV import (FIN slice e)", () => {
     await pickFinCsvFile(deps);
     cancelFinCsvImport();
     expect(await previewFinCsvImport(deps, null, null)).toEqual({ status: "no-file" });
+  });
+});
+
+// --- Browser bookmarks import (IMEX-007) -------------------------------------
+
+const BOOKMARKS_HTML = [
+  "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
+  "<DL><p>",
+  "    <DT><H3>Posao</H3>",
+  "    <DL><p>",
+  '        <DT><A HREF="https://example.com/a">Alfa</A>',
+  '        <DT><A HREF="javascript:void(0)">Skripta</A>',
+  "    </DL><p>",
+  '    <DT><A HREF="https://example.org/root">Koren</A>',
+  "</DL><p>",
+  "",
+].join("\n");
+
+async function writeBookmarksFixture(fileName: string, text: string): Promise<string> {
+  const filePath = fixturePath(fileName);
+  await writeFile(filePath, text, "utf8");
+  return filePath;
+}
+
+describe("Browser bookmarks import (IMEX-007)", () => {
+  it("creates one note per folder under the Bookmarks tag, names the skip, and undoes them away completely", async () => {
+    const filePath = await writeBookmarksFixture("obelezivaci.html", BOOKMARKS_HTML);
+    const profileB = createProfile(dbB, "B");
+    const { deps, getReloadCount } = makeTestDeps(dbB, null, null, null, null, null, moduleSeam(), filePath);
+
+    const picked = await pickBookmarksFile(deps);
+    expect(picked).toEqual({ canceled: false, path: filePath, fileName: "obelezivaci.html" });
+
+    const previewed = await previewBookmarksImport(deps, profileB);
+    if (previewed.status !== "ready") unreachable();
+    expect(previewed.preview).toMatchObject({
+      fileName: "obelezivaci.html",
+      bookmarks: 2,
+      folders: 2,
+      skips: [{ code: "unsupported-url", count: 1 }],
+    });
+    // A preview is a dry run: nothing has been written yet.
+    expect(new NoteStore(dbB.raw, profileB).list()).toHaveLength(0);
+
+    await applyBookmarksImport(deps, profileB, previewed.preview.token);
+
+    const notes = new NoteStore(dbB.raw, profileB).list();
+    expect(notes.map((note) => note.title).sort()).toEqual(["Posao", shellStrings().bookmarksRootTitle].sort());
+    const orgStore = new NoteOrgStore(dbB.raw, profileB);
+    expect(orgStore.listTags().map((tag) => tag.name)).toEqual([shellStrings().bookmarksTagName]);
+    expect(orgStore.listTagLinks()).toHaveLength(2);
+
+    // The shared banner, naming this operation as its own kind.
+    expect(restoreStatus(profileB).undo?.kind).toBe("bookmarks");
+    await flushSetTimeout();
+    expect(getReloadCount()).toBe(1);
+
+    await undoRestore(deps, profileB);
+    expect(new NoteStore(dbB.raw, profileB).list()).toHaveLength(0);
+    expect(restoreStatus(profileB).undo).toBeNull();
+  });
+
+  it("refuses a file that is not a bookmarks export, and a preview the next preview replaced", async () => {
+    const profileB = createProfile(dbB, "B");
+    const notBookmarks = await writeBookmarksFixture("pismo.html", "<html><body>Zdravo</body></html>");
+    const refused = makeTestDeps(dbB, null, null, null, null, null, moduleSeam(), notBookmarks);
+    await pickBookmarksFile(refused.deps);
+    expect(await previewBookmarksImport(refused.deps, profileB)).toEqual({
+      status: "unreadable",
+      code: "not-bookmarks",
+    });
+
+    const filePath = await writeBookmarksFixture("obelezivaci.html", BOOKMARKS_HTML);
+    const { deps } = makeTestDeps(dbB, null, null, null, null, null, moduleSeam(), filePath);
+    await pickBookmarksFile(deps);
+    const first = await previewBookmarksImport(deps, profileB);
+    const second = await previewBookmarksImport(deps, profileB);
+    if (first.status !== "ready" || second.status !== "ready") unreachable();
+
+    await expect(applyBookmarksImport(deps, profileB, first.preview.token)).rejects.toThrow(/stale/);
+    await applyBookmarksImport(deps, profileB, second.preview.token);
+    expect(new NoteStore(dbB.raw, profileB).list()).toHaveLength(2);
   });
 });

@@ -4,6 +4,7 @@ import {
   findWorkflow,
   renderWorkflowBrief,
   runAgentTurn,
+  ToolMeaningIndex,
   toolsForWorkflow,
   type AgentEvent,
   type AgentTurnInput,
@@ -61,6 +62,9 @@ import {
   TurnLog,
   TurnUnknownError,
 } from "./turns.js";
+
+/** The shape of a module id (`shared/manifest.ts`): what `send`'s `location` must look like. */
+const MODULE_ID = /^[a-z][a-z0-9-]{0,39}$/;
 
 /**
  * THE ASSISTANT in the main process (ADR-106): its handlers, its turn engine,
@@ -126,6 +130,8 @@ export function register(host: ModuleHostSurface): void {
   /** Which turn is waiting on a confirm id, so `answerConfirm` can find it. */
   const confirmations = new Map<string, { readonly turn: Turn; readonly park: ConfirmPark }>();
   const registry = new TurnRegistry(() => randomUUID());
+  /** The tool descriptions' vectors, kept across turns for whichever embedder is loaded. */
+  const toolMeaning = new ToolMeaningIndex();
 
   function services(): AssistantServices {
     return assistantServices();
@@ -422,6 +428,9 @@ export function register(host: ModuleHostSurface): void {
         ? {}
         : { toolCalls: message.toolCalls }),
       ...(message.toolCallId === null ? {} : { toolCallId: message.toolCallId }),
+      // Legacy rows carry no outcome and are read as the tool that did the thing,
+      // as `messageView` reads them.
+      ...(message.role === "tool" ? { ok: message.ok ?? true } : {}),
     }));
   }
 
@@ -439,6 +448,11 @@ export function register(host: ModuleHostSurface): void {
       throw new Error('Invalid IPC payload: "text" must not be blank.');
     }
     const workflowId = call.as.asNullableString(payload.workflowId, "workflowId");
+    // A module id or nothing: it is written into the system prompt, so anything
+    // that is not an id's shape is dropped rather than quoted to the model.
+    const location =
+      payload.location === undefined ? null : call.as.asNullableString(payload.location, "location");
+    const page = location !== null && MODULE_ID.test(location) ? location : null;
     const workflow = workflowId === null ? null : (findWorkflow(workflowId) ?? null);
     if (workflowId !== null && workflow === null) {
       throw new Error(`There is no assistant workflow named "${workflowId}".`);
@@ -489,6 +503,13 @@ export function register(host: ModuleHostSurface): void {
     turns.set(turn.id, turn);
 
     const offered = profile.tools(profile.webSearchActive());
+    const tools = workflow === null ? offered : toolsForWorkflow(workflow, offered);
+    const meaning = await toolMeaning.similarities(
+      tools,
+      text,
+      await profile.embedder(),
+      controller.signal,
+    );
     const input: AgentTurnInput = {
       history,
       user: {
@@ -497,7 +518,7 @@ export function register(host: ModuleHostSurface): void {
           workflow === null ? text : `${text}\n\n${renderWorkflowBrief(workflow, locale)}`,
       },
       locale,
-      tools: workflow === null ? offered : toolsForWorkflow(workflow, offered),
+      tools,
       knowledge: profile.knowledgeBase(),
       model,
       context: {
@@ -508,6 +529,8 @@ export function register(host: ModuleHostSurface): void {
       },
       maxSteps: DEFAULT_MAX_STEPS,
       today: localDay(services().now()),
+      ...(page === null ? {} : { location: page }),
+      ...(meaning === undefined ? {} : { toolMeaning: meaning }),
     };
 
     // Unawaited: the page polls. The failure of a whole turn is caught here and

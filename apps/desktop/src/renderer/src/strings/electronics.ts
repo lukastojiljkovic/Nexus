@@ -63,6 +63,12 @@ export const electronicsSr = {
   undo: "Opozovi",
   deletedNotice: "Kolo je obrisano.",
   dismiss: "Zatvori",
+  deleteTitle: "Obrisati ovo kolo?",
+  deleteQuestion: "Kolo nestaje sa spiska, zajedno sa delovima, žicama i generisanim kodom.",
+  /** What stays true after the answer: the offer that follows the delete takes it back. */
+  deleteNote: "Ponuda Opozovi posle brisanja vraća kolo.",
+  /** The name of the overflow trigger that holds the tools, Rename and Delete below 900px. */
+  moreActions: "Još radnji",
   loadErrorTitle: "Kola nisu učitana",
   loadError: "Učitavanje kola nije uspelo. Zatvori i ponovo otvori stranicu.",
   actionError: "Radnja nije uspela. Pokušaj ponovo.",

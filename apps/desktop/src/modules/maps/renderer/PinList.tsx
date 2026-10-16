@@ -1,4 +1,4 @@
-import { Button, EmptyState } from "@nexus/ui";
+import { Button, EmptyState, ListDetail } from "@nexus/ui";
 import type { MapsPinView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 
@@ -8,10 +8,11 @@ import { copy } from "./copy.js";
  * **Why a list at all, when the pins are drawn on the map.** The map is a
  * canvas: a pin on it is reachable by pointer, and a person using a keyboard
  * cannot tab to a circle drawn into a WebGL surface. This list is the same set
- * of pins as buttons — one per pin, naming its title and its note — carrying the
- * two actions that must not be pointer-only (edit, remove). Selecting a row also
- * jumps the camera to that pin, which is the list's third job: it is the only
- * way to say "take me to Vinarija" without hunting for its dot.
+ * of pins as a `ListDetail`, one row per pin, and it carries the two actions
+ * that must not be pointer-only (edit, remove) in the detail pane, where they
+ * have their own names. Selecting a row also jumps the camera to that pin, which
+ * is the list's third job: it is the only way to say "take me to Vinarija"
+ * without hunting for its dot.
  *
  * **A disclosure, not a permanent column.** At the minimum window (900 × 600) a
  * fixed column would take a third of the map, and the map is the content. The
@@ -27,7 +28,7 @@ export function PinList({
 }: {
   pins: readonly MapsPinView[];
   selectedId: string | null;
-  onSelect: (pin: MapsPinView) => void;
+  onSelect: (pin: MapsPinView | null) => void;
   onEdit: (pin: MapsPinView) => void;
   onRemove: (pin: MapsPinView) => void;
 }) {
@@ -41,34 +42,44 @@ export function PinList({
           description={copy.pins.emptyBody}
         />
       ) : (
-        <ul className="maps__list-rows">
-          {pins.map((pin) => (
-            <li key={pin.id} className="maps__list-row">
-              <button
-                type="button"
-                className={`maps__list-pick${pin.id === selectedId ? " maps__list-pick--selected" : ""}`}
-                aria-pressed={pin.id === selectedId}
-                onClick={() => onSelect(pin)}
-              >
-                <span
-                  className="maps__list-dot"
-                  style={{ background: `var(--nx-swatch-${pin.color})` }}
-                  aria-hidden="true"
-                />
+        <ListDetail
+          className="maps__pins"
+          items={pins}
+          itemKey={(pin) => pin.id}
+          listLabel={copy.pins.title}
+          detailLabel={copy.pins.detailLabel}
+          backLabel={copy.pins.back}
+          renderRow={(pin) => (
+            <>
+              <span
+                className="maps__list-dot"
+                style={{ background: `var(--nx-swatch-${pin.color})` }}
+                aria-hidden="true"
+              />
+              <span className="maps__list-name">{pin.title}</span>
+            </>
+          )}
+          renderDetail={(pin) =>
+            pin === null ? (
+              <p className="nx-hint">{copy.pins.pickHint}</p>
+            ) : (
+              <>
                 <span className="maps__list-name">{pin.title}</span>
                 <span className="maps__list-note">{pin.note ?? copy.pins.noteEmpty}</span>
-              </button>
-              <span className="maps__list-actions">
-                <Button size="sm" onClick={() => onEdit(pin)}>
-                  {copy.pins.edit}
-                </Button>
-                <Button size="sm" variant="quiet" onClick={() => onRemove(pin)}>
-                  {copy.pins.remove}
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
+                <span className="maps__list-actions">
+                  <Button size="sm" onClick={() => onEdit(pin)}>
+                    {copy.pins.edit}
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => onRemove(pin)}>
+                    {copy.pins.remove}
+                  </Button>
+                </span>
+              </>
+            )
+          }
+          selectedId={selectedId}
+          onSelect={(id) => onSelect(pins.find((pin) => pin.id === id) ?? null)}
+        />
       )}
     </div>
   );

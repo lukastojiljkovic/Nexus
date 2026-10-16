@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { Button, EmptyState, Icon, LoadingState, PageHeader, type IconName } from "@nexus/ui";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Button, Icon, LoadingState, PageHeader, type IconName } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { manifest } from "../shared/manifest.js";
-import { MINIAPPS_APP_IDS, type MiniappsAppId, type MiniappsView } from "../shared/ipc.js";
+import {
+  MINIAPPS_APP_IDS,
+  isMiniappsAppId,
+  type MiniappsAppId,
+  type MiniappsView,
+} from "../shared/ipc.js";
 import { DiceApp } from "./apps/DiceApp.js";
 import { DatesApp } from "./apps/DatesApp.js";
 import { MetronomeApp } from "./apps/MetronomeApp.js";
@@ -13,7 +18,7 @@ import { ScreenLightApp } from "./apps/ScreenLightApp.js";
 import { TallyApp } from "./apps/TallyApp.js";
 import { TypingApp } from "./apps/TypingApp.js";
 import { WorldClockApp } from "./apps/WorldClockApp.js";
-import type { MiniAppProps, Run } from "./apps/contract.js";
+import type { Run } from "./apps/contract.js";
 import { copy } from "./copy.js";
 import "./miniapps.css";
 
@@ -53,12 +58,17 @@ const TILE_ICONS: Record<MiniappsAppId, IconName> = {
   qr: "image",
 };
 
-export default function MiniappsPage({ profileId }: ModulePageProps) {
+export default function MiniappsPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<MiniappsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<MiniappsAppId | null>(null);
   /** Whether the kept tile has already been applied - see the seeding effect below. */
   const [seeded, setSeeded] = useState(false);
+  /**
+   * Bumped when an assistant change reveals a tile. A tile reads the document once,
+   * when it mounts, so the revealed one is remounted on the document main now holds.
+   */
+  const [revision, setRevision] = useState(0);
 
   const run = useCallback<Run>(async (action) => {
     try {
@@ -107,6 +117,32 @@ export default function MiniappsPage({ profileId }: ModulePageProps) {
     [profileId, run],
   );
 
+  /**
+   * An assistant change reveals the tile it landed in (`miniapps.counter` names
+   * "tally", `miniapps.city` "worldclock"): the tile opens, and the document it
+   * shows is the one `setLastApp` answers with, which already holds the change.
+   * A reveal that names no tile is reported handled and changes nothing.
+   */
+  useEffect(() => {
+    if (intent?.kind === "reveal" && isMiniappsAppId(intent.item)) {
+      const app = intent.item;
+      void (async () => {
+        try {
+          const fresh = await window.nexus.modules.miniapps.setLastApp({ profileId, app });
+          setView(fresh);
+          setSeeded(true);
+          setOpen(app);
+          setRevision((count) => count + 1);
+          setError(null);
+        } catch (failure) {
+          setError(copy.errors.mutate);
+          console.error("Nexus: the mini apps could not open the tile a change landed in:", failure);
+        }
+      })();
+    }
+    if (intent !== null && intent !== undefined) onIntentHandled?.();
+  }, [intent, onIntentHandled, profileId]);
+
   useEffect(() => {
     if (open === null) return;
     const handler = (event: KeyboardEvent): void => {
@@ -115,9 +151,6 @@ export default function MiniappsPage({ profileId }: ModulePageProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, show]);
-
-  const appProps: MiniAppProps | null =
-    view === null ? null : { profileId, view, run };
 
   return (
     <div className="miniapps">
@@ -156,21 +189,19 @@ export default function MiniappsPage({ profileId }: ModulePageProps) {
             </button>
           ))}
         </div>
-      ) : appProps === null ? (
-        <EmptyState title={copy.page.loading} />
       ) : (
-        <>
+        <Fragment key={revision}>
           <h2 className="miniapps__app-title">{copy.apps[open].name}</h2>
           {open === "metronome" && <MetronomeApp />}
-          {open === "dice" && <DiceApp {...appProps} />}
-          {open === "tally" && <TallyApp {...appProps} />}
-          {open === "scoreboard" && <ScoreboardApp {...appProps} />}
-          {open === "typing" && <TypingApp {...appProps} />}
+          {open === "dice" && <DiceApp profileId={profileId} view={view} run={run} />}
+          {open === "tally" && <TallyApp profileId={profileId} view={view} run={run} />}
+          {open === "scoreboard" && <ScoreboardApp profileId={profileId} view={view} run={run} />}
+          {open === "typing" && <TypingApp profileId={profileId} view={view} run={run} />}
           {open === "dates" && <DatesApp />}
-          {open === "worldclock" && <WorldClockApp {...appProps} />}
+          {open === "worldclock" && <WorldClockApp profileId={profileId} view={view} run={run} />}
           {open === "screenlight" && <ScreenLightApp onLeave={() => show(null)} />}
           {open === "qr" && <QrApp />}
-        </>
+        </Fragment>
       )}
     </div>
   );

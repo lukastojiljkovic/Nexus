@@ -32,6 +32,8 @@ import type {
   FinCsvImportRowDropCode,
   FinCsvImportRowSkipCode,
   FinCsvImportSignConvention,
+  BookmarksImportReadErrorCode,
+  BookmarksImportSkipCode,
   IcsImportReadErrorCode,
   IcsImportSkipCode,
   ImportDuplicateType,
@@ -127,8 +129,17 @@ export const sr = {
      */
     overviewToggle: "Pregled",
     themeToggle: "Promeni temu",
+    assistantOpen: "Otvori asistenta uz ovu stranicu",
+    assistantClose: "Zatvori asistenta",
     themeDan: "Dan",
     themeNoc: "Noć",
+    /** The theme toggle's name stays put; `aria-pressed` says whether the dark theme is on. */
+    themeDark: "Tamna tema",
+    /** The rail could not re-read the device's module order (ADR-101). */
+    arrangementError: "Raspored modula na ovom uređaju nije moguće ponovo učitati.",
+    dismissNotice: "Zatvori",
+    /** The tooltip of a pinned row: the keyboard reorder that the shortcuts reference documents. */
+    pinnedMoveHint: "Alt+↑ i Alt+↓ pomeraju ovaj modul gore ili dole",
     /**
      * The drawn window frame (`TitleBar.tsx`). Three controls that used to be
      * the operating system's, so their names have to be the ones a Serbian
@@ -692,6 +703,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     createDemo: "Dodaj demo profil",
     createError: "Pravljenje profila nije uspelo. Pokušaj ponovo.",
+    /** The demo item's label while main is filling the profile, which takes a moment. */
+    creatingDemo: "Dodaje se demo profil…",
     /**
      * The passcode gate in front of EVERY switch (AUTH-024). The error map is
      * the lock screen's own (`authErrorMessage`), never respelled here — a
@@ -859,6 +872,38 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       title: "Tvoje stručne alatke",
       empty: "Nijedan paket još nije uključen",
     },
+    /**
+     * NTF's centre, as a card: the reminders that are waiting on the user. The
+     * rows are what the centre HOLDS — a reminder that has not fired yet is not
+     * in the ledger, so the card cannot list it.
+     */
+    reminders: {
+      title: "Podsetnici",
+      empty: "Nema podsetnika na čekanju",
+    },
+    /** The palette's own quick-creates, as buttons (`searchCommands.ts`); the labels are the palette's. */
+    quickActions: {
+      title: "Brze radnje",
+      capture: "Brzi unos",
+    },
+    /**
+     * Two small charts over the last seven days, from data the stores already
+     * hold: completed tasks (by the day they were completed) and focus time
+     * (by the day each session started). A day with nothing is a measured zero.
+     */
+    stats: {
+      title: "Statistika",
+      tasks: {
+        heading: "Završeni zadaci",
+        lead: "Završeni zadaci u poslednjih 7 dana",
+        empty: "Grafik se crta čim se u poslednjih 7 dana završi bar jedan zadatak.",
+      },
+      focus: {
+        heading: "Fokus",
+        lead: "Fokus u poslednjih 7 dana",
+        empty: "Grafik se crta čim se u poslednjih 7 dana zabeleži bar jedna sesija fokusa.",
+      },
+    },
     /** FIN slice d: what the subscriptions' rules say is coming — never a row, always the schedule. */
     renewals: {
       title: "Predstojeće naplate",
@@ -945,6 +990,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
     /** The layout itself could not be read — the one failure that is the page's own. */
     layoutError: "Raspored kartica se ne može učitati.",
+    /** Naziv okidača za dodatne radnje ispod 900px, koji sklapa zupčanik podešavanja. */
+    moreActions: "Još radnji",
     /** Edit mode (ADR-045 section 5) — the header actions and each card's „⋯“ menu. */
     /**
      * The board with no cards on it, and the board still being read. Until
@@ -1240,7 +1287,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     emptyTitle: "Nema zadataka",
     emptyDescription:
       "Zapiši prvi zadatak u polje iznad — dovoljno je ime i Enter.",
-    loadError: "Zadaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadFailedTitle: "Zadaci nisu učitani",
+    loadError: "Zadaci se nisu mogli pročitati. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     editLabel: "Izmeni zadatak",
     deleteLabel: "Obriši zadatak",
     /** The per-row „⋯“ menu: tags to attach plus „Sačuvaj kao šablon“, so its name is the row, not one of them. */
@@ -1279,6 +1328,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      */
     startDateLabel: "Počinje",
     priorityLabel: "Prioritet",
+    descriptionLabel: "Opis (opciono)",
+    /** The row marker that a task carries a description; the text itself is read in the form. */
+    descriptionChip: "Opis",
+    descriptionChipTitle: "Zadatak ima opis",
     save: "Sačuvaj",
     cancel: "Otkaži",
     /**
@@ -1804,6 +1857,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     newNote: "Nova beleška",
     untitled: "Bez naslova",
     listEmptyTitle: "Nema beležaka",
+    loadFailedTitle: "Beleške nisu mogle da se učitaju",
+    retry: "Pokušaj ponovo",
     listEmptyDescription:
       "Kreiraj prvu belešku dugmetom iznad — piše se u editoru sa desne strane.",
     noSelectionTitle: "Nijedna beleška nije izabrana",
@@ -1820,9 +1875,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     duplicate: "Dupliraj",
     duplicateError: "Dupliranje beleške nije uspelo. Pokušaj ponovo.",
     duplicateTooLarge: "Beleška je prevelika da bi se duplirala odjednom.",
+    visualize: "Vizuelizuj na tabli",
+    visualizeError: "Belešku nije bilo moguće nacrtati na tabli. Pokušaj ponovo.",
     undo: "Vrati",
     dismiss: "Zatvori",
-    loadError: "Beleške se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadError: "Beleške se trenutno ne mogu učitati.",
     editorLoadError: "Beleška se ne može učitati. Pokušaj ponovo.",
     saveError: "Čuvanje beleške nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
     saveTooLarge:
@@ -2282,6 +2339,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** A row whose sealed container no longer opens: named, dead, honest. */
       unreadable: "Nečitljiva beleška",
       loadError: "Privatne beleške se trenutno ne mogu učitati. Pokušaj ponovo.",
+      loadErrorTitle: "Privatne beleške nisu učitane",
+      retry: "Pokušaj ponovo",
       noSelectionTitle: "Nijedna beleška nije izabrana",
       noSelectionDescription: "Izaberi belešku sa leve strane ili napravi novu.",
       deleteLabel: "Obriši",
@@ -2291,6 +2350,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** The private editor's own surfaces — save channel, attachments, the honest v1 limits. */
     editor: {
       loadError: "Beleška se ne može otvoriti. Pokušaj ponovo.",
+      loadErrorTitle: "Beleška nije otvorena",
+      retry: "Pokušaj ponovo",
       saveError: "Čuvanje nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
       saveTooLarge: "Beleška je prevelika da bi se sačuvala. Skrati je ili podeli na više beležaka.",
       attachmentsTitle: "Prilozi",
@@ -2314,6 +2375,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         restore: "Vrati ovu verziju",
         restoreNote: "Trenutno stanje se čuva kao verzija pre vraćanja, pa je i ovaj korak povratan.",
         error: "Radnja nad verzijama nije uspela. Pokušaj ponovo.",
+        loadError: "Verzije nisu učitane. Pokušaj ponovo.",
         /** The preview column's label for the selected version's own title. */
         previewLabel: "Naslov u ovoj verziji",
       },
@@ -2327,6 +2389,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     clipboard: {
       notice: "Kopirano — klipbord se briše za 30 s ako je Nexus tada u prvom planu.",
       cancel: "Zadrži u klipbordu",
+      dismiss: "Zatvori",
     },
     /** Typed-confirm HARD delete — no trash, no undo, and the copy says so before the field. */
     deleteDialog: {
@@ -2413,6 +2476,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * finance year field — an optional field says so in its own name.
      */
     locationLabel: "Mesto (opciono)",
+    notesLabel: "Beleške (opciono)",
+    categoryLabel: "Kategorija (opciono)",
     allDay: "Ceo dan",
     add: "Dodaj",
     save: "Sačuvaj",
@@ -2420,8 +2485,10 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     editLabel: "Izmeni događaj",
     deleteLabel: "Obriši događaj",
     emptyTitle: "Nema događaja",
+    loadFailedTitle: "Događaji nisu učitani",
     emptyDescription: "Dodaj prvi događaj u formi iznad — naziv i datum su dovoljni.",
-    loadError: "Događaji se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadError: "Događaji se trenutno ne mogu učitati.",
+    retry: "Pokušaj ponovo",
     deletedNotice: "Događaj obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
@@ -2613,7 +2680,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       deleteLabel: "Obriši osobu",
       emptyTitle: "Nema ljudi",
       emptyDescription: "Dodaj prvu osobu u formi iznad — ime, vrsta i datum su dovoljni.",
-      loadError: "Ljudi se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+      loadFailedTitle: "Ljudi nisu učitani",
+      loadError: "Ljudi se trenutno ne mogu učitati.",
+      retry: "Pokušaj ponovo",
       /** Client-side guard mirroring PeopleStore's own (month, day) pair check. */
       invalidDate: "Taj datum ne postoji ni u jednom mesecu.",
       saveError: "Osoba nije sačuvana. Pokušaj ponovo.",
@@ -2722,7 +2791,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     emptyTitle: "Nema dokumenata",
     emptyDescription:
       "Dodaj prvi dokument u formi iznad — vrsta, naziv i datum isteka su dovoljni.",
-    loadError: "Dokumenti se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadFailedTitle: "Dokumenti nisu učitani",
+    loadError: "Dokumenti se trenutno ne mogu učitati.",
+    retry: "Pokušaj ponovo",
     deletedNotice: "Dokument obrisan",
     undo: "Vrati",
     dismiss: "Zatvori",
@@ -2892,9 +2963,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     noMatchDescription: "Promeni pretragu ili isključi neki filter.",
     clearFilters: "Poništi filtere",
     /** The isolated failure of this one read, with the way to ask again — the dashboard widgets' recipe. */
+    failureTitle: "Datoteke nisu dostupne",
     error: "Datoteke se trenutno ne mogu učitati.",
     retry: "Pokušaj ponovo",
     actionError: "Radnja nad datotekom nije uspela. Pokušaj ponovo.",
+    dismiss: "Zatvori",
   },
 
   study: {
@@ -2960,6 +3033,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * empty. Four other fields took the same parenthesis on the same day.
      */
     semesterLabel: "Semestar (opciono)",
+    /** Prazno nasleđuje; u polju stoji vrednost koja važi. Deli se među predmetima i špilovima. */
+    retentionOverrideLabel: "Ciljana zapamćenost (prazno nasleđuje)",
+    retentionProblem: "Ciljana zapamćenost mora biti između 0,70 i 0,97.",
     colorLabel: "Boja",
     /** Colour-dot names, keyed by subject colour value (labels are presentation). */
     color: {
@@ -2983,7 +3059,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     emptyTitle: "Nema predmeta",
     /** „u formi iznad" until the form moved behind „Dodaj predmet" — the sentence had to stop pointing at a form nobody can see. */
     emptyDescription: "Dodaj prvi predmet — naziv je dovoljan.",
-    loadError: "Predmeti se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadError: "Podaci o učenju se trenutno ne mogu učitati. Pokušaj ponovo.",
+    loadFailedTitle: "Učenje nije moguće učitati",
+    retry: "Pokušaj ponovo",
     showArchived: "Prikaži arhivirano",
     hideArchived: "Sakrij arhivirano",
     noExams: "Nema zakazanih ispita za ovaj predmet.",
@@ -3117,7 +3195,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     cardsEmptyTitle: "Nema kartica",
     /** The card form is BELOW this empty state, never above it — the sentence used to point the wrong way. */
     cardsEmptyDescription: "Dodaj prvu karticu — prednja i zadnja strana su dovoljne.",
-    loadCardsError: "Kartice se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadCardsError: "Kartice se trenutno ne mogu učitati. Pokušaj ponovo.",
+    cardsLoadFailedTitle: "Kartice nije moguće učitati",
     addCard: "Dodaj karticu",
     saveCard: "Sačuvaj",
     cancelCard: "Otkaži",
@@ -3603,7 +3682,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       emptyReason: "Linija se crta čim u ovom mesecu postoji bar jedna stavka.",
     },
     loadErrorTitle: "Finansije nisu učitane",
-    loadError: "Učitavanje finansija nije uspelo. Zatvori i ponovo otvori stranicu.",
+    loadError: "Učitavanje finansija nije uspelo. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     /** The one line every failed write falls back to when `financeErrorMessage` recognizes nothing more specific. */
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
@@ -3945,7 +4025,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    */
   habits: {
     loadErrorTitle: "Navike nisu učitane",
-    loadError: "Učitavanje navika nije uspelo. Zatvori i ponovo otvori stranicu.",
+    loadError: "Učitavanje navika nije uspelo. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     /** The one line every failed write falls back to when `habitErrorMessage` recognizes nothing more specific. */
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
@@ -4215,7 +4296,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       emptyReason: "Trake se crtaju čim danas postoji bar jedna završena faza.",
     },
     loadErrorTitle: "Fokus nije učitan",
-    loadError: "Učitavanje fokusa nije uspelo. Zatvori i ponovo otvori stranicu.",
+    loadError: "Učitavanje fokusa nije uspelo. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
     dismiss: "Zatvori",
@@ -5613,6 +5695,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     undo: "Opozovi",
     deletedNotice: "Tabla je obrisana.",
     dismiss: "Zatvori",
+    deleteTitle: "Obrisati ovu tablu?",
+    deleteQuestion: "Tabla nestaje sa spiska, zajedno sa svim što je na njoj nacrtano.",
+    /** What stays true after the answer: the offer that follows the delete takes it back. */
+    deleteNote: "Ponuda Opozovi posle brisanja vraća tablu.",
+    /** The name of the overflow trigger that holds Rename and Delete below 900px. */
+    moreActions: "Još radnji",
     /** The mermaid action — see this section's own header for why it is a button. */
     mermaid: "Mermaid dijagram",
     mermaidTitle: "Napiši mermaid definiciju i pretvori je u oblike koje možeš dalje uređivati.",
@@ -5873,12 +5961,13 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notifications: "Obaveštenja",
       backup: "Rezervna kopija i vraćanje",
       /**
-       * The eight sub-pages of „Uvoz i izvoz" (SET-015). The text is the one
+       * The nine sub-pages of „Uvoz i izvoz" (SET-015). The text is the one
        * the block inside each already draws, so a list row and its card name
        * the same thing rather than two spellings of it.
        */
       "import-archive": "Uvoz iz arhive",
       "import-ics": "Uvoz kalendara (.ics)",
+      "import-bookmarks": "Uvoz obeleživača (.html)",
       "export-ics": "Izvoz kalendara",
       "import-apkg": "Uvoz iz Anki (.apkg)",
       "import-csv": "Uvoz zadataka (.csv)",
@@ -7291,6 +7380,41 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       undoBanner: "Događaji su uvezeni iz kalendara (.ics).",
     },
     /**
+     * Uvoz obeleživača (IMEX-007) — the browser's HTML export. Its own card,
+     * beside the calendar's, on the same pick → preview → apply flow.
+     */
+    bookmarksImport: {
+      title: "Uvoz obeleživača (.html)",
+      description:
+        "Uvezi obeleživače iz HTML fajla koji izvoze Chrome, Edge i Firefox. Svaka fascikla postaje jedna beleška sa spiskom linkova, a sve beleške dobijaju oznaku „Obeleživači“. Uvoz ništa ne briše. Dolaze samo http i https linkovi; ostalo se prebroji u pregledu pre uvoza. Uvoz možeš opozvati jednim klikom, ali samo dok ne zaključaš ili ne zatvoriš aplikaciju.",
+      pickButton: "Izaberi HTML fajl…",
+      previewRunning: "Čitanje obeleživača…",
+      columnSource: "U fajlu",
+      columnPlanned: "Uvozi se",
+      rowBookmarks: "Obeleživači",
+      rowFolders: "Beleške (fascikle)",
+      skipsTitle: "Šta se ne uvozi",
+      /** One sentence per `BookmarksImportSkipCode`. */
+      skips: {
+        "unsupported-url":
+          "Link nije http ili https adresa (javascript:, file:, data: i slične), pa se preskače.",
+      } satisfies Record<BookmarksImportSkipCode, string>,
+      /** One sentence per `BookmarksImportReadErrorCode`: the file could not be read at all. */
+      unreadable: {
+        "too-large": "Fajl prelazi bezbednosna ograničenja i zato je odbijen.",
+        "not-bookmarks": "Ovaj fajl nije izvoz obeleživača iz pregledača.",
+      } satisfies Record<BookmarksImportReadErrorCode, string>,
+      applyButton: "Uvezi",
+      applying: "Uvoz u toku…",
+      applied: "Obeleživači su uvezeni. Aplikacija se osvežava…",
+      readError: "Čitanje fajla nije uspelo. Pokušaj ponovo.",
+      error: "Uvoz nije uspeo. Pokušaj ponovo.",
+      noFileError: "Fajl više nije izabran. Izaberi ga ponovo.",
+      nothingToImport: "Iz ovog fajla nema šta da se uvede — razlozi su izlistani iznad.",
+      /** The post-reload banner (App.tsx) when the undo slot holds a bookmarks import. */
+      undoBanner: "Beleške su uvezene iz obeleživača.",
+    },
+    /**
      * Uvoz preko AI asistenta (IMEX-005) — the one block in this card whose
      * „reader" is a person and a chat window.
      *
@@ -8033,7 +8157,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     quickActionsGroup: "Brze radnje",
     emptyResults: "Nema rezultata.",
     /** Shown instead of `emptyResults` when the fetch itself rejected — a failure is not an empty result and must not read as one. */
-    searchError: "Pretraga trenutno ne radi. Pokušaj ponovo.",
+    searchError: "Pretraga trenutno ne radi.",
     hint: "↑↓ kretanje · Enter otvori · Esc zatvori",
     /**
      * SRCH-009: the profile's remembered QUERIES, which are a different list
@@ -8137,6 +8261,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** Shown instead of an exact count once candidate sourcing hit its bound. */
       truncatedNote: "Prikazano je prvih 500 rezultata — suzite pretragu za precizniji spisak.",
       showMore: "Prikaži još",
+      retry: "Pokušaj ponovo",
       emptyTitle: "Nema rezultata",
       emptyDescription: "Probajte drugu reč ili uklonite neki filter.",
     },
@@ -8200,14 +8325,19 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     dialogTitle: "Prečice na tastaturi",
     dialogClose: "Zatvori",
     groups: {
+      assistant: "Asistent",
       global: "Globalno",
       modules: "Moduli",
       palette: "Paleta",
+      rail: "Bočna traka",
       tasks: "Zadaci",
       calendar: "Kalendar",
       study: "Učenje",
       notes: "Beleške",
       notesFind: "Pretraga u belešci",
+      timers: "Tajmeri",
+      miniapps: "Mini aplikacije",
+      signals: "Signali",
     },
     /** The reserved Ctrl+1…Ctrl+9 family: positional, so it is described rather than named. */
     moduleNavLabel: "Prelazak na modul po redosledu",
@@ -8218,11 +8348,16 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notes: "Na početku reda u editoru beleški.",
       /** The find bar's keys work anywhere in the note, unlike the markdown shortcuts above them — hence a group of its own. */
       notesFind: "Dok je otvorena beleška; pretražuje samo nju.",
+      timers: "Na stranici tajmera, van polja za unos.",
+      miniapps: "Dok je mini aplikacija otvorena.",
+      signals: "Dok lampa prekriva ekran.",
     },
     reference: {
       paletteMove: "Kretanje kroz rezultate",
       paletteOpen: "Otvori rezultat ili pokreni komandu",
       paletteClose: "Zatvori paletu",
+      railMove: "Pomeri prikačeni modul gore ili dole",
+      assistantDock: "Otvori ili zatvori asistenta uz ovu stranicu",
       tasksSubtask: "Dodaj podzadatak iz reda za unos",
       tasksCancel: "Otkaži unos u redu ili zatvori pitanje",
       tasksExitSelection: "Izađi iz režima Izbor",
@@ -8245,6 +8380,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notesFindOpen: "Otvori traku za pretragu u belešci",
       notesFindStep: "Sledeći ili prethodni rezultat",
       notesFindClose: "Zatvori traku i vrati kursor na rezultat",
+      timersStartPause: "Pokreni ili pauziraj štopericu",
+      timersLap: "Zabeleži krug",
+      timersReset: "Resetuj štopericu",
+      miniappsClose: "Zatvori otvorenu mini aplikaciju",
+      signalsLampStop: "Ugasi Morzeovu lampu",
     },
   },
 } as const;

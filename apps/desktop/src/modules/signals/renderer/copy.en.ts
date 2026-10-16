@@ -11,11 +11,14 @@ import { sr } from "./copy.sr.js";
 export const en: typeof sr = {
   page: {
     subtitle:
-      "Morse, an ASCII table, a tuner and a sound meter: the microphone opens only when one is started.",
+      "Morse, an ASCII table, the NATO alphabet, Braille, the periodic table, a tuner and a sound meter: the microphone opens only when one is started.",
   },
   tabs: {
     morse: "Morse",
     ascii: "ASCII",
+    nato: "NATO",
+    braille: "Braille",
+    elements: "Periodic table",
     tuner: "Tuner",
     meter: "Sound meter",
   },
@@ -144,6 +147,47 @@ export const en: typeof sr = {
     historyEmpty: "No measured second yet.",
     historyCaption: "A {count}-second window; the line is the level, the hairline the held peak.",
     peakRule: "held peak",
+  },
+  textCode: {
+    textLabel: "Text",
+    codeLabel: "Code",
+    toCode: "To code",
+    toText: "To text",
+    transliterated: "Not sent as written:",
+    unsupported: "Cannot be sent:",
+    unknown: "Unknown in the code:",
+  },
+  nato: {
+    title: "NATO alphabet",
+    hint: "Each letter is one word and each digit has its own word. A slash separates the words of the text. The spelling is ICAO's: Alfa, Juliett.",
+  },
+  braille: {
+    title: "Braille",
+    hint: "Grade 1: letters, digits and the space. A capital has dot 6 in front, and a number starts with the numeric sign. Serbian Braille has its own cells for the letters with diacritics; here those letters are sent as Latin letters.",
+  },
+  elements: {
+    title: "Periodic table",
+    hint: "The data is from PubChem. Position is group and period; the lanthanides and actinides are below the table.",
+    nameNote: "Element names are in English: no Serbian names are shown in this table.",
+    symbol: "Symbol",
+    number: "Atomic number",
+    mass: "Atomic mass (u)",
+    group: "Group",
+    period: "Period",
+    category: "Category",
+    noGroup: "no group (f-block)",
+    categories: {
+      "alkali-metal": "Alkali metals",
+      "alkaline-earth-metal": "Alkaline earth metals",
+      "transition-metal": "Transition metals",
+      "post-transition-metal": "Post-transition metals",
+      metalloid: "Metalloids",
+      nonmetal: "Nonmetals",
+      halogen: "Halogens",
+      "noble-gas": "Noble gases",
+      lanthanide: "Lanthanides",
+      actinide: "Actinides",
+    },
   },
   settings: {
     speedCaption:

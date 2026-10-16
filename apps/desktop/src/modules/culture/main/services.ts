@@ -25,6 +25,8 @@ export interface CultureServices {
   readBlob(sha256: string): Promise<Uint8Array | null>;
   /** Unlinks a blob once `refCount` says nothing names it any more. */
   deleteBlobIfOrphaned(sha256: string, refCount: number): Promise<void>;
+  /** Hands a blob to the OS's own viewer under its file name, as the notes' "Otvori" does. */
+  openBlob(sha256: string, fileName: string): Promise<void>;
   /**
    * Main's own union count across EVERY table that names a hash, at the moment
    * it is asked. This module contributes its two tables through the store

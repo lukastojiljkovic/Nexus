@@ -1,4 +1,4 @@
-import type { AppLocation, Citation } from "@nexus/core";
+import type { AgentErrorCode, AppLocation, Citation } from "@nexus/core";
 import type { AssistantMessageView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 
@@ -20,6 +20,10 @@ import { copy } from "./copy.js";
  * ONE `tools` item holding one line per call. An assistant message with visible
  * text ends the run: the answer is what the person came for, and the tool rows
  * above it belong to the step that produced it.
+ *
+ * **What a turn that failed says is here too.** The loop's own error codes mean
+ * nothing to a reader ("step-limit"), so each one is a sentence this module's
+ * copy carries, in the words the sentence is read in.
  */
 
 /** One line of tool activity: what was asked, and what came back. */
@@ -190,16 +194,45 @@ export interface ToolLineView {
  * sentence about it.
  */
 export function toolLineView(line: ThreadToolLine): ToolLineView {
-  // Read at call time and widened once: a tool name is a value the model wrote,
-  // not one of the map's own keys - so only an OWN key counts, or a call named
-  // `constructor` would draw Object's function as its label.
-  const labels: Readonly<Record<string, string>> = copy.thread.tools.labels;
-  const known = line.name !== null && Object.hasOwn(labels, line.name);
   return {
-    label: line.name === null ? copy.thread.tools.unnamed : known ? (labels[line.name] ?? line.name) : line.name,
+    label: toolLabel(line.name),
     state: line.ok === null ? "running" : line.ok ? "done" : "failed",
     detail: line.text,
   };
+}
+
+/**
+ * A tool's name as a person reads it: its action in the copy table, the name as it
+ * stands when this build cannot name it, or the unnamed label for a call the thread
+ * no longer holds.
+ */
+export function toolLabel(name: string | null): string {
+  // Read at call time and widened once: a tool name is a value the model wrote,
+  // not one of the map's own keys - so only an OWN key counts, or a call named
+  // `constructor` would draw Object's function as its label.
+  if (name === null) return copy.thread.tools.unnamed;
+  const labels: Readonly<Record<string, string>> = copy.thread.tools.labels;
+  return Object.hasOwn(labels, name) ? (labels[name] ?? name) : name;
+}
+
+/**
+ * What the thread says when a turn ended without an answer: the loop's own code,
+ * in one sentence the user can act on.
+ *
+ * **Why a code is not enough.** `step-limit`, `context-full` and `tool-failed`
+ * are the loop's words for what happened to a turn it could not finish, and the
+ * page used to draw only `aborted` - so every other way a turn could die left
+ * the reader looking at a thread that simply stopped, with nothing to tell a full
+ * context from a crash. The copy table is keyed BY the code, so a code added to
+ * `AgentErrorCode` and given no sentence is a compile error here and in the
+ * English table (`copy.en.ts` is typed by the Serbian one).
+ *
+ * The sentence for `aborted` is the one the page has always drawn for the user's
+ * own Stop, and it stays that sentence: a stop the user asked for is not a
+ * failure to explain.
+ */
+export function turnErrorSentence(code: AgentErrorCode): string {
+  return copy.thread.errors[code];
 }
 
 /** Where clicking a citation takes the user. */
@@ -221,12 +254,33 @@ export type CitationTarget =
  * address the web service stores in `id` and `locator`). Everything else is
  * text: a note, a task or a pack article that the knowledge base did not give a
  * location for has no surface to open, and a link that goes nowhere is worse
- * than none.
+ * than none. A place is handed on with any action stripped from it
+ * (`withoutAction`): a citation is a link to somewhere, never an instruction.
  */
 export function citationTarget(citation: Citation): CitationTarget {
-  if (citation.location !== undefined) return { kind: "app", location: citation.location };
+  if (citation.location !== undefined) {
+    return { kind: "app", location: withoutAction(citation.location) };
+  }
   const url = asHttpsUrl(citation.id) ?? asHttpsUrl(citation.locator ?? "");
   return url === null ? { kind: "none" } : { kind: "web", url };
+}
+
+/**
+ * A citation's place, with any action stripped from it.
+ *
+ * A citation is a link to where an answer came from, and `AppAction` is a
+ * request to CHANGE something - two things that must not travel as one: a link
+ * that acted when it was clicked would be a command wearing a link's shape, and
+ * a citation is what a stored thread replays. Nothing writes an action into a
+ * citation's location today; this is the guard that keeps one from acting if it
+ * ever did, at the single point a citation's location is handed to the shell.
+ */
+function withoutAction(location: AppLocation): AppLocation {
+  if (location.action === undefined) return location;
+  const place: { module: string; item?: string; settings?: string } = { module: location.module };
+  if (location.item !== undefined) place.item = location.item;
+  if (location.settings !== undefined) place.settings = location.settings;
+  return place;
 }
 
 /** The first line of a tool result, trimmed - what the quiet row shows. */

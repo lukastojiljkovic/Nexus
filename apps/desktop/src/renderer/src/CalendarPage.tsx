@@ -1,16 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import {
+  AsyncSurface,
   Button,
   Checkbox,
   Chip,
   EmptyState,
   Icon,
   ListRow,
-  LoadingState,
+  Notice,
   PageHeader,
+  TextArea,
   TextField,
+  Toast,
 } from "@nexus/ui";
+import type { AsyncState } from "@nexus/ui";
 import { isValidDayKey, monthKeyOf, shiftDayKey, shiftMonthKey, weekDayKeys } from "@nexus/core";
 import type { WeekStart } from "@nexus/core";
 import { MAX_EVENT_TEMPLATE_NAME_LENGTH } from "../../shared/ipc.js";
@@ -32,6 +36,7 @@ import type {
 } from "../../shared/ipc.js";
 import { CalendarMiniMonth } from "./CalendarMiniMonth.js";
 import { CalendarMonth, ForeignMark } from "./CalendarMonth.js";
+import { categorySuggestions, optionalText } from "./formFields.js";
 import { profileDisplayName } from "./profilePrefs.js";
 import { CalendarTimeGrid } from "./CalendarTimeGrid.js";
 import type { TimedEventDragTarget } from "./CalendarTimeGrid.js";
@@ -251,6 +256,10 @@ interface EditedEventFields {
   /** Timed events only; null clears a stored end time (all-day never sends one). */
   endAt: string | null;
   location: string | null;
+  /** Null clears the stored notes, the same as `location`. */
+  description: string | null;
+  /** Null clears the stored category; the field suggests the ones already in use. */
+  category: string | null;
   recurrence: RecurrenceRule | null;
   /** Lead times in whole minutes (CAL-006); empty clears every reminder. */
   reminderOffsets: number[];
@@ -292,8 +301,9 @@ type PendingSeries =
  * occurrence is detached or a series restarted. Editing an existing event
  * normally leaves everything the form does not show alone, but these two flows
  * CREATE a row, so whatever the form cannot express has to be carried across
- * explicitly or it is lost: the description, the category, and the day span of
- * a multi-day all-day event (which has no end field in this form at all).
+ * explicitly or it is lost: the day span of a multi-day all-day event (which
+ * has no end field in this form at all). The notes and the category are fields
+ * of the form now, so they travel with the fields like the reminders do.
  */
 function newEventFields(
   fields: EditedEventFields,
@@ -310,10 +320,10 @@ function newEventFields(
     reminderOffsets: fields.reminderOffsets,
   };
   if (fields.location !== null) payload.location = fields.location;
+  if (fields.description !== null) payload.description = fields.description;
+  if (fields.category !== null) payload.category = fields.category;
   if (!fields.allDay && fields.endAt !== null) payload.endAt = fields.endAt;
   if (carry !== null) {
-    if (carry.description !== null) payload.description = carry.description;
-    if (carry.category !== null) payload.category = carry.category;
     if (fields.allDay && carry.endAt !== null) {
       const span = daysBetweenKeys(carry.startAt.slice(0, 10), carry.endAt.slice(0, 10));
       if (span > 0) payload.endAt = shiftDayKey(fields.date, span);
@@ -455,6 +465,8 @@ export function CalendarPage({
       ? { start: term.semesterStart, end: term.semesterEnd }
       : null;
   const [failed, setFailed] = useState(false);
+  // Bumped by the retry button: the load effect runs again from the top.
+  const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<CalendarView>(() => readStoredCalendarView(profileId));
   const [sources, setSources] = useState<ReadonlySet<CalendarSource>>(() =>
     readStoredSources(profileId),
@@ -513,6 +525,9 @@ export function CalendarPage({
   // already somebody's answer.
   const [endTimeTouched, setEndTimeTouched] = useState(false);
   const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const categoryListId = useId();
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
@@ -600,7 +615,12 @@ export function CalendarPage({
     return () => {
       active = false;
     };
-  }, [profileId]);
+  }, [profileId, attempt]);
+
+  function retryLoad(): void {
+    setFailed(false);
+    setAttempt((count) => count + 1);
+  }
 
   function selectView(next: CalendarView): void {
     setView(next);
@@ -657,6 +677,8 @@ export function CalendarPage({
     setEndTime("");
     setEndTimeTouched(false);
     setLocation("");
+    setDescription("");
+    setCategory("");
     setRecurrence(null);
     setReminderOffsets([]);
     setFormError(null);
@@ -692,6 +714,10 @@ export function CalendarPage({
     // answer, so moving the start of an existing event never rewrites it.
     setEndTimeTouched(true);
     setLocation(event.location ?? "");
+    // Notes and category belong to the stored row too, so they are read off the
+    // master, like the reminders below.
+    setDescription(master.description ?? "");
+    setCategory(master.category ?? "");
     setRecurrence(master.recurrence);
     // Reminders belong to the stored row, so they are read off the master —
     // the occurrence copy carries them, but the master is what a write reaches.
@@ -949,6 +975,8 @@ export function CalendarPage({
       // nulling whatever end DATE a multi-day all-day event might carry.
       endAt: !allDay && trimmedEndTime.length > 0 ? `${date}T${trimmedEndTime}` : null,
       location: trimmedLocation.length > 0 ? trimmedLocation : null,
+      description: optionalText(description),
+      category: optionalText(category),
       recurrence,
       reminderOffsets,
     };
@@ -968,6 +996,8 @@ export function CalendarPage({
           startAt: fields.startAt,
           allDay: fields.allDay,
           location: fields.location,
+          description: fields.description,
+          category: fields.category,
           recurrence: fields.recurrence,
           reminderOffsets: fields.reminderOffsets,
         };
@@ -1040,6 +1070,8 @@ export function CalendarPage({
         startAt: fields.allDay ? masterDay : `${masterDay}T${fields.time}`,
         allDay: fields.allDay,
         location: fields.location,
+        description: fields.description,
+        category: fields.category,
         recurrence: fields.recurrence,
         reminderOffsets: fields.reminderOffsets,
       };
@@ -1398,12 +1430,73 @@ export function CalendarPage({
             ? formatSemesterLabel(semesterMonths)
             : "";
 
+  const loadState: AsyncState<null> = failed
+    ? { status: "failed" }
+    : dataLoading
+      ? { status: "loading" }
+      : { status: "ready", data: null };
+
   return (
     <div className="cal">
       <PageHeader
         title={moduleName("calendar")}
         sigil="calendar"
         actions={<ModuleSettingsGear moduleId="calendar" />}
+        filters={
+          <>
+            {/* Both switcher rows carry a VISIBLE label now. They had identical
+                treatments and sat directly on top of each other, so „which view"
+                and „which calendars" looked like one control that had wrapped —
+                the only thing telling them apart was an `aria-label` nobody sees
+                (STATUS §5 C item 15). They are the page's filter row, so they sit
+                in the header's `filters` slot and collapse with the title. */}
+            <div className="cal__views" role="group" aria-labelledby="cal-views-label">
+              <span className="cal__reminders-label" id="cal-views-label">
+                {strings.calendar.viewLabel}
+              </span>
+              {CALENDAR_VIEWS.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  className="nx-segmented__option cal__view"
+                  aria-pressed={view === option}
+                  onClick={() => selectView(option)}
+                >
+                  {viewLabel()[option]}
+                </Button>
+              ))}
+            </div>
+
+            {!isPanelView(view) && (
+              <div className="cal__sources" role="group" aria-labelledby="cal-sources-label">
+                <span className="cal__reminders-label" id="cal-sources-label">
+                  {strings.calendar.sourcesLabel}
+                </span>
+                {CALENDAR_SOURCES
+                  // The overlay chip exists only when the account has another
+                  // profile to overlay (CAL-005) — with one profile there is
+                  // nothing for it to say.
+                  .filter((source) => source !== "overlay" || overlayProfile !== null)
+                  .map((source) => (
+                    <Button
+                      key={source}
+                      size="sm"
+                      className="nx-segmented__option cal__source"
+                      aria-pressed={sources.has(source)}
+                      onClick={() => toggleSource(source)}
+                    >
+                      {source === "overlay"
+                        ? // Labelled by what it SHOWS: the OTHER profile's calendar.
+                          overlayProfile?.kind === "business"
+                          ? strings.calendar.sourceOverlayBusiness
+                          : strings.calendar.sourceOverlayPrivate
+                        : sourceLabel()[source]}
+                    </Button>
+                  ))}
+              </div>
+            )}
+          </>
+        }
       />
       {pendingSeries !== null && (
         <RecurrenceScopeDialog
@@ -1450,64 +1543,11 @@ export function CalendarPage({
           </div>,
         )}
 
-      {/* Both switcher rows carry a VISIBLE label now. They had identical
-          treatments and sat directly on top of each other, so „which view"
-          and „which calendars" looked like one control that had wrapped —
-          the only thing telling them apart was an `aria-label` nobody sees
-          (STATUS §5 C item 15). */}
-      <div className="cal__views" role="group" aria-labelledby="cal-views-label">
-        <span className="cal__reminders-label" id="cal-views-label">
-          {strings.calendar.viewLabel}
-        </span>
-        {CALENDAR_VIEWS.map((option) => (
-          <Button
-            key={option}
-            size="sm"
-            className="nx-segmented__option cal__view"
-            aria-pressed={view === option}
-            onClick={() => selectView(option)}
-          >
-            {viewLabel()[option]}
-          </Button>
-        ))}
-      </div>
-
-      {!isPanelView(view) && (
-        <div className="cal__sources" role="group" aria-labelledby="cal-sources-label">
-          <span className="cal__reminders-label" id="cal-sources-label">
-            {strings.calendar.sourcesLabel}
-          </span>
-          {CALENDAR_SOURCES
-            // The overlay chip exists only when the account has another
-            // profile to overlay (CAL-005) — with one profile there is
-            // nothing for it to say.
-            .filter((source) => source !== "overlay" || overlayProfile !== null)
-            .map((source) => (
-              <Button
-                key={source}
-                size="sm"
-                className="nx-segmented__option cal__source"
-                aria-pressed={sources.has(source)}
-                onClick={() => toggleSource(source)}
-              >
-                {source === "overlay"
-                  ? // Labelled by what it SHOWS: the OTHER profile's calendar.
-                    overlayProfile?.kind === "business"
-                    ? strings.calendar.sourceOverlayBusiness
-                    : strings.calendar.sourceOverlayPrivate
-                  : sourceLabel()[source]}
-              </Button>
-            ))}
-        </div>
-      )}
-
       {/* Quiet, inline and non-blocking: the profile's own calendar is
           unaffected by an overlay fetch failing — the guests just say why
           they are missing. */}
       {overlayFailed && overlayOn && (
-        <p className="nx-hint" role="status">
-          {strings.calendar.overlay.loadError}
-        </p>
+        <Notice kind="warning" message={strings.calendar.overlay.loadError} />
       )}
 
       {view === "dokumenta" ? (
@@ -1592,6 +1632,28 @@ export function CalendarPage({
               value={location}
               label={strings.calendar.locationLabel}
               onChange={(event) => setLocation(event.target.value)}
+            />
+            {/* The category is free text with suggestions, not a closed select:
+                CAL ships no category list, so a select would offer nothing on a
+                fresh profile and make the first category impossible to set. */}
+            <TextField
+              type="text"
+              list={categoryListId}
+              value={category}
+              label={strings.calendar.categoryLabel}
+              onChange={(event) => setCategory(event.target.value)}
+            />
+            <datalist id={categoryListId}>
+              {categorySuggestions(events ?? []).map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <TextArea
+              className="cal__notes"
+              label={strings.calendar.notesLabel}
+              rows={3}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
             />
             <Checkbox checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>
               {strings.calendar.allDay}
@@ -1772,298 +1834,325 @@ export function CalendarPage({
             )}
           </form>
 
-          {pendingUndoId != null && (
-            <div className="cal__undo" role="status">
-              <span className="cal__undo-text">{strings.calendar.deletedNotice}</span>
-              <Button size="sm" className="cal__undo-action" onClick={() => void undo()}>
-                {strings.calendar.undo}
-              </Button>
-              <Button
-                size="sm"
-                className="cal__undo-dismiss"
-                aria-label={strings.calendar.dismiss}
-                onClick={() => setPendingUndoId(null)}
-              >
-                <Icon name="close" size={14} />
-              </Button>
-            </div>
-          )}
-
-          {actionError != null && (
-            <p className="cal__form-error" role="status">
-              {actionError}
-            </p>
-          )}
-
-          {failed ? (
-            <EmptyState
-              sigil="calendar"
-              title={strings.calendar.emptyTitle}
-              description={strings.calendar.loadError}
+          {/* The page's one announcement slot. A failed action takes it, and
+              the undo offer for the last delete stands behind it until the
+              failure is dismissed: the offer was never withdrawn, only covered. */}
+          {actionError != null ? (
+            <Toast
+              message={actionError}
+              kind="error"
+              dismissLabel={strings.calendar.dismiss}
+              onDismiss={() => setActionError(null)}
             />
-          ) : dataLoading ? (
-            <LoadingState label={strings.app.loading} rows={6} />
-          ) : isGridView ? (
-            <div className="cal__month" onKeyDown={handleGridKeyDown}>
-              <div className="cal__month-nav">
-                <span className="cal__month-label">{periodLabel}</span>
-                <span className="cal__month-nav-actions">
-                  {/* A SET term does not slide (ADR-054): Semestar is anchored
-                      to its dates, so the month arrows are disabled there —
-                      and only there. */}
-                  <Button
-                    size="sm"
-                    aria-label={strings.calendar.prevPeriod}
-                    disabled={view === "semestar" && activeTerm !== null}
-                    onClick={() => shiftPeriod(-1)}
-                  >
-                    <Icon name="chevronLeft" size={14} />
-                  </Button>
-                  <Button size="sm" onClick={goToday}>
-                    {strings.calendar.today}
-                  </Button>
-                  <Button
-                    size="sm"
-                    aria-label={strings.calendar.nextPeriod}
-                    disabled={view === "semestar" && activeTerm !== null}
-                    onClick={() => shiftPeriod(1)}
-                  >
-                    <Icon name="chevronRight" size={14} />
-                  </Button>
-                </span>
+          ) : pendingUndoId != null ? (
+            <Toast
+              message={strings.calendar.deletedNotice}
+              undo={{ label: strings.calendar.undo, onUndo: () => void undo() }}
+              dismissLabel={strings.calendar.dismiss}
+              onDismiss={() => setPendingUndoId(null)}
+            />
+          ) : null}
+
+          <AsyncSurface
+            state={loadState}
+            loadingLabel={strings.app.loading}
+            loadingRows={6}
+            failureTitle={strings.calendar.loadFailedTitle}
+            failureMessage={strings.calendar.loadError}
+            retry={{ label: strings.calendar.retry, onClick: retryLoad }}
+          >
+            {() => (isGridView ? (
+              <div className="cal__month" onKeyDown={handleGridKeyDown}>
+                <div className="cal__month-nav">
+                  <span className="cal__month-label">{periodLabel}</span>
+                  <span className="cal__month-nav-actions">
+                    {/* A SET term does not slide (ADR-054): Semestar is anchored
+                        to its dates, so the month arrows are disabled there —
+                        and only there. */}
+                    <Button
+                      size="sm"
+                      aria-label={strings.calendar.prevPeriod}
+                      disabled={view === "semestar" && activeTerm !== null}
+                      onClick={() => shiftPeriod(-1)}
+                    >
+                      <Icon name="chevronLeft" size={14} />
+                    </Button>
+                    <Button size="sm" onClick={goToday}>
+                      {strings.calendar.today}
+                    </Button>
+                    <Button
+                      size="sm"
+                      aria-label={strings.calendar.nextPeriod}
+                      disabled={view === "semestar" && activeTerm !== null}
+                      onClick={() => shiftPeriod(1)}
+                    >
+                      <Icon name="chevronRight" size={14} />
+                    </Button>
+                  </span>
+                </div>
+                {view === "mesec" ? (
+                  <CalendarMonth
+                    monthKey={monthKey}
+                    todayKey={todayKey}
+                    weekStart={weekStart}
+                    clock={clock}
+                    items={calendarItems}
+                    onSelectDay={selectDay}
+                    onOpenDay={openDay}
+                    onEditEvent={startEdit}
+                    onOpenPeople={() => selectView("ljudi")}
+                    onOpenForeign={openForeignPopover}
+                    onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
+                  />
+                ) : view === "semestar" ? (
+                  /* An overview and nothing else (CAL-010): no drag, no
+                     creating, no editor — the one thing a mini day does is open
+                     the Dan view, through the very same `openDay` the month
+                     grid's day numbers and the week grid's headers use. */
+                  <>
+                    <div
+                      className="cal__semester"
+                      role="group"
+                      tabIndex={0}
+                      aria-label={strings.calendar.semester.regionLabel}
+                    >
+                      {semesterMonths.map((key) => (
+                        <CalendarMiniMonth
+                          key={key}
+                          monthKey={key}
+                          todayKey={todayKey}
+                          weekStart={weekStart}
+                          density={dayDensity}
+                          term={activeTerm}
+                          onOpenDay={openDay}
+                        />
+                      ))}
+                    </div>
+                    <p className="cal__semester-legend">{strings.calendar.semester.legend}</p>
+                    {/* The term has edges (ADR-054): a span past six months
+                        renders its first six and says so; no term at all earns
+                        one quiet line naming where the dates are set — plain
+                        text, since no caption here navigates. */}
+                    {termTruncated && (
+                      <p className="cal__semester-legend">{strings.calendar.semester.truncated}</p>
+                    )}
+                    {activeTerm === null && (
+                      <p className="cal__semester-legend">{strings.calendar.semester.unsetHint}</p>
+                    )}
+                  </>
+                ) : (
+                  <CalendarTimeGrid
+                    dayKeys={view === "nedelja" ? weekKeys : [anchorKey]}
+                    todayKey={todayKey}
+                    clock={clock}
+                    items={calendarItems}
+                    onSelectSlot={selectSlot}
+                    onOpenDay={openDay}
+                    onEditEvent={startEdit}
+                    onOpenPeople={() => selectView("ljudi")}
+                    onOpenForeign={openForeignPopover}
+                    onMoveTimedEvent={(item, target) => void moveTimedEvent(item, target)}
+                  />
+                )}
               </div>
-              {view === "mesec" ? (
-                <CalendarMonth
-                  monthKey={monthKey}
-                  todayKey={todayKey}
-                  weekStart={weekStart}
-                  clock={clock}
-                  items={calendarItems}
-                  onSelectDay={selectDay}
-                  onOpenDay={openDay}
-                  onEditEvent={startEdit}
-                  onOpenPeople={() => selectView("ljudi")}
-                  onOpenForeign={openForeignPopover}
-                  onMoveItem={(item, dayKey) => void moveItem(item, dayKey)}
-                />
-              ) : view === "semestar" ? (
-                /* An overview and nothing else (CAL-010): no drag, no
-                   creating, no editor — the one thing a mini day does is open
-                   the Dan view, through the very same `openDay` the month
-                   grid's day numbers and the week grid's headers use. */
-                <>
-                  <div
-                    className="cal__semester"
-                    role="group"
-                    tabIndex={0}
-                    aria-label={strings.calendar.semester.regionLabel}
-                  >
-                    {semesterMonths.map((key) => (
-                      <CalendarMiniMonth
-                        key={key}
-                        monthKey={key}
-                        todayKey={todayKey}
-                        weekStart={weekStart}
-                        density={dayDensity}
-                        term={activeTerm}
-                        onOpenDay={openDay}
-                      />
-                    ))}
-                  </div>
-                  <p className="cal__semester-legend">{strings.calendar.semester.legend}</p>
-                  {/* The term has edges (ADR-054): a span past six months
-                      renders its first six and says so; no term at all earns
-                      one quiet line naming where the dates are set — plain
-                      text, since no caption here navigates. */}
-                  {termTruncated && (
-                    <p className="cal__semester-legend">{strings.calendar.semester.truncated}</p>
-                  )}
-                  {activeTerm === null && (
-                    <p className="cal__semester-legend">{strings.calendar.semester.unsetHint}</p>
-                  )}
-                </>
-              ) : (
-                <CalendarTimeGrid
-                  dayKeys={view === "nedelja" ? weekKeys : [anchorKey]}
-                  todayKey={todayKey}
-                  clock={clock}
-                  items={calendarItems}
-                  onSelectSlot={selectSlot}
-                  onOpenDay={openDay}
-                  onEditEvent={startEdit}
-                  onOpenPeople={() => selectView("ljudi")}
-                  onOpenForeign={openForeignPopover}
-                  onMoveTimedEvent={(item, target) => void moveTimedEvent(item, target)}
-                />
-              )}
-            </div>
-          ) : calendarItems.length === 0 ? (
-            <EmptyState
-              sigil="calendar"
-              title={strings.calendar.emptyTitle}
-              description={strings.calendar.emptyDescription}
-            />
-          ) : (
-            <div className="cal__agenda">
-              {/* CAL's signature graphic, and the one thing this view cannot
-                  otherwise say: which HOURS the loaded horizon is busy in, not
-                  just which days. It is drawn INSIDE the agenda's scroller, and
-                  in this view alone — see `CalendarHourRing`'s own header for
-                  why both of those are load-bearing rather than incidental. It
-                  re-derives from `calendarItems` itself, so it never needs a
-                  fetch and can never disagree with the rows beneath it. */}
-              <CalendarHourRing items={visibleCalendarItems} />
-              {groupAgenda(calendarItems).map(([key, dayItems]) => (
-                <section key={key} className="cal__day">
-                  <h2 className="nx-eyebrow cal__day-header">{formatDay(key)}</h2>
-                  {dayItems.map((item) => {
-                    if (item.kind === "event") {
-                      return (
-                        <ListRow
-                          key={item.id}
-                          leading={<span className="cal__time">{formatTime(item.event, clock)}</span>}
-                          trailing={
-                            <span className="cal__row-actions">
+            ) : calendarItems.length === 0 ? (
+              <EmptyState
+                sigil="calendar"
+                title={strings.calendar.emptyTitle}
+                description={strings.calendar.emptyDescription}
+              />
+            ) : (
+              <div className="cal__agenda">
+                {/* CAL's signature graphic, and the one thing this view cannot
+                    otherwise say: which HOURS the loaded horizon is busy in, not
+                    just which days. It is drawn INSIDE the agenda's scroller, and
+                    in this view alone — see `CalendarHourRing`'s own header for
+                    why both of those are load-bearing rather than incidental. It
+                    re-derives from `calendarItems` itself, so it never needs a
+                    fetch and can never disagree with the rows beneath it. */}
+                <CalendarHourRing items={visibleCalendarItems} />
+                {groupAgenda(calendarItems).map(([key, dayItems]) => (
+                  <section key={key} className="cal__day">
+                    <h2 className="nx-eyebrow cal__day-header">{formatDay(key)}</h2>
+                    {dayItems.map((item) => {
+                      if (item.kind === "event") {
+                        return (
+                          <ListRow
+                            key={item.id}
+                            leading={<span className="cal__time">{formatTime(item.event, clock)}</span>}
+                            trailing={
+                              <span className="cal__row-actions">
+                                <Button
+                                  size="sm"
+                                  className="cal__edit"
+                                  aria-label={strings.calendar.editLabel}
+                                  onClick={() => startEdit(item.event, item.occurrence)}
+                                >
+                                  <Icon name="pencil" size={14} />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="cal__delete"
+                                  aria-label={strings.calendar.deleteLabel}
+                                  onClick={() => void remove(item.event, item.occurrence)}
+                                >
+                                  <Icon name="trash" size={14} />
+                                </Button>
+                              </span>
+                            }
+                          >
+                            <span className="cal__event">
+                              {item.occurrence !== null && <RecurrenceMark />}
+                              {/* Every title on this list ellipsises, so every
+                                  one of them carries the full text as its hover
+                                  title — an ellipsis with no way back to what was
+                                  cut is information the row simply lost. */}
+                              <span className="cal__event-title" title={item.event.title}>
+                                {item.event.title}
+                              </span>
+                              {item.event.location ? (
+                                <Chip variant="data">{item.event.location}</Chip>
+                              ) : null}
+                            </span>
+                          </ListRow>
+                        );
+                      }
+                      // Foreign row (CAL-005): a read-only guest. No edit, no
+                      // delete — the „⋯“ opens the origin popover, whose one
+                      // action is the passcode-gated profile switch.
+                      if (item.kind === "foreign") {
+                        return (
+                          <ListRow
+                            key={item.id}
+                            muted
+                            leading={
+                              <span className="cal__time">{formatTime(item.foreign, clock)}</span>
+                            }
+                            trailing={
                               <Button
                                 size="sm"
-                                className="cal__edit"
-                                aria-label={strings.calendar.editLabel}
-                                onClick={() => startEdit(item.event, item.occurrence)}
+                                className="cal__foreign-origin"
+                                aria-label={strings.calendar.overlay.popoverLabel}
+                                onClick={(e) =>
+                                  openForeignPopover(e.currentTarget.getBoundingClientRect())
+                                }
                               >
-                                <Icon name="pencil" size={14} />
+                                <Icon name="more" size={14} />
                               </Button>
-                              <Button
-                                size="sm"
-                                className="cal__delete"
-                                aria-label={strings.calendar.deleteLabel}
-                                onClick={() => void remove(item.event, item.occurrence)}
-                              >
-                                <Icon name="trash" size={14} />
-                              </Button>
+                            }
+                          >
+                            <span className="cal__event">
+                              <ForeignMark />
+                              <span className="cal__event-title" title={item.foreign.title}>
+                                {item.foreign.title}
+                              </span>
                             </span>
-                          }
-                        >
-                          <span className="cal__event">
-                            {item.occurrence !== null && <RecurrenceMark />}
-                            {/* Every title on this list ellipsises, so every
-                                one of them carries the full text as its hover
-                                title — an ellipsis with no way back to what was
-                                cut is information the row simply lost. */}
-                            <span className="cal__event-title" title={item.event.title}>
-                              {item.event.title}
-                            </span>
-                            {item.event.location ? (
-                              <Chip variant="data">{item.event.location}</Chip>
-                            ) : null}
-                          </span>
-                        </ListRow>
-                      );
-                    }
-                    // Foreign row (CAL-005): a read-only guest. No edit, no
-                    // delete — the „⋯“ opens the origin popover, whose one
-                    // action is the passcode-gated profile switch.
-                    if (item.kind === "foreign") {
-                      return (
-                        <ListRow
-                          key={item.id}
-                          muted
-                          leading={
-                            <span className="cal__time">{formatTime(item.foreign, clock)}</span>
-                          }
-                          trailing={
-                            <Button
-                              size="sm"
-                              className="cal__foreign-origin"
-                              aria-label={strings.calendar.overlay.popoverLabel}
-                              onClick={(e) =>
-                                openForeignPopover(e.currentTarget.getBoundingClientRect())
-                              }
-                            >
-                              <Icon name="more" size={14} />
-                            </Button>
-                          }
-                        >
-                          <span className="cal__event">
-                            <ForeignMark />
-                            <span className="cal__event-title" title={item.foreign.title}>
-                              {item.foreign.title}
-                            </span>
-                          </span>
-                        </ListRow>
-                      );
-                    }
-                    // Birthday row (CAL-007): read-only, like every other
-                    // non-event source here — a person is edited in the Ljudi
-                    // panel, never from a calendar surface.
-                    if (item.kind === "birthday") {
-                      return (
-                        <ListRow key={item.id} leading={<span className="cal__time" />}>
-                          <span className="cal__event">
-                            <Chip className="cal__birthday-tag">
-                              {strings.calendar.people.kind[item.person.kind]}
-                            </Chip>
-                            <span className="cal__event-title" title={item.person.name}>
-                              {item.person.name}
-                            </span>
-                            {item.age !== null && (
-                              <Chip variant="data">
-                                {item.age} {strings.calendar.people.yearsUnit}
+                          </ListRow>
+                        );
+                      }
+                      // Birthday row (CAL-007): read-only, like every other
+                      // non-event source here — a person is edited in the Ljudi
+                      // panel, never from a calendar surface.
+                      if (item.kind === "birthday") {
+                        return (
+                          <ListRow key={item.id} leading={<span className="cal__time" />}>
+                            <span className="cal__event">
+                              <Chip className="cal__birthday-tag">
+                                {strings.calendar.people.kind[item.person.kind]}
                               </Chip>
-                            )}
-                          </span>
-                        </ListRow>
-                      );
-                    }
-                    if (item.kind === "task") {
-                      return (
-                        <ListRow
-                          key={item.id}
-                          muted={item.task.done}
-                          leading={<span className="cal__time" />}
-                        >
-                          <span className="cal__event">
-                            <Chip className="cal__task-tag">{strings.calendar.taskTag}</Chip>
-                            <span className="cal__event-title" title={item.task.title}>
-                              {item.task.title}
+                              <span className="cal__event-title" title={item.person.name}>
+                                {item.person.name}
+                              </span>
+                              {item.age !== null && (
+                                <Chip variant="data">
+                                  {item.age} {strings.calendar.people.yearsUnit}
+                                </Chip>
+                              )}
                             </span>
-                          </span>
-                        </ListRow>
-                      );
-                    }
-                    // Renewal row (FIN slice d): read-only, like every other
-                    // non-event source here — a subscription is edited on the
-                    // Finansije page, never from a calendar surface. What is
-                    // drawn comes from the RULE, so a day in the future shows
-                    // what WILL be charged rather than a row that already is.
-                    if (item.kind === "subscription") {
-                      return (
-                        <ListRow
-                          key={item.id}
-                          leading={<span className="cal__time" />}
-                          trailing={
-                            <Chip variant="data">
-                              {formatMoney(item.renewal.amount, item.renewal.currency)}
-                            </Chip>
-                          }
-                        >
-                          <span className="cal__event">
-                            <Chip className="cal__subscription-tag">
-                              {strings.calendar.subscriptionTag}
-                            </Chip>
-                            <span className="cal__event-title" title={item.renewal.name}>
-                              {item.renewal.name}
+                          </ListRow>
+                        );
+                      }
+                      if (item.kind === "task") {
+                        return (
+                          <ListRow
+                            key={item.id}
+                            muted={item.task.done}
+                            leading={<span className="cal__time" />}
+                          >
+                            <span className="cal__event">
+                              <Chip className="cal__task-tag">{strings.calendar.taskTag}</Chip>
+                              <span className="cal__event-title" title={item.task.title}>
+                                {item.task.title}
+                              </span>
                             </span>
-                          </span>
-                        </ListRow>
-                      );
-                    }
-                    if (item.kind === "exam") {
-                      const days = daysUntilExam(item.exam.examDate);
-                      const examTitle = `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
+                          </ListRow>
+                        );
+                      }
+                      // Renewal row (FIN slice d): read-only, like every other
+                      // non-event source here — a subscription is edited on the
+                      // Finansije page, never from a calendar surface. What is
+                      // drawn comes from the RULE, so a day in the future shows
+                      // what WILL be charged rather than a row that already is.
+                      if (item.kind === "subscription") {
+                        return (
+                          <ListRow
+                            key={item.id}
+                            leading={<span className="cal__time" />}
+                            trailing={
+                              <Chip variant="data">
+                                {formatMoney(item.renewal.amount, item.renewal.currency)}
+                              </Chip>
+                            }
+                          >
+                            <span className="cal__event">
+                              <Chip className="cal__subscription-tag">
+                                {strings.calendar.subscriptionTag}
+                              </Chip>
+                              <span className="cal__event-title" title={item.renewal.name}>
+                                {item.renewal.name}
+                              </span>
+                            </span>
+                          </ListRow>
+                        );
+                      }
+                      if (item.kind === "exam") {
+                        const days = daysUntilExam(item.exam.examDate);
+                        const examTitle = `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
+                        return (
+                          <ListRow
+                            key={item.id}
+                            muted={days < 0}
+                            leading={
+                              <span className="cal__time cal__exam-time">
+                                <span
+                                  className={`study__dot study__dot--${item.subject.color}`}
+                                  aria-hidden="true"
+                                />
+                              </span>
+                            }
+                            trailing={
+                              <Chip variant={examCountdownVariant(days)}>
+                                {examCountdownLabel(days)}
+                              </Chip>
+                            }
+                          >
+                            <span className="cal__event">
+                              <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
+                              <span className="cal__event-title" title={examTitle}>
+                                {examTitle}
+                              </span>
+                              {item.exam.scope ? <Chip variant="data">{item.exam.scope}</Chip> : null}
+                            </span>
+                          </ListRow>
+                        );
+                      }
+                      // Study-block row (STUDY-003): read-only — check-off lives on StudyPage.
+                      const status = item.block.status;
+                      const blockTitle = `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
                       return (
                         <ListRow
                           key={item.id}
-                          muted={days < 0}
+                          muted={status === "missed"}
                           leading={
                             <span className="cal__time cal__exam-time">
                               <span
@@ -2073,70 +2162,40 @@ export function CalendarPage({
                             </span>
                           }
                           trailing={
-                            <Chip variant={examCountdownVariant(days)}>
-                              {examCountdownLabel(days)}
-                            </Chip>
+                            status === "planned" ? undefined : (
+                              <Chip variant={status === "done" ? "data" : "neutral"}>
+                                {strings.study.blockStatus[status]}
+                              </Chip>
+                            )
                           }
                         >
                           <span className="cal__event">
-                            <Chip className="cal__exam-tag">{strings.study.calendarTag}</Chip>
-                            <span className="cal__event-title" title={examTitle}>
-                              {examTitle}
+                            <Chip className="cal__block-tag">{strings.study.planCalendarTag}</Chip>
+                            <span className="cal__event-title" title={blockTitle}>
+                              {blockTitle}
                             </span>
-                            {item.exam.scope ? <Chip variant="data">{item.exam.scope}</Chip> : null}
+                            {/* The block's topic and kind, quietly (ADR-063) — the
+                                row stays read-only; check-off lives on StudyPage. */}
+                            {item.block.topicId !== null && topicNames.has(item.block.topicId) && (
+                              <span className="cal__block-topic">
+                                {topicNames.get(item.block.topicId)}
+                              </span>
+                            )}
+                            {item.block.kind !== "coverage" && (
+                              <Chip>{strings.study.blockKind[item.block.kind]}</Chip>
+                            )}
+                            <Chip>
+                              {item.block.minutes} {strings.study.minutesUnit}
+                            </Chip>
                           </span>
                         </ListRow>
                       );
-                    }
-                    // Study-block row (STUDY-003): read-only — check-off lives on StudyPage.
-                    const status = item.block.status;
-                    const blockTitle = `${item.subject.name} — ${strings.study.examType[item.exam.examType]}`;
-                    return (
-                      <ListRow
-                        key={item.id}
-                        muted={status === "missed"}
-                        leading={
-                          <span className="cal__time cal__exam-time">
-                            <span
-                              className={`study__dot study__dot--${item.subject.color}`}
-                              aria-hidden="true"
-                            />
-                          </span>
-                        }
-                        trailing={
-                          status === "planned" ? undefined : (
-                            <Chip variant={status === "done" ? "data" : "neutral"}>
-                              {strings.study.blockStatus[status]}
-                            </Chip>
-                          )
-                        }
-                      >
-                        <span className="cal__event">
-                          <Chip className="cal__block-tag">{strings.study.planCalendarTag}</Chip>
-                          <span className="cal__event-title" title={blockTitle}>
-                            {blockTitle}
-                          </span>
-                          {/* The block's topic and kind, quietly (ADR-063) — the
-                              row stays read-only; check-off lives on StudyPage. */}
-                          {item.block.topicId !== null && topicNames.has(item.block.topicId) && (
-                            <span className="cal__block-topic">
-                              {topicNames.get(item.block.topicId)}
-                            </span>
-                          )}
-                          {item.block.kind !== "coverage" && (
-                            <Chip>{strings.study.blockKind[item.block.kind]}</Chip>
-                          )}
-                          <Chip>
-                            {item.block.minutes} {strings.study.minutesUnit}
-                          </Chip>
-                        </span>
-                      </ListRow>
-                    );
-                  })}
-                </section>
-              ))}
-            </div>
-          )}
+                    })}
+                  </section>
+                ))}
+              </div>
+            ))}
+          </AsyncSurface>
         </>
       )}
     </div>

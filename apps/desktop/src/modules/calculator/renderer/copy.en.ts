@@ -52,6 +52,11 @@ export const en: typeof sr = {
     decimal: "Decimal point",
     clear: "Clear the line",
   },
+  bases: {
+    hex: "hex",
+    octal: "oct",
+    binary: "bin",
+  },
   history: {
     title: "History",
     search: "Search the history",
@@ -65,6 +70,8 @@ export const en: typeof sr = {
     clear: "Clear the history",
     clearTitle: "Clearing the history",
     clearQuestion: "Delete every expression in the history?",
+    removeTitle: "Deleting an entry",
+    removeQuestion: "Delete this entry from the history?",
     clearNote: "Pinned entries stay, and so do the variables.",
   },
   variables: {

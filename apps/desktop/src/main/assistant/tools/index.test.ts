@@ -16,7 +16,11 @@ import {
 } from "@nexus/core";
 import type { Tool, ToolEffect, ToolRegistry, WebService } from "@nexus/core";
 import { createModuleRegistry } from "../../../shared/modules.js";
+import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
+import { createModuleTools } from "../../moduleTools.js";
 import { createToolRegistry, type ToolDeps } from "./index.js";
+import { createDictionaryReader } from "../../../modules/translator/main/dictionary.js";
+import requests from "./offering.requests.json";
 
 /**
  * The registry itself: the properties that are about the SET of tools rather
@@ -78,14 +82,53 @@ function registryWith(web: WebService | null = null): ToolRegistry {
     profileDb: (id, open) => open(db.raw, id),
     now: () => NOW_MS,
     search: () => Promise.resolve([]),
-    packs: { list: () => Promise.resolve([]) },
+    packs: {
+      list: () => Promise.resolve([]),
+      catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }),
+      download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }),
+      remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }),
+      downloadsAllowed: () => false,
+    },
+    // No pack folder under the temp directory, so the reader answers "not installed".
+    dictionary: createDictionaryReader(() => tmpdir()),
     timers: {
       startCountdown: () => {
         throw new Error("Test setup: timers.start was not expected here.");
       },
       listCountdowns: () => [],
+      pauseCountdown: () => {
+        throw new Error("Test setup: timers.pause was not expected here.");
+      },
+      resumeCountdown: () => {
+        throw new Error("Test setup: timers.resume was not expected here.");
+      },
+      cancelCountdown: () => {
+        throw new Error("Test setup: timers.cancel was not expected here.");
+      },
+    },
+    focus: {
+      start: unexpected("focus.start"),
+      stop: unexpected("focus.stop"),
+      cancel: unexpected("focus.cancel"),
+      pause: unexpected("focus.pause"),
+      resume: unexpected("focus.resume"),
+      status: () => null,
+    },
+    notifications: {
+      list: () => [],
+      snooze: unexpected("notifications.snooze"),
+      dismiss: unexpected("notifications.dismiss"),
+      settings: unexpected("notifications.settings"),
+      updateSettings: unexpected("notifications.updateSettings"),
+      setSourceEnabled: unexpected("notifications.setSourceEnabled"),
+      upcoming: () => [],
     },
     modules: createModuleRegistry(),
+    // No pack installed: the chess tools' analysis answers with the built-in engine.
+    tools: createModuleTools({ userData: () => tmpdir(), publicKeyPem: "no key" }),
+    visibility: () => DEFAULT_SHELL_VISIBILITY,
+    userData: () => tmpdir(),
+    appVersion: () => "0.0.0-test",
     web,
   };
   return createToolRegistry(deps);
@@ -93,13 +136,77 @@ function registryWith(web: WebService | null = null): ToolRegistry {
 
 const EFFECTS: readonly ToolEffect[] = ["read", "write", "navigate", "network"];
 
+/** How many tools each area declares, keyed by the part of a name before the dot. */
+function countByArea(tools: readonly Tool[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const tool of tools) {
+    const area = tool.name.slice(0, tool.name.indexOf("."));
+    counts[area] = (counts[area] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** A host method no test in this file should reach. */
+function unexpected(name: string): () => never {
+  return () => {
+    throw new Error(`Test setup: ${name} was not expected here.`);
+  };
+}
+
 describe("createToolRegistry", () => {
   it("declares every area's tools, each named area.verb", () => {
     const tools = registryWith().tools({ web: false });
-    // 19 before wave 2, plus the eighteen the wave-1 kit modules added
-    // (library 2, pantry 2, car 2, cookbook 2, culture 2, recorder, reader,
-    // wiki, maps, calculator, lab 2, miniapps).
-    expect(tools).toHaveLength(37);
+    // ONE LINE PER AREA, so a run that adds an area changes only its own line
+    // rather than a total every parallel run also edits. The area is the part of
+    // a tool's name before the dot, and a new tool in an existing area changes
+    // that area's line alone. A count that reads too high is a tool that was
+    // added and never named here; one that reads too low is a tool that was
+    // removed and left in the table.
+    expect(countByArea(tools)).toEqual({
+      app: 3,
+      arcade: 2,
+      boards: 6,
+      calendar: 9,
+      calculator: 3,
+      canvas: 7,
+      cards: 5,
+      car: 2,
+      chess: 5,
+      cookbook: 2,
+      culture: 2,
+      dashboard: 4,
+      documents: 5,
+      drawer: 3,
+      electronics: 13,
+      emergency: 1,
+      files: 2,
+      finance: 8,
+      fitness: 8,
+      focus: 5,
+      habits: 7,
+      lab: 2,
+      library: 2,
+      maps: 1,
+      miniapps: 4,
+      notes: 18,
+      notifications: 5,
+      packs: 4,
+      pantry: 2,
+      people: 4,
+      puzzles: 5,
+      reader: 1,
+      recorder: 1,
+      reminders: 1,
+      search: 3,
+      settings: 6,
+      study: 14,
+      tasks: 17,
+      timers: 9,
+      scanner: 1,
+      translator: 3,
+      wiki: 1,
+      workshop: 1,
+    });
     for (const tool of tools) {
       expect(tool.name).toMatch(/^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$/);
       expect(EFFECTS).toContain(tool.effect);
@@ -257,13 +364,52 @@ describe("createToolRegistry", () => {
       "sr",
     );
 
-    // Measured 2026-10-14 with this registry (37 tools, web off) and the
-    // question above: 8 tools offered, 2 640 tokens of tool specs, 1 101 tokens
-    // of Serbian prompt - 3 741 of the 7 168-token ceiling, leaving 3 427 for
-    // the history, the knowledge passages and the question. Before the tools
-    // were chosen per turn the specs alone were 22 271 characters, which is
-    // more than this window holds.
+    // Measured 2026-10-16 with this registry (148 tools, web off) and the
+    // question above: 7 tools offered, 2 499 tokens of tool specs, 1 368 tokens
+    // of Serbian prompt, against a 7 168-token ceiling - 3 301 left. The budget
+    // share (TOOL_BUDGET_SHARE, 0.35) is what keeps that room above 3 000 tokens.
     expect(offered.length).toBeLessThanOrEqual(MAX_TOOLS_PER_TURN);
     expect(ceiling - specTokens - promptTokens).toBeGreaterThanOrEqual(3000);
+  });
+});
+
+describe("the offered set over the real registry", () => {
+  /**
+   * The request set the maintainer tracks (`offering.requests.json`): what a user
+   * says, in each language, with the tool that answers it. Every request runs
+   * through the budget a turn on an 8 192-token model gets, with no earlier
+   * messages, and a request whose tool is not offered is a miss the model could
+   * never recover from.
+   *
+   * The floor is a POLICY number set just under the rate the lexical choice
+   * reached when this set was written; the misses are named in the failure
+   * message. A later run that adds requests, or teaches the choice a word, moves
+   * the rate, and the floor moves with it - never down to hide a regression.
+   */
+  const HIT_RATE_FLOOR = 0.8;
+
+  it("offers the expected tool for most of the request set, and names the misses", () => {
+    const tools = registryWith().tools({ web: false });
+    const contextTokens = 8192;
+    const budgetTokens = Math.floor((contextTokens - answerReserveTokens(contextTokens)) * TOOL_BUDGET_SHARE);
+    const misses: string[] = [];
+    for (const row of requests) {
+      const offered = chooseTools({
+        tools,
+        query: row.request,
+        earlier: [],
+        recent: [],
+        budgetTokens,
+        ...("location" in row ? { location: row.location } : {}),
+      });
+      if (!offered.some((tool) => tool.name === row.expect)) {
+        misses.push(`${row.locale} "${row.request}" -> ${row.expect}`);
+      }
+    }
+    const hitRate = (requests.length - misses.length) / requests.length;
+    expect(
+      hitRate,
+      `${String(requests.length - misses.length)} of ${String(requests.length)} offered; missed: ${misses.join("; ")}`,
+    ).toBeGreaterThanOrEqual(HIT_RATE_FLOOR);
   });
 });

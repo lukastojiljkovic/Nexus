@@ -12,13 +12,20 @@ import {
   Select,
   TextArea,
   TextField,
+  Toast,
 } from "@nexus/ui";
 import {
+  LIBRARY_MAX_LOAN_TO_LENGTH,
   LIBRARY_MAX_SUMMARY_LENGTH,
   LIBRARY_MAX_THOUGHT_LENGTH,
   LIBRARY_MAX_TITLE_LENGTH,
   LIBRARY_MAX_COLLECTION_DESCRIPTION_LENGTH,
   LIBRARY_MAX_COLLECTION_NAME_LENGTH,
+  LIBRARY_MAX_GOAL_TARGET,
+  LIBRARY_MIN_GOAL_TARGET,
+  isLibraryLoanOverdue,
+  libraryGoalProgress,
+  libraryYearStats,
   type LibraryKind,
   type LibrarySortKey,
   type LibraryStatus,
@@ -28,7 +35,9 @@ import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { manifest } from "../shared/manifest.js";
 import type {
   LibraryCollectionView,
+  LibraryGoalView,
   LibraryItemView,
+  LibraryLoanView,
   LibrarySuggestionView,
   LibraryThoughtView,
   LibraryView,
@@ -36,6 +45,7 @@ import type {
 import { copy } from "./copy.js";
 import {
   KIND_ICONS,
+  activeLoan,
   KIND_OPTIONS,
   NO_FILTER,
   RATING_OPTIONS,
@@ -103,6 +113,7 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
     null,
   );
   const locale = activeLocale();
+  const today = localDayKey(new Date());
 
   const refresh = useCallback(async () => {
     try {
@@ -181,13 +192,11 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
       />
 
       {undo !== null && (
-        <div className="lib__undo" role="status">
-          <span className="lib__undo-text">
-            {undo.kind === "item" ? copy.undo.item : copy.undo.collection}
-          </span>
-          <Button
-            size="sm"
-            onClick={() => {
+        <Toast
+          message={undo.kind === "item" ? copy.undo.item : copy.undo.collection}
+          undo={{
+            label: copy.undo.action,
+            onUndo: () => {
               const pending = undo;
               setUndo(null);
               void run((library) =>
@@ -195,19 +204,11 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
                   ? library.restoreItem({ profileId, id: pending.id })
                   : library.restoreCollection({ profileId, id: pending.id }),
               );
-            }}
-          >
-            {copy.undo.action}
-          </Button>
-          <Button
-            size="sm"
-            variant="quiet"
-            aria-label={copy.undo.dismiss}
-            onClick={() => setUndo(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+            },
+          }}
+          dismissLabel={copy.undo.dismiss}
+          onDismiss={() => setUndo(null)}
+        />
       )}
 
       {error !== null && (
@@ -260,6 +261,16 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
                 ))}
               </Select>
               <Select
+                label={copy.filters.loanLabel}
+                value={filter.loan}
+                onChange={(event) =>
+                  setFilter({ ...filter, loan: event.target.value as LibraryFilter["loan"] })
+                }
+              >
+                <option value="all">{copy.filters.loanAny}</option>
+                <option value="out">{copy.filters.loanOut}</option>
+              </Select>
+              <Select
                 label={copy.filters.sortLabel}
                 value={sort}
                 onChange={(event) => setSort(event.target.value as LibrarySortKey)}
@@ -309,6 +320,7 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
                     trailing={
                       <span className="lib__row-trailing">
                         <Chip>{copy.statuses[item.status]}</Chip>
+                        <LoanChip item={item} today={today} />
                         <Rating rating={item.rating} locale={locale} />
                       </span>
                     }
@@ -346,6 +358,8 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
               />
             )}
           </section>
+
+          <GoalsSection profileId={profileId} goals={view.goals} items={items} run={run} />
 
           <CollectionsSection
             profileId={profileId}
@@ -662,6 +676,7 @@ function ItemPanel({
       </form>
 
       <PassesSection profileId={profileId} item={item} locale={locale} run={run} />
+      <LoansSection profileId={profileId} item={item} locale={locale} run={run} />
       <ThoughtsSection profileId={profileId} item={item} locale={locale} run={run} />
 
       <div className="lib__form-title">{copy.collections.heading}</div>
@@ -813,6 +828,270 @@ function PassesSection({
         </Button>
       </div>
       {problem && <p className="lib__field-error">{copy.errors.number}</p>}
+    </div>
+  );
+}
+
+/** The loan badge on a row: overdue when the due day has passed, otherwise lent out. Nothing is drawn for a work that is on the shelf. */
+function LoanChip({ item, today }: { item: LibraryItemView; today: string }) {
+  const loan = activeLoan(item);
+  if (loan === null) return null;
+  return <Chip>{isLibraryLoanOverdue(loan, today) ? copy.loans.overdue : copy.loans.lentLabel}</Chip>;
+}
+
+// --- Ciljevi ------------------------------------------------------------------
+
+/** The year's goals with how far each has got, and the form that sets one. A goal is kept per scope, so choosing a scope that already has one shows its target to change. */
+function GoalsSection({
+  profileId,
+  goals,
+  items,
+  run,
+}: {
+  profileId: string;
+  goals: readonly LibraryGoalView[];
+  items: readonly LibraryItemView[];
+  run: Run;
+}) {
+  const year = new Date().getFullYear();
+  const stats = useMemo(
+    () =>
+      libraryYearStats(
+        items,
+        items.flatMap((item) =>
+          item.passes.map((pass) => ({
+            itemId: item.id,
+            finishedOn: pass.finishedOn,
+            rating: pass.rating,
+          })),
+        ),
+        year,
+      ),
+    [items, year],
+  );
+  const targetOf = (choice: LibraryKind | "all"): string =>
+    String(goals.find((goal) => goal.kind === (choice === "all" ? null : choice))?.target ?? "");
+  const [scope, setScope] = useState<LibraryKind | "all">("all");
+  const [target, setTarget] = useState("");
+  const [problem, setProblem] = useState(false);
+
+  return (
+    <section className="lib__section" aria-label={copy.goals.heading}>
+      <div className="lib__heading">{copy.goals.heading}</div>
+      <p className="nx-hint">{copy.goals.caption}</p>
+      {goals.length === 0 ? (
+        <p className="nx-hint">{copy.goals.empty}</p>
+      ) : (
+        <div className="lib__list">
+          {goals.map((goal) => {
+            const progress = libraryGoalProgress(goal, stats);
+            return (
+              <ListRow
+                key={goal.id}
+                trailing={<Chip>{`${progress.done} / ${progress.target}`}</Chip>}
+              >
+                <span className="lib__row-title">
+                  {goal.kind === null ? copy.goals.scopeAll : copy.kinds[goal.kind]}
+                </span>
+                <span className="lib__row-meta">
+                  {`${progress.done} ${copy.goals.progress} ${copy.goals.yearLabel} ${year}`}
+                </span>
+              </ListRow>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="lib__form-row">
+        <Select
+          label={copy.goals.scopeLabel}
+          value={scope}
+          onChange={(event) => {
+            const next = event.target.value as LibraryKind | "all";
+            setScope(next);
+            setTarget(targetOf(next));
+            setProblem(false);
+          }}
+        >
+          <option value="all">{copy.goals.scopeAll}</option>
+          {KIND_OPTIONS.map((kind) => (
+            <option key={kind} value={kind}>
+              {copy.kinds[kind]}
+            </option>
+          ))}
+        </Select>
+        <TextField
+          label={copy.goals.targetLabel}
+          inputMode="numeric"
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+        />
+        <Button
+          size="sm"
+          onClick={() => {
+            const reading = readCount(target, LIBRARY_MIN_GOAL_TARGET, LIBRARY_MAX_GOAL_TARGET);
+            if (!reading.ok || reading.value === null) {
+              setProblem(true);
+              return;
+            }
+            const value = reading.value;
+            setProblem(false);
+            void run((library) =>
+              library.setGoal({ profileId, kind: scope === "all" ? null : scope, target: value }),
+            );
+          }}
+        >
+          {copy.goals.set}
+        </Button>
+      </div>
+      {problem && (
+        <p className="lib__field-error" role="alert">
+          {copy.errors.goal}
+        </p>
+      )}
+    </section>
+  );
+}
+
+// --- Pozajmice ----------------------------------------------------------------
+
+/** One work's loans: the open one with its due day and its return, the form that lends it when nothing is out, and the history. The store keeps one open loan per work, so the lend form is replaced by the open loan rather than offered beside it. */
+function LoansSection({
+  profileId,
+  item,
+  locale,
+  run,
+}: {
+  profileId: string;
+  item: LibraryItemView;
+  locale: ReturnType<typeof activeLocale>;
+  run: Run;
+}) {
+  const today = localDayKey(new Date());
+  const [to, setTo] = useState("");
+  const [lentOn, setLentOn] = useState(today);
+  const [dueOn, setDueOn] = useState("");
+  const [returnedOn, setReturnedOn] = useState(today);
+  const [problem, setProblem] = useState<string | null>(null);
+  const active = activeLoan(item);
+  const dayText = (value: string): string => formatDay(value, locale) ?? value;
+  const loanLine = (loan: LibraryLoanView): string =>
+    [
+      `${copy.loans.toLabel}: ${loan.to}`,
+      `${copy.loans.lentLabel} ${dayText(loan.lentOn)}`,
+      loan.dueOn === null ? null : `${copy.loans.dueLabel} ${dayText(loan.dueOn)}`,
+      loan.returnedOn === null ? null : `${copy.loans.returnedLabel} ${dayText(loan.returnedOn)}`,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" · ");
+
+  const lend = (): void => {
+    const name = blankToNull(to);
+    if (name === null || name.length > LIBRARY_MAX_LOAN_TO_LENGTH) {
+      setProblem(copy.errors.loanTo);
+      return;
+    }
+    if (lentOn === "" || (dueOn !== "" && dueOn < lentOn)) {
+      setProblem(copy.errors.loanDay);
+      return;
+    }
+    setProblem(null);
+    void run((library) =>
+      library.lendItem({ profileId, itemId: item.id, to: name, lentOn, dueOn: blankToNull(dueOn) }),
+    ).then((saved) => {
+      if (saved) {
+        setTo("");
+        setDueOn("");
+      }
+    });
+  };
+
+  const markReturned = (loan: LibraryLoanView): void => {
+    if (returnedOn < loan.lentOn) {
+      setProblem(copy.errors.loanDay);
+      return;
+    }
+    setProblem(null);
+    void run((library) =>
+      library.returnLoan({ profileId, itemId: item.id, id: loan.id, returnedOn }),
+    );
+  };
+
+  return (
+    <div className="lib__subsection">
+      <div className="lib__form-title">{copy.loans.heading}</div>
+      <p className="nx-hint">{copy.loans.caption}</p>
+
+      {active !== null ? (
+        <>
+          <div className="lib__form-title">{copy.loans.activeHeading}</div>
+          <div className="lib__list">
+            <ListRow
+              trailing={
+                isLibraryLoanOverdue(active, today) ? <Chip>{copy.loans.overdue}</Chip> : undefined
+              }
+            >
+              <span className="lib__pass-dates">{loanLine(active)}</span>
+            </ListRow>
+          </div>
+          <div className="lib__form-row">
+            <TextField
+              type="date"
+              label={copy.loans.returnedOnLabel}
+              value={returnedOn}
+              onChange={(event) => setReturnedOn(event.target.value)}
+            />
+            <Button size="sm" onClick={() => markReturned(active)}>
+              {copy.loans.markReturned}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="lib__form-row">
+          <TextField
+            label={copy.loans.toLabel}
+            placeholder={copy.loans.toPlaceholder}
+            maxLength={LIBRARY_MAX_LOAN_TO_LENGTH}
+            value={to}
+            onChange={(event) => setTo(event.target.value)}
+          />
+          <TextField
+            type="date"
+            label={copy.loans.lentOnLabel}
+            value={lentOn}
+            onChange={(event) => setLentOn(event.target.value)}
+          />
+          <TextField
+            type="date"
+            label={copy.loans.dueOnLabel}
+            value={dueOn}
+            onChange={(event) => setDueOn(event.target.value)}
+          />
+          <Button size="sm" onClick={lend}>
+            {copy.loans.lend}
+          </Button>
+        </div>
+      )}
+      {problem !== null && (
+        <p className="lib__field-error" role="alert">
+          {problem}
+        </p>
+      )}
+
+      {item.loans.length === 0 ? (
+        <p className="nx-hint">{copy.loans.none}</p>
+      ) : (
+        <>
+          <div className="lib__form-title">{copy.loans.history}</div>
+          <div className="lib__list">
+            {[...item.loans].reverse().map((loan) => (
+              <ListRow key={loan.id}>
+                <span className="lib__pass-dates">{loanLine(loan)}</span>
+              </ListRow>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

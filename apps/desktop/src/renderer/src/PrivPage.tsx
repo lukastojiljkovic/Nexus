@@ -2,14 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import * as Y from "yjs";
 import {
+  AsyncSurface,
   Button,
   Card,
   Checkbox,
   EmptyState,
   Icon,
-  LoadingState,
   PageHeader,
   TextField,
+  Toast,
+  type AsyncState,
 } from "@nexus/ui";
 import type { PrivNoteListEntry, PrivStatus } from "../../shared/ipc.js";
 import { formatCountdown, passcodeMeetsPolicy, RecoveryKitPanel } from "./AuthGate.js";
@@ -120,24 +122,26 @@ export function PrivPage({ profileId }: PrivPageProps) {
     };
   }, [loadStatus]);
 
-  if (failed) {
+  if (failed || status === null) {
+    // The skeleton needs a width of its own here: `.priv--center` centres its
+    // one child, so a stretch-width skeleton would size to its own (zero)
+    // content and draw nothing at all. `.priv__loading` gives it the gate
+    // card's width, which is also the shape this load resolves into. The
+    // failure takes the same frame. Its title is `moduleName`, not a
+    // hand-written fallback: the section's name is the sidebar's.
     return (
       <div className="priv priv--center">
-        {/* `moduleName` rather than a hand-written fallback: the section's name
-            is the sidebar's, and an inline „Privatno" here was a second copy of
-            it that a locale switch would have left behind. */}
-        <EmptyState title={moduleName("priv")} description={strings.priv.section.loadError} />
-      </div>
-    );
-  }
-  if (status === null) {
-    return (
-      <div className="priv priv--center">
-        {/* The skeleton needs a width of its own here: `.priv--center` centres
-            its one child, so a stretch-width skeleton would size to its own
-            (zero) content and draw nothing at all. `.priv__loading` gives it the
-            gate card's width, which is also the shape this load resolves into. */}
-        <LoadingState className="priv__loading" label={strings.app.loading} rows={3} />
+        <AsyncSurface
+          className="priv__loading"
+          state={failed ? { status: "failed" } : { status: "loading" }}
+          loadingLabel={strings.app.loading}
+          failureTitle={moduleName("priv")}
+          failureMessage={strings.priv.section.loadError}
+          retry={{ label: strings.priv.section.retry, onClick: () => void loadStatus() }}
+          loadingRows={3}
+        >
+          {() => null}
+        </AsyncSurface>
       </div>
     );
   }
@@ -709,6 +713,11 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
         : searchIds
             .map((id) => entries.find((entry) => entry.id === id))
             .filter((entry): entry is PrivNoteListEntry => entry !== undefined);
+  const listState: AsyncState<PrivNoteListEntry[]> = listError
+    ? { status: "failed" }
+    : visible === null
+      ? { status: "loading" }
+      : { status: "ready", data: visible };
 
   return (
     <div className="priv" onCopy={onSectionCopy}>
@@ -750,13 +759,14 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
         {strings.priv.noChartNote}
       </p>
 
+      {/* Dismissing hides the offer only: the clear stays armed, as the notice says. */}
       {clipboardArmed && (
-        <div className="priv__clipboard" role="status">
-          <span>{strings.priv.clipboard.notice}</span>
-          <Button size="sm" onClick={cancelClipboardClear}>
-            {strings.priv.clipboard.cancel}
-          </Button>
-        </div>
+        <Toast
+          message={strings.priv.clipboard.notice}
+          undo={{ label: strings.priv.clipboard.cancel, onUndo: cancelClipboardClear }}
+          dismissLabel={strings.priv.clipboard.dismiss}
+          onDismiss={() => setClipboardArmed(false)}
+        />
       )}
 
       <div className="priv__body">
@@ -764,96 +774,109 @@ function PrivSection({ profileId, onStatusChange, onRecheck }: PrivSectionProps)
           <Button variant="primary" className="note__new" onClick={() => void create()}>
             {s.newNote}
           </Button>
-          {listError ? (
-            <EmptyState title={s.emptyTitle} description={s.loadError} />
-          ) : visible === null ? (
-            <LoadingState label={strings.app.loading} rows={6} />
-          ) : visible.length === 0 ? (
-            // The section being empty and a query matching nothing are different
-            // states and get different shapes: the mark says „this section holds
-            // nothing", a quiet line says „that search found nothing". The inline
-            // shape folds title and description onto one line, so the search case
-            // passes its sentence AS the title rather than behind „Nema privatnih
-            // beležaka", which would not even be true — they are there, the query
-            // missed them.
-            searchIds === null ? (
-              <EmptyState sigil="priv" title={s.emptyTitle} description={s.emptyDescription} />
-            ) : (
-              <EmptyState variant="inline" title={s.searchEmpty} />
-            )
-          ) : (
-            // Deliberately UNGROUPED, unlike the NOTE list. Grouping this one by
-            // date would draw the shape of when the private notes are written
-            // across the pane — the very picture `noChartNote` explains the
-            // absence of, arrived at through the list instead of through a chart.
-            <ul className="note__list">
-              {visible.map((entry) => (
-                <li key={entry.id} className="note__item-row">
-                  {entry.unreadable ? (
-                    // A named dead row: the container no longer opens, and a
-                    // click could only show an error — delete is its one action.
-                    <span className="note__item priv__item--dead">
-                      <span className="note__item-title">{s.unreadable}</span>
-                      <span className="note__item-meta">
-                        <span className="note__item-date">{formatNoteDate(entry.updatedAt)}</span>
-                      </span>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={
-                        entry.id === selectedId ? "note__item note__item--active" : "note__item"
-                      }
-                      aria-current={entry.id === selectedId ? "true" : undefined}
-                      onClick={() => setSelectedId(entry.id)}
-                    >
-                      <span className="note__item-title">{displayTitle(entry)}</span>
-                      <span className="note__item-meta">
-                        <span className="note__item-date">{formatNoteDate(entry.updatedAt)}</span>
-                      </span>
-                    </button>
-                  )}
-                  {/* The NOTE row's own „⋯", not two 11px text buttons hanging
-                      off the end of every row. `section.noteMenuLabel` had been
-                      written for exactly this and never used — the two note
-                      surfaces are meant to be one shape, and „premesti"/„obriši"
-                      spelled out on fifty rows is the opposite of that. */}
-                  <NotePopover label={s.noteMenuLabel} triggerClassName="note__row-menu">
-                    {(close) => (
-                      <>
-                        {!entry.unreadable && (
-                          <button
-                            className="note__menu-item"
-                            role="menuitem"
-                            type="button"
-                            onClick={() => {
-                              setDialogError(null);
-                              setPendingMoveOut(entry);
-                              close();
-                            }}
-                          >
-                            {s.moveOut}
-                          </button>
-                        )}
+          <AsyncSurface
+            state={listState}
+            loadingLabel={strings.app.loading}
+            failureTitle={s.loadErrorTitle}
+            failureMessage={s.loadError}
+            retry={{ label: s.retry, onClick: () => void loadEntries() }}
+            loadingRows={6}
+          >
+            {(rows) =>
+              rows.length === 0 ? (
+                // The section being empty and a query matching nothing are different
+                // states and get different shapes: the mark says „this section holds
+                // nothing", a quiet line says „that search found nothing". The inline
+                // shape folds title and description onto one line, so the search case
+                // passes its sentence AS the title rather than behind „Nema privatnih
+                // beležaka", which would not even be true — they are there, the query
+                // missed them. The search case takes no clear-search action, unlike the
+                // note and file lists: the search field is in this page's header, one
+                // press away, and a second control would only repeat it.
+                searchIds === null ? (
+                  <EmptyState sigil="priv" title={s.emptyTitle} description={s.emptyDescription} />
+                ) : (
+                  <EmptyState variant="inline" title={s.searchEmpty} />
+                )
+              ) : (
+                // Deliberately UNGROUPED, unlike the NOTE list. Grouping this one by
+                // date would draw the shape of when the private notes are written
+                // across the pane — the very picture `noChartNote` explains the
+                // absence of, arrived at through the list instead of through a chart.
+                <ul className="note__list">
+                  {rows.map((entry) => (
+                    <li key={entry.id} className="note__item-row">
+                      {entry.unreadable ? (
+                        // A named dead row: the container no longer opens, and a
+                        // click could only show an error — delete is its one action.
+                        <span className="note__item priv__item--dead">
+                          <span className="note__item-title">{s.unreadable}</span>
+                          <span className="note__item-meta">
+                            <span className="note__item-date">
+                              {formatNoteDate(entry.updatedAt)}
+                            </span>
+                          </span>
+                        </span>
+                      ) : (
                         <button
-                          className="note__menu-item note__menu-item--danger"
-                          role="menuitem"
                           type="button"
-                          onClick={() => {
-                            setDialogError(null);
-                            setPendingDelete(entry);
-                            close();
-                          }}
+                          className={
+                            entry.id === selectedId ? "note__item note__item--active" : "note__item"
+                          }
+                          aria-current={entry.id === selectedId ? "true" : undefined}
+                          onClick={() => setSelectedId(entry.id)}
                         >
-                          {s.deleteLabel}
+                          <span className="note__item-title">{displayTitle(entry)}</span>
+                          <span className="note__item-meta">
+                            <span className="note__item-date">
+                              {formatNoteDate(entry.updatedAt)}
+                            </span>
+                          </span>
                         </button>
-                      </>
-                    )}
-                  </NotePopover>
-                </li>
-              ))}
-            </ul>
-          )}
+                      )}
+                      {/* The NOTE row's own „⋯", not two 11px text buttons hanging
+                          off the end of every row. `section.noteMenuLabel` had been
+                          written for exactly this and never used — the two note
+                          surfaces are meant to be one shape, and „premesti"/„obriši"
+                          spelled out on fifty rows is the opposite of that. */}
+                      <NotePopover label={s.noteMenuLabel} triggerClassName="note__row-menu">
+                        {(close) => (
+                          <>
+                            {!entry.unreadable && (
+                              <button
+                                className="note__menu-item"
+                                role="menuitem"
+                                type="button"
+                                onClick={() => {
+                                  setDialogError(null);
+                                  setPendingMoveOut(entry);
+                                  close();
+                                }}
+                              >
+                                {s.moveOut}
+                              </button>
+                            )}
+                            <button
+                              className="note__menu-item note__menu-item--danger"
+                              role="menuitem"
+                              type="button"
+                              onClick={() => {
+                                setDialogError(null);
+                                setPendingDelete(entry);
+                                close();
+                              }}
+                            >
+                              {s.deleteLabel}
+                            </button>
+                          </>
+                        )}
+                      </NotePopover>
+                    </li>
+                  ))}
+                </ul>
+              )
+            }
+          </AsyncSurface>
         </div>
 
         <div className="note__editor-pane">

@@ -133,6 +133,10 @@ pkg_postinst() {
 	elog "refuses to create or unlock an account instead of silently weakening"
 	elog "the key chain — that refusal is the design, not a bug."
 	elog
-	elog "Cloud sync is off by default and this build makes no network calls"
-	elog "until it is explicitly turned on."
+	elog "Nexus asks once, at first start, what it may use the network for. The"
+	elog "default is Offline only: no network call of any kind. Offline + update"
+	elog "checks contacts GitHub for a new version of Nexus itself; Downloads also"
+	elog "fetches the content packs, Kiwix libraries and models you choose. The"
+	elog "choice is a mode of the whole device, kept in ~/.config/Nexus, and can be"
+	elog "changed at any time in Settings."
 }
