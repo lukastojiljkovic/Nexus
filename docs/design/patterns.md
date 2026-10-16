@@ -150,8 +150,8 @@ containing block, so a fixed panel is already positioned against the window, and
 `packages/ui` does not depend on `react-dom`.
 
 **Adopted by:** the shared `ConfirmDialog`, and the shell's module launcher and
-shortcuts reference. Six module renderer files still draw their own
-`role="dialog"` (cookbook, culture, lab, maps, reader, signals), and the
+shortcuts reference. Five module renderer files still draw their own
+`role="dialog"` (cookbook, culture, maps, reader, signals), and the
 `recur-dialog__*` recipe still wears the other renderer dialogs.
 
 ## ConfirmDialog
@@ -394,16 +394,16 @@ EmptyState columns, which are tags.
 | lab | 1 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 0 | 0 | 0 |
 | maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
-| miniapps | 1 | 0 | 1 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
+| miniapps | 1 | 0 | 0 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
 | pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
 | puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 0 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | recorder | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 |
 | scanner | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | signals | 1 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 |
-| timers | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
-| translator | 1 | 2 | 1 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
-| wiki | 1 | 2 | 0 | 1 | 4 | 0 | 0 | 0 | 0 | 0 |
+| timers | 1 | 3 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
+| translator | 1 | 1 | 2 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
+| wiki | 1 | 6 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | workshop | 1 | 2 | 3 | 1 | 4 | 0 | 0 | 0 | 1 | 1 |
 | **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **8** | **0** | **7** | **9** |
 

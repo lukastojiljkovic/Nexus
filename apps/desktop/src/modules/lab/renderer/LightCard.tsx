@@ -187,11 +187,13 @@ export function LightCard() {
       )}
       <p className="nx-hint">{copy.light.morseTiming}</p>
 
+      {/* A region, not a dialog: the lamp asks nothing and traps no focus, so it
+          must not claim to be modal. Escape and the visible button are its exits. */}
       {overlayVisible && (
         <div
           className={`lab__lamp lab__lamp--${mode}${flashing && !lit ? " lab__lamp--off" : ""}`}
           style={{ opacity: flashing && !lit ? 0.04 : intensity }}
-          role="dialog"
+          role="region"
           aria-label={copy.light.lampLabel}
         >
           <Button

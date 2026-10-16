@@ -274,4 +274,67 @@ export const SHORTCUT_REFERENCE: readonly ShortcutReferenceGroup[] = [
       },
     ],
   },
+  {
+    id: "timers",
+    get title() {
+      return strings.shortcuts.groups.timers;
+    },
+    get caption() {
+      return strings.shortcuts.captions.timers;
+    },
+    rows: [
+      {
+        keys: ["Space"],
+        get description() {
+          return strings.shortcuts.reference.timersStartPause;
+        },
+      },
+      {
+        keys: ["L"],
+        get description() {
+          return strings.shortcuts.reference.timersLap;
+        },
+      },
+      {
+        keys: ["R"],
+        get description() {
+          return strings.shortcuts.reference.timersReset;
+        },
+      },
+    ],
+  },
+  {
+    id: "miniapps",
+    get title() {
+      return strings.shortcuts.groups.miniapps;
+    },
+    get caption() {
+      return strings.shortcuts.captions.miniapps;
+    },
+    rows: [
+      {
+        keys: ["Esc"],
+        get description() {
+          return strings.shortcuts.reference.miniappsClose;
+        },
+      },
+    ],
+  },
+  {
+    id: "signals",
+    get title() {
+      return strings.shortcuts.groups.signals;
+    },
+    get caption() {
+      return strings.shortcuts.captions.signals;
+    },
+    rows: [
+      {
+        keys: ["Esc"],
+        get description() {
+          return strings.shortcuts.reference.signalsLampStop;
+        },
+      },
+    ],
+  },
 ];

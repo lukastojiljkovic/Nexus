@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Chip, EmptyState, LoadingState, TextArea } from "@nexus/ui";
+import { openAppLocation } from "../../../../renderer/src/moduleKit/moduleSurface.js";
 import { browserClock, workerTransport } from "./browser.js";
 import { SentenceTranslatorClient } from "./client.js";
 import { copy } from "./copy.js";
@@ -227,7 +228,20 @@ export function SentenceTranslator({ loadPacks, request, onRequestApplied }: Sen
       {packs === null ? (
         <LoadingState label={copy.heading} rows={3} />
       ) : available.length === 0 ? (
-        <EmptyState title={copy.noPacksTitle} description={copy.noPacksBody} variant="inline" />
+        <EmptyState
+          variant="page"
+          title={copy.noPacksTitle}
+          description={copy.noPacksBody}
+          action={
+            <Button
+              onClick={() => {
+                openAppLocation({ module: "settings", settings: "packs" });
+              }}
+            >
+              {copy.openPacks}
+            </Button>
+          }
+        />
       ) : (
         <>
           <div className="sentences__fields">

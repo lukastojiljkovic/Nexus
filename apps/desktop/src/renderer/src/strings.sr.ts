@@ -8329,6 +8329,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       study: "Učenje",
       notes: "Beleške",
       notesFind: "Pretraga u belešci",
+      timers: "Tajmeri",
+      miniapps: "Mini aplikacije",
+      signals: "Signali",
     },
     /** The reserved Ctrl+1…Ctrl+9 family: positional, so it is described rather than named. */
     moduleNavLabel: "Prelazak na modul po redosledu",
@@ -8339,6 +8342,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notes: "Na početku reda u editoru beleški.",
       /** The find bar's keys work anywhere in the note, unlike the markdown shortcuts above them — hence a group of its own. */
       notesFind: "Dok je otvorena beleška; pretražuje samo nju.",
+      timers: "Na stranici tajmera, van polja za unos.",
+      miniapps: "Dok je mini aplikacija otvorena.",
+      signals: "Dok lampa prekriva ekran.",
     },
     reference: {
       paletteMove: "Kretanje kroz rezultate",
@@ -8368,6 +8374,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       notesFindOpen: "Otvori traku za pretragu u belešci",
       notesFindStep: "Sledeći ili prethodni rezultat",
       notesFindClose: "Zatvori traku i vrati kursor na rezultat",
+      timersStartPause: "Pokreni ili pauziraj štopericu",
+      timersLap: "Zabeleži krug",
+      timersReset: "Resetuj štopericu",
+      miniappsClose: "Zatvori otvorenu mini aplikaciju",
+      signalsLampStop: "Ugasi Morzeovu lampu",
     },
   },
 } as const;

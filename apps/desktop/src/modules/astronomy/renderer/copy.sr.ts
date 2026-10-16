@@ -44,6 +44,8 @@ export const sr = {
   },
   textures: {
     credits: "Teksture:",
+    failed: "Paket „planet-textures“ nije mogao da se pročita, pa tela ostaju bez fotografija.",
+    retry: "Pokušaj ponovo",
     missing:
       "Fotografije tela dodaje paket „planet-textures“ — instaliraj ga u Podešavanjima, na kartici „Paketi sadržaja“.",
   },

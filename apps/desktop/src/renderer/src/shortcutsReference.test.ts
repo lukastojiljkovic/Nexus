@@ -42,6 +42,9 @@ describe("SHORTCUT_REFERENCE", () => {
       "study",
       "notes",
       "notesFind",
+      "timers",
+      "miniapps",
+      "signals",
     ]);
   });
 
@@ -80,7 +83,15 @@ describe("SHORTCUT_REFERENCE", () => {
     const captioned = SHORTCUT_REFERENCE.filter((group) => group.caption !== undefined).map(
       (group) => group.id,
     );
-    expect(captioned).toEqual(["calendar", "study", "notes", "notesFind"]);
+    expect(captioned).toEqual([
+      "calendar",
+      "study",
+      "notes",
+      "notesFind",
+      "timers",
+      "miniapps",
+      "signals",
+    ]);
     for (const group of SHORTCUT_REFERENCE) {
       if (group.caption !== undefined) expect(group.caption.length, group.id).toBeGreaterThan(0);
     }
@@ -185,5 +196,24 @@ describe("the Pretraga u belešci group", () => {
   it("keeps its own caption — its keys work anywhere in the note, unlike the markdown group's", () => {
     expect(groupById("notesFind").caption).toBe(strings.shortcuts.captions.notesFind);
     expect(groupById("notesFind").caption).not.toBe(strings.shortcuts.captions.notes);
+  });
+});
+
+describe("the module groups", () => {
+  it("documents the stopwatch keys of the timers page, the ones the page answers to", () => {
+    const rows = groupById("timers").rows;
+    expect(rows.map((row) => row.description)).toEqual([
+      r().timersStartPause,
+      r().timersLap,
+      r().timersReset,
+    ]);
+    expect(rows.map((row) => row.keys)).toEqual([["Space"], ["L"], ["R"]]);
+  });
+
+  it("documents the Escape that closes an open mini app and the one that stops the Morse lamp", () => {
+    expect(groupById("miniapps").rows[0]?.description).toBe(r().miniappsClose);
+    expect(groupById("miniapps").rows[0]?.keys).toEqual(["Esc"]);
+    expect(groupById("signals").rows[0]?.description).toBe(r().signalsLampStop);
+    expect(groupById("signals").rows[0]?.keys).toEqual(["Esc"]);
   });
 });
