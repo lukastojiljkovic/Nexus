@@ -92,8 +92,9 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** no module page yet. The hand-written `*__error` lines are the
-ones it replaces.
+**Adopted by:** the dashboard's layout, write and widget failures (a shell page,
+so outside the matrix below). No module page yet; the hand-written `*__error`
+lines are the ones it replaces.
 
 ## AsyncSurface
 

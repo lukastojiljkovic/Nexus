@@ -14,7 +14,7 @@ import {
   widgetTaskLists,
 } from "@nexus/core";
 import type { WidgetContract } from "@nexus/core";
-import { Button, Checkbox, Chip, ColumnPlot, EmptyState, Icon, ListRow, LoadingState } from "@nexus/ui";
+import { Button, Checkbox, Chip, ColumnPlot, EmptyState, Icon, ListRow, LoadingState, Notice } from "@nexus/ui";
 import type { IconName } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
 import { NOTIFICATION_SOURCE_MODULE } from "../../shared/notificationModules.js";
@@ -267,14 +267,7 @@ function WidgetSkeleton() {
 /** One widget's isolated failure: this card could not read, and the way to ask again. */
 function WidgetFailure({ onRetry }: { onRetry: () => void }) {
   const s = strings.dashboard.widget;
-  return (
-    <div className="dash__failure" role="alert">
-      <p className="nx-hint dash__quiet">{s.error}</p>
-      <Button size="sm" onClick={onRetry}>
-        {s.retry}
-      </Button>
-    </div>
-  );
+  return <Notice kind="danger" message={s.error} action={{ label: s.retry, onClick: onRetry }} />;
 }
 
 /** Skeleton, isolated failure, or the body — the three states every widget has. */
