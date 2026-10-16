@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { EmptyState } from "@nexus/ui";
+import { EmptyState, Notice } from "@nexus/ui";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
@@ -93,11 +93,7 @@ export function NoteVersionHistory({
     return <p className="nx-hint">{strings.app.loading}</p>;
   }
   if (listError) {
-    return (
-      <div className="note__history-error" role="status">
-        {strings.notes.historyError}
-      </div>
-    );
+    return <Notice kind="danger" message={strings.notes.historyError} />;
   }
   if (versions.length === 0) {
     return <EmptyState variant="inline" title={strings.notes.historyEmpty} />;
@@ -141,9 +137,7 @@ export function NoteVersionHistory({
       </div>
       <div className="note__history-preview">
         {loadError ? (
-          <div className="note__history-error" role="status">
-            {strings.notes.historyError}
-          </div>
+          <Notice kind="danger" message={strings.notes.historyError} />
         ) : selectedBytes === null ? (
           <p className="nx-hint">{strings.app.loading}</p>
         ) : (
