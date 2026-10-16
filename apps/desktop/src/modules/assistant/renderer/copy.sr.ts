@@ -19,6 +19,23 @@ export const sr = {
   page: {
     subtitle: "Razgovor sa lokalnim modelom — bez interneta, sa tvojim podacima.",
     loading: "Učitavanje…",
+    loadFailed: "Asistent se nije pokrenuo.",
+  },
+  dock: {
+    label: "Asistent uz stranicu",
+    picker: "Razgovor",
+    close: "Zatvori asistenta",
+    resize: "Promeni širinu asistenta",
+    settings: "Podešavanja asistenta",
+  },
+  status: {
+    web: {
+      on: "Pretraga weba je uključena.",
+      off: "Pretraga weba je isključena.",
+      blocked: "Pretraga weba je uključena, ali je režim mreže blokira.",
+    },
+    indexed: "Indeksirano odlomaka",
+    pending: "Izvora čeka",
   },
   rail: {
     title: "Razgovori",
@@ -39,6 +56,7 @@ export const sr = {
     emptyBody:
       "Asistent poznaje tvoje beleške, zadatke, događaje i priručnik same aplikacije, i odgovara bez interneta. Izaberi razgovor ili napiši pitanje ispod.",
     thinking: "Razmišljam…",
+    loadingModel: "Učitavam model…",
     /**
      * Šta se kaže kada se krug završi bez odgovora, po kodu koji je petlja
      * poslala (`packages/core/src/assistant/contract.ts`). Ključ je sam kod, pa
@@ -163,6 +181,12 @@ export const sr = {
     question: "Alatka traži dozvolu pre nego što nastavi.",
     allow: "Dozvoli",
     deny: "Ne",
+    /** What the tool's permission changes, as a chip and the sentence under it. */
+    effects: {
+      write: { chip: "Menja aplikaciju", note: "Alatka će nešto promeniti u aplikaciji." },
+      navigate: { chip: "Otvara stranicu", note: "Alatka će otvoriti stranicu u aplikaciji." },
+      network: { chip: "Koristi internet", note: "Upit će napustiti ovaj računar." },
+    },
   },
   citations: {
     sources: "Izvori",
@@ -188,7 +212,8 @@ export const sr = {
     licence: "Licenca",
     download: "Preuzmi",
     stop: "Zaustavi",
-    resume: "Nastavi",
+    working: "Radim…",
+    resume:"Nastavi",
     import: "Uvezi .gguf",
     remove: "Obriši",
     removeTitle: "Obriši model",
@@ -234,5 +259,7 @@ export const sr = {
     load: "Asistent nije učitan.",
     action: "Izmena nije sačuvana.",
     send: "Poruka nije poslata.",
+    lostStream: "Odgovor nije mogao da se pročita. Poruka je sačuvana, a odgovor može biti u razgovoru.",
+    retry: "Pokušaj ponovo",
   },
 };

@@ -129,6 +129,8 @@ export const sr = {
      */
     overviewToggle: "Pregled",
     themeToggle: "Promeni temu",
+    assistantOpen: "Otvori asistenta uz ovu stranicu",
+    assistantClose: "Zatvori asistenta",
     themeDan: "Dan",
     themeNoc: "Noć",
     /**
@@ -8281,6 +8283,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     dialogTitle: "Prečice na tastaturi",
     dialogClose: "Zatvori",
     groups: {
+      assistant: "Asistent",
       global: "Globalno",
       modules: "Moduli",
       palette: "Paleta",
@@ -8304,6 +8307,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       paletteMove: "Kretanje kroz rezultate",
       paletteOpen: "Otvori rezultat ili pokreni komandu",
       paletteClose: "Zatvori paletu",
+      assistantDock: "Otvori ili zatvori asistenta uz ovu stranicu",
       tasksSubtask: "Dodaj podzadatak iz reda za unos",
       tasksCancel: "Otkaži unos u redu ili zatvori pitanje",
       tasksExitSelection: "Izađi iz režima Izbor",

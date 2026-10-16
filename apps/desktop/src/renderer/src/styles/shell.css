@@ -377,6 +377,8 @@ body {
   flex: 1;
   min-height: 0;
   display: flex;
+  /* The assistant dock overlays this body when the window is too narrow for the page beside it. */
+  position: relative;
 }
 /* Two regions, and the split is the whole point: the module list scrolls, the
    foot — whose data this is, „Pretraga", the bell, the profile switcher and the

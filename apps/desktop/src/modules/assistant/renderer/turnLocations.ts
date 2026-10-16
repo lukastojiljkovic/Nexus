@@ -29,12 +29,8 @@ export function turnLocations(events: readonly AssistantTurnEventView[]): readon
   if (events.some(endedTheTurn)) return [];
   const locations: AppLocation[] = [];
   for (const event of events) {
-    if (event.type !== "tool-result") continue;
-    const location = event.result.navigateTo;
-    if (location === undefined) continue;
-    // The assistant is a page like any other, and a turn that asks to be taken
-    // to it asks for the page the user is already reading.
-    if (location.module === manifest.id) continue;
+    const location = placeOf(event);
+    if (location === null) continue;
     const previous = locations[locations.length - 1];
     if (
       location.action === undefined &&
@@ -46,6 +42,20 @@ export function turnLocations(events: readonly AssistantTurnEventView[]): readon
     locations.push(location);
   }
   return locations;
+}
+
+/**
+ * The place one event asks the app to show, or `null`. A docked assistant opens
+ * each one as it arrives (`dockRules.ts`), and the full page opens the list at the end,
+ * so both read a place through this one rule.
+ */
+export function placeOf(event: AssistantTurnEventView): AppLocation | null {
+  if (event.type !== "tool-result") return null;
+  const location = event.result.navigateTo;
+  // The assistant is a page like any other, and a turn that asks to be taken
+  // to it asks for the page the user is already reading.
+  if (location === undefined || location.module === manifest.id) return null;
+  return location;
 }
 
 /** The one error code the loop emits mid-turn and survives (`loop.ts`). */

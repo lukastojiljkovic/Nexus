@@ -1,8 +1,11 @@
 import {
+  Suspense,
+  lazy,
   useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   // Aliased because this file also listens for the DOM's own `KeyboardEvent`
   // (`handleGlobalKeydown`), and the two are different types.
@@ -227,6 +230,12 @@ function compiledInReveal(moduleId: string, item: unknown): PendingIntent | null
 const SEARCH_PAGE_ID = "search";
 
 /**
+ * The assistant docked beside a page (`shortcutsReference.ts` lists Ctrl+J). Lazy,
+ * so the dock and its page's chunk are paid for only by a person who opens it.
+ */
+const AssistantDock = lazy(() => import("../../modules/assistant/renderer/Dock.js"));
+
+/**
  * What the one undo banner says it is offering to undo. A closed map over the
  * wire's own `RestoreUndoKind`, so an operation added to that slot in
  * `shared/ipc.ts` is a compile error here rather than a banner that silently
@@ -330,6 +339,10 @@ export function App() {
   const [visibility, setVisibility] = useState<ShellVisibility>(DEFAULT_SHELL_VISIBILITY);
   const [failed, setFailed] = useState(false);
   const [activeId, setActiveId] = useState("dashboard");
+  /** Whether the assistant is docked beside the page on screen. */
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  /** The page's own pane, which Escape in the dock returns focus to. */
+  const mainRef = useRef<HTMLElement | null>(null);
   // Pending page-level intent (021-e): reveal or create, tagged with the
   // module that owns it. That page consumes it on arrival and reports back
   // via onIntentHandled (`clearIntent`), so a later return to that module
@@ -1435,6 +1448,12 @@ export function App() {
         setActiveId(moduleId);
         return;
       }
+      // Ctrl+J is not remappable (`shortcutsReference.ts`): it opens the assistant beside the page.
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        setAssistantOpen((open) => !open);
+        return;
+      }
       for (const action of SHORTCUT_ACTIONS) {
         if (!matchesChord(shortcuts[action.id], event)) continue;
         event.preventDefault();
@@ -1696,6 +1715,8 @@ export function App() {
         surface={effectiveId === SEARCH_PAGE_ID ? strings.search.navLabel : moduleName(effectiveId)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        assistantOpen={assistantOpen}
+        onToggleAssistant={() => setAssistantOpen((open) => !open)}
         // The shell half of the app menu. „Prikaz" and „Prozor" belong to the
         // strip and it builds those itself; these are the four commands that
         // need the shell's own state — where to navigate, which account is
@@ -2077,6 +2098,8 @@ export function App() {
         </nav>
 
         <main
+          ref={mainRef}
+          tabIndex={-1}
           className="app__main"
           // Which page is ON SCREEN, which during a navigation is still the one
           // being left (`shownId`); busy until it is the one asked for.
@@ -2360,6 +2383,17 @@ export function App() {
             </ModuleSettingsNavProvider>
           </PageSlot>
         </main>
+        {/* Not beside the assistant's own page: two copies of one conversation would each keep their own turn. */}
+        {assistantOpen && activeProfile !== undefined && shownId !== "assistant" && (
+          <Suspense fallback={null}>
+            <AssistantDock
+              profileId={activeProfile.id}
+              beside={shownId}
+              onClose={() => setAssistantOpen(false)}
+              onEscape={() => mainRef.current?.focus()}
+            />
+          </Suspense>
+        )}
       </div>
 
       {activeProfile && (

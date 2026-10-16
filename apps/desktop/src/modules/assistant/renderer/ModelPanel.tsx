@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Button, Card, Chip, ConfirmDialog, EmptyState, ListRow, TextField } from "@nexus/ui";
 import type { ModelEntry, ModelTier } from "@nexus/core";
+import { ExternalLink } from "../../../renderer/src/moduleKit/ExternalLink.js";
 import { activeLocale, numberFormat } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import type { AssistantSetupView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
-import { openAppLocation, openWebAddress } from "./location.js";
+import { openAppLocation } from "./location.js";
 
 /**
  * THE MODELS AND SETUP PANE (ADR-106 item 6): what this machine can run, what it
@@ -25,8 +26,12 @@ import { openAppLocation, openWebAddress } from "./location.js";
  *
  * **A model's licence travels with it.** Every entry the runtime offers carries
  * its licence name and address, and this pane draws both and opens the address
- * through `window.nexus.openExternal` (ADR-103) - the same one channel the
- * citations use, which refuses anything that is not https.
+ * through the kit's `ExternalLink` (ADR-103), the same one channel the citations
+ * use, which refuses anything that is not https.
+ *
+ * **A problem is shown in the card that had it.** Each card names the action it
+ * ran, a busy hint sits beside the control that started it, and a refusal is drawn
+ * at the foot of the card that was working - not three cards away below the fold.
  *
  * **The installed list is where a model is chosen to answer.** A downloaded or
  * imported chat model serves no tier, so without a choice it can never answer;
@@ -34,6 +39,9 @@ import { openAppLocation, openWebAddress } from "./location.js";
  * (migration 92's `chat_model_id`). An embedding model is offered nothing,
  * because it cannot answer at all - main refuses such an id by the same rule.
  */
+
+/** The three cards of this pane, each of which owns the problems its own actions raise. */
+type PanelCard = "setup" | "installed" | "search";
 
 export function ModelPanel({
   profileId,
@@ -45,32 +53,55 @@ export function ModelPanel({
   readonly onSetup: (view: AssistantSetupView) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  /** The action running now: the card it is in, and the control that started it. It disables the others. */
+  const [working, setWorking] = useState<{ readonly card: PanelCard; readonly key: string } | null>(
+    null,
+  );
+  const [problem, setProblem] = useState<{ readonly card: PanelCard; readonly text: string } | null>(
+    null,
+  );
   const [removing, setRemoving] = useState<ModelEntry | null>(null);
+  const busy = working !== null;
 
-  /** Runs one op and hands the fresh view back; a refusal is shown, never swallowed. */
+  /**
+   * Runs one op and hands the fresh view back; a refusal is shown in the card that
+   * ran it, never swallowed. `key` names the control, so only that control says it is working.
+   */
   async function run(
+    card: PanelCard,
+    key: string,
     action: () => Promise<AssistantSetupView>,
     failure: string = copy.errors.action,
   ): Promise<void> {
-    setBusy(true);
+    setWorking({ card, key });
     setProblem(null);
     try {
       onSetup(await action());
     } catch (error) {
-      setProblem(failure);
+      setProblem({ card, text: failure });
       console.error("Nexus: an assistant model action failed:", error);
     } finally {
-      setBusy(false);
+      setWorking(null);
     }
   }
+
+  /** The hint that sits beside the control which started the work, and only that one. */
+  const workingHint = (key: string) =>
+    working?.key === key ? <span className="nx-hint">{copy.setup.working}</span> : null;
+
+  /** A card's own problem, drawn at its foot. */
+  const problemIn = (card: PanelCard) =>
+    problem?.card === card ? (
+      <p className="asst__error" role="alert">
+        {problem.text}
+      </p>
+    ) : null;
 
   const download = setup.download;
 
   return (
     <div className="asst__models">
-      <Card className="asst__card" title={copy.setup.title}>
+      <Card className="asst__card" title={copy.setup.title} aria-busy={working?.card === "setup" || undefined}>
         <p className="nx-hint">{copy.setup.intro}</p>
         <div className="asst__facts">
           <span className="nx-hint">{copy.setup.hardwareTitle}</span>
@@ -106,21 +137,24 @@ export function ModelPanel({
                   pick.installed ? (
                     <Chip variant="data">{copy.setup.installed}</Chip>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      disabled={busy || !setup.downloadsAllowed}
-                      onClick={() =>
-                        void run(() =>
-                          window.nexus.modules.assistant.downloadModel({
-                            profileId,
-                            modelId: pick.model.id,
-                          }),
-                        )
-                      }
-                    >
-                      {copy.setup.download}
-                    </Button>
+                    <span className="asst__actions">
+                      {workingHint(`download:${pick.model.id}`)}
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={busy || !setup.downloadsAllowed}
+                        onClick={() =>
+                          void run("setup", `download:${pick.model.id}`, () =>
+                            window.nexus.modules.assistant.downloadModel({
+                              profileId,
+                              modelId: pick.model.id,
+                            }),
+                          )
+                        }
+                      >
+                        {copy.setup.download}
+                      </Button>
+                    </span>
                   )
                 }
               >
@@ -128,13 +162,7 @@ export function ModelPanel({
                   <span className="asst__pick-name">{pick.model.title}</span>
                   <span className="nx-hint">
                     {`${copy.setup.size}: ${formatBytes(pick.model.sizeBytes)} · ${copy.setup.licence}: `}
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      onClick={() => void openWebAddress(pick.model.licence.url)}
-                    >
-                      {pick.model.licence.name}
-                    </Button>
+                    <ExternalLink href={pick.model.licence.url}>{pick.model.licence.name}</ExternalLink>
                   </span>
                   <span className="nx-hint">{pick.reason[activeLocale()]}</span>
                 </span>
@@ -152,7 +180,7 @@ export function ModelPanel({
               <Button
                 size="sm"
                 onClick={() =>
-                  void run(() =>
+                  void run("setup", "download-stop", () =>
                     window.nexus.modules.assistant.cancelDownload({
                       profileId,
                     }),
@@ -165,8 +193,9 @@ export function ModelPanel({
               <Button
                 size="sm"
                 variant="primary"
+                disabled={busy}
                 onClick={() =>
-                  void run(() =>
+                  void run("setup", "download-resume", () =>
                     window.nexus.modules.assistant.resumeDownload({
                       profileId,
                       modelId: download.model.id,
@@ -177,6 +206,7 @@ export function ModelPanel({
                 {copy.setup.resume}
               </Button>
             )}
+            {workingHint("download-resume")}
             {download.status === "failed" && (
               <span className="asst__error">{copy.setup.downloadFailed}</span>
             )}
@@ -204,17 +234,23 @@ export function ModelPanel({
             size="sm"
             disabled={busy}
             onClick={() =>
-              void run(() =>
+              void run("setup", "import", () =>
                 window.nexus.modules.assistant.importModel({ profileId }),
               )
             }
           >
             {copy.setup.import}
           </Button>
+          {workingHint("import")}
         </div>
+        {problemIn("setup")}
       </Card>
 
-      <Card className="asst__card" title={copy.setup.installedTitle}>
+      <Card
+        className="asst__card"
+        title={copy.setup.installedTitle}
+        aria-busy={working?.card === "installed" || undefined}
+      >
         {setup.installed.length === 0 ? (
           <EmptyState variant="inline" title={copy.setup.noModel} description={copy.setup.intro} />
         ) : (
@@ -237,7 +273,7 @@ export function ModelPanel({
                         variant="quiet"
                         disabled={busy}
                         onClick={() =>
-                          void run(() =>
+                          void run("installed", "chat-recommended", () =>
                             window.nexus.modules.assistant.setChatModel({
                               profileId,
                               modelId: null,
@@ -255,7 +291,7 @@ export function ModelPanel({
                         variant="quiet"
                         disabled={busy}
                         onClick={() =>
-                          void run(() =>
+                          void run("installed", `chat:${entry.model.id}`, () =>
                             window.nexus.modules.assistant.setChatModel({
                               profileId,
                               modelId: entry.model.id,
@@ -267,9 +303,10 @@ export function ModelPanel({
                       </Button>
                     )
                   )}
-                  <Button size="sm" variant="quiet" onClick={() => setRemoving(entry.model)}>
+                  <Button size="sm" variant="quiet" disabled={busy} onClick={() => setRemoving(entry.model)}>
                     {copy.setup.remove}
                   </Button>
+                  {workingHint(`chat:${entry.model.id}`)}
                 </span>
               }
             >
@@ -279,9 +316,14 @@ export function ModelPanel({
             </ListRow>
           ))
         )}
+        {problemIn("installed")}
       </Card>
 
-      <Card className="asst__card" title={copy.setup.searchTitle}>
+      <Card
+        className="asst__card"
+        title={copy.setup.searchTitle}
+        aria-busy={working?.card === "search" || undefined}
+      >
         <div className="asst__search">
           <TextField
             label={copy.setup.searchTitle}
@@ -294,7 +336,7 @@ export function ModelPanel({
             size="sm"
             disabled={busy || query.trim() === "" || !setup.downloadsAllowed}
             onClick={() =>
-              void run(() =>
+              void run("search", "search", () =>
                 window.nexus.modules.assistant.searchModels({
                   profileId,
                   query: query.trim(),
@@ -304,6 +346,7 @@ export function ModelPanel({
           >
             {copy.setup.search}
           </Button>
+          {workingHint("search")}
         </div>
         <p className="nx-hint">{copy.setup.searchHint}</p>
         {setup.search !== null && (
@@ -316,20 +359,23 @@ export function ModelPanel({
                   key={entry.id}
                   leading={<span className="asst__pick-name">{entry.title}</span>}
                   trailing={
-                    <Button
-                      size="sm"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() =>
-                          window.nexus.modules.assistant.downloadModel({
-                            profileId,
-                            modelId: entry.id,
-                          }),
-                        )
-                      }
-                    >
-                      {copy.setup.download}
-                    </Button>
+                    <span className="asst__actions">
+                      {workingHint(`search-download:${entry.id}`)}
+                      <Button
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void run("search", `search-download:${entry.id}`, () =>
+                            window.nexus.modules.assistant.downloadModel({
+                              profileId,
+                              modelId: entry.id,
+                            }),
+                          )
+                        }
+                      >
+                        {copy.setup.download}
+                      </Button>
+                    </span>
                   }
                 >
                   <span className="nx-hint">
@@ -340,13 +386,8 @@ export function ModelPanel({
             )}
           </div>
         )}
+        {problemIn("search")}
       </Card>
-
-      {problem !== null && (
-        <p className="asst__error" role="alert">
-          {problem}
-        </p>
-      )}
 
       {removing !== null && (
         <ConfirmDialog
@@ -359,7 +400,7 @@ export function ModelPanel({
           onConfirm={() => {
             const model = removing;
             setRemoving(null);
-            void run(() =>
+            void run("installed", `remove:${model.id}`, () =>
               window.nexus.modules.assistant.removeModel({
                 profileId,
                 modelId: model.id,

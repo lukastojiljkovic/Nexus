@@ -33,7 +33,7 @@ describe("SHORTCUT_REFERENCE", () => {
   it("gives every group a unique id", () => {
     const ids = SHORTCUT_REFERENCE.map((group) => group.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["palette", "tasks", "calendar", "study", "notes", "notesFind"]);
+    expect(ids).toEqual(["assistant", "palette", "tasks", "calendar", "study", "notes", "notesFind"]);
   });
 
   it("titles every group from the shared group copy", () => {
