@@ -362,7 +362,8 @@ export function TitleBar({
         <button
           type="button"
           className="app__titlebar-button app__titlebar-button--theme"
-          aria-label={strings.app.themeToggle}
+          aria-label={strings.app.themeDark}
+          aria-pressed={theme === "noc"}
           title={theme === "noc" ? strings.app.themeDan : strings.app.themeNoc}
           onClick={onToggleTheme}
         >

@@ -140,9 +140,10 @@ What the component enforces, so a caller cannot forget any of it:
 containing block, so a fixed panel is already positioned against the window, and
 `packages/ui` does not depend on `react-dom`.
 
-**Adopted by:** the shared `ConfirmDialog` only. Six module renderer files still
-draw their own `role="dialog"` (cookbook, culture, lab, maps, reader, signals),
-and the shell's module launcher still uses the `recur-dialog__*` recipe.
+**Adopted by:** the shared `ConfirmDialog`, and the shell's module launcher and
+shortcuts reference. Six module renderer files still draw their own
+`role="dialog"` (cookbook, culture, lab, maps, reader, signals), and the
+`recur-dialog__*` recipe still wears the other renderer dialogs.
 
 ## ConfirmDialog
 
@@ -183,8 +184,9 @@ that is named in the page's words. `kind="error"` is the same component
 announcing assertively with the `error` glyph; both kinds carry a shape as well
 as an ink.
 
-**Adopted by:** no module page, and the shell's two (Finance, Habits). The undo
-bars that predate it are the ones to convert.
+**Adopted by:** no module page; the shell's rail, for a failed profile action and
+a failed reload of the device's module order. The undo bars that predate it
+(Finance, Habits) are the ones to convert.
 
 ## ListDetail
 
@@ -328,8 +330,9 @@ A count, not a boolean: nested modals are the ordinary case, and a release by th
 inner one must not tell the guard the outer one has closed. The release is
 idempotent, because React runs effects twice in development.
 
-**Wired into the shell:** not yet. Until it is, the shell's shortcuts act through
-an open dialog.
+**Wired into the shell:** yes. The shell's chord handler returns early while
+`isModalOpen()`, and the command palette holds a layer while it is open. The
+palette's own chord therefore does not close it: Escape and the backdrop do.
 
 ## Where the rules are enforced
 

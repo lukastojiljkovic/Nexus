@@ -1,8 +1,7 @@
-import { useEffect, useId, useState } from "react";
+import { useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { createPortal } from "react-dom";
 import type { ModuleRegistry } from "@nexus/core";
-import { Button, Icon, TextField } from "@nexus/ui";
+import { Button, Dialog, Icon, TextField } from "@nexus/ui";
 
 import type { ShellVisibility } from "../../shared/moduleVisibility.js";
 import { moduleIconName } from "./moduleIcon.js";
@@ -15,7 +14,6 @@ import {
   type LauncherGroup,
 } from "./moduleLauncher.js";
 import { fill, lookup, strings } from "./strings.js";
-import { useFocusTrap } from "./useFocusTrap.js";
 
 /**
  * „Svi moduli" (ADR-093 §4): every module the profile has on, as a grid of
@@ -29,11 +27,11 @@ import { useFocusTrap } from "./useFocusTrap.js";
  * is also why it searches: the question it answers is „where is X", and X is
  * usually half a word.
  *
- * The house dialog recipe (`CanvasCardPicker`'s, which is the widget gallery's):
- * portalled to `document.body`, Escape and the backdrop both close, focus lands
- * in the panel and returns where it came from, and nothing here writes a
- * preference of its own — the pin toggle reports up, and the shell owns the
- * list.
+ * Drawn with the kit's `Dialog`: Escape and the backdrop close, focus lands in
+ * the panel and returns where it came from, and the open dialog holds the modal
+ * layer, so the shell's chords (Alt+2, Ctrl+K…) cannot act through it. Nothing
+ * here writes a preference of its own — the pin toggle reports up, and the shell
+ * owns the list.
  */
 
 export interface ModuleLauncherProps {
@@ -61,14 +59,6 @@ export function ModuleLauncherDialog({
   const s = strings.app.launcher;
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const titleId = useId();
-  const descriptionId = useId();
-
-  // Focus lands on the search field — the trap's own default (the first tabbable
-  // descendant, which is the `TextField`'s input), the same way the canvas card
-  // picker opens. The field is the surface: an overlay that opened anywhere else
-  // would be a grid you have to Tab into before you can type.
-  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
 
   // Recomputed rather than memoised, and that is a locale question: the copy is
   // read from the live table, which is rewritten in place when the language
@@ -83,17 +73,6 @@ export function ModuleLauncherDialog({
   // Out-of-range answers nothing rather than clamping: the list shrinks as the
   // query narrows, and this keeps the render honest about which tile is active.
   const activeId = ids[activeIndex];
-
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
 
   /**
    * ↑/↓ move the highlight and Enter opens it, both from the field the caret is
@@ -192,52 +171,42 @@ export function ModuleLauncherDialog({
     offset += group.tiles.length;
   }
 
-  return createPortal(
-    <div className="recur-dialog__overlay">
-      <div className="recur-dialog__backdrop" onClick={onClose} />
-      <div
-        ref={panelRef}
-        className="recur-dialog__panel launcher__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-      >
-        <h2 id={titleId} className="recur-dialog__title">
-          {s.label}
-        </h2>
-        <p id={descriptionId} className="nx-hint">
-          {s.description}
-        </p>
+  // Focus lands on the search field: the dialog's default is the first tabbable
+  // descendant, which is the `TextField`'s input. The field is the surface — an
+  // overlay that opened anywhere else would be a grid you have to Tab into before
+  // you can type.
+  return (
+    <Dialog
+      className="launcher__panel"
+      title={s.label}
+      description={s.description}
+      onClose={onClose}
+      actions={
+        <Button className="nx-dialog__cancel" onClick={onClose}>
+          {s.close}
+        </Button>
+      }
+    >
+      <TextField
+        label={s.searchLabel}
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          // A narrowed list has a different first tile, so the highlight goes
+          // back to the top rather than pointing at whatever index the old
+          // list happened to leave it on.
+          setActiveIndex(0);
+        }}
+        onKeyDown={onFieldKeyDown}
+      />
 
-        <TextField
-          label={s.searchLabel}
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            // A narrowed list has a different first tile, so the highlight goes
-            // back to the top rather than pointing at whatever index the old
-            // list happened to leave it on.
-            setActiveIndex(0);
-          }}
-          onKeyDown={onFieldKeyDown}
-        />
-
-        <div className="launcher__body">
-          {visible.length === 0 ? (
-            <p className="nx-hint">{strings.search.emptyResults}</p>
-          ) : (
-            sections
-          )}
-        </div>
-
-        <div className="recur-dialog__actions">
-          <Button className="recur-dialog__cancel" onClick={onClose}>
-            {s.close}
-          </Button>
-        </div>
+      <div className="launcher__body">
+        {visible.length === 0 ? (
+          <p className="nx-hint">{strings.search.emptyResults}</p>
+        ) : (
+          sections
+        )}
       </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

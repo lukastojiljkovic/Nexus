@@ -64,6 +64,8 @@ export interface DialogProps {
   actions?: ReactNode;
   /** The panel's body, between the description and the answers. */
   children?: ReactNode;
+  /** The caller's own class, for a panel wider than the house width (the module launcher). */
+  className?: string | undefined;
 }
 
 /**
@@ -104,6 +106,7 @@ export function Dialog({
   busy = false,
   actions,
   children,
+  className,
 }: DialogProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -129,7 +132,7 @@ export function Dialog({
       <div className="nx-dialog__backdrop" onClick={busy ? undefined : onClose} />
       <div
         ref={panelRef}
-        className="nx-dialog__panel"
+        className={className === undefined ? "nx-dialog__panel" : `nx-dialog__panel ${className}`}
         {...dialogAria({ titleId, describedById: description === undefined ? undefined : descriptionId })}
       >
         <h2 id={titleId} className="nx-dialog__title">

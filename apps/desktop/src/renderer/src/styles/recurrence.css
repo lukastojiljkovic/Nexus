@@ -232,11 +232,10 @@
   color: var(--nx-text);
 }
 
-/* Shortcuts reference (ADR-040) — the house dialog recipe above, widened for a
-   two-column list and scrolling in its body rather than growing past the
-   window. It reuses those classes outright and only overrides what a reference
-   needs; nothing about the overlay, backdrop or title differs. */
-.shortcuts-dialog__panel.recur-dialog__panel {
+/* Shortcuts reference (ADR-040) — the kit's `Dialog`, widened for a two-column
+   list and scrolling in its body rather than growing past the window. Only the
+   width and the body are the reference's own. */
+.shortcuts-dialog__panel.nx-dialog__panel {
   width: min(520px, 94vw);
   max-height: min(680px, 86vh);
 }
