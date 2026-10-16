@@ -101,6 +101,23 @@ function registryWith(web: WebService | null = null): ToolRegistry {
         throw new Error("Test setup: timers.cancel was not expected here.");
       },
     },
+    focus: {
+      start: unexpected("focus.start"),
+      stop: unexpected("focus.stop"),
+      cancel: unexpected("focus.cancel"),
+      pause: unexpected("focus.pause"),
+      resume: unexpected("focus.resume"),
+      status: () => null,
+    },
+    notifications: {
+      list: () => [],
+      snooze: unexpected("notifications.snooze"),
+      dismiss: unexpected("notifications.dismiss"),
+      settings: unexpected("notifications.settings"),
+      updateSettings: unexpected("notifications.updateSettings"),
+      setSourceEnabled: unexpected("notifications.setSourceEnabled"),
+      upcoming: () => [],
+    },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
     userData: () => tmpdir(),
@@ -120,6 +137,13 @@ function countByArea(tools: readonly Tool[]): Record<string, number> {
     counts[area] = (counts[area] ?? 0) + 1;
   }
   return counts;
+}
+
+/** A host method no test in this file should reach. */
+function unexpected(name: string): () => never {
+  return () => {
+    throw new Error(`Test setup: ${name} was not expected here.`);
+  };
 }
 
 describe("createToolRegistry", () => {
@@ -145,16 +169,19 @@ describe("createToolRegistry", () => {
       files: 2,
       finance: 8,
       fitness: 8,
+      focus: 5,
       habits: 7,
       lab: 2,
       library: 2,
       maps: 1,
       miniapps: 1,
       notes: 18,
+      notifications: 5,
       packs: 4,
       pantry: 2,
       reader: 1,
       recorder: 1,
+      reminders: 1,
       search: 3,
       settings: 6,
       study: 14,

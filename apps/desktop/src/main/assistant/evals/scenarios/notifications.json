@@ -1,0 +1,118 @@
+{
+  "scenarios": [
+    {
+      "id": "notifications-list-sr",
+      "title": "Šta sam propustio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta sam sve propustio u obaveštenjima?" }
+      ],
+      "tools": [
+        {
+          "name": "notifications.list",
+          "effect": "read",
+          "content": "Obaveštenja (2):\n- n-1 · zadatak · Predaj seminarski\n- n-2 · dokument · Pasoš ističe (odloženo do 2026-10-16 08:00)"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "notifications.list", "args": {} }],
+        "answerContains": ["seminarskog"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notifications.list", "arguments": {} }] },
+        { "text": "Imate dva obaveštenja: predaja seminarskog i to što pasoš ističe, koje ste odložili." }
+      ]
+    },
+    {
+      "id": "notifications-dismiss-sr",
+      "title": "Uklanjanje obaveštenja iz centra",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Ukloni obaveštenje o predaji seminarskog, već sam ga predao." }
+      ],
+      "tools": [
+        {
+          "name": "notifications.dismiss",
+          "effect": "write",
+          "summary": { "sr": "Ukloni obaveštenje „Predaj seminarski“ iz centra.", "en": "Remove the notification “Predaj seminarski” from the centre." },
+          "content": "Obaveštenje „Predaj seminarski“ je uklonjeno iz centra."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "notifications.dismiss", "args": { "id": { "eq": "n-1" } } }],
+        "answerContains": ["seminarsk"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notifications.dismiss", "arguments": { "id": "n-1" } }] },
+        { "text": "Uklonio sam obaveštenje o predaji seminarskog iz centra." }
+      ]
+    },
+    {
+      "id": "notifications-list-en",
+      "title": "What reminders are coming up",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What will remind me in the next few days?" }
+      ],
+      "tools": [
+        {
+          "name": "reminders.due",
+          "effect": "read",
+          "content": "Reminders for the next 7 days:\n- 2026-10-18 · Passport expires · in 30 days"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "reminders.due", "args": {} }],
+        "answerContains": ["passport"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "reminders.due", "arguments": {} }] },
+        { "text": "Your passport expiry reminder is due on 2026-10-18." }
+      ]
+    },
+    {
+      "id": "notifications-configure-en",
+      "title": "Turning off habit reminders",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Turn off the habit reminders, I don't want them any more." }
+      ],
+      "tools": [
+        {
+          "name": "notifications.configure",
+          "effect": "write",
+          "summary": { "sr": "Promeni podešavanja obaveštenja: isključi podsetnike za navike.", "en": "Change notification settings: turn off habit reminders." },
+          "content": "The notification settings were changed."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "notifications.configure", "args": { "source": { "eq": "habit" }, "enabled": { "eq": false } } }],
+        "answerContains": ["habit"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "notifications.configure", "arguments": { "source": "habit", "enabled": false } }] },
+        { "text": "Habit reminders are off. Everything else stays on." }
+      ]
+    }
+  ]
+}

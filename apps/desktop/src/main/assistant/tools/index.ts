@@ -74,12 +74,14 @@ import { electronicsTools } from "./electronics.js";
 import { emergencyTools } from "./emergency.js";
 import { fileTools } from "./files.js";
 import { financeTools } from "./finance.js";
+import { type FocusHost, focusTools } from "./focus.js";
 import { fitnessTools } from "./fitness.js";
 import { habitTools } from "./habits.js";
 import { labTools } from "./lab.js";
 import { libraryTools } from "./library.js";
 import { mapsTools } from "./maps.js";
 import { miniappsTools } from "./miniapps.js";
+import { notificationTools, type NotificationsHost } from "./notifications.js";
 import { noteTools } from "./notes.js";
 import { packTools, type PackManager } from "./packs.js";
 import { pantryTools } from "./pantry.js";
@@ -125,6 +127,10 @@ export interface ToolDeps {
   readonly userData: () => string;
   /** The release running now (`app.getVersion()`), for the Settings read. */
   readonly appVersion: () => string;
+  /** The FOKUS module's running phase, as main owns it (`main/index.ts`). */
+  readonly focus: FocusHost;
+  /** The notification centre, its settings and the reminders due, as main owns them. */
+  readonly notifications: NotificationsHost;
   /** The web service, or `null` in a build without one. Its tools appear only when the user turned web search on. */
   readonly web: WebService | null;
 }
@@ -166,6 +172,8 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     }),
     ...fitnessTools({ profileDb: deps.profileDb, now: deps.now }),
     ...dashboardTools({ profileDb: deps.profileDb, now: deps.now, modules: deps.modules }),
+    ...focusTools({ focus: deps.focus, now: deps.now }),
+    ...notificationTools({ notifications: deps.notifications }),
     // The wave-1 kit modules, in the order their manifests sort: library,
     // culture, car, pantry, cookbook, recorder, calculator, reader, wiki, maps,
     // lab, miniapps.

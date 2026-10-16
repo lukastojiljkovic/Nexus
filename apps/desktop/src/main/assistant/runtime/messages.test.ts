@@ -317,6 +317,16 @@ function realTools(): readonly ToolSpec[] {
         throw new Error("The grammar test never cancels a countdown.");
       },
     },
+    focus: { start: () => { throw new Error("Test setup: not expected in this test."); }, stop: () => { throw new Error("Test setup: not expected in this test."); }, cancel: () => { throw new Error("Test setup: not expected in this test."); }, pause: () => { throw new Error("Test setup: not expected in this test."); }, resume: () => { throw new Error("Test setup: not expected in this test."); }, status: () => null },
+    notifications: {
+      list: () => [],
+      snooze: () => { throw new Error("Test setup: not expected in this test."); },
+      dismiss: () => { throw new Error("Test setup: not expected in this test."); },
+      settings: () => { throw new Error("Test setup: not expected in this test."); },
+      updateSettings: () => { throw new Error("Test setup: not expected in this test."); },
+      setSourceEnabled: () => { throw new Error("Test setup: not expected in this test."); },
+      upcoming: () => [],
+    },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
     userData: () => "",

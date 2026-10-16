@@ -162,6 +162,8 @@ export class AssistantProfile {
       search: this.services.search,
       packs: this.services.packs,
       timers: this.timers,
+      focus: this.services.focus,
+      notifications: this.services.notifications,
       modules: this.services.modules,
       visibility: () => resolveShellVisibility(this.services.userData()),
       userData: () => this.services.userData(),

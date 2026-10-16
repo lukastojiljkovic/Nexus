@@ -1,0 +1,120 @@
+{
+  "scenarios": [
+    {
+      "id": "focus-status-sr",
+      "title": "Koliko je ostalo u fokusu",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koliko mi je ostalo u fokusu?" }
+      ],
+      "tools": [
+        {
+          "name": "focus.status",
+          "effect": "read",
+          "content": "Radi faza fokusa: rad, plan 25 min, preostalo 12 min."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "focus.status", "args": {} }],
+        "answerContains": ["12"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "focus.status", "arguments": {} }] },
+        { "text": "U fokusu vam je ostalo još 12 minuta." }
+      ]
+    },
+    {
+      "id": "focus-start-sr",
+      "title": "Pokretanje Pomodora od 25 minuta",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Pokreni mi Pomodoro od 25 minuta za pisanje seminarskog." }
+      ],
+      "tools": [
+        {
+          "name": "focus.start",
+          "effect": "write",
+          "summary": { "sr": "Pokreni fazu fokusa: rad, 25 min.", "en": "Start a focus phase: work, 25 min." },
+          "content": "Pokrenuta faza fokusa: rad, plan 25 min."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "focus.start", "args": { "minutes": { "eq": 25 }, "kind": { "eq": "work" } } }
+        ],
+        "answerContains": ["25"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "focus.start", "arguments": { "minutes": 25, "kind": "work", "label": "Pisanje seminarskog" } }] },
+        { "text": "Pokrenuo sam Pomodoro od 25 minuta za pisanje seminarskog, pa sada radite bez prekida." }
+      ]
+    },
+    {
+      "id": "focus-status-en",
+      "title": "Whether a focus phase is running",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Is a focus session running right now?" }
+      ],
+      "tools": [
+        {
+          "name": "focus.status",
+          "effect": "read",
+          "content": "No focus phase is running right now."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "focus.status", "args": {} }],
+        "answerContains": ["running"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "focus.status", "arguments": {} }] },
+        { "text": "No focus phase is running right now." }
+      ]
+    },
+    {
+      "id": "focus-stop-en",
+      "title": "Stopping and saving the focus phase",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Stop the focus timer and save it." }
+      ],
+      "tools": [
+        {
+          "name": "focus.stop",
+          "effect": "write",
+          "summary": { "sr": "Zaustavi fazu fokusa i sačuvaj je u istoriji.", "en": "Stop the focus phase and save it to the history." },
+          "content": "Focus phase stopped and saved (f-1), 18 min of work."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "focus.stop", "args": { "discard": { "eq": false } } }],
+        "answerContains": ["18"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "focus.stop", "arguments": { "discard": false } }] },
+        { "text": "I stopped the focus phase and saved it: 18 minutes of work." }
+      ]
+    }
+  ]
+}

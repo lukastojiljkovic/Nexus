@@ -37,11 +37,13 @@ import type {
   HabitStore,
   NotificationStore,
   PlanStore,
+  Subject,
   SubjectStore,
   Task,
   TaskStore,
   TrackedDocument,
 } from "@nexus/db";
+import type { UpcomingReminder } from "./assistant/tools/notifications.js";
 import { localToday, localTime } from "./clock.js";
 import {
   catchUpDigestCopy,
@@ -522,78 +524,9 @@ function checkProfile(
     deps.enabledModuleIds(profileId),
   );
 
-  const documents = deps.documentStore(profileId).listActive();
-  const events = deps.eventStore(profileId).listActive();
-  const exams = deps.examStore(profileId).listActive();
-  const subjects = deps.subjectStore(profileId).listActive();
-  const tasks = deps.taskStore(profileId).listActive();
-  const subscriptions = finRecurring.listActive();
-  const subscriptionLeads = new Map(
-    subscriptions
-      .filter((row): row is typeof row & { reminderDays: number } => row.reminderDays !== null)
-      .map((row) => [row.id, row.reminderDays] as const),
-  );
-  // Read from the RULE, over exactly the window the LONGEST lead in use needs —
-  // a renewal further ahead than that cannot have a fire date on or before
-  // today, so reading it would be work with no answer in it. Empty when nothing
-  // reminds, which is the common case (no subscription ships with a lead).
-  const renewalHorizon = Math.max(0, ...subscriptionLeads.values());
-  const renewals =
-    subscriptionLeads.size === 0
-      ? []
-      : finRecurring.upcoming({ from: today, to: shiftDayKey(today, renewalHorizon) });
-  // HABIT slice c. A trailing SEVEN days, which is exactly what the filter can
-  // ask about and never more: the most recent week opening is at most six days
-  // back whichever day a week starts on, so this window always covers the whole
-  // of the current one, and the days of it that fall in the previous week are
-  // simply days the filter never looks at.
-  const habitStore = deps.habitStore(profileId);
-  const habits = habitStore.listActive();
-  const habitRows = habitReminderRows(
-    habits,
-    habitStore.listAllEntries({ from: shiftDayKey(today, -(DAYS_PER_WEEK - 1)), to: today }),
-  );
-
-  const todaysBlocks = plans
-    .listBlocksInRange(today, today)
-    .filter((block) => block.status === "planned");
-
-  const studyDays: StudyDayReminderInput[] =
-    todaysBlocks.length === 0
-      ? []
-      : [
-          {
-            date: today,
-            blockCount: todaysBlocks.length,
-            totalMinutes: todaysBlocks.reduce((sum, block) => sum + block.minutes, 0),
-          },
-        ];
-
-  const candidates = deriveNotificationCandidates({
-    documents: documents.map((doc) => ({
-      id: doc.id,
-      expiryDate: doc.expiryDate,
-      reminderOffsets: doc.reminderOffsets,
-    })),
-    exams: exams.map((exam) => ({ id: exam.id, examDate: exam.examDate })),
-    events: eventReminderInputs(events, today),
-    studyDays,
-    tasks: taskReminderInputs(tasks),
-    subscriptions: subscriptionReminderInputs(renewals, subscriptionLeads),
-    habits: habitReminderInputs(habitRows, today, SCHEDULER_WEEK_START),
-    // EVERY source, deliberately — this call answers „what exists today", and
-    // `isDeliverable` below answers „what may be shown". Filtering here instead
-    // conflated the two, and the cost fell on snoozed rows: a source switched
-    // off stopped deriving, so `dueSnoozed` could not tell „the passport was
-    // deleted" from „the user turned document reminders off", and DISMISSED the
-    // snooze for both. Turning the source back on did not bring it back either,
-    // because the ledger key survives a dismiss. Deriving unconditionally makes
-    // the two cases distinguishable, and holding cost-free.
-    enabledSources: DERIVABLE_SOURCES,
-    today,
-    nowLocalTime: nowTime,
-    morningHour: settings.morningHour,
-  });
+  const rows = readReminderRows(deps, profileId, today, nowTime, settings.morningHour);
+  const { candidates } = rows;
+  const copyContext = copyContextOf(rows, today);
 
   const ledgerKeys = new Set(ntf.listLedgerKeys().map(occurrenceKey));
   const withinQuiet = isWithinQuietHours(nowTime, settings.quietFrom, settings.quietTo);
@@ -666,37 +599,11 @@ function checkProfile(
     }
   }
 
-  const documentsById = new Map(documents.map((doc) => [doc.id, doc]));
-  const eventsById = new Map(events.map((event) => [event.id, event]));
-  const examsById = new Map(exams.map((exam) => [exam.id, exam]));
-  const tasksById = new Map(tasks.map((task) => [task.id, task]));
-  const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
-  const studyDaysByDate = new Map(studyDays.map((day) => [day.date, day]));
-  const subscriptionsById = new Map(subscriptions.map((row) => [row.id, row]));
-  const habitsById = new Map(habits.map((row) => [row.id, row]));
-  // The currency an amount is stated in lives on the ACCOUNT (migration 051's
-  // no-FX design), so the copy joins through it — a figure with no code beside
-  // it is a number, not money.
-  const accountCurrencyById = new Map(
-    deps.finAccountStore(profileId).listActive().map((account) => [account.id, account.currency]),
-  );
-
   const toShow: ToastItem[] = [];
   let ledgerChanged = false;
 
   for (const candidate of fresh) {
-    const copy = composeCopy(candidate, {
-      documentsById,
-      eventsById,
-      examsById,
-      tasksById,
-      subjectNameById,
-      studyDaysByDate,
-      subscriptionsById,
-      accountCurrencyById,
-      habitsById,
-      today,
-    });
+    const copy = composeCopy(candidate, copyContext);
     if (!copy) continue; // entity vanished between the reads above and here — skip, never crash
 
     ntf.recordDelivered(
@@ -733,6 +640,199 @@ function checkProfile(
   if (ledgerChanged) {
     deps.getMainWindow()?.webContents.send(IpcChannel.notificationsChanged);
   }
+}
+
+/**
+ * Everything one reminder read takes from the stores for one day: the rows the
+ * copy is written from, and the candidates `deriveNotificationCandidates` derives
+ * from them. The scheduler and `upcomingReminders` both read through here, so
+ * "what would remind" has one answer wherever it is asked.
+ *
+ * It writes nothing. The two things a check does before it reads (posting the
+ * subscription charges that have come due, syncing the day's planned blocks)
+ * stay with the caller, because a reader that only asks must not change a row.
+ */
+export interface ReminderRows {
+  readonly documents: readonly TrackedDocument[];
+  readonly events: readonly Event[];
+  readonly exams: readonly Exam[];
+  readonly subjects: readonly Subject[];
+  readonly tasks: readonly Task[];
+  readonly subscriptions: readonly FinRecurring[];
+  readonly habits: readonly Habit[];
+  readonly studyDays: readonly StudyDayReminderInput[];
+  readonly currencyByAccount: ReadonlyMap<string, string>;
+  readonly candidates: readonly NotificationCandidate[];
+}
+
+export function readReminderRows(
+  deps: NotificationSchedulerDeps,
+  profileId: string,
+  today: string,
+  nowTime: string,
+  morningHour: string,
+): ReminderRows {
+  const documents = deps.documentStore(profileId).listActive();
+  const events = deps.eventStore(profileId).listActive();
+  const exams = deps.examStore(profileId).listActive();
+  const subjects = deps.subjectStore(profileId).listActive();
+  const tasks = deps.taskStore(profileId).listActive();
+  const finRecurring = deps.finRecurringStore(profileId);
+  const subscriptions = finRecurring.listActive();
+  const subscriptionLeads = new Map(
+    subscriptions
+      .filter((row): row is typeof row & { reminderDays: number } => row.reminderDays !== null)
+      .map((row) => [row.id, row.reminderDays] as const),
+  );
+  // Read from the RULE, over exactly the window the LONGEST lead in use needs —
+  // a renewal further ahead than that cannot have a fire date on or before
+  // today, so reading it would be work with no answer in it. Empty when nothing
+  // reminds, which is the common case (no subscription ships with a lead).
+  const renewalHorizon = Math.max(0, ...subscriptionLeads.values());
+  const renewals =
+    subscriptionLeads.size === 0
+      ? []
+      : finRecurring.upcoming({ from: today, to: shiftDayKey(today, renewalHorizon) });
+  // HABIT slice c. A trailing SEVEN days, which is exactly what the filter can
+  // ask about and never more: the most recent week opening is at most six days
+  // back whichever day a week starts on, so this window always covers the whole
+  // of the current one, and the days of it that fall in the previous week are
+  // simply days the filter never looks at.
+  const habitStore = deps.habitStore(profileId);
+  const habits = habitStore.listActive();
+  const habitRows = habitReminderRows(
+    habits,
+    habitStore.listAllEntries({ from: shiftDayKey(today, -(DAYS_PER_WEEK - 1)), to: today }),
+  );
+
+  const todaysBlocks = deps
+    .planStore(profileId)
+    .listBlocksInRange(today, today)
+    .filter((block) => block.status === "planned");
+
+  const studyDays: StudyDayReminderInput[] =
+    todaysBlocks.length === 0
+      ? []
+      : [
+          {
+            date: today,
+            blockCount: todaysBlocks.length,
+            totalMinutes: todaysBlocks.reduce((sum, block) => sum + block.minutes, 0),
+          },
+        ];
+
+  const candidates = deriveNotificationCandidates({
+    documents: documents.map((doc) => ({
+      id: doc.id,
+      expiryDate: doc.expiryDate,
+      reminderOffsets: doc.reminderOffsets,
+    })),
+    exams: exams.map((exam) => ({ id: exam.id, examDate: exam.examDate })),
+    events: eventReminderInputs(events, today),
+    studyDays,
+    tasks: taskReminderInputs(tasks),
+    subscriptions: subscriptionReminderInputs(renewals, subscriptionLeads),
+    habits: habitReminderInputs(habitRows, today, SCHEDULER_WEEK_START),
+    // EVERY source, deliberately — this call answers „what exists today", and
+    // `isDeliverable` below answers „what may be shown". Filtering here instead
+    // conflated the two, and the cost fell on snoozed rows: a source switched
+    // off stopped deriving, so `dueSnoozed` could not tell „the passport was
+    // deleted" from „the user turned document reminders off", and DISMISSED the
+    // snooze for both. Turning the source back on did not bring it back either,
+    // because the ledger key survives a dismiss. Deriving unconditionally makes
+    // the two cases distinguishable, and holding cost-free.
+    enabledSources: DERIVABLE_SOURCES,
+    today,
+    nowLocalTime: nowTime,
+    morningHour,
+  });
+
+  // The currency an amount is stated in lives on the ACCOUNT (migration 051's
+  // no-FX design), so the copy joins through it — a figure with no code beside
+  // it is a number, not money.
+  const currencyByAccount = new Map(
+    deps.finAccountStore(profileId).listActive().map((account) => [account.id, account.currency]),
+  );
+
+  return {
+    documents,
+    events,
+    exams,
+    subjects,
+    tasks,
+    subscriptions,
+    habits,
+    studyDays,
+    currencyByAccount,
+    candidates,
+  };
+}
+
+/** The lookups `composeCopy` joins through, built from one day's rows. */
+function copyContextOf(rows: ReminderRows, today: string): CopyContext {
+  return {
+    documentsById: new Map(rows.documents.map((doc) => [doc.id, doc])),
+    eventsById: new Map(rows.events.map((event) => [event.id, event])),
+    examsById: new Map(rows.exams.map((exam) => [exam.id, exam])),
+    tasksById: new Map(rows.tasks.map((task) => [task.id, task])),
+    subjectNameById: new Map(rows.subjects.map((subject) => [subject.id, subject.name])),
+    studyDaysByDate: new Map(rows.studyDays.map((day) => [day.date, day])),
+    subscriptionsById: new Map(rows.subscriptions.map((row) => [row.id, row])),
+    accountCurrencyById: new Map(rows.currencyByAccount),
+    habitsById: new Map(rows.habits.map((row) => [row.id, row])),
+    today,
+  };
+}
+
+/**
+ * The clock reading a day's read is taken at when that day is not today: its
+ * last minute, so every reminder dated that day is due by then and counts.
+ */
+const END_OF_DAY = "23:59";
+
+/**
+ * The reminders the scheduler would show over the next `days` days, starting
+ * today (`reminders.due`). Each day is read as its own check at `END_OF_DAY`,
+ * and the copy is the toast's own. The ledger is not consulted: this lists what
+ * is scheduled, so a reminder dated today may already have fired. Only sources
+ * the profile has switched on are kept, and a candidate whose entity has
+ * vanished is dropped, as the scheduler drops it.
+ */
+export function upcomingReminders(
+  deps: NotificationSchedulerDeps,
+  profileId: string,
+  days: number,
+): UpcomingReminder[] {
+  const today = localToday();
+  const last = shiftDayKey(today, days - 1);
+  const settings = deps.notificationStore(profileId).getSettings();
+  const enabledSources = sourcesForEnabledModules(
+    settings.enabledSources,
+    deps.enabledModuleIds(profileId),
+  );
+  const seen = new Set<string>();
+  const found: UpcomingReminder[] = [];
+  for (let offset = 0; offset < days; offset += 1) {
+    const day = shiftDayKey(today, offset);
+    const rows = readReminderRows(deps, profileId, day, END_OF_DAY, settings.morningHour);
+    const context = copyContextOf(rows, day);
+    for (const candidate of rows.candidates) {
+      // The fire date joins the key: a study-day occurrence is keyed only by "day".
+      const key = `${occurrenceKey(candidate)} ${candidate.fireDate}`;
+      if (seen.has(key) || candidate.fireDate < today || candidate.fireDate > last) continue;
+      if (!isDeliverable(candidate, { enabledSources, withinQuietHours: false })) continue;
+      const copy = composeCopy(candidate, context);
+      if (copy === null) continue;
+      seen.add(key);
+      found.push({
+        source: candidate.source,
+        fireDate: candidate.fireDate,
+        title: copy.title,
+        body: copy.body,
+      });
+    }
+  }
+  return found.sort((a, b) => (a.fireDate < b.fireDate ? -1 : a.fireDate > b.fireDate ? 1 : 0));
 }
 
 /**
