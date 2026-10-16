@@ -124,18 +124,21 @@ export function register(host: ModuleHostSurface): void {
    *
    * A row that is no longer there is NOT announced: the countdown was cancelled,
    * paused, or replaced in the meantime, and a toast about a timer that no longer
-   * exists would be the app inventing an end. Never throws - this runs from a
-   * timer callback, where an exception reaches nobody - and its failure path is
-   * the notification scheduler's own: a log, and nothing else.
+   * exists would be the app inventing an end. The same holds for a row whose end
+   * has moved since this alarm was set (the assistant can pause, resume and cancel
+   * a countdown without going through this module's arming): the alarm belongs to
+   * the end it was set for, and a newer one has its own alarm. Never throws - this
+   * runs from a timer callback, where an exception reaches nobody - and its
+   * failure path is the notification scheduler's own: a log, and nothing else.
    */
-  function finish(countdownId: string): void {
+  function finish(countdownId: string, endsAt: string): void {
     const entry = armed.get(countdownId);
     armed.delete(countdownId);
     if (entry === undefined) return;
     try {
       const timers = timersStore(entry.bearer, entry.profileId);
       const row = timers.countdown(countdownId);
-      if (row === null) return;
+      if (row === null || row.endsAt !== endsAt) return;
       const silent = !timers.settings().soundOnEnd;
       // The row goes with the announcement: a countdown that has ended has
       // nothing left to be, and main has just said everything there is to say
@@ -164,8 +167,9 @@ export function register(host: ModuleHostSurface): void {
   function rearm(profileId: string, countdowns: readonly TimersCountdownView[], bearer: StoreBearer): void {
     const running = new Set<string>();
     for (const countdown of countdowns) {
-      if (countdown.endsAt === null) continue;
-      const endsAtMs = Date.parse(countdown.endsAt);
+      const endsAt = countdown.endsAt;
+      if (endsAt === null) continue;
+      const endsAtMs = Date.parse(endsAt);
       if (Number.isNaN(endsAtMs)) continue;
       running.add(countdown.id);
       // Re-armed rather than left alone: an `extend` moves the instant, and the
@@ -178,7 +182,7 @@ export function register(host: ModuleHostSurface): void {
       // drop the announcement the feature exists for.
       const entry: ArmedCountdown = { profileId, bearer, cancel: () => undefined };
       armed.set(countdown.id, entry);
-      entry.cancel = ctx.armUntil(endsAtMs, () => finish(countdown.id));
+      entry.cancel = ctx.armUntil(endsAtMs, () => finish(countdown.id, endsAt));
     }
     for (const [countdownId, entry] of [...armed]) {
       if (entry.profileId === profileId && !running.has(countdownId)) disarm(countdownId);

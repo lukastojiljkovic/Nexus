@@ -50,6 +50,15 @@ function toolNames(): readonly string[] {
         throw new Error("Test setup: no tool was run here.");
       },
       listCountdowns: () => [],
+      pauseCountdown: () => {
+        throw new Error("Test setup: no tool was run here.");
+      },
+      resumeCountdown: () => {
+        throw new Error("Test setup: no tool was run here.");
+      },
+      cancelCountdown: () => {
+        throw new Error("Test setup: no tool was run here.");
+      },
     },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
