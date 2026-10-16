@@ -12,10 +12,12 @@
  */
 
 import type { ToolRunner } from "./shared.js";
+import { DEVTOOLS_RUNNERS } from "./devtools.js";
 import { EVERYDAY_RUNNERS } from "./everyday.js";
 
 export type { ToolRunner } from "./shared.js";
 
 export const TOOL_RUNNERS: ReadonlyMap<string, ToolRunner> = new Map<string, ToolRunner>([
   ...Object.entries(EVERYDAY_RUNNERS),
+  ...Object.entries(DEVTOOLS_RUNNERS),
 ]);
