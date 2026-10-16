@@ -96,6 +96,7 @@ function services(wiki: WikiSource | null): AssistantServices {
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [], catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
     dictionary: createDictionaryReader(() => tmpdir()),
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     zimWiki: () => wiki,
     focus: { start: () => { throw new Error("not expected"); }, stop: () => { throw new Error("not expected"); }, cancel: () => undefined, pause: () => { throw new Error("not expected"); }, resume: () => { throw new Error("not expected"); }, status: () => null },
     notifications: { list: () => [], snooze: () => { throw new Error("not expected"); }, dismiss: () => undefined, settings: () => { throw new Error("not expected"); }, updateSettings: () => { throw new Error("not expected"); }, setSourceEnabled: () => undefined, upcoming: () => [] },

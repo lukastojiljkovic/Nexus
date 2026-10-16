@@ -32,6 +32,7 @@ import { dateTimeFormat, numberFormat } from "../../../renderer/src/intl.js";
 import { openExternalLink } from "../../../renderer/src/links.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { PACK_FIRST_LEVEL } from "../shared/levels.js";
+import { CHESS_START_ACTION, NO_CLOCK, parseChessStart } from "../shared/setup.js";
 import { manifest } from "../shared/manifest.js";
 import type {
   ChessEnginePlayed,
@@ -155,7 +156,7 @@ interface EngineReport {
 /** The two sides, as this page walks them. */
 const SIDES: readonly ChessSide[] = ["w", "b"];
 
-export default function ChessPage({ profileId }: ModulePageProps) {
+export default function ChessPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<ChessView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -609,6 +610,8 @@ export default function ChessPage({ profileId }: ModulePageProps) {
   const [incrementSeconds, setIncrementSeconds] = useState("5");
   const [startFen, setStartFen] = useState("");
   const [importText, setImportText] = useState("");
+  /** A new game the shell asked for, held until the form it applies has rendered (see the intent effects below). */
+  const [starting, setStarting] = useState(false);
 
   /** The custom clock the two fields spell, or null when they do not spell one the store would hold. */
   function customControl(): string | null {
@@ -838,6 +841,50 @@ export default function ChessPage({ profileId }: ModulePageProps) {
     setNotice(null);
     setError(null);
   }
+
+  // --- The shell's intents (ADR-117) ----------------------------------------
+
+  /**
+   * A saved game to review, or a new game with the setup a location names.
+   *
+   * Keyed on the intent alone: the handlers above are rebuilt on every render,
+   * and an effect keyed on them would open the same game again on every render.
+   * A START applies its setup to the form and lets the next effect deal the game,
+   * because `startGame` reads the form and not the request. Anything this page
+   * does not know is ignored and still reported handled, so the queue moves on.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    if (intent.kind === "reveal") void openGame(intent.item);
+    if (intent.kind === "action" && intent.action === CHESS_START_ACTION) {
+      const request = parseChessStart(intent.payload);
+      if (request !== null) {
+        setOpponent(request.opponent);
+        setSide(request.color === "white" ? "w" : "b");
+        if (request.level !== undefined) setLevel(request.level);
+        if (request.time !== undefined) {
+          setClockChoice(request.time === NO_CLOCK ? "" : request.time);
+        }
+        setStartFen("");
+        setStarting(true);
+      }
+    }
+    onIntentHandled?.();
+  }, [intent, onIntentHandled]);
+
+  /**
+   * The same decision the setup's own Start button makes, taken once the form
+   * holds the requested setup: a game in progress is confirmed first.
+   */
+  useEffect(() => {
+    if (!starting) return;
+    setStarting(false);
+    if (game !== null && !game.review && !over && game.moves.length > 0) {
+      setConfirm("newGame");
+      return;
+    }
+    startGame();
+  }, [starting]);
 
   // --- The board's own derived values ---------------------------------------
 

@@ -1,5 +1,6 @@
 import type { ModelHost, ModuleRegistry } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
+import type { ModuleToolsAccess } from "../../../main/moduleTools.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
 import type { FocusHost } from "../../../main/assistant/tools/focus.js";
 import type { NotificationsHost } from "../../../main/assistant/tools/notifications.js";
@@ -75,6 +76,8 @@ export interface AssistantServices {
   readonly packs: PackManager;
   /** The dictionary pack's reader (`modules/translator/main/dictionary.ts`), for the translator's word and phrase tools. */
   readonly dictionary: DictionaryReader;
+  /** The installed tool packs (ADR-094), for the chess tools' Stockfish analysis. */
+  readonly tools: ModuleToolsAccess;
   /**
    * The offline wiki, in the shape the knowledge base reads it
    * (`main/assistant/knowledge/zimWiki.ts`), or `null` in a build with no ZIM

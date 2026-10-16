@@ -161,6 +161,7 @@ export class AssistantProfile {
       now: () => this.services.now(),
       search: this.services.search,
       packs: this.services.packs,
+      tools: this.services.tools,
       timers: this.timers,
       focus: this.services.focus,
       notifications: this.services.notifications,

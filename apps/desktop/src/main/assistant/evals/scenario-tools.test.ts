@@ -98,6 +98,7 @@ function appTools(): readonly Tool[] {
       upcoming: () => [],
     },
     dictionary: createDictionaryReader(() => tmpdir()),
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
     userData: refuse,

@@ -25,21 +25,8 @@ export interface TimeControl {
   readonly incrementSeconds: number;
 }
 
-/**
- * The controls a person is most likely to want, as text, in the order they are
- * offered. Bullet through classical, which is the span the common sites use; the
- * custom fields are the answer for anything else.
- */
-export const COMMON_TIME_CONTROLS: readonly string[] = [
-  "60+0",
-  "180+0",
-  "180+2",
-  "300+0",
-  "600+0",
-  "600+5",
-  "900+10",
-  "1800+0",
-];
+// The setup form's clocks live in `shared/setup.ts`, where the assistant's START tool reads the same list.
+export { COMMON_TIME_CONTROLS } from "../shared/setup.js";
 
 /** The two bounds the store enforces, so a custom control is refused by the form before it reaches a row. */
 export const MAX_CLOCK_BASE_SECONDS = 7_200;
