@@ -1,0 +1,149 @@
+{
+  "scenarios": [
+    {
+      "id": "study-due-sr",
+      "title": "Pitanje šta je danas na redu za pregled",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Šta treba danas da ponovim?" }
+      ],
+      "tools": [
+        { "name": "study.due", "effect": "read", "content": "Na redu za pregled: 3.", "navigateTo": { "module": "study" } },
+        {
+          "name": "study.card",
+          "effect": "write",
+          "summary": { "sr": "Izmeniću karticu.", "en": "I will change the card." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "study.due" }],
+        "toolsNotCalled": ["study.card"],
+        "navigatesTo": [{ "module": "study" }],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "study.due", "arguments": {} }] },
+        {
+          "text": "Na redu za pregled su tri kartice. Otvoriću stranicu učenja da ih pregledaš."
+        }
+      ]
+    },
+    {
+      "id": "study-subject-create-accepted-sr",
+      "title": "Predmet napravljen posle potvrde",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Napravi predmet Biologija." }
+      ],
+      "tools": [
+        {
+          "name": "study.subject",
+          "effect": "write",
+          "summary": { "sr": "Napravi predmet „Biologija“.", "en": "Create the subject “Biologija”." },
+          "content": "Napravljeno: „Biologija“ (id subj-1)."
+        },
+        { "name": "study.subjects", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "study.subject", "args": { "name": { "contains": "Biologij" } } }],
+        "toolsNotCalled": ["study.subjects"],
+        "answerContains": ["Biologij"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "study.subject", "arguments": { "action": "create", "name": "Biologija" } }
+          ]
+        },
+        {
+          "text": "Napravio sam predmet Biologija. Možeš mu dodati ispite i špilove."
+        }
+      ]
+    },
+    {
+      "id": "study-exams-en",
+      "title": "Question about the next exam",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "When is my next exam?" }
+      ],
+      "tools": [
+        { "name": "study.exams", "effect": "read" },
+        {
+          "name": "study.exam",
+          "effect": "write",
+          "summary": { "sr": "Dodaću ispit.", "en": "I will add the exam." }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "study.exams" }],
+        "toolsNotCalled": ["study.exam"],
+        "answerContains": ["exam"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "study.exams", "arguments": {} }] },
+        {
+          "text": "Your next exam is Analysis 1, a written exam on 3 November. That is 24 days away."
+        }
+      ]
+    },
+    {
+      "id": "study-exam-declined-en",
+      "title": "Exam not added when the user declined",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Add a written exam for Analysis 1 on 3 November." }
+      ],
+      "tools": [
+        {
+          "name": "study.exam",
+          "effect": "write",
+          "summary": {
+            "sr": "Dodaću ispit: pismeni ispit za predmet „Analiza 1“, 3. novembar 2026.",
+            "en": "Add the exam: written exam for “Analysis 1”, 3 November 2026."
+          },
+          "content": "Napravljeno: ispit (id exam-1)."
+        },
+        { "name": "study.exams", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "study.exam" }],
+        "toolsNotCalled": ["study.exams"],
+        "answerNotContains": ["added the exam"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "study.exam",
+              "arguments": { "action": "create", "subject": "Analysis 1", "type": "pismeni", "date": "2026-11-03" }
+            }
+          ]
+        },
+        {
+          "text": "I did not add the exam, because you declined. Nothing was saved to your study plan."
+        }
+      ]
+    }
+  ]
+}
