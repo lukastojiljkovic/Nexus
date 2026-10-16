@@ -160,6 +160,7 @@ export const sr = {
         "pantry.expiring": "Čitanje šta ističe",
         "reader.progress": "Čitanje napretka čitanja",
         "recorder.list": "Čitanje snimaka",
+        "scanner.open": "Otvaranje skenera",
         "settings.model": "Promena modela asistenta",
         "settings.module": "Prikaz ili skrivanje modula",
         "settings.open": "Otvaranje kartice podešavanja",
@@ -209,6 +210,7 @@ export const sr = {
         "web.read": "Čitanje web stranice",
         "web.search": "Pretraga weba",
         "wiki.recent": "Čitanje istorije referenci",
+        "workshop.open": "Otvaranje alata radionice",
       },
       /** Alatka kojoj se poziv više ne nalazi u razgovoru: imena nema, pa se imenuje ovako. */
       unnamed: "Alatka",

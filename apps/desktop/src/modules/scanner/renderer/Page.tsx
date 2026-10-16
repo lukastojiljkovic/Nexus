@@ -34,6 +34,7 @@ import {
 import { TESSDATA_PACK_ID, type OcrLanguage } from "./ocrConfig.js";
 import { scanPhase, type ScanOutcome } from "./ocrResult.js";
 import { createScanSession } from "./ocrSession.js";
+import { sourceOfAction } from "./intent.js";
 import "./scanner.css";
 
 /**
@@ -81,7 +82,7 @@ const LANGUAGE_ROWS: readonly { readonly code: OcrLanguage; readonly copyKey: "l
 /** What the page knows about the language pack: still asking, installed, not installed, or unreadable. */
 type PackState = "checking" | "ready" | "missing" | "unknown";
 
-export default function ScannerPage({ profileId }: ModulePageProps) {
+export default function ScannerPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   /** The picture as loaded, before any edit. */
   const [source, setSource] = useState<RgbaImage | null>(null);
   const [sourceFailed, setSourceFailed] = useState(false);
@@ -117,6 +118,8 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
   const [cameraFailure, setCameraFailure] = useState<"denied" | "unavailable" | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const cameraButton = useRef<HTMLButtonElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   /** The crop applied when the current drag began: the frame an inner rectangle is relative to. */
@@ -204,6 +207,21 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [loadBlob]);
+
+  /**
+   * What the assistant asked: point at a source. The control is focused and the
+   * person presses it, so an assistant action never opens the camera by itself.
+   * Any other intent is not this page's verb and is reported handled anyway.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    if (intent.kind === "action" && intent.action === "source") {
+      const source = sourceOfAction(intent.payload);
+      if (source === "file") fileInput.current?.focus();
+      if (source === "camera") cameraButton.current?.focus();
+    }
+    onIntentHandled?.();
+  }, [intent, onIntentHandled]);
 
   // --- The camera ------------------------------------------------------------
 
@@ -441,6 +459,7 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
           <label className="scanner__file">
             <span className="scanner__file-name">{copy.source.file}</span>
             <input
+              ref={fileInput}
               type="file"
               accept="image/png,image/jpeg,image/webp"
               aria-label={copy.source.file}
@@ -454,7 +473,7 @@ export default function ScannerPage({ profileId }: ModulePageProps) {
             />
           </label>
           {camera === null ? (
-            <Button size="sm" onClick={() => void startCamera()}>
+            <Button ref={cameraButton} size="sm" onClick={() => void startCamera()}>
               {copy.source.camera}
             </Button>
           ) : (

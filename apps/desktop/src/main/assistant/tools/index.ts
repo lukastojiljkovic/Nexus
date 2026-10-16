@@ -84,11 +84,13 @@ import { packTools, type PacksLookup } from "./packs.js";
 import { pantryTools } from "./pantry.js";
 import { readerTools } from "./reader.js";
 import { recorderTools } from "./recorder.js";
+import { scannerTools } from "./scanner.js";
 import { settingsTools } from "./settings.js";
 import { studyTools } from "./study.js";
 import { taskTools } from "./tasks.js";
 import { timerTools, type TimerHost } from "./timers.js";
 import { wikiTools } from "./wiki.js";
+import { workshopTools } from "./workshop.js";
 import type { ProfileDb } from "./support.js";
 
 export type { ModuleLookup } from "./app.js";
@@ -179,6 +181,8 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...mapsTools({ profileDb: deps.profileDb }),
     ...labTools({ profileDb: deps.profileDb }),
     ...miniappsTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...scannerTools(),
+    ...workshopTools(),
   ];
 
   return {

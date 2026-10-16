@@ -39,7 +39,7 @@ import { activeTheme, layerColour, viewerColours, withLayerColour } from "./pale
 import { forgetRecentFiles, readRecentFiles, rememberRecentFile, type RecentFile } from "./recentFiles.js";
 import { buildModelScene, buildToolpathScene, type ToolpathScene } from "./scenes.js";
 import { Viewport3D, type SceneApi, type ViewportHandle } from "./Viewport3D.js";
-import { isViewer, viewLabel, WORKSHOP_VIEWS, type WorkshopView } from "./views.js";
+import { isViewer, viewLabel, viewOfAction, WORKSHOP_VIEWS, type WorkshopView } from "./views.js";
 import { createParseClient, type ParseClient } from "./workerClient.js";
 import "./workshop.css";
 
@@ -89,7 +89,7 @@ interface ToolpathState {
 /** One layer of the open board, with an id of its own for the show/hide chips. */
 type BoardLayer = WorkshopBoardLayer & { readonly id: string };
 
-export default function WorkshopPage({ profileId }: ModulePageProps) {
+export default function WorkshopPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<WorkshopView>("model");
   const [model, setModel] = useState<ModelState | null>(null);
   const [toolpath, setToolpath] = useState<ToolpathState | null>(null);
@@ -124,6 +124,21 @@ export default function WorkshopPage({ profileId }: ModulePageProps) {
       worker.current = null;
     };
   }, []);
+
+  /**
+   * What the assistant asked: open one of the page's tools. It switches the view
+   * and nothing else; a file is still picked by the person through the dialog.
+   * Any other intent is not this page's verb and is reported handled anyway, so
+   * the shell's queue moves on.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined) return;
+    if (intent.kind === "action" && intent.action === "open-tool") {
+      const next = viewOfAction(intent.payload);
+      if (next !== null) setView(next);
+    }
+    onIntentHandled?.();
+  }, [intent, onIntentHandled]);
 
   /**
    * The theme is a document attribute (`theme.ts` writes `<html data-theme>`) and

@@ -153,7 +153,9 @@ describe("createToolRegistry", () => {
       study: 14,
       tasks: 17,
       timers: 9,
+      scanner: 1,
       wiki: 1,
+      workshop: 1,
     });
     for (const tool of tools) {
       expect(tool.name).toMatch(/^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$/);

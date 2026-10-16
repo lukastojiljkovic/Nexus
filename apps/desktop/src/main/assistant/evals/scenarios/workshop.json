@@ -1,0 +1,232 @@
+{
+  "scenarios": [
+    {
+      "id": "workshop-pdf-sr",
+      "title": "Zahtev za spajanje PDF-ova",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Hoću da spojim dva PDF fajla u jedan."
+        }
+      ],
+      "tools": [
+        {
+          "name": "workshop.open",
+          "effect": "navigate",
+          "navigateTo": {
+            "module": "workshop"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "workshop.open",
+            "args": {
+              "tool": {
+                "eq": "pdf"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "workshop"
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "workshop.open",
+              "arguments": {
+                "tool": "pdf"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Otvaram PDF alate u Radionici. Datoteke izaberi na stranici, pa ih spoji."
+        }
+      ]
+    },
+    {
+      "id": "workshop-pdf-en",
+      "title": "A request to merge two PDFs",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "I want to merge two PDF files into one."
+        }
+      ],
+      "tools": [
+        {
+          "name": "workshop.open",
+          "effect": "navigate",
+          "navigateTo": {
+            "module": "workshop"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "workshop.open",
+            "args": {
+              "tool": {
+                "eq": "pdf"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "workshop"
+          }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "workshop.open",
+              "arguments": {
+                "tool": "pdf"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I am opening the PDF tools in the Workshop. Pick the files on the page, then merge them."
+        }
+      ]
+    },
+    {
+      "id": "workshop-model-sr",
+      "title": "Zahtev za pregled STL modela",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Otvori mi STL model da ga pogledam pre štampe."
+        }
+      ],
+      "tools": [
+        {
+          "name": "workshop.open",
+          "effect": "navigate",
+          "navigateTo": {
+            "module": "workshop"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "workshop.open",
+            "args": {
+              "tool": {
+                "eq": "model"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "workshop"
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "workshop.open",
+              "arguments": {
+                "tool": "model"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Otvaram pregled STL modela u Radionici. Model izaberi na stranici."
+        }
+      ]
+    },
+    {
+      "id": "workshop-board-en",
+      "title": "A request to look at a Gerber board",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Show me the layers of this Gerber board."
+        }
+      ],
+      "tools": [
+        {
+          "name": "workshop.open",
+          "effect": "navigate",
+          "navigateTo": {
+            "module": "workshop"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "workshop.open",
+            "args": {
+              "tool": {
+                "eq": "board"
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "workshop"
+          }
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "workshop.open",
+              "arguments": {
+                "tool": "board"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I am opening the Gerber viewer in the Workshop. Pick the layer files on the page."
+        }
+      ]
+    }
+  ]
+}

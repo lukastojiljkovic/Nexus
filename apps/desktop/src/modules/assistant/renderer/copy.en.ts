@@ -149,6 +149,7 @@ export const en: typeof sr = {
         "pantry.expiring": "Read what is expiring",
         "reader.progress": "Read the reading progress",
         "recorder.list": "Read the recordings",
+        "scanner.open": "Open the Scanner",
         "settings.model": "Change the assistant's model",
         "settings.module": "Show or hide a module",
         "settings.open": "Open a settings card",
@@ -198,6 +199,7 @@ export const en: typeof sr = {
         "web.read": "Read a web page",
         "web.search": "Search the web",
         "wiki.recent": "Read the reference history",
+        "workshop.open": "Open a Workshop tool",
       },
       /** A tool whose call the thread no longer holds: no name to print, so it is named this. */
       unnamed: "A tool",

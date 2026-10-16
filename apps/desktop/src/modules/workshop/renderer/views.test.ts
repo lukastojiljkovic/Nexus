@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { applyLocale, DEFAULT_LOCALE } from "../../../renderer/src/strings.js";
-import { isViewer, viewLabel, WORKSHOP_VIEWS } from "./views.js";
+import { isViewer, viewLabel, viewOfAction, WORKSHOP_VIEWS } from "./views.js";
 
 /**
  * The workshop page's five views (ADR-107's wiring of the two tool sets).
@@ -51,5 +51,21 @@ describe("the page's views", () => {
     // And the API is the module's own contract: a tool set reaching for a
     // shell-wide call would be a second door beside the contract's.
     expect(page).toContain("window.nexus.modules.workshop");
+  });
+});
+
+describe("the open-tool action", () => {
+  it("opens the view the assistant named, for each of the five", () => {
+    for (const view of WORKSHOP_VIEWS) {
+      expect(viewOfAction({ tool: view })).toBe(view);
+    }
+  });
+
+  it("leaves a payload it does not know alone rather than guessing a view", () => {
+    expect(viewOfAction({ tool: "dwg" })).toBeNull();
+    expect(viewOfAction({ tool: 3 })).toBeNull();
+    expect(viewOfAction({})).toBeNull();
+    expect(viewOfAction(null)).toBeNull();
+    expect(viewOfAction("pdf")).toBeNull();
   });
 });
