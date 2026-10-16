@@ -144,6 +144,7 @@ import {
   type ThemePreference,
 } from "./theme.js";
 import { fill, lookup, strings } from "./strings.js";
+import { toolPrefillOf } from "./toolPrefill.js";
 
 /**
  * A pending page-level intent (021-e): one payload, tagged with the module
@@ -186,6 +187,12 @@ function assertNever(value: never): never {
   throw new Error(`Nexus: unhandled case ${String(value)}`);
 }
 
+/** A tool to open, and the fields its `drawer.open` asked to fill in (`toolPrefillOf`). */
+function openToolIntent(toolId: string, action: unknown): ToolsIntent {
+  const values = toolPrefillOf(action);
+  return values === undefined ? { kind: "open", toolId } : { kind: "open", toolId, values };
+}
+
 /**
  * A COMPILED-IN page's own reveal intent, from the one thing a location can
  * carry: `{ module: "tasks", item }` means the task with that id.
@@ -206,9 +213,15 @@ function assertNever(value: never): never {
  * compiled-in page takes a reveal it could not use from an id (`finance` has
  * only `create`), and answers `null` like the rest.
  */
-function compiledInReveal(moduleId: string, item: unknown): PendingIntent | null {
+function compiledInReveal(moduleId: string, item: unknown, action: unknown): PendingIntent | null {
   if (typeof item !== "string" || item === "") return null;
   switch (moduleId) {
+    // A tool opens on its drawer's page, and `drawer.open` may name the fields to fill
+    // in (`toolPrefillOf`): both arrive in one intent, so the page never sees one without the other.
+    case "tools":
+      return { module: "tools", intent: openToolIntent(item, action) };
+    case "pro":
+      return { module: "pro", intent: openToolIntent(item, action) };
     case "tasks":
       return { module: "tasks", intent: { kind: "reveal", taskId: item } };
     case "notes":
@@ -1091,7 +1104,7 @@ export function App() {
         const intent = canvasIntentOf({ item: detail?.item, action: detail?.action });
         if (intent !== null) setPending({ module: "canvas", intent });
       } else {
-        const reveal = compiledInReveal(moduleId, detail?.item);
+        const reveal = compiledInReveal(moduleId, detail?.item, detail?.action);
         if (reveal !== null) setPending(reveal);
       }
       const settings = detail?.settings;

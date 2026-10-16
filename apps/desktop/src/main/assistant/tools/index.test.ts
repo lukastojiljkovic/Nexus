@@ -173,6 +173,7 @@ describe("createToolRegistry", () => {
       culture: 2,
       dashboard: 4,
       documents: 5,
+      drawer: 3,
       electronics: 13,
       emergency: 1,
       files: 2,

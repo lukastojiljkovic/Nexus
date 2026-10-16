@@ -1,0 +1,96 @@
+{
+  "scenarios": [
+    {
+      "id": "drawer-find-sr",
+      "title": "Traženje alata za PDV",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Imam li u aplikaciji alat za PDV?" }
+      ],
+      "tools": [
+        {
+          "name": "drawer.find",
+          "effect": "read",
+          "content": "Alati (1):\n- pdv (calculation); računa u razgovoru"
+        },
+        {
+          "name": "drawer.run",
+          "effect": "read"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "drawer.find", "args": { "query": { "matches": "pdv|porez" } } }
+        ],
+        "toolsNotCalled": ["drawer.run"],
+        "answerContains": ["PDV"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            { "name": "drawer.find", "arguments": { "query": "PDV" } }
+          ]
+        },
+        {
+          "text": "Imaš alat za PDV u Alatkama, „pdv“. Mogu i da izračunam iznos ako mi kažeš osnovicu i stopu."
+        }
+      ]
+    },
+    {
+      "id": "drawer-run-en",
+      "title": "VAT on an amount, computed by the drawer's tool",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What is 20% VAT on 1000, with the VAT added on top?" }
+      ],
+      "tools": [
+        {
+          "name": "drawer.run",
+          "effect": "read",
+          "content": "Result of “pdv”:\nNet: 1,000.00\nVAT: 200.00\nGross: 1,200.00\nAn informational calculation from the rates and amounts you enter. It is not tax or accounting advice.\nRepeat this notice with the result."
+        },
+        {
+          "name": "drawer.open",
+          "effect": "navigate",
+          "content": "Opening the tool “pdv” on the “tools” page.",
+          "navigateTo": { "module": "tools", "item": "pdv" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "drawer.run",
+            "args": {
+              "tool": { "eq": "pdv" }
+            }
+          }
+        ],
+        "toolsNotCalled": ["drawer.open"],
+        "answerContains": ["1,200.00"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "drawer.run",
+              "arguments": { "tool": "pdv", "values": { "amount": 1000, "rate": 20, "direction": "add" } }
+            }
+          ]
+        },
+        {
+          "text": "With 20% VAT added, 1,000.00 becomes 1,200.00: the VAT is 200.00. This is an informational calculation, not tax advice."
+        }
+      ]
+    }
+  ]
+}
