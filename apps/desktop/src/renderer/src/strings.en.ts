@@ -5647,6 +5647,12 @@ export const en = {
     undo: "Undo",
     deletedNotice: "The board was deleted.",
     dismiss: "Dismiss",
+    deleteTitle: "Delete this board?",
+    deleteQuestion: "The board leaves the list, with everything drawn on it.",
+    /** What stays true after the answer: the offer that follows the delete takes it back. */
+    deleteNote: "The Undo offer that follows the delete brings it back.",
+    /** The name of the overflow trigger that holds Rename and Delete below 900px. */
+    moreActions: "More actions",
     /** The mermaid action — see this section's own header for why it is a button. */
     mermaid: "Mermaid diagram",
     mermaidTitle: "Write a Mermaid definition and turn it into shapes you can keep editing.",

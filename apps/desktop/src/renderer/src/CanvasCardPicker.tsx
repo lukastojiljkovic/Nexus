@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { Button, Chip, TextField } from "@nexus/ui";
+import { Button, Chip, Notice, TextField } from "@nexus/ui";
 import { canvasPickerRows } from "./canvasCards.js";
 import type { CanvasPickerRow } from "./canvasCards.js";
 import { SEARCH_DEBOUNCE_MS } from "./searchShared.js";
@@ -148,9 +148,7 @@ export function CanvasCardPicker({ profileId, onPick, onCancel }: CanvasCardPick
         />
 
         {failed && (
-          <p className="canv__error" role="alert">
-            {s.error}
-          </p>
+          <Notice kind="danger" message={s.error} />
         )}
 
         {rows === null ? (

@@ -20,11 +20,22 @@ import type {
   ExcalidrawProps,
 } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { isCanvasRefText } from "@nexus/core";
 import type { CanvasRef, CanvasSketch } from "@nexus/core";
 import type { ThemeName } from "@nexus/tokens";
-import { Button, EmptyState, Icon, LoadingState, PageHeader, SaveIndicator, type SaveStatus, TextField } from "@nexus/ui";
+import {
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+  SaveIndicator,
+  type SaveStatus,
+  TextField,
+  Toast,
+} from "@nexus/ui";
 import { MAX_CANVAS_BOARD_NAME_LENGTH, MAX_CANVAS_SCENE_LENGTH } from "../../shared/ipc.js";
 import type { CanvasBoard, CanvasRefCard } from "../../shared/ipc.js";
 import { CanvasAutosave, type SceneObservation } from "./canvasAutosave.js";
@@ -259,6 +270,7 @@ export function CanvasPage({
   const [failed, setFailed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   /**
    * What the board says about its own persistence.
    *
@@ -914,6 +926,30 @@ export function CanvasPage({
 
   const active = boards.find((board) => board.id === activeId) ?? null;
 
+  // Rename and delete fold behind the header's ⋯ trigger below 900px. With no
+  // board open there is nothing for them to act on, so there is no trigger either.
+  const boardTools:
+    | { secondaryActions: ReactNode[]; overflowLabel: string }
+    | { secondaryActions?: undefined; overflowLabel?: string } =
+    active === null
+      ? {}
+      : {
+          secondaryActions: [
+            <Button variant="ghost" onClick={() => setNaming({ id: active.id, draft: active.name })}>
+              {s.rename}
+            </Button>,
+            // `danger` because deleting a board is not the same kind of act as
+            // renaming it, and the confirmation names it before it goes.
+            <Button
+              variant="danger"
+              onClick={() => setPendingDelete({ id: active.id, name: active.name })}
+            >
+              {s.delete}
+            </Button>,
+          ],
+          overflowLabel: s.moreActions,
+        };
+
   return (
     <div className="canv">
       {/* The board strip used to be a row of tabs with an unlabelled „Table"
@@ -929,6 +965,11 @@ export function CanvasPage({
         title={moduleName("canvas")}
         sigil="canvas"
         {...(active === null ? {} : { subtitle: active.name })}
+        primaryAction={
+          <Button variant="primary" onClick={() => setNaming({ id: null, draft: "" })}>
+            {s.newBoard}
+          </Button>
+        }
         actions={
           <>
             <SaveIndicator
@@ -991,29 +1032,9 @@ export function CanvasPage({
                 </>
               )}
             </NotePopover>
-            <Button variant="ghost" onClick={() => setNaming({ id: null, draft: "" })}>
-              {s.newBoard}
-            </Button>
-            {active !== null && (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => setNaming({ id: active.id, draft: active.name })}
-                >
-                  {s.rename}
-                </Button>
-                {/* „Mermaid dijagram" is NOT here: it is a drawing action and it
-                    moved into the toolbar with the rest of them (slice b1). This
-                    header is about boards. `danger` because deleting one is not
-                    the same kind of act as renaming it, and until now the two
-                    buttons were indistinguishable. */}
-                <Button variant="danger" onClick={() => void deleteBoard(active.id)}>
-                  {s.delete}
-                </Button>
-              </>
-            )}
           </>
         }
+        {...boardTools}
       />
 
       {naming !== null && (
@@ -1046,21 +1067,21 @@ export function CanvasPage({
       )}
 
       {actionError !== null && (
-        <p className="canv__error" role="alert">
-          {actionError}
-          <Button variant="ghost" onClick={() => setActionError(null)}>
-            {s.dismiss}
-          </Button>
-        </p>
+        <Toast
+          kind="error"
+          message={actionError}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setActionError(null)}
+        />
       )}
 
       {pendingUndoId !== null && (
-        <p className="canv__notice" role="status">
-          {s.deletedNotice}
-          <Button variant="ghost" onClick={() => void undoDelete(pendingUndoId)}>
-            {s.undo}
-          </Button>
-        </p>
+        <Toast
+          message={s.deletedNotice}
+          undo={{ label: s.undo, onUndo: () => void undoDelete(pendingUndoId) }}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
       {active === null ? (
@@ -1159,6 +1180,24 @@ export function CanvasPage({
             </div>
           </div>
         </>
+      )}
+
+      {pendingDelete !== null && (
+        <ConfirmDialog
+          title={s.deleteTitle}
+          name={pendingDelete.name}
+          question={s.deleteQuestion}
+          note={s.deleteNote}
+          confirmLabel={s.delete}
+          cancelLabel={s.cancel}
+          destructive
+          onConfirm={() => {
+            const doomed = pendingDelete;
+            setPendingDelete(null);
+            void deleteBoard(doomed.id);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

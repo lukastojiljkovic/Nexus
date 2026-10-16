@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   COMPONENT_CATALOGUE,
   MAX_CIRCUIT_NAME_LENGTH,
@@ -17,7 +17,16 @@ import type {
   WireColour,
   WireEnd,
 } from "@nexus/core";
-import { Button, EmptyState, Icon, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import {
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Icon,
+  LoadingState,
+  PageHeader,
+  TextField,
+  Toast,
+} from "@nexus/ui";
 
 import type {
   CodeExportResult,
@@ -140,6 +149,7 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
   const [failed, setFailed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   /** The name form, open for a new circuit (`{ id: null }`) or for a rename (`{ id }`). */
   const [naming, setNaming] = useState<{ id: string | null; draft: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -639,6 +649,58 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
 
   const active = circuits.find((circuit) => circuit.id === activeId) ?? null;
 
+  // The tools, Rename and Delete fold behind the header's ⋯ trigger below 900px. With no
+  // circuit open there is nothing for them to act on, so there is no trigger either.
+  // The code, the bench and the runner read the parts and wires, which the list row
+  // does not carry, so they are enabled only once the circuit is open. The runner is
+  // NOT disabled on a circuit with no ROS 2 package: its refusal is a sentence inside
+  // the dialog, and a dead button would leave the user to guess what they did wrong.
+  const boardTools:
+    | { secondaryActions: ReactNode[]; overflowLabel: string }
+    | { secondaryActions?: undefined; overflowLabel?: string } =
+    active === null
+      ? {}
+      : {
+          secondaryActions: [
+            <Button
+              className="elec__code"
+              variant="ghost"
+              disabled={doc === null}
+              onClick={() => setCodeOpen(true)}
+            >
+              {s.code.open}
+            </Button>,
+            <Button
+              className="elec__sim"
+              variant="ghost"
+              disabled={doc === null}
+              onClick={() => setSimOpen(true)}
+            >
+              {s.sim.open}
+            </Button>,
+            <Button
+              className="elec__runner"
+              variant="ghost"
+              disabled={doc === null}
+              onClick={() => setRunnerOpen(true)}
+            >
+              {s.runner.open}
+            </Button>,
+            <Button variant="ghost" onClick={() => setNaming({ id: active.id, draft: active.name })}>
+              {s.rename}
+            </Button>,
+            // `danger` because deleting a circuit is not the same kind of act as
+            // renaming it, and the confirmation names it before it goes.
+            <Button
+              variant="danger"
+              onClick={() => setPendingDelete({ id: active.id, name: active.name })}
+            >
+              {s.delete}
+            </Button>,
+          ],
+          overflowLabel: s.moreActions,
+        };
+
   return (
     <div className="elec">
       <PageHeader
@@ -646,6 +708,11 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
         title={moduleName("electronics")}
         sigil="electronics"
         {...(active === null ? {} : { subtitle: active.name })}
+        primaryAction={
+          <Button variant="primary" onClick={() => setNaming({ id: null, draft: "" })}>
+            {s.newCircuit}
+          </Button>
+        }
         actions={
           <>
             <NotePopover
@@ -697,64 +764,9 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
                 </>
               )}
             </NotePopover>
-            <Button variant="ghost" onClick={() => setNaming({ id: null, draft: "" })}>
-              {s.newCircuit}
-            </Button>
-            {active !== null && (
-              <>
-                {/* Enabled only once the circuit is actually open: the code is
-                    derived from the parts and wires, which the list row does
-                    not carry. */}
-                <Button
-                  className="elec__code"
-                  variant="ghost"
-                  disabled={doc === null}
-                  onClick={() => setCodeOpen(true)}
-                >
-                  {s.code.open}
-                </Button>
-                {/* The bench, on the same terms: it reads the parts and wires,
-                    which the list row does not carry. `.elec__sim` is an anchor
-                    with no rule behind it, `.elec__code`'s arrangement — the
-                    screenshot sweep needs a name for the control, and the
-                    control needs no style of its own. */}
-                <Button
-                  className="elec__sim"
-                  variant="ghost"
-                  disabled={doc === null}
-                  onClick={() => setSimOpen(true)}
-                >
-                  {s.sim.open}
-                </Button>
-                {/* The runner, on the same terms and with one more: it takes
-                    the circuit's ID and nothing else, because what command that
-                    ID becomes is main's decision from the user's own settings.
-                    It is NOT disabled on a circuit with no ROS 2 package — the
-                    refusal is a sentence inside the dialog, and a dead button
-                    would leave the user to guess which of a dozen things they
-                    did wrong. `.elec__runner` is an anchor with no rule behind
-                    it, `.elec__code`'s arrangement. */}
-                <Button
-                  className="elec__runner"
-                  variant="ghost"
-                  disabled={doc === null}
-                  onClick={() => setRunnerOpen(true)}
-                >
-                  {s.runner.open}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setNaming({ id: active.id, draft: active.name })}
-                >
-                  {s.rename}
-                </Button>
-                <Button variant="danger" onClick={() => void deleteCircuit(active.id)}>
-                  {s.delete}
-                </Button>
-              </>
-            )}
           </>
         }
+        {...boardTools}
       />
 
       {naming !== null && (
@@ -787,30 +799,47 @@ export function ElectronicsPage({ profileId, intent, onIntentHandled }: Electron
       )}
 
       {actionError !== null && (
-        <p className="elec__error" role="alert">
-          {actionError}
-          <Button variant="ghost" onClick={() => setActionError(null)}>
-            {s.dismiss}
-          </Button>
-        </p>
+        <Toast
+          kind="error"
+          message={actionError}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setActionError(null)}
+        />
       )}
 
       {pendingUndoId !== null && (
-        <p className="elec__notice" role="status">
-          {s.deletedNotice}
-          <Button variant="ghost" onClick={() => void undoDelete(pendingUndoId)}>
-            {s.undo}
-          </Button>
-        </p>
+        <Toast
+          message={s.deletedNotice}
+          undo={{ label: s.undo, onUndo: () => void undoDelete(pendingUndoId) }}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setPendingUndoId(null)}
+        />
       )}
 
       {codeNotice !== null && (
-        <p className="elec__notice" role="status">
-          {codeNotice}
-          <Button variant="ghost" onClick={() => setCodeNotice(null)}>
-            {s.dismiss}
-          </Button>
-        </p>
+        <Toast
+          message={codeNotice}
+          dismissLabel={s.dismiss}
+          onDismiss={() => setCodeNotice(null)}
+        />
+      )}
+
+      {pendingDelete !== null && (
+        <ConfirmDialog
+          title={s.deleteTitle}
+          name={pendingDelete.name}
+          question={s.deleteQuestion}
+          note={s.deleteNote}
+          confirmLabel={s.delete}
+          cancelLabel={s.cancel}
+          destructive
+          onConfirm={() => {
+            const doomed = pendingDelete;
+            setPendingDelete(null);
+            void deleteCircuit(doomed.id);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
 
       {codeOpen && code !== null && (

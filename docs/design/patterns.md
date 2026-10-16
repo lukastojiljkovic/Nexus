@@ -45,7 +45,9 @@ action stay where they are. 900px is the window minimum the desktop enforces, so
 this is the narrowest window that exists rather than a breakpoint nobody
 reaches.
 
-**Adopted by:** all 26 module pages, each rendering one `PageHeader`.
+**Adopted by:** all 26 module pages, each rendering one `PageHeader`, and the shell's
+Canvas and Electronics pages, which use `primaryAction` and `secondaryActions` (the tools and
+Rename fold behind the ⋯ trigger below 900px).
 
 ## EmptyState
 
@@ -92,8 +94,9 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures. No
-module page yet. The hand-written `*__error` lines are the ones it replaces.
+**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures, and the
+canvas card picker's failed search (shell). No module page yet. The hand-written `*__error`
+lines are the ones it replaces.
 
 ## AsyncSurface
 
@@ -166,7 +169,8 @@ The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
 **Adopted by:** 6 module renderer files (assistant ×2, calculator, car, chess,
-maps).
+maps), and the shell's Canvas and Electronics pages (deleting a board or a circuit,
+`destructive`).
 
 ## Toast
 
@@ -188,7 +192,8 @@ as an ink.
 **Adopted by:** the shell's pages Finance, Habits, Notes and Tasks (which holds its
 delete, batch and list offers in the one slot and its action failures in
 `kind="error"`), and the shell's rail, for a failed profile action and a failed
-reload of the device's module order. No module page yet. The undo bars that
+reload of the device's module order. Canvas and Electronics (the delete offer, the failed
+action and the code-export line) use it too. No module page yet. The undo bars that
 predate it are the ones to convert.
 
 ## ListDetail

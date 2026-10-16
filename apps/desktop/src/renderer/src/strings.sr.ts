@@ -5673,6 +5673,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     undo: "Opozovi",
     deletedNotice: "Tabla je obrisana.",
     dismiss: "Zatvori",
+    deleteTitle: "Obrisati ovu tablu?",
+    deleteQuestion: "Tabla nestaje sa spiska, zajedno sa svim što je na njoj nacrtano.",
+    /** What stays true after the answer: the offer that follows the delete takes it back. */
+    deleteNote: "Ponuda Opozovi posle brisanja vraća tablu.",
+    /** The name of the overflow trigger that holds Rename and Delete below 900px. */
+    moreActions: "Još radnji",
     /** The mermaid action — see this section's own header for why it is a button. */
     mermaid: "Mermaid dijagram",
     mermaidTitle: "Napiši mermaid definiciju i pretvori je u oblike koje možeš dalje uređivati.",
