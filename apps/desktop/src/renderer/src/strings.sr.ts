@@ -3030,7 +3030,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     emptyTitle: "Nema predmeta",
     /** „u formi iznad" until the form moved behind „Dodaj predmet" — the sentence had to stop pointing at a form nobody can see. */
     emptyDescription: "Dodaj prvi predmet — naziv je dovoljan.",
-    loadError: "Predmeti se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadError: "Podaci o učenju se trenutno ne mogu učitati. Pokušaj ponovo.",
+    loadFailedTitle: "Učenje nije moguće učitati",
+    retry: "Pokušaj ponovo",
     showArchived: "Prikaži arhivirano",
     hideArchived: "Sakrij arhivirano",
     noExams: "Nema zakazanih ispita za ovaj predmet.",
@@ -3164,7 +3166,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     cardsEmptyTitle: "Nema kartica",
     /** The card form is BELOW this empty state, never above it — the sentence used to point the wrong way. */
     cardsEmptyDescription: "Dodaj prvu karticu — prednja i zadnja strana su dovoljne.",
-    loadCardsError: "Kartice se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadCardsError: "Kartice se trenutno ne mogu učitati. Pokušaj ponovo.",
+    cardsLoadFailedTitle: "Kartice nije moguće učitati",
     addCard: "Dodaj karticu",
     saveCard: "Sačuvaj",
     cancelCard: "Otkaži",

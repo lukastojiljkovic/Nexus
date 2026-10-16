@@ -3016,7 +3016,9 @@ export const en = {
     emptyTitle: "No subjects",
     /** „u formi iznad" until the form moved behind „Dodaj predmet" — the sentence had to stop pointing at a form nobody can see. */
     emptyDescription: "Add your first subject — a name is enough.",
-    loadError: "Subjects cannot be loaded right now. Try again later.",
+    loadError: "Study data cannot be loaded right now. Try again.",
+    loadFailedTitle: "Study could not be loaded",
+    retry: "Try again",
     showArchived: "Show archived",
     hideArchived: "Hide archived",
     noExams: "No exams scheduled for this subject.",
@@ -3150,7 +3152,8 @@ export const en = {
     cardsEmptyTitle: "No cards",
     /** The card form is BELOW this empty state, never above it — the sentence used to point the wrong way. */
     cardsEmptyDescription: "Add your first card — a front and a back are enough.",
-    loadCardsError: "Cards cannot be loaded right now. Try again later.",
+    loadCardsError: "Cards cannot be loaded right now. Try again.",
+    cardsLoadFailedTitle: "The cards could not be loaded",
     addCard: "Add card",
     saveCard: "Save",
     cancelCard: "Cancel",
