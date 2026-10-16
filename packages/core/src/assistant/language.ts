@@ -323,12 +323,17 @@ function wordToCyrillic(word: string): string {
  * The runs of a text that are not prose and must survive transliteration
  * untouched: a code span (fenced by one, two or three backticks), a URL, an
  * email address, a thing named the way this app names its tools
- * (`tasks.create`), and a citation marker (`[1]`). The three fences are spelled
- * out rather than matched as a run and its back-reference, which backtracks
- * quadratically over a long run of backticks.
+ * (`tasks.create`), and a citation marker (`[1]`).
+ *
+ * Every alternative is linear on any input. The three fences are spelled out
+ * rather than matched as a run and its back-reference, which backtracks over a
+ * long run of backticks. The two that start with a repeated class are bounded,
+ * because the search starts again at every character of a long run that never
+ * reaches the `@` or the `.`: an email's local part at RFC 5321's 64, and an
+ * identifier's first name at the same 64, a policy choice no tool name nears.
  */
 const PROTECTED =
-  /```[^`]*```|``[^`]*``|`[^`]*`|https?:\/\/[^\s]+|www\.[^\s]+|[\w.+-]+@[\w.-]+|[\p{L}\p{N}_]+(?:\.[\p{L}\p{N}_]+)+|\[\d+\]/gu;
+  /```[^`]*```|``[^`]*``|`[^`]*`|https?:\/\/[^\s]+|www\.[^\s]+|[\w.+-]{1,64}@[\w.-]+|[\p{L}\p{N}_]{1,64}(?:\.[\p{L}\p{N}_]+)+|\[\d+\]/gu;
 
 /**
  * The answer's own Serbian Latin, rewritten in Cyrillic - the other half of
