@@ -217,12 +217,6 @@
   background: var(--nx-surface-alt);
   color: var(--nx-text);
 }
-.tasks__rail-error {
-  margin: var(--nx-space-2) 0 0;
-  padding: 0 var(--nx-space-2);
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-danger);
-}
 /* Oznake, the rail's second section (migration 023): the same caption heading as
    „Liste“, plus the room a second section needs above it and the „Poništi“ the
    NOTE organizer puts on the same line. The chips themselves share the NOTE tag
@@ -924,8 +918,12 @@ button.tasks__cal-chip:active {
 }
 
 /* Delete + undo (TASK-011): an inline, token-styled undo bar above the list. */
-.tasks__undo {
+/* The batch action bar (ADR-038): a row of menu triggers and a delete that act
+   on the picked rows. It wraps rather than squeezing the count out of view on a
+   narrow window, and it is its own bar, not the undo offer's (which is Toast). */
+.tasks__bulk {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--nx-space-2);
   padding: var(--nx-space-2) var(--nx-space-3);
@@ -933,27 +931,10 @@ button.tasks__cal-chip:active {
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-md);
 }
-.tasks__undo-text {
+.tasks__bulk-count {
   flex: 1;
   font-size: var(--nx-font-size-body-sm);
   color: var(--nx-text);
-}
-.tasks__undo-dismiss.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-  padding: 2px 8px;
-}
-.tasks__undo-dismiss.nx-button:hover {
-  background: var(--nx-surface);
-  color: var(--nx-text);
-}
-
-/* The batch action bar (ADR-038) is the undo bar's recipe with a wrap: it holds
-   three menu triggers and a delete rather than one action, and must not squeeze
-   the count out of view on a narrow window. */
-.tasks__bulk {
-  flex-wrap: wrap;
 }
 /* Sub-lists indent under their parent exactly as the rail draws them, so the
    menu reads as the same tree rather than as a flat list of names. */
@@ -965,11 +946,6 @@ button.tasks__cal-chip:active {
   flex-direction: column;
   gap: var(--nx-space-2);
   padding: var(--nx-space-1);
-}
-.tasks__bulk-error {
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-danger);
 }
 
 /* The row itself ------------------------------------------------------

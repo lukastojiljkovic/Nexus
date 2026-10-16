@@ -1262,7 +1262,9 @@ export const en = {
     emptyTitle: "No tasks",
     emptyDescription:
       "Write your first task in the field above — a name and Enter is enough.",
-    loadError: "Tasks cannot be loaded right now. Try again later.",
+    loadFailedTitle: "Tasks not loaded",
+    loadError: "The tasks could not be read. Try again.",
+    retry: "Try again",
     editLabel: "Edit task",
     deleteLabel: "Delete task",
     /** The per-row „⋯“ menu: tags to attach plus „Sačuvaj kao šablon“, so its name is the row, not one of them. */

@@ -793,7 +793,7 @@ body {
    unsaved exits (DC-148), the word on an edit that failed to save after its
    page was gone. Both are app-wide statements that outlive any page. Stacked
    banners are spaced by `.app__main`'s own gap. Deliberately the same shell as
-   the per-page undo bars (.tasks__undo and friends) — surface-alt fill,
+   the kit's per-page undo bar (`.nx-toast`) — surface-alt fill,
    hairline border, no glow — because it is the same promise, only app-wide. */
 .app__banner {
   flex: none;
