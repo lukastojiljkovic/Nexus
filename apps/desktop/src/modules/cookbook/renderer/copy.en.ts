@@ -206,5 +206,8 @@ export const en: typeof sr = {
     load: "The cookbook could not be loaded.",
     mutate: "The change was not saved.",
     recipe: "The recipe could not be loaded.",
+    search: "The search did not run.",
+    browse: "The recipe pack could not be searched.",
+    retry: "Try again",
   },
 };

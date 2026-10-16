@@ -92,8 +92,9 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures. No
-module page yet. The hand-written `*__error` lines are the ones it replaces.
+**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures, and
+the cookbook's failed search and failed pack browse, each with a retry. The
+hand-written `*__error` lines are the ones it replaces.
 
 ## AsyncSurface
 
@@ -141,9 +142,9 @@ What the component enforces, so a caller cannot forget any of it:
 containing block, so a fixed panel is already positioned against the window, and
 `packages/ui` does not depend on `react-dom`.
 
-**Adopted by:** the shared `ConfirmDialog`, and the shell's module launcher and
-shortcuts reference. Six module renderer files still draw their own
-`role="dialog"` (cookbook, culture, lab, maps, reader, signals), and the
+**Adopted by:** the shared `ConfirmDialog`, the cookbook's recipe editor, and the
+shell's module launcher and shortcuts reference. Five module renderer files still
+draw their own `role="dialog"` (culture, lab, maps, reader, signals), and the
 `recur-dialog__*` recipe still wears the other renderer dialogs.
 
 ## ConfirmDialog
@@ -165,8 +166,8 @@ first in the DOM. What it enforces on top of the frame:
 The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
-**Adopted by:** 6 module renderer files (assistant ×2, calculator, car, chess,
-maps).
+**Adopted by:** 8 module renderer files (assistant ×2, calculator, car, chess,
+cookbook, maps, pantry).
 
 ## Toast
 
@@ -188,8 +189,8 @@ as an ink.
 **Adopted by:** the shell's pages Finance, Habits, Notes and Tasks (which holds its
 delete, batch and list offers in the one slot and its action failures in
 `kind="error"`), and the shell's rail, for a failed profile action and a failed
-reload of the device's module order. No module page yet. The undo bars that
-predate it are the ones to convert.
+reload of the device's module order. The library page is the first module page
+to use it; the recorder's `rec__undo` bar predates it and is still to convert.
 
 ## ListDetail
 
@@ -375,15 +376,15 @@ EmptyState columns, which are tags.
 | car | 1 | 8 | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | cards | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | chess | 1 | 3 | 0 | 1 | 2 | 0 | 1 | 0 | 0 | 0 |
-| cookbook | 1 | 4 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
+| cookbook | 1 | 4 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | culture | 1 | 8 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 1 |
 | drawings | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | emergency | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | lab | 1 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
-| library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 0 | 0 | 0 |
+| library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 1 | 0 | 0 |
 | maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
 | miniapps | 1 | 0 | 1 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
-| pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
+| pantry | 1 | 1 | 1 | 1 | 3 | 0 | 1 | 0 | 0 | 0 |
 | puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 0 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | recorder | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
@@ -393,9 +394,8 @@ EmptyState columns, which are tags.
 | translator | 1 | 2 | 1 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
 | wiki | 1 | 2 | 0 | 1 | 4 | 0 | 0 | 0 | 0 | 0 |
 | workshop | 1 | 2 | 3 | 1 | 4 | 0 | 0 | 0 | 1 | 1 |
-| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **6** | **0** | **7** | **9** |
+| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **5** | **8** | **1** | **7** | **9** |
 
 Not counted in this matrix: the shell's pages (`apps/desktop/src/renderer/src`).
-Components no module page uses yet: `Dialog`, `Notice`, `AsyncSurface`,
-`Section`, `Toolbar`, `SettingsRow`, the `Segmented` component, `Toast`,
-`ListDetail` and `FormLayout`.
+Components no module page uses yet: `AsyncSurface`, `Section`, `Toolbar`,
+`SettingsRow`, the `Segmented` component, `ListDetail` and `FormLayout`.

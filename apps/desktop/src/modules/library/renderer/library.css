@@ -212,23 +212,6 @@
   gap: var(--nx-space-2);
 }
 
-/* The undo bar: a status line under the header, never a dialog - the rows it
-   offers back are already gone from the shelf, and the store kept them. */
-.lib__undo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nx-space-3);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-surface-alt);
-}
-
-.lib__undo-text {
-  flex: 1 1 auto;
-}
-
 .lib__error {
   color: var(--nx-danger);
   overflow-wrap: anywhere;
