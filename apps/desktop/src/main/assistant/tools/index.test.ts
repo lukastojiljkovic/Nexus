@@ -135,7 +135,7 @@ describe("createToolRegistry", () => {
       reader: 1,
       recorder: 1,
       search: 3,
-      tasks: 4,
+      tasks: 17,
       timers: 2,
       wiki: 1,
     });
