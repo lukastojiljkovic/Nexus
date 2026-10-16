@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   EmptyState,
   Icon,
   ListRow,
@@ -215,6 +216,8 @@ function StockSection({
   const [showArchived, setShowArchived] = useState(false);
   /** The shelf a NEW item is filed under, so adding three things to one shelf is not three selections. */
   const [newLocationId, setNewLocationId] = useState<string | null>(null);
+  /** The item whose removal is waiting for an answer. */
+  const [removing, setRemoving] = useState<PantryItemView | null>(null);
 
   const { current, archived } = splitArchived(view.items);
   const groups = groupItemsByLocation(current, view.locations);
@@ -308,6 +311,7 @@ function StockSection({
                       setNewLocationId(item.locationId);
                       setEditing({ mode: "edit", id: item.id });
                     }}
+                    onRemove={() => setRemoving(item)}
                   />
                 ),
               )}
@@ -335,13 +339,7 @@ function StockSection({
                     >
                       {copy.stock.unarchive}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      onClick={() =>
-                        void run((pantry) => pantry.removeItem({ profileId, id: item.id }))
-                      }
-                    >
+                    <Button size="sm" variant="quiet" onClick={() => setRemoving(item)}>
                       {copy.common.remove}
                     </Button>
                   </span>
@@ -355,6 +353,23 @@ function StockSection({
             ))}
           </div>
         </div>
+      )}
+
+      {removing !== null && (
+        <ConfirmDialog
+          title={copy.stock.removeTitle}
+          name={removing.name}
+          question={copy.stock.removeQuestion}
+          confirmLabel={copy.common.remove}
+          cancelLabel={copy.common.cancel}
+          destructive
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const id = removing.id;
+            setRemoving(null);
+            void run((pantry) => pantry.removeItem({ profileId, id }));
+          }}
+        />
       )}
     </Card>
   );
@@ -377,12 +392,14 @@ function StockRow({
   expiryText,
   run,
   onEdit,
+  onRemove,
 }: {
   profileId: string;
   item: PantryItemView;
   expiryText: string;
   run: Run;
   onEdit: () => void;
+  onRemove: () => void;
 }) {
   return (
     <ListRow
@@ -432,11 +449,7 @@ function StockRow({
           >
             {copy.stock.archive}
           </Button>
-          <Button
-            size="sm"
-            variant="quiet"
-            onClick={() => void run((pantry) => pantry.removeItem({ profileId, id: item.id }))}
-          >
+          <Button size="sm" variant="quiet" onClick={onRemove}>
             {copy.common.remove}
           </Button>
         </span>
@@ -975,6 +988,8 @@ function LocationsSection({
   const [draft, setDraft] = useState("");
   const [problem, setProblem] = useState(false);
   const [held, setHeld] = useState<string | null>(null);
+  /** The location whose removal is waiting for an answer. */
+  const [removing, setRemoving] = useState<PantryLocationView | null>(null);
 
   const locations = view.locations;
 
@@ -1060,18 +1075,7 @@ function LocationsSection({
                   >
                     {copy.locations.rename}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    onClick={() => {
-                      setHeld(null);
-                      void run((pantry) =>
-                        pantry.removeLocation({ profileId, id: location.id }),
-                      ).then((landed) => {
-                        if (!landed) setHeld(location.id);
-                      });
-                    }}
-                  >
+                  <Button size="sm" variant="quiet" onClick={() => setRemoving(location)}>
                     {copy.common.remove}
                   </Button>
                 </span>
@@ -1110,6 +1114,25 @@ function LocationsSection({
           {copy.locations.add}
         </Button>
       </div>
+      {removing !== null && (
+        <ConfirmDialog
+          title={copy.locations.removeTitle}
+          name={removing.name}
+          question={copy.locations.removeQuestion}
+          confirmLabel={copy.common.remove}
+          cancelLabel={copy.common.cancel}
+          destructive
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const id = removing.id;
+            setRemoving(null);
+            setHeld(null);
+            void run((pantry) => pantry.removeLocation({ profileId, id })).then((landed) => {
+              if (!landed) setHeld(id);
+            });
+          }}
+        />
+      )}
     </Card>
   );
 }

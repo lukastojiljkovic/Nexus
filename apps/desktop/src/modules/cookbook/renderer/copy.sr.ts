@@ -211,5 +211,8 @@ export const sr = {
     load: "Kuvarica nije učitana.",
     mutate: "Izmena nije sačuvana.",
     recipe: "Recept nije učitan.",
+    search: "Pretraga nije uspela.",
+    browse: "Paket recepata nije mogao da se pretraži.",
+    retry: "Pokušaj ponovo",
   },
 };

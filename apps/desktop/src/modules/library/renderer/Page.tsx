@@ -12,6 +12,7 @@ import {
   Select,
   TextArea,
   TextField,
+  Toast,
 } from "@nexus/ui";
 import {
   LIBRARY_MAX_LOAN_TO_LENGTH,
@@ -191,13 +192,11 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
       />
 
       {undo !== null && (
-        <div className="lib__undo" role="status">
-          <span className="lib__undo-text">
-            {undo.kind === "item" ? copy.undo.item : copy.undo.collection}
-          </span>
-          <Button
-            size="sm"
-            onClick={() => {
+        <Toast
+          message={undo.kind === "item" ? copy.undo.item : copy.undo.collection}
+          undo={{
+            label: copy.undo.action,
+            onUndo: () => {
               const pending = undo;
               setUndo(null);
               void run((library) =>
@@ -205,19 +204,11 @@ export default function LibraryPage({ profileId }: ModulePageProps) {
                   ? library.restoreItem({ profileId, id: pending.id })
                   : library.restoreCollection({ profileId, id: pending.id }),
               );
-            }}
-          >
-            {copy.undo.action}
-          </Button>
-          <Button
-            size="sm"
-            variant="quiet"
-            aria-label={copy.undo.dismiss}
-            onClick={() => setUndo(null)}
-          >
-            <Icon name="close" size={14} />
-          </Button>
-        </div>
+            },
+          }}
+          dismissLabel={copy.undo.dismiss}
+          onDismiss={() => setUndo(null)}
+        />
       )}
 
       {error !== null && (

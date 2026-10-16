@@ -88,6 +88,8 @@ export const sr = {
     low: "Fali {count} {unit}",
     // Throwing the rest away: the one move that records the `expired` reason.
     discard: "Bačeno",
+    removeTitle: "Brisanje namirnice",
+    removeQuestion: "Namirnica napušta ostavu.",
   },
   form: {
     newTitle: "Nova namirnica",
@@ -112,6 +114,8 @@ export const sr = {
     title: "Mesta",
     name: "Naziv mesta",
     add: "Dodaj mesto",
+    removeTitle: "Brisanje mesta",
+    removeQuestion: "Mesto napušta spisak.",
     rename: "Preimenuj",
     up: "Pomeri gore",
     down: "Pomeri dole",

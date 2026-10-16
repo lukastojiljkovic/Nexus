@@ -197,8 +197,8 @@ as an ink.
 **Adopted by:** the shell's pages Finance, Habits, Notes and Tasks (which holds its
 delete, batch and list offers in the one slot and its action failures in
 `kind="error"`), and the shell's rail, for a failed profile action and a failed
-reload of the device's module order. No module page yet. The undo bars that
-predate it are the ones to convert.
+reload of the device's module order. The library page is the first module page
+to use it; the recorder's `rec__undo` bar predates it and is still to convert.
 
 ## ListDetail
 
@@ -392,7 +392,7 @@ EmptyState columns, which are tags.
 | drawings | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | emergency | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 0 | 0 | 0 |
 | lab | 1 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
-| library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 0 | 0 | 0 |
+| library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 1 | 0 | 0 |
 | maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
 | miniapps | 1 | 0 | 0 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
 | pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |

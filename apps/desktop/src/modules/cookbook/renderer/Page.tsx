@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
   Chip,
   ConfirmDialog,
+  Dialog,
   EmptyState,
   Icon,
   ListRow,
   LoadingState,
+  Notice,
   PageHeader,
   Select,
   TextArea,
@@ -23,7 +24,6 @@ import {
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { numberFormat } from "../../../renderer/src/intl.js";
-import { useFocusTrap } from "../../../renderer/src/useFocusTrap.js";
 import { manifest } from "../shared/manifest.js";
 import type {
   CollectionView,
@@ -88,6 +88,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   const [servings, setServings] = useState(1);
   /** What the search box found, or null while the box is empty. */
   const [hits, setHits] = useState<readonly RecipeSummaryView[] | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<null | { id: string | null }>(null);
   const [cooking, setCooking] = useState(false);
@@ -148,6 +149,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
       try {
         setDetail(await window.nexus.modules.cookbook.get({ profileId, id }));
       } catch (failure) {
+        setError(copy.errors.recipe);
         console.error("Nexus: the open recipe could not be re-read:", failure);
       }
     },
@@ -158,6 +160,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   const search = useCallback(
     async (text: string): Promise<void> => {
       setQuery(text);
+      setSearchFailed(false);
       if (text.trim().length === 0) {
         setHits(null);
         return;
@@ -165,6 +168,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
       try {
         setHits(await window.nexus.modules.cookbook.search({ profileId, query: text }));
       } catch (failure) {
+        setSearchFailed(true);
         console.error("Nexus: the cookbook search failed:", failure);
       }
     },
@@ -232,7 +236,13 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
                 ))}
               </Select>
             )}
-            {recipes.length === 0 ? (
+            {searchFailed ? (
+              <Notice
+                kind="danger"
+                message={copy.errors.search}
+                action={{ label: copy.errors.retry, onClick: () => void search(query) }}
+              />
+            ) : recipes.length === 0 ? (
               <EmptyState
                 variant="inline"
                 title={copy.list.emptyTitle}
@@ -373,8 +383,13 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
       )}
 
       {deleting && detail !== null && (
-        <ConfirmDelete
-          title={detail.title}
+        <ConfirmDialog
+          title={copy.confirm.title}
+          name={detail.title}
+          question={copy.confirm.question}
+          confirmLabel={copy.confirm.confirm}
+          cancelLabel={copy.confirm.cancel}
+          destructive
           onCancel={() => setDeleting(false)}
           onConfirm={() => {
             const id = detail.id;
@@ -945,6 +960,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
   const [opened, setOpened] = useState<PackRecipeView | null>(null);
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [browseFailed, setBrowseFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -968,6 +984,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
     async (id: string, text: string): Promise<void> => {
       setOpened(null);
       setSaved(false);
+      setBrowseFailed(false);
       if (id === "") {
         setHits([]);
         return;
@@ -975,6 +992,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
       try {
         setHits(await window.nexus.modules.cookbook.browsePack({ profileId, packId: id, query: text }));
       } catch (failure) {
+        setBrowseFailed(true);
         console.error("Nexus: a recipe pack could not be browsed:", failure);
       }
     },
@@ -1012,7 +1030,13 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          {hits.length === 0 ? (
+          {browseFailed ? (
+            <Notice
+              kind="danger"
+              message={copy.errors.browse}
+              action={{ label: copy.errors.retry, onClick: () => void browse(packId, query) }}
+            />
+          ) : hits.length === 0 ? (
             <p className="nx-hint">{copy.packs.noResults}</p>
           ) : (
             <div className="cookbook__list">
@@ -1135,8 +1159,6 @@ function RecipeEditor({
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
-  const titleId = useId();
-  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
   const [title, setTitle] = useState(recipe?.title ?? "");
   const [course, setCourse] = useState<CookbookCourse>(recipe?.course ?? "main");
   const [servings, setServings] = useState(String(recipe?.servings ?? 4));
@@ -1159,16 +1181,6 @@ function RecipeEditor({
   const [notes, setNotes] = useState(recipe?.notes ?? "");
   const [problem, setProblem] = useState<"name" | "ingredients" | "steps" | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onClose]);
 
   function drafts(): RecipeIngredientDraft[] | null {
     const previous = new Map(
@@ -1245,131 +1257,125 @@ function RecipeEditor({
     }
   }
 
-  return createPortal(
-    <div className="cookbook__overlay">
-      <div className="cookbook__backdrop" onClick={onClose} />
-      <div
-        ref={panelRef}
-        className="cookbook__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <h2 id={titleId} className="cookbook__panel-title">
-          {recipe === null ? copy.editor.newTitle : copy.editor.title}
-        </h2>
-        <TextField
-          label={copy.editor.name}
-          value={title}
-          maxLength={120}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-        {problem === "name" && <p className="cookbook__error">{copy.editor.errorName}</p>}
-        <Select
-          label={copy.editor.course}
-          value={course}
-          onChange={(event) => setCourse(event.target.value as CookbookCourse)}
-        >
-          {COOKBOOK_COURSES.map((value) => (
-            <option key={value} value={value}>
-              {courseLabel(value)}
-            </option>
-          ))}
-        </Select>
-        <div className="cookbook__triple">
-          <TextField
-            label={copy.editor.servings}
-            inputMode="numeric"
-            value={servings}
-            onChange={(event) => setServings(event.target.value)}
-          />
-          <TextField
-            label={copy.editor.prep}
-            inputMode="numeric"
-            value={prep}
-            onChange={(event) => setPrep(event.target.value)}
-          />
-          <TextField
-            label={copy.editor.cook}
-            inputMode="numeric"
-            value={cook}
-            onChange={(event) => setCook(event.target.value)}
-          />
-        </div>
-        <TextArea
-          label={copy.editor.ingredients}
-          rows={6}
-          value={ingredients}
-          onChange={(event) => setIngredients(event.target.value)}
-        />
-        <p className="nx-hint">{copy.editor.ingredientsHint}</p>
-        {problem === "ingredients" && (
-          <p className="cookbook__error">{copy.editor.errorIngredients}</p>
-        )}
-        <div className="cookbook__step-editor">
-          <h3 className="cookbook__section-title">{copy.editor.steps}</h3>
-          {steps.map((step, index) => (
-            <div key={index} className="cookbook__step-row">
-              <TextField
-                label={`${copy.cooking.step} ${numberFormat().format(index + 1)}`}
-                value={step.text}
-                onChange={(event) =>
-                  setSteps((current) =>
-                    current.map((entry, at) =>
-                      at === index ? { ...entry, text: event.target.value } : entry,
-                    ),
-                  )
-                }
-              />
-              <TextField
-                label={copy.editor.stepTimer}
-                className="cookbook__step-minutes"
-                inputMode="numeric"
-                value={step.timerMinutes}
-                onChange={(event) =>
-                  setSteps((current) =>
-                    current.map((entry, at) =>
-                      at === index ? { ...entry, timerMinutes: event.target.value } : entry,
-                    ),
-                  )
-                }
-              />
-              <Button
-                size="sm"
-                variant="quiet"
-                onClick={() => setSteps((current) => current.filter((_entry, at) => at !== index))}
-              >
-                <Icon name="trash" />
-              </Button>
-            </div>
-          ))}
-          <Button size="sm" onClick={() => setSteps((current) => [...current, { text: "", timerMinutes: "" }])}>
-            {copy.list.add}
-          </Button>
-        </div>
-        {problem === "steps" && <p className="cookbook__error">{copy.editor.errorSteps}</p>}
-        <TextField
-          label={copy.editor.tags}
-          value={tags}
-          onChange={(event) => setTags(event.target.value)}
-        />
-        <TextArea
-          label={copy.editor.notes}
-          rows={3}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-        />
-        <div className="cookbook__actions">
+  return (
+    <Dialog
+      title={recipe === null ? copy.editor.newTitle : copy.editor.title}
+      onClose={onClose}
+      busy={busy}
+      className="cookbook__editor"
+      actions={
+        <>
           <Button variant="primary" disabled={busy} onClick={() => void save()}>
             {copy.editor.save}
           </Button>
           <Button variant="quiet" onClick={onClose}>
             {copy.editor.cancel}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <TextField
+        label={copy.editor.name}
+        value={title}
+        maxLength={120}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+      {problem === "name" && <p className="cookbook__error">{copy.editor.errorName}</p>}
+      <Select
+        label={copy.editor.course}
+        value={course}
+        onChange={(event) => setCourse(event.target.value as CookbookCourse)}
+      >
+        {COOKBOOK_COURSES.map((value) => (
+          <option key={value} value={value}>
+            {courseLabel(value)}
+          </option>
+        ))}
+      </Select>
+      <div className="cookbook__triple">
+        <TextField
+          label={copy.editor.servings}
+          inputMode="numeric"
+          value={servings}
+          onChange={(event) => setServings(event.target.value)}
+        />
+        <TextField
+          label={copy.editor.prep}
+          inputMode="numeric"
+          value={prep}
+          onChange={(event) => setPrep(event.target.value)}
+        />
+        <TextField
+          label={copy.editor.cook}
+          inputMode="numeric"
+          value={cook}
+          onChange={(event) => setCook(event.target.value)}
+        />
       </div>
-    </div>,
-    document.body,
+      <TextArea
+        label={copy.editor.ingredients}
+        rows={6}
+        value={ingredients}
+        onChange={(event) => setIngredients(event.target.value)}
+      />
+      <p className="nx-hint">{copy.editor.ingredientsHint}</p>
+      {problem === "ingredients" && (
+        <p className="cookbook__error">{copy.editor.errorIngredients}</p>
+      )}
+      <div className="cookbook__step-editor">
+        <h3 className="cookbook__section-title">{copy.editor.steps}</h3>
+        {steps.map((step, index) => (
+          <div key={index} className="cookbook__step-row">
+            <TextField
+              label={`${copy.cooking.step} ${numberFormat().format(index + 1)}`}
+              value={step.text}
+              onChange={(event) =>
+                setSteps((current) =>
+                  current.map((entry, at) =>
+                    at === index ? { ...entry, text: event.target.value } : entry,
+                  ),
+                )
+              }
+            />
+            <TextField
+              label={copy.editor.stepTimer}
+              className="cookbook__step-minutes"
+              inputMode="numeric"
+              value={step.timerMinutes}
+              onChange={(event) =>
+                setSteps((current) =>
+                  current.map((entry, at) =>
+                    at === index ? { ...entry, timerMinutes: event.target.value } : entry,
+                  ),
+                )
+              }
+            />
+            <Button
+              size="sm"
+              variant="quiet"
+              onClick={() => setSteps((current) => current.filter((_entry, at) => at !== index))}
+            >
+              <Icon name="trash" />
+            </Button>
+          </div>
+        ))}
+        <Button size="sm" onClick={() => setSteps((current) => [...current, { text: "", timerMinutes: "" }])}>
+          {copy.list.add}
+        </Button>
+      </div>
+      {problem === "steps" && <p className="cookbook__error">{copy.editor.errorSteps}</p>}
+      <TextField
+        label={copy.editor.tags}
+        value={tags}
+        onChange={(event) => setTags(event.target.value)}
+      />
+      <TextArea
+        label={copy.editor.notes}
+        rows={3}
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+      />
+    </Dialog>
   );
 }
 
@@ -1486,59 +1492,5 @@ function ShelfRow({
         {copy.collections.delete}
       </Button>
     </div>
-  );
-}
-
-// --- Potvrda brisanja ---------------------------------------------------------
-
-/** The house confirmation, drawn with this module's own classes so the dialog needs no stylesheet it did not load. */
-function ConfirmDelete({
-  title,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const titleId = useId();
-  const panelRef = useFocusTrap<HTMLDivElement>({ open: true });
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onCancel]);
-
-  return createPortal(
-    <div className="cookbook__overlay">
-      <div className="cookbook__backdrop" onClick={onCancel} />
-      <div
-        ref={panelRef}
-        className="cookbook__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <h2 id={titleId} className="cookbook__panel-title">
-          {copy.confirm.title}
-        </h2>
-        <p className="cookbook__panel-name">„{title}“</p>
-        <p className="nx-hint">{copy.confirm.question}</p>
-        <div className="cookbook__actions">
-          <Button variant="danger" onClick={onConfirm}>
-            {copy.confirm.confirm}
-          </Button>
-          <Button variant="quiet" onClick={onCancel}>
-            {copy.confirm.cancel}
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
