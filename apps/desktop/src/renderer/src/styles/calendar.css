@@ -33,9 +33,11 @@
   gap: var(--nx-space-5);
 }
 
-/* View toggle (Agenda | Dokumenta) — typographic active state, mirrors tasks. */
+/* View toggle (Agenda | Dokumenta) — typographic active state, mirrors tasks.
+   It wraps, so a narrow window stacks the views instead of scrolling them sideways. */
 .cal__views {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--nx-space-1);
   flex: none;
@@ -387,32 +389,6 @@
 }
 .cal__template-form .nx-textfield {
   flex-basis: 100%;
-}
-
-/* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
-.cal__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-}
-.cal__undo-text {
-  flex: 1;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
-.cal__undo-dismiss.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-  padding: 2px 8px;
-}
-.cal__undo-dismiss.nx-button:hover {
-  background: var(--nx-surface);
-  color: var(--nx-text);
 }
 
 /* Agenda: day sections in ascending order, each a quiet label over its rows. */
@@ -1670,32 +1646,6 @@ button.cal__grid-event {
   color: var(--nx-text);
 }
 
-/* Delete + undo: inline, token-styled undo bar (mirrors the tasks pattern). */
-.documents__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-}
-.documents__undo-text {
-  flex: 1;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
-.documents__undo-dismiss.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-  padding: 2px 8px;
-}
-.documents__undo-dismiss.nx-button:hover {
-  background: var(--nx-surface);
-  color: var(--nx-text);
-}
-
 /* List: rows ordered by soonest expiry, each led by a derived status chip. */
 .documents__list {
   display: flex;
@@ -1874,39 +1824,10 @@ button.cal__grid-event {
   color: var(--nx-text);
 }
 
-/* Form validation (an impossible day/month pair, a refused write) — same
-   full-width line under the fields as .cal__form-error. */
-.people__error {
-  margin: 0;
-  flex-basis: 100%;
-  color: var(--nx-danger);
-  font-size: var(--nx-font-size-body-sm);
-}
 
-/* Delete + undo: inline, token-styled undo bar (mirrors the documents panel). */
-.people__undo {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-}
-.people__undo-text {
-  flex: 1;
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text);
-}
-.people__undo-dismiss.nx-button {
-  background: transparent;
-  border-color: transparent;
-  color: var(--nx-text-muted);
-  padding: 2px 8px;
-}
-.people__undo-dismiss.nx-button:hover {
-  background: var(--nx-surface);
-  color: var(--nx-text);
+/* The refusal line takes the form's full width, as the fields do; the notice draws its own ink. */
+.people__error {
+  flex-basis: 100%;
 }
 
 /* List: rows in Serbian-collated name order, each led by its kind mark. */
