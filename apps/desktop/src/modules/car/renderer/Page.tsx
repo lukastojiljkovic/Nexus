@@ -45,7 +45,7 @@ import type {
   CarView,
 } from "../shared/ipc.js";
 import { copy } from "./copy.js";
-import { moneyPair, parseDecimal } from "./carView.js";
+import { moneyPair, parseDecimal, serviceDraft, type ServiceDraft } from "./carView.js";
 import "./car.css";
 
 /**
@@ -793,7 +793,8 @@ function ServiceCard({
   detail: CarDetailView;
   run: DetailRun;
 }) {
-  const [adding, setAdding] = useState(false);
+  /** The form that is open: a new entry, the row being edited, or nothing. */
+  const [form, setForm] = useState<CarServiceView | "new" | null>(null);
 
   return (
     <Card className="car__card" title={copy.log.title}>
@@ -809,25 +810,37 @@ function ServiceCard({
               vehicleId={detail.vehicle.id}
               service={service}
               run={run}
+              onEdit={() => setForm(service)}
             />
           ))}
         </div>
       )}
       <div className="car__actions">
-        {!adding && (
-          <Button size="sm" variant="primary" onClick={() => setAdding(true)}>
+        {form === null && (
+          <Button size="sm" variant="primary" onClick={() => setForm("new")}>
             {copy.log.add}
           </Button>
         )}
       </div>
-      {adding && (
+      {form !== null && (
         <ServiceForm
+          // A key per target, as the garage vehicle form has: moving from one row
+          // to another starts the form from THAT row's fields.
+          key={form === "new" ? "new" : form.id}
           unit={detail.vehicle.distanceUnit}
-          onCancel={() => setAdding(false)}
+          draft={serviceDraft(form === "new" ? null : form)}
+          onCancel={() => setForm(null)}
           onSubmit={(fields) => {
-            setAdding(false);
+            setForm(null);
             void run((car) =>
-              car.addService({ profileId, vehicleId: detail.vehicle.id, ...fields }),
+              form === "new"
+                ? car.addService({ profileId, vehicleId: detail.vehicle.id, ...fields })
+                : car.updateService({
+                    profileId,
+                    vehicleId: detail.vehicle.id,
+                    id: form.id,
+                    fields,
+                  }),
             );
           }}
         />
@@ -841,11 +854,13 @@ function ServiceRow({
   vehicleId,
   service,
   run,
+  onEdit,
 }: {
   profileId: string;
   vehicleId: string;
   service: CarServiceView;
   run: DetailRun;
+  onEdit: () => void;
 }) {
   return (
     <div className="car__service">
@@ -859,6 +874,9 @@ function ServiceRow({
                 {`${formatMoneyPlain(service.costMinor, service.currency)} ${service.currency}`}
               </span>
             )}
+            <Button size="sm" onClick={onEdit}>
+              {copy.log.edit}
+            </Button>
             <Button
               size="sm"
               onClick={() => void run((car) => car.attachReceipts({ profileId, vehicleId, serviceId: service.id }))}
@@ -924,21 +942,23 @@ function ServiceRow({
 /** The service form: what was done, where, for how much, and at which odometer. */
 function ServiceForm({
   unit,
+  draft,
   onSubmit,
   onCancel,
 }: {
   unit: DistanceUnit;
+  draft: ServiceDraft;
   onSubmit: (fields: ServiceFieldsForm) => void;
   onCancel: () => void;
 }) {
-  const [date, setDate] = useState("");
-  const [category, setCategory] = useState<ServiceCategory>(SERVICE_CATEGORIES[0]);
-  const [description, setDescription] = useState("");
-  const [odometer, setOdometer] = useState("");
-  const [cost, setCost] = useState("");
-  const [currency, setCurrency] = useState("");
-  const [workshop, setWorkshop] = useState("");
-  const [parts, setParts] = useState("");
+  const [date, setDate] = useState(draft.date);
+  const [category, setCategory] = useState<ServiceCategory>(draft.category);
+  const [description, setDescription] = useState(draft.description);
+  const [odometer, setOdometer] = useState(draft.odometer);
+  const [cost, setCost] = useState(draft.cost);
+  const [currency, setCurrency] = useState(draft.currency);
+  const [workshop, setWorkshop] = useState(draft.workshop);
+  const [parts, setParts] = useState(draft.parts);
   const [problem, setProblem] = useState<"date" | "description" | "money" | "odometer" | null>(null);
 
   return (

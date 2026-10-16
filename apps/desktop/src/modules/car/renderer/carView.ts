@@ -1,13 +1,15 @@
+import { SERVICE_CATEGORIES, type ServiceCategory } from "@nexus/core";
 import { decimalSeparators } from "../../../renderer/src/intl.js";
-import { parseMoneyInput } from "../../../renderer/src/money.js";
+import { moneyInputValue, parseMoneyInput } from "../../../renderer/src/money.js";
+import type { CarServiceView } from "../shared/ipc.js";
 
 /**
- * The CAR page's two pure helpers: reading a typed number, and reading a typed
- * money pair.
+ * The CAR page's pure form rules: reading a typed number, reading a typed money
+ * pair, and the text a service form opens with.
  *
- * Both are here rather than inline in `Page.tsx` because both are rules a form
+ * They are here rather than inline in `Page.tsx` because each is a rule a form
  * gets subtly wrong, they are the same rules for every field on the page, and
- * neither needs a DOM to be asked about -- which is what lets a test state the
+ * none needs a DOM to be asked about -- which is what lets a test state the
  * exact answers in both locales.
  */
 
@@ -69,4 +71,51 @@ export function moneyPair(
   const minorUnits = parseMoneyInput(text, code);
   if (minorUnits === null || minorUnits <= 0) return null;
   return { costMinor: minorUnits, currency: code };
+}
+
+/** The text a service form types into, one field each. */
+export interface ServiceDraft {
+  readonly date: string;
+  readonly category: ServiceCategory;
+  readonly description: string;
+  readonly odometer: string;
+  readonly cost: string;
+  readonly currency: string;
+  readonly workshop: string;
+  readonly parts: string;
+}
+
+/**
+ * Where a service form starts: blank for a new entry, and for an edit the stored
+ * row read back as the fields it was typed from. Saving an unchanged row then
+ * writes the same record, which is what the edit path promises.
+ *
+ * The amount is written by `moneyInputValue`, the one function that writes money
+ * in the form's own decimal mark, so `moneyPair` reads it back to the same minor
+ * units whichever language the interface is in.
+ */
+export function serviceDraft(service: CarServiceView | null): ServiceDraft {
+  if (service === null) {
+    return {
+      date: "",
+      category: SERVICE_CATEGORIES[0],
+      description: "",
+      odometer: "",
+      cost: "",
+      currency: "",
+      workshop: "",
+      parts: "",
+    };
+  }
+  const priced = service.costMinor !== null && service.currency !== null;
+  return {
+    date: service.date,
+    category: service.category,
+    description: service.description,
+    odometer: service.odometer === null ? "" : String(service.odometer),
+    cost: priced ? moneyInputValue(service.costMinor, service.currency) : "",
+    currency: service.currency ?? "",
+    workshop: service.workshop ?? "",
+    parts: service.parts ?? "",
+  };
 }
