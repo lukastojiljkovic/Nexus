@@ -124,7 +124,9 @@ const SYMBOLS: Readonly<Record<ValueUnit, readonly string[]>> = {
   ampere: ["A"],
 };
 
-const VALUE = /^(\d+(?:[.,]\d+)?)\s*([pnuµmkKM]?)\s*([A-Za-zΩ]*)$/;
+// The prefix owns the spaces after it, so a value without one has a single run of
+// spaces to match: two optional runs side by side backtrack quadratically on a long one.
+const VALUE = /^(\d+(?:[.,]\d+)?)\s*(?:([pnuµmkKM])\s*)?([A-Za-zΩ]*)$/;
 
 /** Folds a name the way every lookup here compares names: case- and diacritic-blind. */
 function fold(text: string): string {

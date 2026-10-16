@@ -321,12 +321,14 @@ function wordToCyrillic(word: string): string {
 
 /**
  * The runs of a text that are not prose and must survive transliteration
- * untouched: a code span (one backtick, or a run of them), a URL, an email
- * address, a thing named the way this app names its tools (`tasks.create`), and
- * a citation marker (`[1]`).
+ * untouched: a code span (fenced by one, two or three backticks), a URL, an
+ * email address, a thing named the way this app names its tools
+ * (`tasks.create`), and a citation marker (`[1]`). The three fences are spelled
+ * out rather than matched as a run and its back-reference, which backtracks
+ * quadratically over a long run of backticks.
  */
 const PROTECTED =
-  /(`+)[^`]*\1|https?:\/\/[^\s]+|www\.[^\s]+|[\w.+-]+@[\w.-]+|[\p{L}\p{N}_]+(?:\.[\p{L}\p{N}_]+)+|\[\d+\]/gu;
+  /```[^`]*```|``[^`]*``|`[^`]*`|https?:\/\/[^\s]+|www\.[^\s]+|[\w.+-]+@[\w.-]+|[\p{L}\p{N}_]+(?:\.[\p{L}\p{N}_]+)+|\[\d+\]/gu;
 
 /**
  * The answer's own Serbian Latin, rewritten in Cyrillic - the other half of
