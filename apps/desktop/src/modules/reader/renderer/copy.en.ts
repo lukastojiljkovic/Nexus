@@ -38,6 +38,7 @@ export const en: typeof sr = {
     note: "Note beside the bookmark",
     saveNote: "Save the note",
     source: "Source",
+    linkRefused: "Nexus will not open this address. Copy it instead:",
     textSize: "Text size",
     sizeSmall: "Small",
     sizeMedium: "Medium",
@@ -77,6 +78,7 @@ export const en: typeof sr = {
     open: "This book could not be opened. Check that the pack is still installed.",
     article: "This article could not be shown.",
     mutate: "The change was not saved.",
+    retry: "Try again",
   },
   widget: {
     empty: "No book is open.",

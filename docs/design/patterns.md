@@ -77,7 +77,7 @@ fails on a copy leaf named like an empty state inside a bare hint line, and
 names the files that still do it: an entry is removed from that list when its
 page converts, and a new one is a regression.
 
-**Adopted by:** 55 inline and 13 page empty states across the module renderers,
+**Adopted by:** 55 inline and 12 page empty states across the module renderers,
 and 39 bare hint lines still in 27 files (the allowlist).
 
 ## Notice
@@ -398,7 +398,7 @@ EmptyState columns, which are tags.
 | pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
 | puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 0 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
-| recorder | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
+| recorder | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 |
 | scanner | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | signals | 1 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 |
 | timers | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 |

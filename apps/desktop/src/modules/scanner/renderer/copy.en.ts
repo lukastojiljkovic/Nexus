@@ -51,6 +51,7 @@ export const en: typeof sr = {
     languageHint: "Pick at least one language. The models come from the pack installed on this device.",
     read: "Read the text",
     reading: "Recognising…",
+    cancel: "Cancel",
     readError: "The recognition did not work. Try another picture or another language.",
     phase: {
       core: "Preparing the engine",

@@ -14,6 +14,7 @@ export const sr = {
   },
   open: {
     button: "Otvori crtež",
+    cancel: "Otkaži",
   },
   empty: {
     title: "Nijedan crtež nije otvoren",

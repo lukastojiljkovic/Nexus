@@ -199,23 +199,6 @@
   color: var(--nx-danger);
 }
 
-/* The undo strip: the row a delete leaves behind, and the one control that puts
-   it back — the house's shape (`hab__undo`), at this module's prefix. */
-.rec__undo {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nx-space-3);
-  align-items: center;
-  padding: var(--nx-space-2) var(--nx-space-3);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-surface-alt);
-}
-
-.rec__undo-text {
-  color: var(--nx-text-muted);
-}
-
 .rec__widget {
   display: flex;
   flex-direction: column;

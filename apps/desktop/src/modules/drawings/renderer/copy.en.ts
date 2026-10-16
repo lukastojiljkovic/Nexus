@@ -19,6 +19,7 @@ export const en: typeof sr = {
   },
   open: {
     button: "Open a drawing",
+    cancel: "Cancel",
   },
   empty: {
     title: "No drawing is open",

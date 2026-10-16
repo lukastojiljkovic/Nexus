@@ -8,6 +8,7 @@ import {
   Icon,
   ListRow,
   LoadingState,
+  Notice,
   PageHeader,
   Select,
   TextField,
@@ -310,12 +311,15 @@ export default function ReaderPage({ profileId }: ModulePageProps) {
     }
   }, [article, pack, paper, printScope, profileId]);
 
+  /** Opens an address through main's rule; a refused one is shown, so the reader can copy it. */
   const openExternal = useCallback(async (url: string) => {
+    let opened = false;
     try {
-      await window.nexus.modules.reader.openExternal({ url });
+      opened = (await window.nexus.modules.reader.openExternal({ url })).outcome === "opened";
     } catch (failure) {
       console.error("Nexus: the source link could not be opened:", failure);
     }
+    if (!opened) setStatus(`${copy.reading.linkRefused} ${url}`);
   }, []);
 
   return (
@@ -326,9 +330,15 @@ export default function ReaderPage({ profileId }: ModulePageProps) {
         sigil="book"
       />
       {error !== null && (
-        <p className="reader__error" role="alert">
-          {error}
-        </p>
+        <Notice
+          kind="danger"
+          message={error}
+          // Only the shelf's read can be asked again from here; a book or an
+          // article that failed is reopened by the reader choosing it again.
+          action={
+            library === null ? { label: copy.errors.retry, onClick: () => void refreshLibrary() } : undefined
+          }
+        />
       )}
       {library === null ? (
         error === null && <LoadingState label={copy.page.loading} rows={4} />

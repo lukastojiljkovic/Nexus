@@ -47,6 +47,7 @@ export const sr = {
     note: "Beleška uz obeleživač",
     saveNote: "Sačuvaj belešku",
     source: "Izvor",
+    linkRefused: "Nexus ne otvara ovu adresu. Kopiraj je:",
     textSize: "Veličina teksta",
     sizeSmall: "Malo",
     sizeMedium: "Srednje",
@@ -86,6 +87,7 @@ export const sr = {
     open: "Ovu knjigu nije moguće otvoriti. Proveri da li je paket još instaliran.",
     article: "Ovaj članak nije moguće prikazati.",
     mutate: "Izmena nije sačuvana.",
+    retry: "Pokušaj ponovo",
   },
   widget: {
     empty: "Nijedna knjiga nije otvorena.",
