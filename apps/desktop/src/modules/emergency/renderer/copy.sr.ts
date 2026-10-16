@@ -119,7 +119,7 @@ export const sr = {
     litres: "{litres} litara",
     personDays: "osoba-dana",
     kitTitle: "Kontrolna lista za 72 sata",
-    kitHint: "Osnovna lista Ready.gov-a („Build A Kit”), za nekoliko dana. Označi stavke koje imaš; stavke dodaješ i uklanjaš sam.",
+    kitHint: "Osnovna lista Ready.gov-a („Build A Kit“), za nekoliko dana. Označi stavke koje imaš; stavke dodaješ i uklanjaš sam.",
     kitProgress: "Označeno: {done} od {total}",
     kitAddLabel: "Nova stavka",
     kitAddPlaceholder: "npr. lekovi za tri dana",

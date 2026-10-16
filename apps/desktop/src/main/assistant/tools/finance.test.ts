@@ -93,7 +93,7 @@ function contextFor(
 }
 
 /** The no-break space `Intl` puts between an amount and its code in Serbian. */
-const NBSP = " ";
+const NBSP = "\u00a0";
 
 /** A monthly rule on the 5th, valid for the rule engine. */
 const MONTHLY_ON_FIFTH = {

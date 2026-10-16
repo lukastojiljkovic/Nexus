@@ -209,7 +209,7 @@
     position: absolute;
     inset-block: 0;
     inset-inline-end: 0;
-    z-index: 10;
+    z-index: var(--nx-layer-overlay);
     box-shadow: var(--nx-elevation-overlay);
   }
 }
