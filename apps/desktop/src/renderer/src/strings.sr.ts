@@ -1276,7 +1276,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     emptyTitle: "Nema zadataka",
     emptyDescription:
       "Zapiši prvi zadatak u polje iznad — dovoljno je ime i Enter.",
-    loadError: "Zadaci se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadFailedTitle: "Zadaci nisu učitani",
+    loadError: "Zadaci se nisu mogli pročitati. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     editLabel: "Izmeni zadatak",
     deleteLabel: "Obriši zadatak",
     /** The per-row „⋯“ menu: tags to attach plus „Sačuvaj kao šablon“, so its name is the row, not one of them. */
