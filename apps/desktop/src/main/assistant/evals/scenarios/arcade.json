@@ -1,0 +1,108 @@
+{
+  "scenarios": [
+    {
+      "id": "arcade-stats-sr",
+      "title": "Najbolje vreme u minolovcu iz rezultata Arkade",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koje mi je najbolje vreme u minolovcu?" }
+      ],
+      "tools": [
+        { "name": "arcade.stats", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "arcade.stats", "args": { "game": { "eq": "minesweeper" } } }
+        ],
+        "answerContains": ["1 min 1 s"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "arcade.stats", "arguments": { "game": "minesweeper" } }] },
+        { "text": "Tvoje najbolje vreme u minolovcu je 1 min 1 s, na početnoj tabli." }
+      ]
+    },
+    {
+      "id": "arcade-stats-en",
+      "title": "Blocks score from the arcade scores",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "How many games of Blocks have I played, and what is my best score?" }
+      ],
+      "tools": [
+        { "name": "arcade.stats", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "arcade.stats", "args": { "game": { "eq": "blocks" } } }
+        ],
+        "answerContains": ["1,200"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "arcade.stats", "arguments": { "game": "blocks" } }] },
+        { "text": "You have played Blocks once, and your best score is 1,200." }
+      ]
+    },
+    {
+      "id": "arcade-play-sr",
+      "title": "Otvaranje minolovca na naprednoj tabli",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Otvori minolovac na naprednoj tabli." }
+      ],
+      "tools": [
+        { "name": "arcade.play", "effect": "navigate", "navigateTo": { "module": "arcade", "item": "minesweeper/expert" } }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "arcade.play", "args": { "game": { "eq": "minesweeper" }, "variant": { "eq": "expert" } } }
+        ],
+        "navigatesTo": [{ "module": "arcade", "item": "minesweeper/expert" }],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "arcade.play", "arguments": { "game": "minesweeper", "variant": "expert" } }] },
+        { "text": "Otvaram minolovac na naprednoj tabli, pa možeš odmah da kreneš s prvim klikom." }
+      ]
+    },
+    {
+      "id": "arcade-play-en",
+      "title": "Opening Snake from a request",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Start a game of Snake." }
+      ],
+      "tools": [
+        { "name": "arcade.play", "effect": "navigate", "navigateTo": { "module": "arcade", "item": "snake" } }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "arcade.play", "args": { "game": { "eq": "snake" } } }
+        ],
+        "navigatesTo": [{ "module": "arcade", "item": "snake" }],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "arcade.play", "arguments": { "game": "snake" } }] },
+        { "text": "Opening Snake for you. The game is ready to start." }
+      ]
+    }
+  ]
+}

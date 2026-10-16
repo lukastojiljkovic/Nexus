@@ -49,22 +49,33 @@ function store(): MiniappsStore {
   return new MiniappsStore(db.raw, profileId);
 }
 
-function context(locale: "sr" | "en"): ToolContext {
+function context(
+  locale: "sr" | "en",
+  confirm: ToolContext["confirm"] = () => Promise.resolve(true),
+): ToolContext {
   return {
     profileId,
     locale,
     signal: new AbortController().signal,
-    confirm: () => Promise.resolve(true),
+    confirm,
   };
 }
 
-function tool(): Tool {
+function tool(name = "miniapps.kept"): Tool {
   const found = miniappsTools({
     profileDb: (id, open) => open(db.raw, id),
     now: () => NOW_MS,
-  }).find((entry) => entry.name === "miniapps.kept");
-  if (found === undefined) throw new Error('Test setup: no tool "miniapps.kept".');
+  }).find((entry) => entry.name === name);
+  if (found === undefined) throw new Error(`Test setup: no tool "${name}".`);
   return found;
+}
+
+/** A confirmation that gives the answer it is asked, and keeps each summary it was shown. */
+function asking(answer: boolean, asked: string[] = []): ToolContext["confirm"] {
+  return (request) => {
+    asked.push(request.summary);
+    return Promise.resolve(answer);
+  };
 }
 
 function seed(): void {
@@ -171,5 +182,211 @@ describe("miniapps.kept", () => {
     store().saveCities(["Europe/Belgrade", "Nasa/Zona"], NOW_ISO);
     const result = await tool().run({}, context("sr"));
     expect(result.content).toBe("Mini aplikacije — šta pamte:\n- Svetski sat: Europe/Belgrade 09:00, Nasa/Zona");
+  });
+});
+
+describe("miniapps.dates", () => {
+  it("counts the days between two dates, in calendar parts as well", async () => {
+    const result = await tool("miniapps.dates").run(
+      { from: "2026-10-10", to: "2026-12-25" },
+      context("en"),
+    );
+    expect(result).toEqual({
+      ok: true,
+      content: "Between 2026-10-10 and 2026-12-25: 76 days (0 yr, 2 mo, 15 d).",
+    });
+  });
+
+  it("answers in Serbian, and uses the singular for one day", async () => {
+    const serbian = await tool("miniapps.dates").run(
+      { from: "2026-10-10", to: "2026-12-25" },
+      context("sr"),
+    );
+    expect(serbian.content).toBe("Između 2026-10-10 i 2026-12-25: 76 dana (0 god., 2 mes., 15 d).");
+    const oneDay = await tool("miniapps.dates").run(
+      { from: "2026-10-10", to: "2026-10-11" },
+      context("en"),
+    );
+    expect(oneDay.content).toBe("Between 2026-10-10 and 2026-10-11: 1 day (0 yr, 0 mo, 1 d).");
+  });
+
+  it("starts from today when no start date is given", async () => {
+    const result = await tool("miniapps.dates").run({ to: "2026-10-20" }, context("en"));
+    expect(result.content).toBe("Between 2026-10-10 and 2026-10-20: 10 days (0 yr, 0 mo, 10 d).");
+  });
+
+  it("moves a date by a span, clamping a month that is too short", async () => {
+    const result = await tool("miniapps.dates").run(
+      { from: "2026-01-31", add: { months: 1 } },
+      context("en"),
+    );
+    expect(result).toEqual({ ok: true, content: "2026-01-31 +1 mo = 2026-02-28" });
+    const back = await tool("miniapps.dates").run(
+      { from: "2026-03-10", add: { weeks: -1, days: 2 } },
+      context("en"),
+    );
+    expect(back.content).toBe("2026-03-10 -1 wk, +2 d = 2026-03-05");
+  });
+
+  it("refuses to be given both an end and a span, or neither", async () => {
+    const both = await tool("miniapps.dates").run(
+      { from: "2026-10-10", to: "2026-10-20", add: { days: 1 } },
+      context("en"),
+    );
+    expect(both.ok).toBe(false);
+    const neither = await tool("miniapps.dates").run({ from: "2026-10-10" }, context("en"));
+    expect(neither.ok).toBe(false);
+  });
+
+  it("refuses a day the calendar does not have, with the schema's message", async () => {
+    const result = await tool("miniapps.dates").run(
+      { from: "2026-02-30", to: "2026-03-01" },
+      context("en"),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain('"from" must be a calendar day');
+  });
+});
+
+describe("miniapps.counter", () => {
+  it("sets a counter found by its name, and keeps every other part of the document", async () => {
+    seed();
+    const result = await tool("miniapps.counter").run({ name: "kafa", value: 5 }, context("en"));
+    expect(result).toEqual({
+      ok: true,
+      content: "The counter “Kafa” is now at 5.",
+      navigateTo: { module: "miniapps", item: "tally" },
+    });
+    const data = store().read();
+    expect(data.counters).toEqual([
+      { id: "kafa", name: "Kafa", value: 5, step: 1, floorZero: true },
+      { id: "voda", name: "Voda", value: 12, step: 1, floorZero: false },
+    ]);
+    expect(data.scoreboard.players.map((player) => player.id)).toEqual(["ana", "marko"]);
+    expect(data.scoreboard.rounds).toHaveLength(2);
+    expect(data.cities).toEqual(["Europe/Belgrade", "America/New_York"]);
+    expect(data.typing.records).toHaveLength(2);
+  });
+
+  it("asks first, in one line that names the counter and both values", async () => {
+    seed();
+    const asked: string[] = [];
+    await tool("miniapps.counter").run({ name: "Kafa", value: 5 }, context("en", asking(true, asked)));
+    expect(asked).toEqual(["Set the counter “Kafa” from 3 to 5?"]);
+  });
+
+  it("writes nothing when the user declines", async () => {
+    seed();
+    const result = await tool("miniapps.counter").run(
+      { name: "Kafa", value: 5 },
+      context("en", asking(false)),
+    );
+    expect(result).toEqual({ ok: false, content: "The user declined." });
+    expect(store().read().counters[0]?.value).toBe(3);
+  });
+
+  it("refuses a name it does not find, and an ambiguous one with the candidates", async () => {
+    seed();
+    const missing = await tool("miniapps.counter").run({ name: "Seme", value: 1 }, context("en"));
+    expect(missing).toEqual({ ok: false, content: "Failed: There is no counter “Seme”." });
+
+    store().saveCounters(
+      [
+        { id: "caj", name: "Čaj", value: 1, step: 1, floorZero: false },
+        { id: "caj2", name: "Caj", value: 2, step: 1, floorZero: false },
+      ],
+      NOW_ISO,
+    );
+    const ambiguous = await tool("miniapps.counter").run({ name: "caj", value: 9 }, context("en"));
+    expect(ambiguous).toEqual({
+      ok: false,
+      content: "Failed: More than one counter has that name: “Čaj”, “Caj”. Name the one you mean.",
+    });
+  });
+
+  it("answers without asking when the value is already set", async () => {
+    seed();
+    const asked: string[] = [];
+    const result = await tool("miniapps.counter").run(
+      { name: "Kafa", value: 3 },
+      context("en", asking(true, asked)),
+    );
+    expect(result).toEqual({ ok: true, content: "The counter “Kafa” is already at 3." });
+    expect(asked).toEqual([]);
+  });
+
+  it("speaks Serbian in Serbian quotes", async () => {
+    seed();
+    const result = await tool("miniapps.counter").run({ name: "Voda", value: 13 }, context("sr"));
+    expect(result.content).toBe("Brojač „Voda“ je sada na 13.");
+  });
+});
+
+describe("miniapps.city", () => {
+  it("puts a zone on the clock and reveals the clock", async () => {
+    seed();
+    const result = await tool("miniapps.city").run({ zone: "Asia/Tokyo" }, context("en"));
+    expect(result).toEqual({
+      ok: true,
+      content: "Asia/Tokyo is on the world clock.",
+      navigateTo: { module: "miniapps", item: "worldclock" },
+    });
+    expect(store().read().cities).toEqual(["Europe/Belgrade", "America/New_York", "Asia/Tokyo"]);
+  });
+
+  it("takes a zone off the clock, and keeps the rest of the document", async () => {
+    seed();
+    const asked: string[] = [];
+    const result = await tool("miniapps.city").run(
+      { zone: "America/New_York", remove: true },
+      context("en", asking(true, asked)),
+    );
+    expect(result.content).toBe("America/New_York is off the world clock.");
+    expect(asked).toEqual(["Take America/New_York off the world clock?"]);
+    expect(store().read().cities).toEqual(["Europe/Belgrade"]);
+    expect(store().read().counters).toHaveLength(2);
+  });
+
+  it("refuses a zone the runtime does not know, and one already on or off the clock", async () => {
+    seed();
+    const unknown = await tool("miniapps.city").run({ zone: "Mars/Olympus" }, context("en"));
+    expect(unknown).toEqual({ ok: false, content: "Failed: Unknown time zone: Mars/Olympus." });
+    const listed = await tool("miniapps.city").run({ zone: "Europe/Belgrade" }, context("en"));
+    expect(listed.content).toBe("Failed: Europe/Belgrade is already on the world clock.");
+    const absent = await tool("miniapps.city").run(
+      { zone: "Asia/Tokyo", remove: true },
+      context("en"),
+    );
+    expect(absent.content).toBe("Failed: Asia/Tokyo is not on the world clock.");
+  });
+
+  it("writes nothing when the user declines, and refuses a full clock", async () => {
+    seed();
+    const declined = await tool("miniapps.city").run(
+      { zone: "Asia/Tokyo" },
+      context("sr", asking(false)),
+    );
+    expect(declined).toEqual({ ok: false, content: "The user declined." });
+    expect(store().read().cities).toHaveLength(2);
+
+    store().saveCities(
+      [
+        "Europe/Belgrade",
+        "Europe/Zagreb",
+        "Europe/Sarajevo",
+        "Europe/Podgorica",
+        "Europe/Ljubljana",
+        "Europe/Vienna",
+        "Europe/Budapest",
+        "Europe/Prague",
+        "Europe/Berlin",
+        "Europe/Paris",
+        "Europe/London",
+        "Europe/Rome",
+      ],
+      NOW_ISO,
+    );
+    const full = await tool("miniapps.city").run({ zone: "Asia/Tokyo" }, context("en"));
+    expect(full.content).toBe("Failed: The world clock holds at most 12 cities.");
   });
 });

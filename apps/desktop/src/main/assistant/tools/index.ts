@@ -65,6 +65,7 @@ import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
 import type { DictionaryReader } from "../../../modules/translator/main/dictionary.js";
 import type { ModuleToolsAccess } from "../../moduleTools.js";
 import { appTools } from "./app.js";
+import { arcadeTools } from "./arcade.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
 import { canvasTools } from "./canvas.js";
@@ -202,6 +203,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...cookbookTools({ profileDb: deps.profileDb }),
     ...recorderTools({ profileDb: deps.profileDb }),
     ...calculatorTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...arcadeTools({ profileDb: deps.profileDb }),
     ...readerTools({ profileDb: deps.profileDb, packs: deps.packs }),
     ...wikiTools({ profileDb: deps.profileDb }),
     ...mapsTools({ profileDb: deps.profileDb }),
