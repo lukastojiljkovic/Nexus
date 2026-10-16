@@ -13,7 +13,7 @@ import {
   PDV_RATES,
   type UnitKind,
 } from "@nexus/core";
-import { Button, Icon, Select, TextField } from "@nexus/ui";
+import { Button, Field, FieldError, Icon, Select, TextField } from "@nexus/ui";
 import { createContext, useContext, useState, type ComponentType, type ReactNode } from "react";
 
 import {
@@ -139,15 +139,17 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
   return (
     <>
       {kind === "data" && <p className="nx-hint nx-hint--prose">{s.dataNote}</p>}
-      <TextField
-        label={s.convert.valueLabel}
-        value={text}
-        inputMode="decimal"
-        autoComplete="off"
-        onChange={(event) => {
-          setText(event.target.value);
-        }}
-      />
+      <Field className="tool__field" error={typedButUnreadable ? s.convert.invalid : undefined}>
+        <TextField
+          label={s.convert.valueLabel}
+          value={text}
+          inputMode="decimal"
+          autoComplete="off"
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
+        />
+      </Field>
       <div className="tool__pair">
         <ToolSelect label={s.convert.fromLabel} value={fromId} options={options} onChange={setFromId} />
         <Button
@@ -163,14 +165,12 @@ function UnitConverter({ kind, from, to }: ConverterSpec) {
         </Button>
         <ToolSelect label={s.convert.toLabel} value={toId} options={options} onChange={setToId} />
       </div>
-      {typedButUnreadable ? (
-        <p className="tool__error">{s.convert.invalid}</p>
-      ) : result !== null ? (
+      {result !== null && (
         <p className="tool__figure">
           <span className="tool__figure-value">{formatToolNumber(result)}</span>
           <span className="tool__figure-unit">{unitName(toId)}</span>
         </p>
-      ) : null}
+      )}
     </>
   );
 }
@@ -399,7 +399,7 @@ function LoanTool() {
           <ResultRow label={s.loan.totalInterestLabel} value={formatToolAmount(plan.totalInterest)} />
         </div>
       ) : allTyped ? (
-        <p className="tool__error">{s.loan.invalid}</p>
+        <FieldError>{s.loan.invalid}</FieldError>
       ) : null}
       <p className="nx-hint nx-hint--prose">{s.loan.caveat}</p>
     </>
@@ -529,7 +529,7 @@ function UnitPriceTool() {
           ))}
         </div>
       ) : anyTyped && complete.length < offers.length ? (
-        <p className="tool__error">{s.unitPrice.invalid}</p>
+        <FieldError>{s.unitPrice.invalid}</FieldError>
       ) : null}
       <p className="nx-hint nx-hint--prose">{s.unitPrice.note}</p>
     </>
