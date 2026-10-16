@@ -6,11 +6,14 @@ import {
   Card,
   Checkbox,
   Chip,
+  ConfirmDialog,
   Disclosure,
   EmptyState,
+  Field,
   Icon,
   ListRow,
   NavItem,
+  Notice,
   PageHeader,
   Select,
   TextArea,
@@ -131,7 +134,6 @@ import {
   type ClockPreference,
   type EventDurationMinutes,
 } from "./calendarPrefs.js";
-import { SettingsResetDialog } from "./SettingsResetDialog.js";
 import {
   buildSettingsIndex,
   foldSettingsQuery,
@@ -518,7 +520,7 @@ function ProfileSection({
           {strings.settings.profile.save}
         </Button>
       </div>
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
 
       <div className="set__avatar-row">
         {/* Live: the avatar shows the name being typed, so the initials
@@ -548,7 +550,7 @@ function ProfileSection({
             )}
           </div>
           <p className="nx-hint">{s.pictureCaption}</p>
-          {pictureError != null && <p className="set__error">{pictureError}</p>}
+          {pictureError != null && <Notice kind="danger" message={pictureError} />}
         </div>
       </div>
     </>
@@ -626,19 +628,16 @@ function ProfileDeleteDialog({ profile, busy, error, onConfirm, onCancel }: Prof
             if (match && !busy) onConfirm();
           }}
         >
-          <TextField
-            label={s.deleteConfirmLabel}
-            placeholder={s.deleteConfirmPlaceholder}
-            value={confirmText}
-            maxLength={NAME_MAX}
-            required
-            onChange={(event) => setConfirmText(event.target.value)}
-          />
-          {error != null && (
-            <p className="set__error" role="alert">
-              {error}
-            </p>
-          )}
+          <Field required>
+            <TextField
+              label={s.deleteConfirmLabel}
+              placeholder={s.deleteConfirmPlaceholder}
+              value={confirmText}
+              maxLength={NAME_MAX}
+              onChange={(event) => setConfirmText(event.target.value)}
+            />
+          </Field>
+          {error != null && <Notice kind="danger" message={error} />}
           <div className="recur-dialog__actions app__profile-dialog-actions">
             <Button type="button" className="recur-dialog__cancel" disabled={busy} onClick={onCancel}>
               {s.deleteCancel}
@@ -776,7 +775,7 @@ function ProfilesSection({
           </Button>
         </div>
       )}
-      {createError != null && <p className="set__error">{createError}</p>}
+      {createError != null && <Notice kind="danger" message={createError} />}
 
       {deleting !== null && (
         <ProfileDeleteDialog
@@ -1010,11 +1009,16 @@ function BackupSection({ profileId }: BackupSectionProps) {
         </p>
       )}
       {saved != null && saved.missingAttachments > 0 && (
-        <p className="set__error">
-          {s.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
-          {dayUnit(saved.missingAttachments, s.missingAttachmentsUnitOne, s.missingAttachmentsUnitMany)}{" "}
-          {s.missingAttachmentsSuffix}
-        </p>
+        <Notice
+          kind="warning"
+          message={
+            <>
+              {s.missingAttachmentsPrefix} {saved.missingAttachments}{" "}
+              {dayUnit(saved.missingAttachments, s.missingAttachmentsUnitOne, s.missingAttachmentsUnitMany)}{" "}
+              {s.missingAttachmentsSuffix}
+            </>
+          }
+        />
       )}
       {/* ADR-057 §6: the private section's fate, stated whenever there was one
           to decide about — included with its count, or excluded with the named
@@ -1025,13 +1029,16 @@ function BackupSection({ profileId }: BackupSectionProps) {
         </p>
       )}
       {saved != null && saved.privateNotesSkipped != null && (
-        <p className="set__error">
-          {saved.privateNotesSkipped === "locked"
-            ? s.privateNotesSkippedLocked
-            : s.privateNotesSkippedPlaintext}
-        </p>
+        <Notice
+          kind="warning"
+          message={
+            saved.privateNotesSkipped === "locked"
+              ? s.privateNotesSkippedLocked
+              : s.privateNotesSkippedPlaintext
+          }
+        />
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </>
   );
 }
@@ -1264,17 +1271,22 @@ function AutoBackupSection({ profileId, hits }: AutoBackupSectionProps) {
       {settings.lastRunAt === null ? (
         <p className="nx-hint">{s.lastRunNever}</p>
       ) : settings.lastStatus === "failed" ? (
-        <p className="set__error">
-          {s.lastRunPrefix} {s.lastRunFailed} —{" "}
-          {lookup(s.runErrors, settings.lastError ?? "unknown") ?? s.runErrors.unknown},{" "}
-          {formatArchiveInstant(settings.lastRunAt)}
-        </p>
+        <Notice
+          kind="danger"
+          message={
+            <>
+              {s.lastRunPrefix} {s.lastRunFailed} —{" "}
+              {lookup(s.runErrors, settings.lastError ?? "unknown") ?? s.runErrors.unknown},{" "}
+              {formatArchiveInstant(settings.lastRunAt)}
+            </>
+          }
+        />
       ) : (
         <p className="nx-hint">
           {s.lastRunPrefix} {s.lastRunOk} — {formatArchiveInstant(settings.lastRunAt)}
         </p>
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </div>
   );
 }
@@ -1356,7 +1368,7 @@ function SearchHistorySection({ profileId, hits }: SearchHistorySectionProps) {
             : `${count} ${countUnit(count, s.countOne, s.countFew, s.countMany)}`}
         </p>
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </div>
   );
 }
@@ -1426,12 +1438,17 @@ function CalendarExportSection({
         </p>
       )}
       {saved != null && saved.skipped > 0 && (
-        <p className="set__error">
-          {s.skippedPrefix} {saved.skipped} {dayUnit(saved.skipped, s.eventsUnitOne, s.eventsUnitMany)}{" "}
-          {s.skippedSuffix}
-        </p>
+        <Notice
+          kind="warning"
+          message={
+            <>
+              {s.skippedPrefix} {saved.skipped} {dayUnit(saved.skipped, s.eventsUnitOne, s.eventsUnitMany)}{" "}
+              {s.skippedSuffix}
+            </>
+          }
+        />
       )}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
     </div>
   );
 }
@@ -1641,7 +1658,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -1669,7 +1686,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
             </form>
           )}
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -1749,7 +1766,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
             </p>
           )}
           {state.preview.privateNotes != null && !state.preview.privateNotes.willRestore && (
-            <p className="set__error">{s.privateNotesSkippedNotice}</p>
+            <Notice kind="danger" message={s.privateNotesSkippedNotice} />
           )}
 
           <div className="set__restore-actions">
@@ -1772,7 +1789,7 @@ function RestoreSection({ profileId, hits }: RestoreSectionProps) {
           </div>
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2095,7 +2112,7 @@ function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -2123,7 +2140,7 @@ function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps
             </form>
           )}
           {state.busy && <p className="nx-hint">{shared.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2263,7 +2280,7 @@ function ImportSection({ profileId, hits, showTitle = true }: ImportSectionProps
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {replanning && <p className="nx-hint">{shared.previewRunning}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2488,7 +2505,7 @@ function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectio
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -2496,7 +2513,7 @@ function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectio
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2635,7 +2652,7 @@ function IcsImportSection({ profileId, hits, showTitle = true }: IcsImportSectio
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {replanning && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2821,7 +2838,7 @@ function BookmarksImportSection({ profileId, hits, showTitle = true }: Bookmarks
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -2829,7 +2846,7 @@ function BookmarksImportSection({ profileId, hits, showTitle = true }: Bookmarks
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -2896,7 +2913,7 @@ function BookmarksImportSection({ profileId, hits, showTitle = true }: Bookmarks
           </div>
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3146,7 +3163,7 @@ function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSect
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -3154,7 +3171,7 @@ function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSect
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3263,7 +3280,7 @@ function ApkgImportSection({ profileId, hits, showTitle = true }: ApkgImportSect
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {state.phase === "ready" && state.busy && <p className="nx-hint">{s.previewRunning}</p>}
-          {state.phase === "ready" && state.error != null && <p className="set__error">{state.error}</p>}
+          {state.phase === "ready" && state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3492,7 +3509,7 @@ function CsvMappingDialog({
             )}
           </div>
 
-          {error != null && <p className="set__error">{error}</p>}
+          {error != null && <Notice kind="danger" message={error} />}
         </div>
 
         <div className="recur-dialog__actions csv-map__actions">
@@ -3711,7 +3728,7 @@ function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectio
         </Button>
       )}
 
-      {state.phase === "idle" && state.error != null && <p className="set__error">{state.error}</p>}
+      {state.phase === "idle" && state.error != null && <Notice kind="danger" message={state.error} />}
 
       {state.phase === "picked" && (
         <>
@@ -3719,7 +3736,7 @@ function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectio
             {shared.pickedPrefix} <span className="app__path">{state.fileName}</span>
           </p>
           {state.busy && <p className="nx-hint">{s.reading}</p>}
-          {state.error != null && <p className="set__error">{state.error}</p>}
+          {state.error != null && <Notice kind="danger" message={state.error} />}
         </>
       )}
 
@@ -3884,7 +3901,7 @@ function CsvImportSection({ profileId, hits, showTitle = true }: CsvImportSectio
 
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {state.phase === "planned" && state.error != null && (
-            <p className="set__error">{state.error}</p>
+            <Notice kind="danger" message={state.error} />
           )}
         </>
       )}
@@ -4257,7 +4274,7 @@ function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectio
         </Button>
       </div>
       <p className="nx-hint">{s.copyHint}</p>
-      {copyError && <p className="set__error">{s.copyError}</p>}
+      {copyError && <Notice kind="danger" message={s.copyError} />}
 
       {showPrompt && (
         // A named, focusable region: the block scrolls, and a scroll container
@@ -4384,7 +4401,7 @@ function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectio
 
       {state.phase === "editing" && state.busy && <p className="nx-hint">{s.previewRunning}</p>}
       {state.phase === "editing" && state.error != null && (
-        <p className="set__error">{state.error}</p>
+        <Notice kind="danger" message={state.error} />
       )}
 
       {previewing && (
@@ -4501,7 +4518,7 @@ function LlmImportSection({ profileId, hits, showTitle = true }: LlmImportSectio
           {state.phase === "applying" && <p className="nx-hint">{s.applying}</p>}
           {replanning && <p className="nx-hint">{shared.previewRunning}</p>}
           {state.phase === "ready" && state.error != null && (
-            <p className="set__error">{state.error}</p>
+            <Notice kind="danger" message={state.error} />
           )}
         </>
       )}
@@ -4612,7 +4629,7 @@ function MarkdownImportSection({ profileId, hits, showTitle = true }: MarkdownIm
       <p className="nx-hint">{s.folderHint}</p>
 
       {busy && <p className="nx-hint">{s.running}</p>}
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
 
       {report !== null && (
         <>
@@ -4647,7 +4664,7 @@ function MarkdownImportSection({ profileId, hits, showTitle = true }: MarkdownIm
   );
 }
 
-/** A settings-form result line: green-ish caption on success, `.set__error` on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
+/** A settings-form result line: an `info` notice on success, a `danger` notice on failure — same idiom as `ProfileSection`/`BackupSection`, just shared across the two Sigurnost sub-forms. */
 interface SecurityMessage {
   text: string;
   failed: boolean;
@@ -4736,35 +4753,36 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
           {s.changeTitle}
         </h3>
         <form className="set__security-form" onSubmit={(event) => void submitChange(event)}>
-          <TextField
-            type="password"
-            label={s.currentLabel}
-            value={currentPasscode}
-            required
-            onChange={(event) => setCurrentPasscode(event.target.value)}
-          />
-          <TextField
-            type="password"
-            label={s.newLabel}
-            value={nextPasscode}
-            required
-            onChange={(event) => setNextPasscode(event.target.value)}
-          />
-          <TextField
-            type="password"
-            label={s.confirmLabel}
-            value={confirmPasscode}
-            required
-            onChange={(event) => setConfirmPasscode(event.target.value)}
-          />
+          <Field required>
+            <TextField
+              type="password"
+              label={s.currentLabel}
+              value={currentPasscode}
+              onChange={(event) => setCurrentPasscode(event.target.value)}
+            />
+          </Field>
+          <Field required>
+            <TextField
+              type="password"
+              label={s.newLabel}
+              value={nextPasscode}
+              onChange={(event) => setNextPasscode(event.target.value)}
+            />
+          </Field>
+          <Field required>
+            <TextField
+              type="password"
+              label={s.confirmLabel}
+              value={confirmPasscode}
+              onChange={(event) => setConfirmPasscode(event.target.value)}
+            />
+          </Field>
           <Button type="submit" size="sm" variant="primary" disabled={changing}>
             {s.save}
           </Button>
         </form>
         {changeMessage != null && (
-          <p className={changeMessage.failed ? "set__error" : "nx-hint"}>
-            {changeMessage.text}
-          </p>
+          <Notice kind={changeMessage.failed ? "danger" : "info"} message={changeMessage.text} />
         )}
       </div>
 
@@ -4780,7 +4798,7 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
             <Button size="sm" variant="primary" disabled={regenerating} onClick={() => void regenerate()}>
               {s.regenerate}
             </Button>
-            {recoveryError != null && <p className="set__error">{recoveryError}</p>}
+            {recoveryError != null && <Notice kind="danger" message={recoveryError} />}
           </>
         )}
       </div>
@@ -4921,13 +4939,14 @@ function AskPasscodeRow({ hits }: { hits: ReadonlySet<string> }) {
               void store(draft, passcode);
             }}
           >
-            <TextField
-              type="password"
-              label={s.askPasscodePasscodeLabel}
-              value={passcode}
-              required
-              onChange={(event) => setPasscode(event.target.value)}
-            />
+            <Field required>
+              <TextField
+                type="password"
+                label={s.askPasscodePasscodeLabel}
+                value={passcode}
+                onChange={(event) => setPasscode(event.target.value)}
+              />
+            </Field>
             <Button type="submit" size="sm" variant="primary" disabled={saving}>
               {s.save}
             </Button>
@@ -4935,7 +4954,7 @@ function AskPasscodeRow({ hits }: { hits: ReadonlySet<string> }) {
         </>
       )}
       {message != null && (
-        <p className={message.failed ? "set__error" : "nx-hint"}>{message.text}</p>
+        <Notice kind={message.failed ? "danger" : "info"} message={message.text} />
       )}
     </div>
   );
@@ -5080,19 +5099,16 @@ function ShortcutsSection({
                 </div>
               </div>
               {isCapturing && (
-                <p className={refusal !== null ? "set__error" : "nx-hint"} role="status">
-                  {refusal ?? s.captureHint}
-                </p>
+                <Notice
+                  kind={refusal !== null ? "danger" : "info"}
+                  message={refusal ?? s.captureHint}
+                />
               )}
               {/* The „globalna" marker, said rather than drawn: what makes this
                   row different is a behaviour, so it is written out under it
                   instead of dressed up as a badge. */}
               {action.global && <p className="nx-hint">{s.globalHint}</p>}
-              {action.global && globalTaken && (
-                <p className="set__error" role="status">
-                  {s.globalTaken}
-                </p>
-              )}
+              {action.global && globalTaken && <Notice kind="danger" message={s.globalTaken} />}
             </div>
           );
         })}
@@ -5258,9 +5274,7 @@ function LicencesSection() {
     <>
       <p className="nx-hint">{s.caption}</p>
       {failed && (
-        <p className="nx-hint" role="alert">
-          {s.loadError}
-        </p>
+        <Notice kind="danger" message={s.loadError} />
       )}
       {!failed && loaded === null && <p className="nx-hint">{s.loading}</p>}
       {loaded !== null && (
@@ -6417,7 +6431,7 @@ export function SettingsPage({
               </div>
               <p className="nx-hint">{strings.settings.notificationPresets.caption}</p>
             </div>
-            {presetError != null && <p className="set__error">{presetError}</p>}
+            {presetError != null && <Notice kind="danger" message={presetError} />}
             <NotificationSettingsControls profileId={profileId} refreshToken={refreshToken} />
           </Card>
 
@@ -6675,8 +6689,13 @@ export function SettingsPage({
       {/* One dialog for every resettable card — the question is the same
           question, and only the card it names differs (SET §5). */}
       {resetting !== null && (
-        <SettingsResetDialog
-          sectionTitle={resetting.title}
+        <ConfirmDialog
+          title={strings.settings.reset.title}
+          name={resetting.title}
+          question={strings.settings.reset.question}
+          confirmLabel={strings.settings.reset.confirm}
+          cancelLabel={strings.settings.reset.cancel}
+          destructive
           onConfirm={() => runReset(resetting.id)}
           onCancel={() => setResetting(null)}
         />

@@ -45,6 +45,11 @@ action stay where they are. 900px is the window minimum the desktop enforces, so
 this is the narrowest window that exists rather than a breakpoint nobody
 reaches.
 
+The settings page's search box is the one control in `actions`, and that is
+deliberate: it is a jump-to that highlights the row it finds, not a filter over
+the page's content, so it does not belong in `filters`. It is 320px wide and
+the header keeps it on the title's line at the 900px minimum.
+
 **Adopted by:** all 26 module pages, each rendering one `PageHeader`.
 
 ## EmptyState
@@ -166,7 +171,8 @@ The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
 **Adopted by:** 6 module renderer files (assistant ×2, calculator, car, chess,
-maps).
+maps), and the settings page's reset question, which is destructive and so takes
+the cancelling focus.
 
 ## Toast
 
@@ -261,8 +267,10 @@ in a card, and **do** reach for `Field` the moment a field has a help line, a
 refusal or a required mark. **Don't** hand-write a hint line or an error line
 beside a field.
 
-**Adopted by:** 2 module renderer files use `Field`; `FormLayout` is used by no
-module page.
+**Adopted by:** 2 module renderer files use `Field`, and the settings page uses
+it for its passcode and profile-deletion fields and for the module settings
+fields (`SettingsPage`, `moduleSettingsPanels`); `FormLayout` is used by no
+module page. Its `required` mark replaces the native attribute on those fields.
 
 ## Segmented
 
@@ -396,6 +404,8 @@ EmptyState columns, which are tags.
 | **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **6** | **0** | **7** | **9** |
 
 Not counted in this matrix: the shell's pages (`apps/desktop/src/renderer/src`).
+The settings page is one of them and has no row; its adoption is in the sections
+above (Notice, Field, ConfirmDialog).
 Components no module page uses yet: `Dialog`, `Notice`, `AsyncSurface`,
 `Section`, `Toolbar`, `SettingsRow`, the `Segmented` component, `Toast`,
 `ListDetail` and `FormLayout`.

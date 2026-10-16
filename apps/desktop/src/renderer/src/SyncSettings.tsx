@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Button, Checkbox, TextField } from "@nexus/ui";
+import { Button, Checkbox, Notice, TextField } from "@nexus/ui";
 import type { SyncActivityView, SyncEnableProblem, SyncStatusView } from "../../shared/ipc.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { labelClass } from "./settingsSearch.js";
@@ -281,7 +281,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
     }
   }
 
-  if (loadFailed) return <p className="set__error">{s.error}</p>;
+  if (loadFailed) return <Notice kind="danger" message={s.error} />;
   if (status === null) return <p className="nx-hint">{strings.app.loading}</p>;
 
   const card = syncCardState({ status, recoveryCode });
@@ -546,7 +546,7 @@ export function SyncSection({ hits }: SyncSectionProps) {
         </div>
       )}
 
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
 
       {confirmingDisconnect && (
         <ConfirmDialog
