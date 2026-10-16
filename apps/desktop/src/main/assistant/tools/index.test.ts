@@ -164,6 +164,7 @@ describe("createToolRegistry", () => {
     expect(countByArea(tools)).toEqual({
       app: 3,
       arcade: 2,
+      boards: 6,
       calendar: 9,
       calculator: 3,
       canvas: 7,
@@ -191,6 +192,7 @@ describe("createToolRegistry", () => {
       packs: 4,
       pantry: 2,
       people: 4,
+      puzzles: 5,
       reader: 1,
       recorder: 1,
       reminders: 1,

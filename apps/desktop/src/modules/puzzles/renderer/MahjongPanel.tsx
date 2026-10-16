@@ -57,9 +57,16 @@ import { newSeed } from "./seed.js";
 
 const PUZZLE = "mahjong";
 
-export function MahjongPanel({ saves, variants, onSave, onFinish, onClear }: PanelProps) {
+export function MahjongPanel({
+  saves,
+  variants,
+  onSave,
+  onFinish,
+  onClear,
+  opening,
+}: PanelProps) {
   const engine = useEngine();
-  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed));
+  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed, opening));
   const [seed, setSeed] = useState(initial.seed);
   const [board, setBoard] = useState<MahjongStateView | null>(
     initial.saved === null ? null : (initial.saved.state as MahjongStateView),

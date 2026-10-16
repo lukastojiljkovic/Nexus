@@ -1,0 +1,126 @@
+{
+  "scenarios": [
+    {
+      "id": "boards-position-sr",
+      "title": "Gde je stao u Reversiju",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Gde sam stao u Reversiju?" }
+      ],
+      "tools": [
+        { "name": "boards.position", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "boards.position", "args": { "game": { "eq": "reversi" } } }
+        ],
+        "answerContains": ["računar"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "boards.position", "arguments": { "game": "reversi" } }] },
+        { "text": "U Reversiju si odigrao potez, pa je na potezu računar." }
+      ]
+    },
+    {
+      "id": "boards-start-declined-sr",
+      "title": "Partija nije pokrenuta kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Hoću da igram Reversi protiv računara." }
+      ],
+      "tools": [
+        {
+          "name": "boards.start",
+          "effect": "write",
+          "summary": { "sr": "Započeti novu partiju: Reversi, protiv računara, nivo 2?", "en": "Start a new Reversi game, against the computer, level 2?" },
+          "content": "Otvara se nova partija: Reversi."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "boards.start", "args": { "game": { "eq": "reversi" } } }],
+        "answerContains": ["odbio"],
+        "claimsOnlyWhatRan": true,
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "boards.start", "arguments": { "game": "reversi", "opponent": "computer" } }] },
+        { "text": "Nisam pokrenuo partiju, jer si odbio." }
+      ]
+    },
+    {
+      "id": "boards-start-en",
+      "title": "A Ludo game against another player",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Start a Ludo game for two players on this machine." }
+      ],
+      "tools": [
+        {
+          "name": "boards.start",
+          "effect": "write",
+          "summary": { "sr": "Započeti novu partiju: Ne ljuti se, čoveče, protiv drugog igrača?", "en": "Start a new Ludo game, against another player?" },
+          "content": "Opening a new Ludo game.",
+          "navigateTo": { "module": "boards" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "boards.start", "args": { "game": { "eq": "ludo" }, "opponent": { "eq": "human" } } }
+        ],
+        "navigatesTo": [{ "module": "boards" }],
+        "answerContains": ["Ludo"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "boards.start", "arguments": { "game": "ludo", "opponent": "human" } }] },
+        { "text": "Opened a new Ludo game for two players on this machine." }
+      ]
+    },
+    {
+      "id": "boards-level-en",
+      "title": "A stronger computer by default",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Make the computer play stronger in the board games by default." }
+      ],
+      "tools": [
+        {
+          "name": "boards.level",
+          "effect": "write",
+          "summary": { "sr": "Podrazumevani nivo za nove partije protiv računara biće 3?", "en": "Set the default computer level for new games to 3?" },
+          "content": "The default level is now 3.",
+          "navigateTo": { "module": "settings" }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "boards.level", "args": { "level": { "eq": 3 } } }],
+        "navigatesTo": [{ "module": "settings" }],
+        "answerContains": ["3"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "boards.level", "arguments": { "level": 3 } }] },
+        { "text": "The default computer level is now 3." }
+      ]
+    }
+  ]
+}

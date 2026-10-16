@@ -68,9 +68,10 @@ export function SudokuPanel({
   onSave,
   onFinish,
   onClear,
+  opening,
 }: PanelProps) {
   const engine = useEngine();
-  const [initial] = useState(() => initialGame(saves, "sudoku", variants, newSeed));
+  const [initial] = useState(() => initialGame(saves, "sudoku", variants, newSeed, opening));
   const [variant, setVariant] = useState(initial.variant);
   const [seed, setSeed] = useState(initial.seed);
   const [board, setBoard] = useState<History<SudokuStateView> | null>(

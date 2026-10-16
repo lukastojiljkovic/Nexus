@@ -32,9 +32,16 @@ import { newSeed } from "./seed.js";
 const PUZZLE = "broj";
 const VARIANT = "six";
 
-export function BrojPanel({ saves, variants, onSave, onFinish, onClear }: PanelProps) {
+export function BrojPanel({
+  saves,
+  variants,
+  onSave,
+  onFinish,
+  onClear,
+  opening,
+}: PanelProps) {
   const engine = useEngine();
-  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed));
+  const [initial] = useState(() => initialGame(saves, PUZZLE, variants, newSeed, opening));
   const [seed, setSeed] = useState(initial.seed);
   const [round, setRound] = useState<BrojStateView | null>(
     initial.saved === null ? null : (initial.saved.state as BrojStateView),

@@ -19,6 +19,7 @@ import type { BoardsSaveView, BoardsView } from "../shared/ipc.js";
 import { Board } from "./Board.js";
 import { copy } from "./copy.js";
 import { useAiClient } from "./ai/client.js";
+import { startRequestOf } from "./intent.js";
 import {
   GAME_ORDER,
   awaitingHuman,
@@ -106,7 +107,7 @@ function randomSeed(): number {
  */
 const ROLL_MOTION_MS = 420;
 
-export default function BoardsPage({ profileId }: ModulePageProps) {
+export default function BoardsPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [view, setView] = useState<BoardsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** The game on screen, or null for the lobby. It is the page's own state: a move is drawn before it is stored. */
@@ -281,12 +282,40 @@ export default function BoardsPage({ profileId }: ModulePageProps) {
 
   // --- Starting, resuming and ending ----------------------------------------
 
-  function startGame(game: BoardsGame, setup: ReturnType<typeof setupOf>): void {
-    setDraft(null);
-    setError(null);
-    const session = newSession(game, setup, randomSeed());
-    commit(session);
-  }
+  const startGame = useCallback(
+    (game: BoardsGame, setup: ReturnType<typeof setupOf>): void => {
+      setDraft(null);
+      setError(null);
+      const session = newSession(game, setup, randomSeed());
+      commit(session);
+    },
+    [commit],
+  );
+
+  /**
+   * What the assistant asked this page to do: start a game with the opponent and the
+   * level the request names. It waits for the view, so the form it starts from is the
+   * profile's own. Anything else is not this page's verb and is reported handled all
+   * the same, so the shell's queue moves on.
+   */
+  useEffect(() => {
+    if (intent === null || intent === undefined || view === null) return;
+    if (intent.kind === "action" && intent.action === "start") {
+      const request = startRequestOf(intent.payload);
+      if (request !== null) {
+        const draft = defaultDraft(request.game, request.level);
+        startGame(
+          request.game,
+          setupOf({
+            ...draft,
+            opponent: request.opponent,
+            seatKinds: request.opponent === "computer" ? draft.seatKinds : ["human", "human"],
+          }),
+        );
+      }
+    }
+    onIntentHandled?.();
+  }, [intent, view, onIntentHandled, startGame]);
 
   function resume(save: BoardsSaveView): void {
     try {
