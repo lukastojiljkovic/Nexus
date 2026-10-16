@@ -121,20 +121,6 @@
   align-items: flex-end;
   gap: var(--nx-space-2);
 }
-.canv__error,
-.canv__notice {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  margin: 0;
-  font-size: var(--nx-font-size-body-sm);
-}
-.canv__error {
-  color: var(--nx-danger);
-}
-.canv__notice {
-  color: var(--nx-text-muted);
-}
 /*
  * The bar and the board are ONE object (the „instrument").
  *

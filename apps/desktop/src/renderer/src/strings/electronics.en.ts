@@ -65,6 +65,12 @@ export const electronicsEn = {
   undo: "Undo",
   deletedNotice: "The circuit was deleted.",
   dismiss: "Close",
+  deleteTitle: "Delete this circuit?",
+  deleteQuestion: "The circuit leaves the list, with its parts, wires and generated code.",
+  /** What stays true after the answer: the offer that follows the delete takes it back. */
+  deleteNote: "The Undo offer that follows the delete brings it back.",
+  /** The name of the overflow trigger that holds the tools, Rename and Delete below 900px. */
+  moreActions: "More actions",
   loadErrorTitle: "Circuits not loaded",
   loadError: "Loading the circuits failed. Close and reopen the page.",
   actionError: "The action failed. Try again.",
