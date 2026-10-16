@@ -1,5 +1,5 @@
 import { TOOL_TASK_GROUPS, type ToolTaskGroup } from "@nexus/core";
-import { Button, Icon, TextField } from "@nexus/ui";
+import { Button, EmptyState, Icon, TextField } from "@nexus/ui";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { searchToolCatalogue, type ToolCatalogueEntry } from "./toolCatalogue.js";
@@ -326,7 +326,7 @@ export function ToolFinder({ profileId, catalogue, recentIds, onOpen }: ToolFind
             ))}
             {rows.length === 0 && (
               <div className="tool-finder__empty">
-                <p className="nx-hint nx-hint--prose">{s.noMatches}</p>
+                <EmptyState variant="inline" title={s.noMatches} />
                 <Button
                   variant="quiet"
                   onClick={() => {
