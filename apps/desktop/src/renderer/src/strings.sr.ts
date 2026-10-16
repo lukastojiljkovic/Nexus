@@ -2936,9 +2936,11 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     noMatchDescription: "Promeni pretragu ili isključi neki filter.",
     clearFilters: "Poništi filtere",
     /** The isolated failure of this one read, with the way to ask again — the dashboard widgets' recipe. */
+    failureTitle: "Datoteke nisu dostupne",
     error: "Datoteke se trenutno ne mogu učitati.",
     retry: "Pokušaj ponovo",
     actionError: "Radnja nad datotekom nije uspela. Pokušaj ponovo.",
+    dismiss: "Zatvori",
   },
 
   study: {
@@ -3650,7 +3652,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       emptyReason: "Linija se crta čim u ovom mesecu postoji bar jedna stavka.",
     },
     loadErrorTitle: "Finansije nisu učitane",
-    loadError: "Učitavanje finansija nije uspelo. Zatvori i ponovo otvori stranicu.",
+    loadError: "Učitavanje finansija nije uspelo. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     /** The one line every failed write falls back to when `financeErrorMessage` recognizes nothing more specific. */
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
@@ -3992,7 +3995,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
    */
   habits: {
     loadErrorTitle: "Navike nisu učitane",
-    loadError: "Učitavanje navika nije uspelo. Zatvori i ponovo otvori stranicu.",
+    loadError: "Učitavanje navika nije uspelo. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     /** The one line every failed write falls back to when `habitErrorMessage` recognizes nothing more specific. */
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
@@ -4262,7 +4266,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       emptyReason: "Trake se crtaju čim danas postoji bar jedna završena faza.",
     },
     loadErrorTitle: "Fokus nije učitan",
-    loadError: "Učitavanje fokusa nije uspelo. Zatvori i ponovo otvori stranicu.",
+    loadError: "Učitavanje fokusa nije uspelo. Pokušaj ponovo.",
+    retry: "Pokušaj ponovo",
     actionError: "Radnja nije uspela. Pokušaj ponovo.",
     undo: "Opozovi",
     dismiss: "Zatvori",

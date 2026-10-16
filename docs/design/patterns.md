@@ -45,7 +45,9 @@ action stay where they are. 900px is the window minimum the desktop enforces, so
 this is the narrowest window that exists rather than a breakpoint nobody
 reaches.
 
-**Adopted by:** all 26 module pages, each rendering one `PageHeader`.
+**Adopted by:** all 26 module pages, each rendering one `PageHeader`. The shell's
+Habits page holds its "new habit" primary here; with no habits yet, the page's
+empty state carries that one invitation instead, so there is never a second.
 
 ## EmptyState
 
@@ -113,8 +115,9 @@ the data is there.
 The header stays with the page (see PageHeader); `AsyncSurface` is the body.
 `asyncSurfacePlan` is the pure decision and the test beside it pins it.
 
-**Adopted by:** no module page yet. The shell surfaces that show a failed read
-as a dead end are the ones to convert.
+**Adopted by:** the shell's Files, Habits, Focus and Finance pages, for their main
+read. Finance's month report still draws its own failure, and the shell's other
+dead-end reads are the ones to convert.
 
 ## Dialog
 
@@ -164,7 +167,7 @@ The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
 **Adopted by:** 6 module renderer files (assistant ×2, calculator, car, chess,
-maps).
+maps), and the shell's `FocusDiscardDialog` (Focus and Study).
 
 ## Toast
 
@@ -183,8 +186,8 @@ that is named in the page's words. `kind="error"` is the same component
 announcing assertively with the `error` glyph; both kinds carry a shape as well
 as an ink.
 
-**Adopted by:** no module page, and the shell's two (Finance, Habits). The undo
-bars that predate it are the ones to convert.
+**Adopted by:** the shell's Files, Finance, Focus and Habits pages. The undo bars
+that predate it on the other shell pages are the ones to convert.
 
 ## ListDetail
 
