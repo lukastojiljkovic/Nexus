@@ -93,6 +93,7 @@ function services(wiki: WikiSource | null): AssistantServices {
     now: () => Date.parse(NOW),
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [] },
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     zimWiki: () => wiki,
     modules: createModuleRegistry(),
   };

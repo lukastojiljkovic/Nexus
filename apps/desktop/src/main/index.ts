@@ -1578,6 +1578,10 @@ function activeProfileForAttachments(): string {
   return id;
 }
 
+// The kit's tool-pack capability (ADR-094), built once and shared by the module host
+// and the assistant's tools: both read the same installed packs.
+const moduleTools = createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM });
+
 /**
  * The module kit's host: every module discovered from `src/modules/<id>/`, its
  * channels registered and its session hooks held (ADR-090). Built once, at
@@ -1654,7 +1658,7 @@ const moduleHost = createModuleHost({
   // module finds an installed pack by id, reads the licence and the source it has
   // to show, and opens a session on one — and nothing a renderer sends ever
   // reaches an argument list (`./moduleTools.ts` states the whole of that).
-  tools: createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM }),
+  tools: moduleTools,
   now: () => Date.now(),
   // The capability that gives a module a file: it prints a document MAIN built
   // and asks the USER where to put it (`cardPdf.ts`). A module never sees the
@@ -1748,6 +1752,8 @@ configureAssistant({
   now: () => Date.now(),
   search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
   packs: { list: () => packs().list() },
+  // The same tool-pack capability the module host hands its modules (ADR-094).
+  tools: moduleTools,
   // The offline wiki, as the knowledge base reads it: the SAME service the wiki
   // page and the `nx-zim://` handler read through (`zimService` above), so a
   // citation and the page it points at can never mean two different files.

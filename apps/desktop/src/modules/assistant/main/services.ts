@@ -1,5 +1,6 @@
 import type { ModelHost, ModuleRegistry } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
+import type { ModuleToolsAccess } from "../../../main/moduleTools.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
 import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
@@ -70,6 +71,8 @@ export interface AssistantServices {
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service, for the installed list. */
   readonly packs: PacksLookup;
+  /** The installed tool packs (ADR-094), for the chess tools' Stockfish analysis. */
+  readonly tools: ModuleToolsAccess;
   /**
    * The offline wiki, in the shape the knowledge base reads it
    * (`main/assistant/knowledge/zimWiki.ts`), or `null` in a build with no ZIM

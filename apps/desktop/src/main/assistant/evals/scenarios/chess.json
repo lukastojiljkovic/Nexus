@@ -1,0 +1,346 @@
+{
+  "scenarios": [
+    {
+      "id": "chess-games-read-sr",
+      "title": "Koje partije protiv računara su sačuvane",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Koje sam partije odigrao protiv računara i kako su se završile?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "chess.games",
+          "effect": "read",
+          "content": "Sačuvane partije (2):\n- 12. oktobar 2026 19:40 · Računar · Nivo 3 · 10 min + 5 s · Pobeda belih (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70)\n- 9. oktobar 2026 18:05 · Druga osoba · 3 min · Nerešeno (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71)\nProtiv računara još nijedna partija nije završena."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "chess.games"
+          }
+        ],
+        "answerContains": [
+          "nivou 3"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "chess.games",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "Protiv računara si na nivou 3 pobedio belima. Druga sačuvana partija bila je protiv druge osobe."
+        }
+      ]
+    },
+    {
+      "id": "chess-games-read-en",
+      "title": "Where a game in progress stands",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Where did I leave my chess game?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "chess.games",
+          "effect": "read",
+          "content": "Saved games (0):\nNo saved games.\nGame in progress: The engine · Level 2 · 3 min + 2 s. Moves played: 14.\nAgainst the engine:\nLevel 2: played 3, won 1, drawn 0, lost 2."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "chess.games"
+          }
+        ],
+        "answerContains": [
+          "14"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "chess.games",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "You have a game in progress against the engine at level 2, with 14 moves played."
+        }
+      ]
+    },
+    {
+      "id": "chess-analyze-read-en",
+      "title": "The best move in the game in progress",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "What should I play next in my chess game?"
+        }
+      ],
+      "tools": [
+        {
+          "name": "chess.analyze",
+          "effect": "read",
+          "content": "Best move: e2e4\nEvaluation: +0.20 (positive favours White)\nMaterial: +0.00 (positive favours White)\nLegal moves (31): a2a3, a2a4, b1a3, b1c3, e2e3, e2e4"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "chess.analyze"
+          }
+        ],
+        "answerContains": [
+          "e2e4"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "chess.analyze",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "text": "The engine suggests e2e4, and the position is slightly better for White, by about a fifth of a pawn."
+        }
+      ]
+    },
+    {
+      "id": "chess-start-navigate-sr",
+      "title": "Nova partija protiv računara",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Hoću da igram šah protiv računara, nivo 2, belim figurama."
+        }
+      ],
+      "tools": [
+        {
+          "name": "chess.start",
+          "effect": "navigate",
+          "content": "Otvaram novu partiju na stranici Šah: beli · Računar · Nivo 2.",
+          "navigateTo": {
+            "module": "chess"
+          }
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "chess.start",
+            "args": {
+              "color": {
+                "oneOf": [
+                  "white"
+                ]
+              },
+              "opponent": {
+                "oneOf": [
+                  "engine"
+                ]
+              },
+              "level": {
+                "eq": 2
+              }
+            }
+          }
+        ],
+        "navigatesTo": [
+          {
+            "module": "chess"
+          }
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "chess.start",
+              "arguments": {
+                "color": "white",
+                "opponent": "engine",
+                "level": 2
+              }
+            }
+          ]
+        },
+        {
+          "text": "Otvorio sam novu partiju na stranici Šah: belim figurama protiv računara, na nivou 2."
+        }
+      ]
+    },
+    {
+      "id": "chess-delete-write-sr",
+      "title": "Brisanje jedne sačuvane partije",
+      "locale": "sr",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Koje partije imam sačuvane?"
+        },
+        {
+          "role": "assistant",
+          "content": "Sačuvane partije:\n- 12. oktobar 2026 19:40 · Računar · Nivo 3 · Pobeda belih (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70)\n- 9. oktobar 2026 18:05 · Druga osoba · Nerešeno (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71)"
+        },
+        {
+          "role": "user",
+          "content": "Obriši tu prvu partiju iz liste."
+        }
+      ],
+      "tools": [
+        {
+          "name": "chess.delete",
+          "effect": "write",
+          "summary": {
+            "sr": "Obriši sačuvanu partiju (12. oktobar 2026, Pobeda belih).",
+            "en": "Delete the saved game (12 October 2026, White wins)."
+          },
+          "content": "Obrisana je sačuvana partija (12. oktobar 2026, Pobeda belih)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "chess.delete",
+            "args": {
+              "id": {
+                "eq": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "12. oktobra"
+        ],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "chess.delete",
+              "arguments": {
+                "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70"
+              }
+            }
+          ]
+        },
+        {
+          "text": "Obrisao sam partiju od 12. oktobra 2026, koju si završio pobedom belih."
+        }
+      ]
+    },
+    {
+      "id": "chess-delete-write-en",
+      "title": "Deleting a saved game, in English",
+      "locale": "en",
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Show me my saved chess games."
+        },
+        {
+          "role": "assistant",
+          "content": "Saved games:\n- 12 October 2026 19:40 · The engine · Level 3 · White wins (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70)\n- 9 October 2026 18:05 · Another person · Draw (0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71)"
+        },
+        {
+          "role": "user",
+          "content": "Delete the chess game from 9 October, the draw."
+        }
+      ],
+      "tools": [
+        {
+          "name": "chess.delete",
+          "effect": "write",
+          "summary": {
+            "sr": "Obriši sačuvanu partiju (9. oktobar 2026, Nerešeno).",
+            "en": "Delete the saved game (9 October 2026, Draw)."
+          },
+          "content": "Deleted the saved game (9 October 2026, Draw)."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [
+        true
+      ],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          {
+            "name": "chess.delete",
+            "args": {
+              "id": {
+                "eq": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71"
+              }
+            }
+          }
+        ],
+        "answerContains": [
+          "deleted"
+        ],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        {
+          "toolCalls": [
+            {
+              "name": "chess.delete",
+              "arguments": {
+                "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71"
+              }
+            }
+          ]
+        },
+        {
+          "text": "I deleted the saved game from 9 October 2026, which ended in a draw."
+        }
+      ]
+    }
+  ]
+}

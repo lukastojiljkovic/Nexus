@@ -45,6 +45,7 @@ function toolNames(): readonly string[] {
     now: () => 0,
     search: () => Promise.resolve([]),
     packs: { list: () => Promise.resolve([]) },
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     timers: {
       startCountdown: () => {
         throw new Error("Test setup: no tool was run here.");

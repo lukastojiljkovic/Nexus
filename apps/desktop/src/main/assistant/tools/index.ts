@@ -62,11 +62,13 @@
 import type { ModuleRegistry, Tool, ToolRegistry, WebService } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { ShellVisibility } from "../../../shared/moduleVisibility.js";
+import type { ModuleToolsAccess } from "../../moduleTools.js";
 import { appTools } from "./app.js";
 import { calculatorTools } from "./calculator.js";
 import { calendarTools } from "./calendar.js";
 import { canvasTools } from "./canvas.js";
 import { carTools } from "./car.js";
+import { chessTools } from "./chess.js";
 import { cookbookTools } from "./cookbook.js";
 import { cultureTools } from "./culture.js";
 import { dashboardTools } from "./dashboard.js";
@@ -118,6 +120,8 @@ export interface ToolDeps {
   readonly timers: TimerHost;
   /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
   readonly modules: ModuleRegistry;
+  /** The installed tool packs (ADR-094), for the Stockfish analysis the chess tools may run. */
+  readonly tools: ModuleToolsAccess;
   /** The device's module visibility (ADR-101), for the hidden tag `app.modules` prints. */
   readonly visibility: () => ShellVisibility;
   /** The `userData` folder, where the device's module arrangement and web settings are kept. */
@@ -148,6 +152,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...studyTools({ profileDb: deps.profileDb, now: deps.now }),
     ...calendarTools({ profileDb: deps.profileDb }),
     ...canvasTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...chessTools({ profileDb: deps.profileDb, now: deps.now, tools: deps.tools }),
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),
     ...habitTools({ profileDb: deps.profileDb, now: deps.now }),
     ...timerTools({ timers: deps.timers }),

@@ -302,6 +302,7 @@ function realTools(): readonly ToolSpec[] {
     now: () => 0,
     search: () => Promise.resolve([]),
     packs: { list: () => Promise.resolve([]) },
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     timers: {
       startCountdown: () => {
         throw new Error("The grammar test never starts a countdown.");

@@ -17,6 +17,7 @@ import {
 import type { Tool, ToolEffect, ToolRegistry, WebService } from "@nexus/core";
 import { createModuleRegistry } from "../../../shared/modules.js";
 import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
+import { createModuleTools } from "../../moduleTools.js";
 import { createToolRegistry, type ToolDeps } from "./index.js";
 
 /**
@@ -87,6 +88,8 @@ function registryWith(web: WebService | null = null): ToolRegistry {
       listCountdowns: () => [],
     },
     modules: createModuleRegistry(),
+    // No pack installed: the chess tools' analysis answers with the built-in engine.
+    tools: createModuleTools({ userData: () => tmpdir(), publicKeyPem: "no key" }),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
     userData: () => tmpdir(),
     appVersion: () => "0.0.0-test",
@@ -122,6 +125,7 @@ describe("createToolRegistry", () => {
       calendar: 9,
       canvas: 7,
       car: 2,
+      chess: 5,
       cookbook: 2,
       culture: 2,
       dashboard: 4,

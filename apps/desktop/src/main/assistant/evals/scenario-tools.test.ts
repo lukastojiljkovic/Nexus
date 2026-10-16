@@ -65,6 +65,7 @@ function appTools(): readonly Tool[] {
     now: () => Date.now(),
     search: () => Promise.resolve([]),
     packs: { list: () => Promise.resolve([]) },
+    tools: { installed: () => [], pack: () => null, session: () => Promise.reject(new Error("no pack")) },
     timers: { startCountdown: refuse, listCountdowns: () => [] },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
