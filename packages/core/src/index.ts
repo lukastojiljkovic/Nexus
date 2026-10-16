@@ -3301,6 +3301,7 @@ export {
   toolSpecTokens,
 } from "./assistant/toolChoice.js";
 export type { ToolChoiceInput } from "./assistant/toolChoice.js";
+export { ToolMeaningIndex } from "./assistant/toolMeaning.js";
 export {
   countBoundary,
   createFenceBoundary,

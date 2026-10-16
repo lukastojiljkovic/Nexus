@@ -20,6 +20,7 @@ import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
 import { createModuleTools } from "../../moduleTools.js";
 import { createToolRegistry, type ToolDeps } from "./index.js";
 import { createDictionaryReader } from "../../../modules/translator/main/dictionary.js";
+import requests from "./offering.requests.json";
 
 /**
  * The registry itself: the properties that are about the SET of tools rather
@@ -363,13 +364,52 @@ describe("createToolRegistry", () => {
       "sr",
     );
 
-    // Measured 2026-10-14 with this registry (37 tools, web off) and the
-    // question above: 8 tools offered, 2 640 tokens of tool specs, 1 101 tokens
-    // of Serbian prompt - 3 741 of the 7 168-token ceiling, leaving 3 427 for
-    // the history, the knowledge passages and the question. Before the tools
-    // were chosen per turn the specs alone were 22 271 characters, which is
-    // more than this window holds.
+    // Measured 2026-10-16 with this registry (148 tools, web off) and the
+    // question above: 7 tools offered, 2 499 tokens of tool specs, 1 368 tokens
+    // of Serbian prompt, against a 7 168-token ceiling - 3 301 left. The budget
+    // share (TOOL_BUDGET_SHARE, 0.35) is what keeps that room above 3 000 tokens.
     expect(offered.length).toBeLessThanOrEqual(MAX_TOOLS_PER_TURN);
     expect(ceiling - specTokens - promptTokens).toBeGreaterThanOrEqual(3000);
+  });
+});
+
+describe("the offered set over the real registry", () => {
+  /**
+   * The request set the maintainer tracks (`offering.requests.json`): what a user
+   * says, in each language, with the tool that answers it. Every request runs
+   * through the budget a turn on an 8 192-token model gets, with no earlier
+   * messages, and a request whose tool is not offered is a miss the model could
+   * never recover from.
+   *
+   * The floor is a POLICY number set just under the rate the lexical choice
+   * reached when this set was written; the misses are named in the failure
+   * message. A later run that adds requests, or teaches the choice a word, moves
+   * the rate, and the floor moves with it - never down to hide a regression.
+   */
+  const HIT_RATE_FLOOR = 0.8;
+
+  it("offers the expected tool for most of the request set, and names the misses", () => {
+    const tools = registryWith().tools({ web: false });
+    const contextTokens = 8192;
+    const budgetTokens = Math.floor((contextTokens - answerReserveTokens(contextTokens)) * TOOL_BUDGET_SHARE);
+    const misses: string[] = [];
+    for (const row of requests) {
+      const offered = chooseTools({
+        tools,
+        query: row.request,
+        earlier: [],
+        recent: [],
+        budgetTokens,
+        ...("location" in row ? { location: row.location } : {}),
+      });
+      if (!offered.some((tool) => tool.name === row.expect)) {
+        misses.push(`${row.locale} "${row.request}" -> ${row.expect}`);
+      }
+    }
+    const hitRate = (requests.length - misses.length) / requests.length;
+    expect(
+      hitRate,
+      `${String(requests.length - misses.length)} of ${String(requests.length)} offered; missed: ${misses.join("; ")}`,
+    ).toBeGreaterThanOrEqual(HIT_RATE_FLOOR);
   });
 });

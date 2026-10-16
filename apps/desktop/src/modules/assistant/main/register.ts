@@ -4,6 +4,7 @@ import {
   findWorkflow,
   renderWorkflowBrief,
   runAgentTurn,
+  ToolMeaningIndex,
   toolsForWorkflow,
   type AgentEvent,
   type AgentTurnInput,
@@ -129,6 +130,8 @@ export function register(host: ModuleHostSurface): void {
   /** Which turn is waiting on a confirm id, so `answerConfirm` can find it. */
   const confirmations = new Map<string, { readonly turn: Turn; readonly park: ConfirmPark }>();
   const registry = new TurnRegistry(() => randomUUID());
+  /** The tool descriptions' vectors, kept across turns for whichever embedder is loaded. */
+  const toolMeaning = new ToolMeaningIndex();
 
   function services(): AssistantServices {
     return assistantServices();
@@ -425,6 +428,9 @@ export function register(host: ModuleHostSurface): void {
         ? {}
         : { toolCalls: message.toolCalls }),
       ...(message.toolCallId === null ? {} : { toolCallId: message.toolCallId }),
+      // Legacy rows carry no outcome and are read as the tool that did the thing,
+      // as `messageView` reads them.
+      ...(message.role === "tool" ? { ok: message.ok ?? true } : {}),
     }));
   }
 
@@ -497,6 +503,13 @@ export function register(host: ModuleHostSurface): void {
     turns.set(turn.id, turn);
 
     const offered = profile.tools(profile.webSearchActive());
+    const tools = workflow === null ? offered : toolsForWorkflow(workflow, offered);
+    const meaning = await toolMeaning.similarities(
+      tools,
+      text,
+      await profile.embedder(),
+      controller.signal,
+    );
     const input: AgentTurnInput = {
       history,
       user: {
@@ -505,7 +518,7 @@ export function register(host: ModuleHostSurface): void {
           workflow === null ? text : `${text}\n\n${renderWorkflowBrief(workflow, locale)}`,
       },
       locale,
-      tools: workflow === null ? offered : toolsForWorkflow(workflow, offered),
+      tools,
       knowledge: profile.knowledgeBase(),
       model,
       context: {
@@ -517,6 +530,7 @@ export function register(host: ModuleHostSurface): void {
       maxSteps: DEFAULT_MAX_STEPS,
       today: localDay(services().now()),
       ...(page === null ? {} : { location: page }),
+      ...(meaning === undefined ? {} : { toolMeaning: meaning }),
     };
 
     // Unawaited: the page polls. The failure of a whole turn is caught here and
