@@ -173,8 +173,8 @@ first in the DOM. What it enforces on top of the frame:
 The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
-**Adopted by:** 6 module renderer files (assistant ×2, calculator, car, chess,
-maps), and the settings page's reset question, which is destructive and so takes
+**Adopted by:** 8 module renderer files (assistant ×2, boards, calculator, car, chess,
+maps, puzzles), and the settings page's reset question, which is destructive and so takes
 the cancelling focus.
 
 ## Toast
@@ -382,7 +382,7 @@ EmptyState columns, which are tags.
 | arcade | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 |
 | assistant | 1 | 1 | 1 | 1 | 2 | 0 | 2 | 0 | 0 | 1 |
 | astronomy | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| boards | 1 | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| boards | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 1 |
 | calculator | 1 | 2 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 |
 | car | 1 | 8 | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | cards | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
@@ -396,7 +396,7 @@ EmptyState columns, which are tags.
 | maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
 | miniapps | 1 | 0 | 0 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
 | pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
-| puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 0 | 0 | 4 | 1 |
+| puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 1 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | recorder | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 |
 | scanner | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |

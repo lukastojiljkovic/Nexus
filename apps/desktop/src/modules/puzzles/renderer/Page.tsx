@@ -243,7 +243,7 @@ export default function PuzzlesPage({ profileId, intent, onIntentHandled }: Modu
             />
           )}
 
-          <Card className="pz__card" title={copy.stats.title}>
+          <Card className="pz__card nx-measure" title={copy.stats.title}>
             {view.stats.length === 0 ? (
               <EmptyState
                 variant="inline"

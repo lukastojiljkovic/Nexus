@@ -31,9 +31,11 @@ import {
 } from "./nonogram.js";
 import {
   ActionRow,
+  NewGameButton,
   Readout,
   VariantChips,
   initialGame,
+  savedFor,
   variantLabel,
   useElapsedClock,
   type PanelProps,
@@ -311,9 +313,7 @@ export function NonogramPanel({
         <Button size="sm" disabled={!canRedo(board)} onClick={() => step(false)}>
           {copy.common.redo}
         </Button>
-        <Button size="sm" variant="primary" onClick={newGame}>
-          {copy.common.newGame}
-        </Button>
+        <NewGameButton saved={savedFor(saves, "nonogram", variant) !== null} primary onNew={newGame} />
       </ActionRow>
 
       {isSolved(marks, puzzle) && (

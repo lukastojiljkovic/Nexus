@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   Icon,
   ListRow,
   LoadingState,
@@ -330,6 +331,17 @@ export default function BoardsPage({ profileId, intent, onIntentHandled }: Modul
     }
   }
 
+  /** Discards a saved game the lobby offers to resume. */
+  async function discard(game: BoardsGame): Promise<void> {
+    try {
+      setView(await window.nexus.modules.boards.remove({ profileId, game }));
+      setError(null);
+    } catch (failure) {
+      setError(copy.errors.mutate);
+      console.error("Nexus: a saved board game could not be discarded:", failure);
+    }
+  }
+
   async function finish(ending: "position" | "resigned" | "cube-declined" | "abandoned"): Promise<void> {
     const session = sessionRef.current;
     if (session === null) return;
@@ -388,6 +400,7 @@ export default function BoardsPage({ profileId, intent, onIntentHandled }: Modul
           statsLevel={statsLevel}
           onStatsLevel={setStatsLevel}
           onResume={resume}
+          onDiscard={(game) => void discard(game)}
           onSetup={setDraft}
           onStart={(game, setup) => startGame(game, setup)}
         />
@@ -528,6 +541,7 @@ function Lobby({
   statsLevel,
   onStatsLevel,
   onResume,
+  onDiscard,
   onSetup,
   onStart,
 }: {
@@ -536,6 +550,7 @@ function Lobby({
   statsLevel: number;
   onStatsLevel: (level: number) => void;
   onResume: (save: BoardsSaveView) => void;
+  onDiscard: (game: BoardsGame) => void;
   onSetup: (draft: SetupDraft | null) => void;
   onStart: (game: BoardsGame, setup: ReturnType<typeof setupOf>) => void;
 }) {
@@ -544,6 +559,8 @@ function Lobby({
     for (const save of view.saves) byGame.set(save.game, save);
     return byGame;
   }, [view.saves]);
+  /** The saved game a person has asked to discard, until they answer the question. */
+  const [discarding, setDiscarding] = useState<BoardsGame | null>(null);
 
   return (
     <>
@@ -558,9 +575,14 @@ function Lobby({
                 trailing={
                   <span className="boards__row-actions">
                     {save !== undefined && (
-                      <Button size="sm" variant="primary" onClick={() => onResume(save)}>
-                        {copy.lobby.resume}
-                      </Button>
+                      <>
+                        <Button size="sm" variant="primary" onClick={() => onResume(save)}>
+                          {copy.lobby.resume}
+                        </Button>
+                        <Button size="sm" variant="quiet" onClick={() => setDiscarding(game)}>
+                          {copy.lobby.discard}
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="sm"
@@ -599,6 +621,21 @@ function Lobby({
         />
       )}
       <StatsCard stats={view.stats} level={statsLevel} onLevel={onStatsLevel} />
+      {discarding !== null && (
+        <ConfirmDialog
+          title={copy.lobby.discardTitle}
+          name={copy.games[discarding].name}
+          question={copy.lobby.discardQuestion}
+          confirmLabel={copy.lobby.discard}
+          cancelLabel={copy.lobby.keep}
+          destructive
+          onCancel={() => setDiscarding(null)}
+          onConfirm={() => {
+            onDiscard(discarding);
+            setDiscarding(null);
+          }}
+        />
+      )}
     </>
   );
 }

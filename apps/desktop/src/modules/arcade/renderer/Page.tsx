@@ -200,7 +200,7 @@ function StatsCard({ view, game }: { readonly view: ArcadeView; readonly game: A
   const rows = boards.length === 0 ? [game === "tile2048" ? "4x4" : "standard"] : boards;
 
   return (
-    <Card className="arcade__card" title={copy.stats.title}>
+    <Card className="arcade__card nx-measure" title={copy.stats.title}>
       {/* The trailing figure per row is named once, above the rows: a time and a
           score are read differently, and a bare number with no word beside it
           would be a reader's guess. */}
