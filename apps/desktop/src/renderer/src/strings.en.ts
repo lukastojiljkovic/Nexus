@@ -2310,6 +2310,8 @@ export const en = {
       /** A row whose sealed container no longer opens: named, dead, honest. */
       unreadable: "Unreadable note",
       loadError: "Private notes cannot be loaded right now. Try again.",
+      loadErrorTitle: "Private notes failed to load",
+      retry: "Try again",
       noSelectionTitle: "No note is selected",
       noSelectionDescription: "Pick a note on the left or make a new one.",
       deleteLabel: "Delete",
@@ -2319,6 +2321,8 @@ export const en = {
     /** The private editor's own surfaces — save channel, attachments, the honest v1 limits. */
     editor: {
       loadError: "The note cannot be opened. Try again.",
+      loadErrorTitle: "The note failed to open",
+      retry: "Try again",
       saveError: "Saving failed — we will try again on your next edit.",
       saveTooLarge: "The note is too large to save. Shorten it or split it into several notes.",
       attachmentsTitle: "Attachments",
@@ -2342,6 +2346,7 @@ export const en = {
         restore: "Restore this version",
         restoreNote: "The current state is saved as a version before restoring, so this step is reversible too.",
         error: "The version action failed. Try again.",
+        loadError: "The versions failed to load. Try again.",
         /** The preview column's label for the selected version's own title. */
         previewLabel: "Title in this version",
       },
@@ -2355,6 +2360,7 @@ export const en = {
     clipboard: {
       notice: "Copied — the clipboard is cleared after 30 s if Nexus is in the foreground then.",
       cancel: "Keep on the clipboard",
+      dismiss: "Dismiss",
     },
     /** Typed-confirm HARD delete — no trash, no undo, and the copy says so before the field. */
     deleteDialog: {

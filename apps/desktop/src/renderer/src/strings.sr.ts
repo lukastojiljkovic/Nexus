@@ -2324,6 +2324,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       /** A row whose sealed container no longer opens: named, dead, honest. */
       unreadable: "Nečitljiva beleška",
       loadError: "Privatne beleške se trenutno ne mogu učitati. Pokušaj ponovo.",
+      loadErrorTitle: "Privatne beleške nisu učitane",
+      retry: "Pokušaj ponovo",
       noSelectionTitle: "Nijedna beleška nije izabrana",
       noSelectionDescription: "Izaberi belešku sa leve strane ili napravi novu.",
       deleteLabel: "Obriši",
@@ -2333,6 +2335,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** The private editor's own surfaces — save channel, attachments, the honest v1 limits. */
     editor: {
       loadError: "Beleška se ne može otvoriti. Pokušaj ponovo.",
+      loadErrorTitle: "Beleška nije otvorena",
+      retry: "Pokušaj ponovo",
       saveError: "Čuvanje nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
       saveTooLarge: "Beleška je prevelika da bi se sačuvala. Skrati je ili podeli na više beležaka.",
       attachmentsTitle: "Prilozi",
@@ -2356,6 +2360,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         restore: "Vrati ovu verziju",
         restoreNote: "Trenutno stanje se čuva kao verzija pre vraćanja, pa je i ovaj korak povratan.",
         error: "Radnja nad verzijama nije uspela. Pokušaj ponovo.",
+        loadError: "Verzije nisu učitane. Pokušaj ponovo.",
         /** The preview column's label for the selected version's own title. */
         previewLabel: "Naslov u ovoj verziji",
       },
@@ -2369,6 +2374,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     clipboard: {
       notice: "Kopirano — klipbord se briše za 30 s ako je Nexus tada u prvom planu.",
       cancel: "Zadrži u klipbordu",
+      dismiss: "Zatvori",
     },
     /** Typed-confirm HARD delete — no trash, no undo, and the copy says so before the field. */
     deleteDialog: {
