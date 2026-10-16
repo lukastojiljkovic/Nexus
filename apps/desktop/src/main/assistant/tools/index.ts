@@ -85,6 +85,7 @@ import { pantryTools } from "./pantry.js";
 import { readerTools } from "./reader.js";
 import { recorderTools } from "./recorder.js";
 import { settingsTools } from "./settings.js";
+import { studyTools } from "./study.js";
 import { taskTools } from "./tasks.js";
 import { timerTools, type TimerHost } from "./timers.js";
 import { wikiTools } from "./wiki.js";
@@ -144,6 +145,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
       visibility: deps.visibility,
     }),
     ...taskTools({ profileDb: deps.profileDb, now: deps.now }),
+    ...studyTools({ profileDb: deps.profileDb, now: deps.now }),
     ...calendarTools({ profileDb: deps.profileDb }),
     ...canvasTools({ profileDb: deps.profileDb, now: deps.now }),
     ...noteTools({ profileDb: deps.profileDb, now: deps.now, search: deps.search }),
