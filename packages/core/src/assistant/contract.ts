@@ -47,6 +47,8 @@ export interface ChatMessage {
   readonly toolCalls?: readonly ToolCall[];
   /** On a tool message: the call it answers. */
   readonly toolCallId?: string;
+  /** On a tool message: whether the tool said it did what it was asked (`ToolResult.ok`). */
+  readonly ok?: boolean;
   /** On a user message, for a model whose `capabilities` include `vision`. */
   readonly images?: readonly ChatImage[];
 }
@@ -384,6 +386,11 @@ export interface AgentTurnInput {
    * the assistant's own page: what „this" and „here" refer to this turn.
    */
   readonly location?: string;
+  /**
+   * How close each tool's description is to this turn's question, by tool name,
+   * when an embedder is loaded (`toolMeaning.ts`). Absent: the lexical choice alone.
+   */
+  readonly toolMeaning?: ReadonlyMap<string, number>;
 }
 
 /** The agent loop's signature (`packages/core/src/assistant/loop.ts` implements it). */

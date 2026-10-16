@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   CORE_TOOLS,
+  LOCATION_TOOL_LIMIT,
   MAX_TOOLS_PER_TURN,
   chooseTools,
+  earlierUserMessages,
+  recentSuccessfulTools,
   toolSpecCharacters,
   toolSpecTokens,
   type ToolChoiceInput,
 } from "./toolChoice.js";
-import type { JsonSchema, ToolSpec } from "./contract.js";
+import type { ChatMessage, JsonSchema, ToolSpec } from "./contract.js";
 
 /**
  * The chooser: what fits, what is scored, and what order the answer keeps.
@@ -174,7 +177,7 @@ describe("the budget and the cap, over many budgets", () => {
     spec(
       `area${String(index)}.verb${String(index)}`,
       `Alatka broj ${String(index)}.`,
-      `Tool number ${String(index)} that does one thing.`,
+      `Tool number ${String(index)} that does ${index % 2 === 0 ? "even" : "odd"} things.`,
       {
         type: "object",
         properties: {
@@ -206,7 +209,7 @@ describe("the budget and the cap, over many budgets", () => {
 
   it("never costs more than the budget, never offers more than the cap, and keeps registry order", () => {
     for (const budgetTokens of budgets) {
-      const chosen = chooseTools(choice({ tools: MANY, query: "tool number one", budgetTokens }));
+      const chosen = chooseTools(choice({ tools: MANY, query: "tool even", budgetTokens }));
       const indices = chosen.map((tool) => MANY.indexOf(tool));
       expect(cost(chosen), `budget ${String(budgetTokens)}`).toBeLessThanOrEqual(budgetTokens);
       expect(chosen.length, `budget ${String(budgetTokens)}`).toBeLessThanOrEqual(MAX_TOOLS_PER_TURN);
@@ -216,8 +219,195 @@ describe("the budget and the cap, over many budgets", () => {
   });
 
   it("takes the cap, not one more, when the budget would allow everything", () => {
-    expect(chooseTools(choice({ tools: MANY, query: "tool number one", budgetTokens: total }))).toHaveLength(
+    expect(chooseTools(choice({ tools: MANY, query: "tool even", budgetTokens: total }))).toHaveLength(
       MAX_TOOLS_PER_TURN,
     );
+  });
+});
+
+describe("the open page comes first", () => {
+  it("offers the open module's tools before the question's own", () => {
+    // Both tools cost one budget share each; tasks.create is what the question
+    // names, notes.append is what the page is about.
+    const chosen = chooseTools(
+      choice({
+        tools: SMALL,
+        query: "Dodaj zadatak za sutra",
+        location: "notes",
+        budgetTokens: toolSpecTokens(notesAppend) + toolSpecTokens(tasksCreate),
+      }),
+    );
+    expect(names(chosen)).toContain("notes.append");
+    expect(names(chosen)).toContain("tasks.create");
+    expect(names(chosen)).not.toContain("app.open");
+  });
+
+  it("offers at most LOCATION_TOOL_LIMIT of the open module's tools ahead of the core tools", () => {
+    const notes = Array.from({ length: LOCATION_TOOL_LIMIT + 2 }, (_unused, index) =>
+      spec(`notes.verb${String(index)}`, `Beleška ${String(index)}.`, `Note verb ${String(index)}.`),
+    );
+    const tools = [appSearch, appOpen, ...notes];
+    // Room for the three first note tools and one more: the fourth tool is the
+    // first core tool, not the fourth note, because the page's own tools are
+    // capped at three.
+    const chosen = chooseTools(
+      choice({
+        tools,
+        query: "",
+        location: "notes",
+        budgetTokens: cost(notes.slice(0, LOCATION_TOOL_LIMIT)) + toolSpecTokens(appSearch),
+      }),
+    );
+    expect(names(chosen)).toEqual([
+      "app.search",
+      "notes.verb0",
+      "notes.verb1",
+      "notes.verb2",
+    ]);
+  });
+
+  it("adds nothing for a location with no tools", () => {
+    const input = choice({ tools: SMALL, query: "zdravo", budgetTokens: 200 });
+    expect(names(chooseTools({ ...input, location: "chess" }))).toEqual(names(chooseTools(input)));
+  });
+});
+
+describe("the Serbian words of the question", () => {
+  it("folds Cyrillic to Latin: 'Додај задатак' finds the Latin description", () => {
+    const chosen = chooseTools(
+      choice({ tools: SMALL, query: "Додај задатак", budgetTokens: toolSpecTokens(tasksCreate) }),
+    );
+    expect(names(chosen)).toEqual(["tasks.create"]);
+  });
+
+  it("folds Cyrillic inflection the same way: 'белешке' finds 'beleške'", () => {
+    const chosen = chooseTools(
+      choice({ tools: SMALL, query: "белешке", budgetTokens: toolSpecTokens(notesAppend) }),
+    );
+    expect(names(chosen)).toEqual(["notes.append"]);
+  });
+
+  it("folds diacritics: 'beleske' without the carons finds 'beleške'", () => {
+    const chosen = chooseTools(
+      choice({ tools: SMALL, query: "beleske", budgetTokens: toolSpecTokens(notesAppend) }),
+    );
+    expect(names(chosen)).toEqual(["notes.append"]);
+  });
+});
+
+describe("recentSuccessfulTools", () => {
+  const call = (id: string, name: string): ChatMessage => ({
+    role: "assistant",
+    content: "",
+    toolCalls: [{ id, name, arguments: {} }],
+  });
+  const result = (toolCallId: string, ok: boolean): ChatMessage => ({
+    role: "tool",
+    content: ok ? "Dodato." : "Nije.",
+    toolCallId,
+    ok,
+  });
+  const user = (content: string): ChatMessage => ({ role: "user", content });
+
+  it("reads the last two turns, newest call first, and no older one", () => {
+    const history: ChatMessage[] = [
+      user("prvo"), call("a", "tasks.list"), result("a", true),
+      user("drugo"), call("b", "notes.append"), result("b", true), call("c", "tasks.create"), result("c", true),
+      user("trece"), call("d", "calendar.events"), result("d", true),
+    ];
+    expect(recentSuccessfulTools(history)).toEqual(["calendar.events", "tasks.create", "notes.append"]);
+  });
+
+  it("leaves out a call whose result did not say ok", () => {
+    const history: ChatMessage[] = [
+      user("zadatak"), call("a", "tasks.create"), result("a", false),
+      user("i jos jedan"), call("b", "notes.append"), result("b", true),
+    ];
+    expect(recentSuccessfulTools(history)).toEqual(["notes.append"]);
+  });
+
+  it("is empty for a history with no calls", () => {
+    expect(recentSuccessfulTools([user("zdravo")])).toEqual([]);
+  });
+});
+
+describe("earlierUserMessages", () => {
+  it("returns the user's messages newest first and ignores the rest", () => {
+    const history: ChatMessage[] = [
+      { role: "user", content: "prvo" },
+      { role: "assistant", content: "odgovor" },
+      { role: "user", content: "drugo" },
+    ];
+    expect(earlierUserMessages(history)).toEqual(["drugo", "prvo"]);
+  });
+});
+
+describe("the meaning score", () => {
+  it("is a no-op when there is none: an empty map chooses what no map chooses", () => {
+    const input = choice({ tools: SMALL, query: "Sta imam za zadatak", budgetTokens: 150 });
+    expect(names(chooseTools({ ...input, meaning: new Map() }))).toEqual(names(chooseTools(input)));
+  });
+
+  it("lets a tool the meaning matches outrank a question with no shared word", () => {
+    const chosen = chooseTools(
+      choice({
+        tools: SMALL,
+        query: "zdravo",
+        meaning: new Map([["notes.append", 1]]),
+        budgetTokens: toolSpecTokens(notesAppend),
+      }),
+    );
+    expect(names(chosen)).toEqual(["notes.append"]);
+  });
+
+  it("ignores a similarity below the floor, so it cannot drown the lexical answer", () => {
+    const chosen = chooseTools(
+      choice({
+        tools: SMALL,
+        query: "zdravo",
+        meaning: new Map([["notes.append", 0.2]]),
+        budgetTokens: toolSpecTokens(appSearch),
+      }),
+    );
+    expect(names(chosen)).toEqual(["app.search"]);
+  });
+});
+
+describe("the choice at scale", () => {
+  /**
+   * Two hundred tools with descriptions and schemas of the length the registry
+   * has (about 150 characters each way, three or four properties), so the budget
+   * and the cap have to hold on a menu far larger than the one the app ships.
+   */
+  const LARGE: readonly ToolSpec[] = Array.from({ length: 200 }, (_unused, index) =>
+    spec(
+      `area${String(index % 25)}.verb${String(index)}`,
+      `Izlistava stavku broj ${String(index)} iz oblasti, sa filterom po datumu i nazivu, kada korisnik traži pregled svojih podataka i rezultata tog dana.`,
+      `Lists item number ${String(index)} from the area, with a filter by date and by name, when the user asks for an overview of their data and results for that day.`,
+      {
+        type: "object",
+        properties: {
+          title: { type: "string", minLength: 1, maxLength: 200, description: "The title to match, case-insensitive." },
+          from: { type: "string", format: "date", description: "The first day to include, YYYY-MM-DD." },
+          limit: { type: "integer", minimum: 1, maximum: 50 },
+        },
+        required: ["title"],
+        additionalProperties: false,
+      },
+    ),
+  );
+
+  it("holds the cap and the budget on two hundred tools, and chooses in under the bound", () => {
+    const budgetTokens = 2_900;
+    const started = performance.now();
+    const chosen = chooseTools(
+      choice({ tools: LARGE, query: "Pokaži mi zadatke za danas", earlier: ["koliko zadataka imam"], budgetTokens }),
+    );
+    const elapsed = performance.now() - started;
+    expect(chosen.length).toBeLessThanOrEqual(MAX_TOOLS_PER_TURN);
+    expect(cost(chosen)).toBeLessThanOrEqual(budgetTokens);
+    // Measured on the development machine with `performance.now`; the bound is
+    // generous on purpose, so a slow CI runner does not turn it into a flake.
+    expect(elapsed).toBeLessThan(200);
   });
 });

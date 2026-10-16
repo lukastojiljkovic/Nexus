@@ -113,6 +113,8 @@ import { parseToolCalls } from "./toolCalls.js";
 import {
   TOOL_BUDGET_SHARE,
   chooseTools,
+  earlierUserMessages,
+  recentSuccessfulTools,
   toolSpecCharacters,
   toolSpecTokens,
 } from "./toolChoice.js";
@@ -244,8 +246,10 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       tools: specs,
       query: input.user.content,
       earlier: earlierUserMessages(input.history),
-      recent: recentToolNames(input.history),
+      recent: recentSuccessfulTools(input.history),
       budgetTokens: Math.floor(ceiling * TOOL_BUDGET_SHARE),
+      ...(input.location === undefined ? {} : { location: input.location }),
+      ...(input.toolMeaning === undefined ? {} : { meaning: input.toolMeaning }),
     });
     const offeredNames = new Set(offered.map((spec) => spec.name));
     const offeredTools = input.tools.filter((tool) => offeredNames.has(tool.name));
@@ -990,24 +994,4 @@ function settledCalls(
   };
 }
 
-/** The user messages of the history, newest first: what the tool chooser reads as context. */
-function earlierUserMessages(history: readonly ChatMessage[]): readonly string[] {
-  const texts: string[] = [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (message !== undefined && message.role === "user") texts.push(message.content);
-  }
-  return texts;
-}
-
-/** The tools the assistant called in the history, newest first, in each step's own order. */
-function recentToolNames(history: readonly ChatMessage[]): readonly string[] {
-  const names: string[] = [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (message === undefined) continue;
-    for (const call of message.toolCalls ?? []) names.push(call.name);
-  }
-  return names;
-}
 
