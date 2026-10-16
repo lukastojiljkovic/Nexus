@@ -70,7 +70,7 @@ fails on a copy leaf named like an empty state inside a bare hint line, and
 names the files that still do it: an entry is removed from that list when its
 page converts, and a new one is a regression.
 
-**Adopted by:** 55 inline and 13 page empty states across the module renderers,
+**Adopted by:** 55 inline and 12 page empty states across the module renderers,
 and 39 bare hint lines still in 27 files (the allowlist).
 
 ## Notice
@@ -92,8 +92,9 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** no module page yet. The hand-written `*__error` lines are the
-ones it replaces.
+**Adopted by:** the reader's shelf and the recorder's diary, for a failed load,
+each with a Try again. The hand-written `*__error` lines the other modules draw
+are the ones it replaces.
 
 ## AsyncSurface
 
@@ -183,8 +184,8 @@ that is named in the page's words. `kind="error"` is the same component
 announcing assertively with the `error` glyph; both kinds carry a shape as well
 as an ink.
 
-**Adopted by:** no module page, and the shell's two (Finance, Habits). The undo
-bars that predate it are the ones to convert.
+**Adopted by:** the recorder's undo offer, and the shell's two (Finance, Habits).
+The undo bars that predate it in the other modules are the ones to convert.
 
 ## ListDetail
 
@@ -380,14 +381,14 @@ EmptyState columns, which are tags.
 | pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
 | puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 0 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
-| recorder | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
+| recorder | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 |
 | scanner | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | signals | 1 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 |
 | timers | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
 | translator | 1 | 2 | 1 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
 | wiki | 1 | 2 | 0 | 1 | 4 | 0 | 0 | 0 | 0 | 0 |
 | workshop | 1 | 2 | 3 | 1 | 4 | 0 | 0 | 0 | 1 | 1 |
-| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **6** | **0** | **7** | **9** |
+| **Total** | **26** | **55** | **12** | **24 modules** | **39** | **6** | **6** | **1** | **7** | **9** |
 
 Not counted in this matrix: the shell's pages (`apps/desktop/src/renderer/src`).
 Components no module page uses yet: `Dialog`, `Notice`, `AsyncSurface`,

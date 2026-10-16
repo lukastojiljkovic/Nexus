@@ -9,11 +9,13 @@ import {
   Icon,
   ListRow,
   LoadingState,
+  Notice,
   PageHeader,
   Select,
   StatBand,
   TextArea,
   TextField,
+  Toast,
 } from "@nexus/ui";
 import type { Stat } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
@@ -152,24 +154,35 @@ export default function RecorderPage({ profileId }: ModulePageProps) {
     });
   }
 
-  if (loadFailed) {
-    return <EmptyState sigil="mic" title={copy.errors.load} />;
-  }
+  // The page's own name is the word the module DECLARED, read in the language
+  // being spoken, rather than a second copy of it. It stays while the list loads
+  // or fails: the header is the page, the list is its body.
+  const header = (
+    <PageHeader title={declaredText(manifest.copy?.name)} subtitle={copy.page.subtitle} sigil="mic" />
+  );
+
   if (view === null) {
-    return <LoadingState label={copy.page.loading} rows={6} />;
+    return (
+      <div className="rec nx-measure">
+        {header}
+        {loadFailed ? (
+          <Notice
+            kind="danger"
+            message={copy.errors.load}
+            action={{ label: copy.errors.retry, onClick: () => void refresh() }}
+          />
+        ) : (
+          <LoadingState label={copy.page.loading} rows={6} />
+        )}
+      </div>
+    );
   }
 
   const empty = view.entries.length === 0;
 
   return (
     <div className="rec nx-measure">
-      {/* The page's own name is the word the module DECLARED, read in the
-          language being spoken, rather than a second copy of it. */}
-      <PageHeader
-        title={declaredText(manifest.copy?.name)}
-        subtitle={copy.page.subtitle}
-        sigil="mic"
-      />
+      {header}
       {actionError !== null && (
         <p className="rec__error" role="alert">
           {actionError}
@@ -197,20 +210,12 @@ export default function RecorderPage({ profileId }: ModulePageProps) {
         <div className="rec__heading">{copy.list.title}</div>
 
         {pendingUndoId !== null && (
-          <div className="rec__undo" role="status">
-            <span className="rec__undo-text">{copy.list.deletedNotice}</span>
-            <Button size="sm" onClick={() => void undoRemove()}>
-              {copy.list.undo}
-            </Button>
-            <Button
-              size="sm"
-              variant="quiet"
-              aria-label={copy.list.dismiss}
-              onClick={() => setPendingUndoId(null)}
-            >
-              <Icon name="close" size={14} />
-            </Button>
-          </div>
+          <Toast
+            message={copy.list.deletedNotice}
+            undo={{ label: copy.list.undo, onUndo: () => void undoRemove() }}
+            dismissLabel={copy.list.dismiss}
+            onDismiss={() => setPendingUndoId(null)}
+          />
         )}
 
         {!empty && (

@@ -125,6 +125,8 @@ export default function ScannerPage({ profileId, intent, onIntentHandled }: Modu
   /** The crop applied when the current drag began: the frame an inner rectangle is relative to. */
   const dragBase = useRef<SelectionPercent | null>(null);
   const session = useRef<ReturnType<typeof createScanSession> | null>(null);
+  /** The scan in flight, so its Cancel can stop it. */
+  const scanAbort = useRef<AbortController | null>(null);
 
   /**
    * The rotated and cropped picture - what the user framed, and what travels
@@ -166,6 +168,7 @@ export default function ScannerPage({ profileId, intent, onIntentHandled }: Modu
 
   useEffect(
     () => () => {
+      scanAbort.current?.abort();
       const active = session.current;
       session.current = null;
       void active?.dispose();
@@ -377,13 +380,19 @@ export default function ScannerPage({ profileId, intent, onIntentHandled }: Modu
     setSavedTitle(null);
     setCopied(false);
     setProgress({ status: "initializing tesseract", progress: 0 });
+    const scan = new AbortController();
+    scanAbort.current = scan;
     try {
       session.current ??= createScanSession();
-      setOutcome(await session.current.recognize(prepared, languages, setProgress));
+      setOutcome(await session.current.recognize(prepared, languages, setProgress, scan.signal));
     } catch (error) {
-      setFailure("read");
-      console.error("Nexus: the scan could not be recognised:", error);
+      // A cancelled scan is the person's own act, not a failure to report.
+      if (!scan.signal.aborted) {
+        setFailure("read");
+        console.error("Nexus: the scan could not be recognised:", error);
+      }
     } finally {
+      scanAbort.current = null;
       setBusy(false);
       setProgress(null);
     }
@@ -659,6 +668,9 @@ export default function ScannerPage({ profileId, intent, onIntentHandled }: Modu
               value={progress.progress}
               aria-label={copy.read.reading}
             />
+            <Button size="sm" variant="quiet" onClick={() => scanAbort.current?.abort()}>
+              {copy.read.cancel}
+            </Button>
           </div>
         )}
       </Card>

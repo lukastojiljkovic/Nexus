@@ -4,9 +4,8 @@ import { Button, Card, Checkbox, EmptyState, LoadingState, PageHeader } from "@n
 import { themes } from "@nexus/tokens";
 import { DxfViewer, type LayerInfo } from "dxf-viewer";
 import { Color, Vector3 } from "three";
-import { declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
+import { declaredText, ExternalLink } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { numberFormat } from "../../../renderer/src/intl.js";
-import { openExternalLink } from "../../../renderer/src/links.js";
 import type {
   DrawingConversionFailure,
   DrawingRefusalCode,
@@ -163,6 +162,8 @@ export default function DrawingsPage() {
   const shownPhase = useRef<Phase | null>(null);
   /** An open is in flight. A ref, because two clicks in one frame both read the state as it was. */
   const busyRef = useRef(false);
+  /** Ends the parse wait the page is in, from the overlay's Cancel. Set only while a load waits. */
+  const releaseLoad = useRef<((outcome: "cancelled") => void) | null>(null);
 
   const [phase, setPhase] = useState<Phase | null>(null);
   const [name, setName] = useState<string | null>(null);
@@ -253,8 +254,20 @@ export default function DrawingsPage() {
         const timeout = new Promise<"timeout">((resolve) => {
           timer = setTimeout(() => resolve("timeout"), PARSE_TIMEOUT_MS);
         });
-        const outcome = await Promise.race([loading, timeout]);
+        const cancelled = new Promise<"cancelled">((resolve) => {
+          releaseLoad.current = resolve;
+        });
+        const outcome = await Promise.race([loading, timeout, cancelled]);
 
+        if (outcome === "cancelled") {
+          // The same stop as the limit below: the worker is the only thing that
+          // can stop a parse, and the page then stops claiming a file is open.
+          worker.terminate();
+          workerRef.current = null;
+          showPhase(null);
+          setName(null);
+          return;
+        }
         if (outcome === "timeout") {
           // The worker is killed rather than abandoned: it is the only way to
           // stop parsing that never finishes, and a thread nobody can reach is
@@ -295,6 +308,7 @@ export default function DrawingsPage() {
         setProblem({ kind: "error", key: "parseFailed" });
       } finally {
         clearTimeout(timer);
+        releaseLoad.current = null;
       }
     },
     [ground, showPhase],
@@ -534,13 +548,7 @@ export default function DrawingsPage() {
         <p className="nx-hint">
           {copy.dwg.converted} {declaredText(credit.title)} {credit.version} ·{" "}
           {credit.licence.spdx} · {credit.licence.attribution} ·{" "}
-          <button
-            type="button"
-            className="drawings__link"
-            onClick={() => openExternalLink(credit.source.url)}
-          >
-            {copy.dwg.source}
-          </button>
+          <ExternalLink href={credit.source.url}>{copy.dwg.source}</ExternalLink>
         </p>
       )}
       {printNote !== null && (
@@ -644,6 +652,9 @@ export default function DrawingsPage() {
           {phase !== null && (
             <div className="drawings__overlay">
               <LoadingState label={copy.phases[phase]} rows={4} />
+              <Button size="sm" onClick={() => releaseLoad.current?.("cancelled")}>
+                {copy.open.cancel}
+              </Button>
             </div>
           )}
         </div>

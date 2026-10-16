@@ -56,6 +56,7 @@ export const sr = {
     languageHint: "Izaberi bar jedan jezik. Modeli se čitaju iz paketa koji je instaliran na ovom uređaju.",
     read: "Pročitaj tekst",
     reading: "Prepoznavanje…",
+    cancel: "Otkaži",
     readError: "Prepoznavanje nije uspelo. Probaj drugu sliku ili drugi jezik.",
     phase: {
       core: "Priprema motora",

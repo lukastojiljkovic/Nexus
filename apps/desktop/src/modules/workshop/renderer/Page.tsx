@@ -299,15 +299,13 @@ export default function WorkshopPage({ profileId, intent, onIntentHandled }: Mod
         ))}
       </div>
 
-      {viewer !== null && error !== null && (
+      {error !== null && (
         <p className="workshop__error" role="alert">
           {error}
         </p>
       )}
-      {viewer !== null && problem !== null && (
-        <p className="workshop__error">{copy.problems[problem]}</p>
-      )}
-      {viewer !== null && refused.length > 0 && (
+      {problem !== null && <p className="workshop__error">{copy.problems[problem]}</p>}
+      {refused.length > 0 && (
         <ul className="workshop__refused">
           {refused.map((entry, index) => (
             <li key={`${entry.name}-${entry.problem}-${index}`}>
