@@ -1,7 +1,7 @@
 import type { ModelHost, ModuleRegistry } from "@nexus/core";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
-import type { PacksLookup } from "../../../main/assistant/tools/packs.js";
+import type { PackManager } from "../../../main/assistant/tools/packs.js";
 import type { ProfileDb } from "../../../main/assistant/tools/support.js";
 import type { SecretCipher } from "../../../main/assistant/web/secrets.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
@@ -69,7 +69,7 @@ export interface AssistantServices {
     limit: number,
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service, for the installed list. */
-  readonly packs: PacksLookup;
+  readonly packs: PackManager;
   /**
    * The offline wiki, in the shape the knowledge base reads it
    * (`main/assistant/knowledge/zimWiki.ts`), or `null` in a build with no ZIM

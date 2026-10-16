@@ -71,6 +71,7 @@ import { cookbookTools } from "./cookbook.js";
 import { cultureTools } from "./culture.js";
 import { electronicsTools } from "./electronics.js";
 import { emergencyTools } from "./emergency.js";
+import { fileTools } from "./files.js";
 import { financeTools } from "./finance.js";
 import { fitnessTools } from "./fitness.js";
 import { habitTools } from "./habits.js";
@@ -79,7 +80,7 @@ import { libraryTools } from "./library.js";
 import { mapsTools } from "./maps.js";
 import { miniappsTools } from "./miniapps.js";
 import { noteTools } from "./notes.js";
-import { packTools, type PacksLookup } from "./packs.js";
+import { packTools, type PackManager } from "./packs.js";
 import { pantryTools } from "./pantry.js";
 import { readerTools } from "./reader.js";
 import { recorderTools } from "./recorder.js";
@@ -90,7 +91,7 @@ import { wikiTools } from "./wiki.js";
 import type { ProfileDb } from "./support.js";
 
 export type { ModuleLookup } from "./app.js";
-export type { PacksLookup } from "./packs.js";
+export type { PackManager, PacksLookup } from "./packs.js";
 export type { TimerHost } from "./timers.js";
 export type { AssistantPhrase, ProfileDb } from "./support.js";
 
@@ -111,7 +112,7 @@ export interface ToolDeps {
     limit: number,
   ) => Promise<readonly SearchResult[]>;
   /** The Packs service (`createPacksIpc`), for the installed list. */
-  readonly packs: PacksLookup;
+  readonly packs: PackManager;
   /** The TIMERS module's start/list, which also arms main's clock. */
   readonly timers: TimerHost;
   /** The app's module registry (`createModuleRegistry`), for navigation and the device's module arrangement. */
@@ -150,6 +151,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...timerTools({ timers: deps.timers }),
     ...packTools({ packs: deps.packs }),
     ...emergencyTools({ profileDb: deps.profileDb }),
+    ...fileTools({ profileDb: deps.profileDb }),
     ...electronicsTools({ profileDb: deps.profileDb, now: deps.now }),
     ...financeTools({ profileDb: deps.profileDb, now: deps.now }),
     ...settingsTools({

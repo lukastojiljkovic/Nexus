@@ -92,7 +92,7 @@ function services(wiki: WikiSource | null): AssistantServices {
     profileDb: (id, open) => open(db.raw, id),
     now: () => Date.parse(NOW),
     search: async (): Promise<readonly SearchResult[]> => [],
-    packs: { list: async () => [] },
+    packs: { list: async () => [], catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
     zimWiki: () => wiki,
     modules: createModuleRegistry(),
   };
