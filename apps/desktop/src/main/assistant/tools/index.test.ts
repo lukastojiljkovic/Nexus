@@ -138,7 +138,6 @@ describe("createToolRegistry", () => {
       emergency: 1,
       finance: 8,
       fitness: 8,
-      habits: 2,
       habits: 7,
       lab: 2,
       library: 2,
@@ -152,10 +151,8 @@ describe("createToolRegistry", () => {
       search: 3,
       settings: 6,
       study: 14,
-      tasks: 4,
-      timers: 9,
       tasks: 17,
-      timers: 2,
+      timers: 9,
       wiki: 1,
     });
     for (const tool of tools) {
