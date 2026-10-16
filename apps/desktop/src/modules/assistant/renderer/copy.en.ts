@@ -57,6 +57,8 @@ export const en: typeof sr = {
         "search.forget": "Forget a search",
         "search.rebuild": "Rebuild the search index",
         "calculator.history": "Read the calculator history",
+        "calculator.calculate": "Calculate",
+        "calculator.remember": "Save a calculation",
         "calendar.create": "Add an event",
         "calendar.events": "Read events",
         "canvas.boards": "Read the boards",

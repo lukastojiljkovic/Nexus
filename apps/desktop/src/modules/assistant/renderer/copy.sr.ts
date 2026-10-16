@@ -68,6 +68,8 @@ export const sr = {
         "search.forget": "Brisanje pretrage iz istorije",
         "search.rebuild": "Obnavljanje indeksa pretrage",
         "calculator.history": "Čitanje istorije kalkulatora",
+        "calculator.calculate": "Računanje izraza",
+        "calculator.remember": "Čuvanje računice",
         "calendar.create": "Dodavanje događaja",
         "calendar.events": "Čitanje događaja",
         "canvas.boards": "Čitanje tabli",

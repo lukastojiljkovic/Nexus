@@ -169,7 +169,7 @@ export function createToolRegistry(deps: ToolDeps): ToolRegistry {
     ...pantryTools({ profileDb: deps.profileDb, now: deps.now }),
     ...cookbookTools({ profileDb: deps.profileDb }),
     ...recorderTools({ profileDb: deps.profileDb }),
-    ...calculatorTools({ profileDb: deps.profileDb }),
+    ...calculatorTools({ profileDb: deps.profileDb, now: deps.now }),
     ...readerTools({ profileDb: deps.profileDb, packs: deps.packs }),
     ...wikiTools({ profileDb: deps.profileDb }),
     ...mapsTools({ profileDb: deps.profileDb }),

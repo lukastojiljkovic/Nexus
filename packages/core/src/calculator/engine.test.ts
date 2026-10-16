@@ -247,6 +247,18 @@ describe("createCalculatorEngine", () => {
   });
 });
 
+describe("the refusals that name a symbol", () => {
+  it("names the undefined symbol or function, and the disabled one", () => {
+    expect(refuse(FLOAT, "foo + 1", { format: EN }).symbol).toBe("foo");
+    expect(refuse(FLOAT, "bar(3)", { format: EN }).symbol).toBe("bar");
+    expect(refuse(FLOAT, 'evaluate("2+2")', { format: EN }).symbol).toBe("evaluate");
+  });
+
+  it("names nothing for a refusal that has no name", () => {
+    expect(refuse(FLOAT, "2 +", { format: EN }).symbol).toBeUndefined();
+  });
+});
+
 describe("the session", () => {
   it("remembers a variable and answers with it in a later expression", () => {
     const assigned = evaluate(FLOAT, "x = 5", { format: EN });

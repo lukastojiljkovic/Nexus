@@ -1,0 +1,116 @@
+{
+  "scenarios": [
+    {
+      "id": "calculator-calculate-sr",
+      "title": "Računica bez otvaranja kalkulatora",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koliko je 2+2*2?" }
+      ],
+      "tools": [
+        { "name": "calculator.calculate", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "calculator.calculate", "args": { "expression": { "contains": "2+2" } } }
+        ],
+        "answerContains": ["6"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calculator.calculate", "arguments": { "expression": "2+2*2" } }] },
+        { "text": "Rezultat računice 2+2*2 je 6, jer se prvo računa množenje." }
+      ]
+    },
+    {
+      "id": "calculator-remember-declined-sr",
+      "title": "Računica nije sačuvana kada je korisnik odbio",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Sačuvaj u istoriju kalkulatora 2+2*2." }
+      ],
+      "tools": [
+        {
+          "name": "calculator.remember",
+          "effect": "write",
+          "summary": { "sr": "Sačuvati 2+2*2 = 6 u istoriju kalkulatora?", "en": "Save 2+2*2 = 6 to the calculator's history?" },
+          "content": "Sačuvano u istoriji kalkulatora: 2+2*2 = 6"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [false],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "calculator.remember", "args": { "expression": { "contains": "2+2" } } }],
+        "answerContains": ["odbio"],
+        "claimsOnlyWhatRan": true,
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calculator.remember", "arguments": { "expression": "2+2*2" } }] },
+        { "text": "Nisam sačuvao računicu u istoriju, jer si odbio." }
+      ]
+    },
+    {
+      "id": "calculator-calculate-en",
+      "title": "Arithmetic without opening the calculator",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "What is 2+2*2?" }
+      ],
+      "tools": [
+        { "name": "calculator.calculate", "effect": "read" }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [
+          { "name": "calculator.calculate", "args": { "expression": { "contains": "2+2" } } }
+        ],
+        "answerContains": ["6"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calculator.calculate", "arguments": { "expression": "2+2*2" } }] },
+        { "text": "2+2*2 is 6." }
+      ]
+    },
+    {
+      "id": "calculator-remember-en",
+      "title": "A calculation saved to the history on request",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Save 2+2*2 to the calculator history." }
+      ],
+      "tools": [
+        {
+          "name": "calculator.remember",
+          "effect": "write",
+          "summary": { "sr": "Sačuvati 2+2*2 = 6 u istoriju kalkulatora?", "en": "Save 2+2*2 = 6 to the calculator's history?" },
+          "content": "Saved to the calculator's history: 2+2*2 = 6"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "calculator.remember", "args": { "expression": { "contains": "2+2" } } }],
+        "answerContains": ["2+2*2"],
+        "claimsOnlyWhatRan": true,
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "calculator.remember", "arguments": { "expression": "2+2*2" } }] },
+        { "text": "Saved 2+2*2 = 6 to the calculator's history." }
+      ]
+    }
+  ]
+}
