@@ -239,9 +239,10 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
                 description={copy.list.emptyBody}
               />
             ) : shown.length === 0 ? (
-              <p className="nx-hint">
-                {shelfIds === undefined ? copy.list.noResults : copy.collections.emptyShelf}
-              </p>
+              <EmptyState
+                variant="inline"
+                title={shelfIds === undefined ? copy.list.noResults : copy.collections.emptyShelf}
+              />
             ) : (
               <div className="cookbook__list">
                 {shown.map((recipe) => (
