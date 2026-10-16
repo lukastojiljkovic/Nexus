@@ -121,6 +121,7 @@ describe("createToolRegistry", () => {
       calculator: 1,
       calendar: 9,
       canvas: 7,
+      cards: 5,
       car: 2,
       cookbook: 2,
       culture: 2,
