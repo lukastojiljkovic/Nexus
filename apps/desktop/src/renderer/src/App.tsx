@@ -400,8 +400,8 @@ export function App() {
   /**
    * Bumped when the assistant changed what the page on screen shows: a location
    * that opens the dashboard (its layout lives in main), or a docked turn that
-   * wrote beside the page. Every page's key carries it, so that page remounts and
-   * re-reads, and only that one.
+   * wrote beside the page (`AssistantSurface`'s `onPageChanged`). Every page's key
+   * carries it, so the page on screen remounts and re-reads, and only that one.
    */
   const [pageEpoch, setPageEpoch] = useState(0);
   const bumpPageEpoch = useCallback(() => setPageEpoch((epoch) => epoch + 1), []);

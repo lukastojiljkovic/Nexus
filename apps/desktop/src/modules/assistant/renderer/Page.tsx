@@ -129,8 +129,9 @@ export function AssistantSurface({
   readonly docked?: boolean;
   readonly beside?: string;
   /**
-   * Called once when a docked turn ends that asked to change something or opened a
-   * place, so the page beside re-reads what the turn may have written under it.
+   * Remounts the page beside the dock, so it re-reads what a docked turn wrote: as
+   * a place without an action opens, or at the end of a turn that asked to change
+   * something and opened no place.
    */
   readonly onPageChanged?: () => void;
 }) {
@@ -334,9 +335,14 @@ export function AssistantSurface({
             if (current === null) break;
             turnEvents.current.push(event);
             // A docked assistant opens a place as its result arrives; the full page
-            // waits for the end (`locationTiming`).
+            // waits for the end (`locationTiming`). A place with no action opens on a
+            // fresh page, so one already on screen re-reads what the turn wrote; an
+            // action is applied to the page's own state, which a remount would drop.
             const place = placeOf(event);
-            if (place !== null && locationTiming(docked) === "as-it-arrives") openAppLocation(place);
+            if (place !== null && locationTiming(docked) === "as-it-arrives") {
+              if (place.action === undefined) onPageChanged?.();
+              openAppLocation(place);
+            }
             if (event.type === "token") {
               current.text += event.text;
               setLive({ ...current });
@@ -383,14 +389,13 @@ export function AssistantSurface({
             setConfirms(NO_CONFIRMS);
             if (polled.thread !== null) setThread(polled.thread);
             await refresh();
-            // A turn that asked to change something, or opened a place, may have written
-            // under the page beside the dock, which re-reads once it is over.
-            const changed = turnEvents.current.some(
-              (turnEvent) => turnEvent.type === "confirm" || placeOf(turnEvent) !== null,
-            );
-            if (docked && changed) {
-              onPageChanged?.();
-            }
+            // A docked turn that asked to change something but opened no place may
+            // have written under the page beside the dock, which re-reads once.
+            const events = turnEvents.current;
+            const wroteInPlace =
+              events.some((turnEvent) => turnEvent.type === "confirm") &&
+              !events.some((turnEvent) => placeOf(turnEvent) !== null);
+            if (docked && wroteInPlace) onPageChanged?.();
             // Last, because opening a place unmounts this page: the answer and
             // the saved thread are on screen first, and then the view moves.
             for (const location of locations) openAppLocation(location);
