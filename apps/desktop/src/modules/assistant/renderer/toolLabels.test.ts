@@ -44,7 +44,7 @@ function toolNames(): readonly string[] {
     },
     now: () => 0,
     search: () => Promise.resolve([]),
-    packs: { list: () => Promise.resolve([]) },
+    packs: { list: () => Promise.resolve([]), catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
     timers: {
       startCountdown: () => {
         throw new Error("Test setup: no tool was run here.");

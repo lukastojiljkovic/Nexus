@@ -1,0 +1,60 @@
+{
+  "scenarios": [
+    {
+      "id": "files-find-sr",
+      "title": "Gde mi je ugovor o zakupu u PDF-u",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Gde mi je ugovor o zakupu u PDF-u?" }
+      ],
+      "tools": [
+        {
+          "name": "files.list",
+          "effect": "read",
+          "content": "Datoteke (1: slika 0, PDF 1, tekst 0, ostalo 0):\n- 0192f0f0-0000-7000-8000-000000000101 ugovor-zakup.pdf [PDF, 1,5 MB, beleška „Ugovor o zakupu“, 1. oktobar 2026.]"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "files.list", "args": { "family": { "eq": "pdf" } } }],
+        "answerContains": ["Ugovor o zakupu"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "files.list", "arguments": { "query": "zakup", "family": "pdf" } }] },
+        { "text": "Ugovor je priložen uz belešku „Ugovor o zakupu“, kao ugovor-zakup.pdf." }
+      ]
+    },
+    {
+      "id": "files-find-en",
+      "title": "Which PDFs do I have attached",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Which PDFs do I have attached?" }
+      ],
+      "tools": [
+        {
+          "name": "files.list",
+          "effect": "read",
+          "content": "Files (1: image 0, PDF 1, text 0, other 0):\n- 0192f0f0-0000-7000-8000-000000000101 ugovor-zakup.pdf [PDF, 1.5 MB, note “Ugovor o zakupu”, 1 October 2026]"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "files.list", "args": { "family": { "eq": "pdf" } } }],
+        "answerContains": ["ugovor-zakup.pdf"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "files.list", "arguments": { "family": "pdf" } }] },
+        { "text": "You have one PDF attached: ugovor-zakup.pdf, on the note “Ugovor o zakupu”." }
+      ]
+    }
+  ]
+}

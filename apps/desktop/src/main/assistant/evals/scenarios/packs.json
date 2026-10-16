@@ -1,0 +1,118 @@
+{
+  "scenarios": [
+    {
+      "id": "packs-list-sr",
+      "title": "Koji paketi su instalirani i pod kojom licencom",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Koje pakete imam instalirane i pod kojom licencom su?" }
+      ],
+      "tools": [
+        {
+          "name": "packs.list",
+          "effect": "read",
+          "content": "Instalirani paketi (1):\n- mapa-srbije Mapa Srbije [vrsta map, 2026.1, 12,3 MB, licenca CC-BY-4.0 (OpenStreetMap contributors), https://creativecommons.org/licenses/by/4.0/]"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "packs.list" }],
+        "answerContains": ["CC-BY-4.0"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "packs.list", "arguments": {} }] },
+        { "text": "Imaš jedan paket, Mapa Srbije, pod licencom CC-BY-4.0 (OpenStreetMap contributors)." }
+      ]
+    },
+    {
+      "id": "packs-remove-sr",
+      "title": "Ukloni mapu Srbije sa uređaja",
+      "locale": "sr",
+      "conversation": [
+        { "role": "user", "content": "Ukloni mapu Srbije sa uređaja." }
+      ],
+      "tools": [
+        {
+          "name": "packs.remove",
+          "effect": "write",
+          "summary": { "sr": "Ukloni paket „Mapa Srbije“ 2026.1 (12,3 MB)? Da bi se vratio, mora ponovo da se preuzme.", "en": "Remove the pack “Map of Serbia” 2026.1 (12.3 MB)? To get it back, it has to be downloaded again." },
+          "content": "Uklonjen je paket „Mapa Srbije“."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "packs.remove", "args": { "pack": { "eq": "Mapa Srbije" } } }],
+        "answerContains": ["Mapa Srbije"],
+        "language": "sr",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "packs.remove", "arguments": { "pack": "Mapa Srbije" } }] },
+        { "text": "Uklonio sam paket Mapa Srbije. Da bi ga ponovo imao, mora da se preuzme." }
+      ]
+    },
+    {
+      "id": "packs-list-en",
+      "title": "Which packs are installed, and their licences",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Which content packs do I have installed, and under what licence?" }
+      ],
+      "tools": [
+        {
+          "name": "packs.list",
+          "effect": "read",
+          "content": "Installed packs (1):\n- mapa-srbije Map of Serbia [kind map, 2026.1, 12.3 MB, licence CC-BY-4.0 (OpenStreetMap contributors), https://creativecommons.org/licenses/by/4.0/]"
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "packs.list" }],
+        "answerContains": ["CC-BY-4.0"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "packs.list", "arguments": {} }] },
+        { "text": "You have one pack, Map of Serbia, under CC-BY-4.0 (OpenStreetMap contributors)." }
+      ]
+    },
+    {
+      "id": "packs-remove-en",
+      "title": "Remove the Map of Serbia pack from this device",
+      "locale": "en",
+      "conversation": [
+        { "role": "user", "content": "Remove the Map of Serbia pack from this device." }
+      ],
+      "tools": [
+        {
+          "name": "packs.remove",
+          "effect": "write",
+          "summary": { "sr": "Ukloni paket „Mapa Srbije“ 2026.1 (12,3 MB)? Da bi se vratio, mora ponovo da se preuzme.", "en": "Remove the pack “Map of Serbia” 2026.1 (12.3 MB)? To get it back, it has to be downloaded again." },
+          "content": "Removed the pack “Map of Serbia”."
+        }
+      ],
+      "knowledge": [],
+      "confirmations": [true],
+      "maxSteps": 2,
+      "expect": {
+        "toolsCalled": [{ "name": "packs.remove", "args": { "pack": { "eq": "Map of Serbia" } } }],
+        "answerContains": ["Map of Serbia"],
+        "language": "en",
+        "maxSteps": 2
+      },
+      "script": [
+        { "toolCalls": [{ "name": "packs.remove", "arguments": { "pack": "Map of Serbia" } }] },
+        { "text": "I removed the Map of Serbia pack. To get it back, it has to be downloaded again." }
+      ]
+    }
+  ]
+}

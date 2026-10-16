@@ -47,6 +47,7 @@ import {
   DOWNLOAD_HOSTS,
   isRequestAllowed,
   isSessionRequestAllowed,
+  modeAllowsDownloads,
   networkChoiceRecorded,
   networkModeRequiresRestart,
   readNetworkChoice,
@@ -1747,7 +1748,16 @@ configureAssistant({
   profileDb: (profileId, open) => open(requireDb().raw, profileId),
   now: () => Date.now(),
   search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
-  packs: { list: () => packs().list() },
+  // The catalogue and the removal go through the same services the Packs card
+  // calls. The mode is read per call, as the card's own download reads it.
+  packs: {
+    list: () => packs().list(),
+    catalogue: (reload) => packCatalogue().catalogue(reload),
+    download: (id) => packCatalogue().download(id),
+    remove: (id) => packs().remove(id),
+    downloadsAllowed: () =>
+      modeAllowsDownloads(activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir()))),
+  },
   // The offline wiki, as the knowledge base reads it: the SAME service the wiki
   // page and the `nx-zim://` handler read through (`zimService` above), so a
   // citation and the page it points at can never mean two different files.

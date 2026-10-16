@@ -64,7 +64,13 @@ function appTools(): readonly Tool[] {
     profileDb: refuse,
     now: () => Date.now(),
     search: () => Promise.resolve([]),
-    packs: { list: () => Promise.resolve([]) },
+    packs: {
+      list: () => Promise.resolve([]),
+      catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }),
+      download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }),
+      remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }),
+      downloadsAllowed: () => false,
+    },
     timers: {
       startCountdown: refuse,
       listCountdowns: () => [],

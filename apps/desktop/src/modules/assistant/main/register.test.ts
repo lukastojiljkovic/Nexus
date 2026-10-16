@@ -236,7 +236,7 @@ function services(): AssistantServices {
     profileDb: (profile, open) => open(db.raw, profile),
     now: () => NOW,
     search: async (): Promise<readonly SearchResult[]> => [],
-    packs: { list: async () => [] },
+    packs: { list: async () => [], catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
     // No ZIM service in this harness: the wiki kind answers nothing, which is
     // the state `knowledge/index.ts` describes for a build without one.
     zimWiki: () => null,

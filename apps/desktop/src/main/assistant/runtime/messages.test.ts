@@ -301,7 +301,7 @@ function realTools(): readonly ToolSpec[] {
     },
     now: () => 0,
     search: () => Promise.resolve([]),
-    packs: { list: () => Promise.resolve([]) },
+    packs: { list: () => Promise.resolve([]), catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }), download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }), remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }), downloadsAllowed: () => false },
     timers: {
       startCountdown: () => {
         throw new Error("The grammar test never starts a countdown.");

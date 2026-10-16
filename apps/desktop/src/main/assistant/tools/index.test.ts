@@ -79,7 +79,13 @@ function registryWith(web: WebService | null = null): ToolRegistry {
     profileDb: (id, open) => open(db.raw, id),
     now: () => NOW_MS,
     search: () => Promise.resolve([]),
-    packs: { list: () => Promise.resolve([]) },
+    packs: {
+      list: () => Promise.resolve([]),
+      catalogue: () => Promise.resolve({ outcome: "ready", entries: [] }),
+      download: () => Promise.resolve({ outcome: "refused", code: "downloads-off" }),
+      remove: () => Promise.resolve({ outcome: "refused", code: "not-a-pack" }),
+      downloadsAllowed: () => false,
+    },
     timers: {
       startCountdown: () => {
         throw new Error("Test setup: timers.start was not expected here.");
@@ -136,6 +142,7 @@ describe("createToolRegistry", () => {
       dashboard: 4,
       electronics: 13,
       emergency: 1,
+      files: 2,
       finance: 8,
       fitness: 8,
       habits: 7,
@@ -144,7 +151,7 @@ describe("createToolRegistry", () => {
       maps: 1,
       miniapps: 1,
       notes: 18,
-      packs: 1,
+      packs: 4,
       pantry: 2,
       reader: 1,
       recorder: 1,
