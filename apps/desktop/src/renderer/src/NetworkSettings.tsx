@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 
-import { Button } from "@nexus/ui";
+import { Button, Notice } from "@nexus/ui";
 
 import type { NetworkMode } from "../../shared/ipc.js";
 import { labelClass } from "./settingsSearch.js";
@@ -128,14 +128,10 @@ export function NetworkSettings({ hits }: { hits: ReadonlySet<string> }) {
           {saved && <p className="nx-hint">{s.saved}</p>}
           {restartRequired && <p className="nx-hint nx-hint--prose">{s.restartNote}</p>}
           {failed && (
-            <p className="auth__error" role="alert">
-              {s.saveError}
-            </p>
+            <Notice kind="danger" message={s.saveError} />
           )}
           {restartFailed && (
-            <p className="auth__error" role="alert">
-              {s.restartError}
-            </p>
+            <Notice kind="danger" message={s.restartError} />
           )}
         </>
       )}

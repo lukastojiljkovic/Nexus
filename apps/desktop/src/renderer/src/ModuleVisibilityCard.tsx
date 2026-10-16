@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { DragEvent } from "react";
 import type { ModuleGroup, ModuleManifest, ModuleRegistry } from "@nexus/core";
-import { Button, Checkbox, Chip, Icon } from "@nexus/ui";
+import { Button, Checkbox, Chip, Icon, Notice } from "@nexus/ui";
 
 import { LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import {
@@ -295,7 +295,7 @@ export function ModuleVisibilityCard({
         );
       })}
 
-      {error != null && <p className="set__error">{error}</p>}
+      {error != null && <Notice kind="danger" message={error} />}
       <Button
         variant="quiet"
         className="set__reset"

@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 
-import { Button, Card, StarField } from "@nexus/ui";
+import { Button, Card, Notice, StarField } from "@nexus/ui";
 
 import type { NetworkMode, NetworkModeView } from "../../shared/ipc.js";
 import { strings } from "./strings.js";
@@ -98,9 +98,7 @@ export function NetworkModeGate({
               ))}
             </div>
             {failed && (
-              <p className="auth__error" role="alert">
-                {s.saveError}
-              </p>
+              <Notice kind="danger" message={s.saveError} />
             )}
             <Button type="submit" variant="primary" disabled={busy}>
               {s.chooseConfirm}

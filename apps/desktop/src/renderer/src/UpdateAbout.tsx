@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Button, Disclosure } from "@nexus/ui";
+import { Button, Disclosure, Notice } from "@nexus/ui";
 
 import { fill, strings } from "./strings.js";
 import { useNetworkMode, useUpdateState } from "./updates.js";
@@ -104,9 +104,7 @@ export function UpdateAbout({ onOpenNetworkCard }: { onOpenNetworkCard: () => vo
         </>
       )}
       {problemText !== null && (
-        <p className="auth__error" role="alert">
-          {s.problemTitle} {problemText}
-        </p>
+        <Notice kind="danger" message={<>{s.problemTitle} {problemText}</>} />
       )}
     </div>
   );

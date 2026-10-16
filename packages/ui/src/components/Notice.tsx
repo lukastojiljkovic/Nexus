@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Button } from "./Button.js";
 import { Icon, type IconName } from "./Icon.js";
 
@@ -37,8 +39,8 @@ export function noticeAnnouncement(kind: NoticeKind): {
 
 export interface NoticeProps {
   kind: NoticeKind;
-  /** One sentence: what is true, in the page's register. */
-  message: string;
+  /** One sentence: what is true, in the page's register. A value inside it may be drawn inline. */
+  message: ReactNode;
   /**
    * The way out of what the line reports — „Pokušaj ponovo", „Otvori
    * podešavanja". Optional, because plenty of notices report a state nothing
