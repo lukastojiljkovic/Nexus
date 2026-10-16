@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { EmptyState } from "@nexus/ui";
+import { EmptyState, Notice } from "@nexus/ui";
 import * as Y from "yjs";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
@@ -63,6 +63,12 @@ export function PrivVersionHistory({
   const [selectedSeq, setSelectedSeq] = useState<number | null>(null);
   const [selected, setSelected] = useState<PrivNoteEnvelopePayload | null>(null);
   const [loadError, setLoadError] = useState(false);
+  // Bumped by the retry, so both reads run again.
+  const [attempt, setAttempt] = useState(0);
+  const retry = {
+    label: strings.priv.editor.retry,
+    onClick: () => setAttempt((count) => count + 1),
+  };
 
   // The browse list, once per note; the newest version (first — main answers
   // newest-first) is selected on arrival.
@@ -88,7 +94,7 @@ export function PrivVersionHistory({
     return () => {
       cancelled = true;
     };
-  }, [profileId, noteId, onMaybeLocked]);
+  }, [profileId, noteId, onMaybeLocked, attempt]);
 
   // The selected version's cleartext, unsealed by main one selection at a time
   // — no cache, so re-selecting the same row asks again and nothing decrypted
@@ -113,14 +119,10 @@ export function PrivVersionHistory({
     return () => {
       cancelled = true;
     };
-  }, [profileId, noteId, selectedSeq, onMaybeLocked]);
+  }, [profileId, noteId, selectedSeq, onMaybeLocked, attempt]);
 
   if (listError) {
-    return (
-      <div className="note__history-error" role="status">
-        {s.error}
-      </div>
-    );
+    return <Notice kind="danger" message={s.loadError} action={retry} />;
   }
   if (versions === null) {
     return <p className="nx-hint">{strings.app.loading}</p>;
@@ -164,9 +166,7 @@ export function PrivVersionHistory({
       </div>
       <div className="note__history-preview">
         {loadError ? (
-          <div className="note__history-error" role="status">
-            {s.error}
-          </div>
+          <Notice kind="danger" message={s.loadError} action={retry} />
         ) : selected === null ? (
           <p className="nx-hint">{strings.app.loading}</p>
         ) : (

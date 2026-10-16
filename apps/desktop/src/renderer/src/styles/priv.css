@@ -43,21 +43,6 @@
 .priv__search {
   width: 240px;
 }
-/* The best-effort clipboard notice (PRIV-012) -- the undo bar's quiet recipe. */
-.priv__clipboard {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-2) var(--nx-space-3);
-  background: var(--nx-surface-alt);
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius-md);
-  font-size: var(--nx-font-size-body-sm);
-  color: var(--nx-text-muted);
-}
-.priv__clipboard > span {
-  flex: 1;
-}
 /* The same two-pane shape `.note` falls back to under 1345px, and deliberately
    so: one fixed list rail, the editor taking the slack, and no third pane to
    take away. The 300px this carried was a hand-written copy of a rail the
