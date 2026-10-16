@@ -17,6 +17,7 @@ import type { VoiceReply, VoiceRequest } from "../../../main/assistant/voice/pro
 import { decodeWav, encodeWav } from "../../../main/assistant/voice/wav.js";
 import { baseManifest, entry, makeKey, writePack } from "../../../main/packs/fixtures.js";
 import { packVersionDir } from "../../../main/packs/registry.js";
+import { createDictionaryReader } from "../../translator/main/dictionary.js";
 import type { SearchResult } from "../../../shared/ipc.js";
 import type { AssistantTurnEventEntry } from "../shared/ipc.js";
 import { TurnBusyError } from "./turns.js";
@@ -237,6 +238,7 @@ function services(): AssistantServices {
     now: () => NOW,
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [] },
+    dictionary: createDictionaryReader(() => tmpdir()),
     // No ZIM service in this harness: the wiki kind answers nothing, which is
     // the state `knowledge/index.ts` describes for a build without one.
     zimWiki: () => null,

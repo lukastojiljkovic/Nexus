@@ -571,6 +571,8 @@ import { createModuleHost } from "./moduleHost.js";
 // store, blob-reference union, packs root). Its arts guide reads images through
 // the shell's `nx-pack:` protocol (ADR-100), like every other pack reader.
 import { configureCultureServices } from "../modules/culture/main/services.js";
+import { createDictionaryReader } from "../modules/translator/main/dictionary.js";
+import { installedPacksRoot } from "../modules/translator/main/packDir.js";
 import { packsRoot } from "./packs/registry.js";
 // The kit's attach path, implemented where it can be read on its own
 // (`moduleAttachments.ts`) — this file supplies it with what only this file
@@ -1748,6 +1750,10 @@ configureAssistant({
   now: () => Date.now(),
   search: (profileId, query, limit) => runSearchQuery(profileId, query, limit),
   packs: { list: () => packs().list() },
+  // The dictionary pack's reader, built the way the TRANSLATOR module builds its
+  // own (a second instance: the module is registered with the kit, not handed
+  // this object). It opens the pack on the first word looked up, not here.
+  dictionary: createDictionaryReader(installedPacksRoot),
   // The offline wiki, as the knowledge base reads it: the SAME service the wiki
   // page and the `nx-zim://` handler read through (`zimService` above), so a
   // citation and the page it points at can never mean two different files.

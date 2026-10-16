@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import type { ModelHost } from "@nexus/core";
 import type { NexusDatabase } from "@nexus/db";
 import type { SearchResult } from "../../../shared/ipc.js";
@@ -12,6 +13,7 @@ import {
 import type { WikiSource } from "../../../main/assistant/knowledge/types.js";
 import { createModuleRegistry } from "../../../shared/modules.js";
 import type { TimerHost } from "../../../main/assistant/tools/timers.js";
+import { createDictionaryReader } from "../../translator/main/dictionary.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import { AssistantProfile } from "./profile.js";
 import type { AssistantServices } from "./services.js";
@@ -93,6 +95,7 @@ function services(wiki: WikiSource | null): AssistantServices {
     now: () => Date.parse(NOW),
     search: async (): Promise<readonly SearchResult[]> => [],
     packs: { list: async () => [] },
+    dictionary: createDictionaryReader(() => tmpdir()),
     zimWiki: () => wiki,
     modules: createModuleRegistry(),
   };

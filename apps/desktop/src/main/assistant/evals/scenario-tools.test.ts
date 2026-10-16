@@ -4,6 +4,8 @@ import type { Tool } from "@nexus/core";
 
 import { createModuleRegistry } from "../../../shared/modules.js";
 import { DEFAULT_SHELL_VISIBILITY } from "../../../shared/moduleVisibility.js";
+import { tmpdir } from "node:os";
+import { createDictionaryReader } from "../../../modules/translator/main/dictionary.js";
 import { createToolRegistry, type ToolDeps } from "../tools/index.js";
 import { loadScenarios } from "./harness.js";
 
@@ -65,6 +67,7 @@ function appTools(): readonly Tool[] {
     now: () => Date.now(),
     search: () => Promise.resolve([]),
     packs: { list: () => Promise.resolve([]) },
+    dictionary: createDictionaryReader(() => tmpdir()),
     timers: { startCountdown: refuse, listCountdowns: () => [] },
     modules: createModuleRegistry(),
     visibility: () => DEFAULT_SHELL_VISIBILITY,
