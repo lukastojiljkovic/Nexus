@@ -1846,6 +1846,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     newNote: "Nova beleška",
     untitled: "Bez naslova",
     listEmptyTitle: "Nema beležaka",
+    loadFailedTitle: "Beleške nisu mogle da se učitaju",
+    retry: "Pokušaj ponovo",
     listEmptyDescription:
       "Kreiraj prvu belešku dugmetom iznad — piše se u editoru sa desne strane.",
     noSelectionTitle: "Nijedna beleška nije izabrana",
@@ -1866,7 +1868,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     visualizeError: "Belešku nije bilo moguće nacrtati na tabli. Pokušaj ponovo.",
     undo: "Vrati",
     dismiss: "Zatvori",
-    loadError: "Beleške se trenutno ne mogu učitati. Pokušaj ponovo kasnije.",
+    loadError: "Beleške se trenutno ne mogu učitati.",
     editorLoadError: "Beleška se ne može učitati. Pokušaj ponovo.",
     saveError: "Čuvanje beleške nije uspelo — pokušaćemo ponovo pri sledećoj izmeni.",
     saveTooLarge:

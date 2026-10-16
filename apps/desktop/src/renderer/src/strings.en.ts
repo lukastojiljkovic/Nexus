@@ -1832,6 +1832,8 @@ export const en = {
     newNote: "New note",
     untitled: "Untitled",
     listEmptyTitle: "No notes",
+    loadFailedTitle: "Notes could not be loaded",
+    retry: "Try again",
     listEmptyDescription:
       "Create your first note with the button above — you write in the editor on the right.",
     noSelectionTitle: "No note is selected",
@@ -1852,7 +1854,7 @@ export const en = {
     visualizeError: "The note could not be drawn on a canvas. Try again.",
     undo: "Undo",
     dismiss: "Dismiss",
-    loadError: "Notes cannot be loaded right now. Try again later.",
+    loadError: "Notes cannot be loaded right now.",
     editorLoadError: "The note cannot be loaded. Try again.",
     saveError: "Saving the note failed — we will try again on your next edit.",
     saveTooLarge:

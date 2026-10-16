@@ -20,7 +20,7 @@ import {
   replaceNoteContent,
   xmlTextContent,
 } from "@nexus/core";
-import { EmptyState, LoadingState, SaveIndicator, Select, type SaveStatus } from "@nexus/ui";
+import { LoadingState, Notice, SaveIndicator, Select, type SaveStatus } from "@nexus/ui";
 import {
   NOTE_ATTACHMENT_MAX_BYTES,
   NOTE_CARDS_MAX_COUNT,
@@ -776,7 +776,7 @@ export function NoteEditor({
   if (loadFailed) {
     return (
       <div className="note__editor-empty">
-        <EmptyState title={strings.notes.untitled} description={strings.notes.editorLoadError} />
+        <Notice kind="danger" message={strings.notes.editorLoadError} />
       </div>
     );
   }
@@ -827,9 +827,7 @@ export function NoteEditor({
         }}
       >
         {restoreError && (
-          <div className="note__history-error" role="status">
-            {strings.notes.historyError}
-          </div>
+          <Notice kind="danger" message={strings.notes.historyError} />
         )}
         <div className="note__editor-tools">
           {mode === "edit" ? (
@@ -871,9 +869,7 @@ export function NoteEditor({
         {mode === "edit" && cardCount > 0 && (
           <>
             {cardError && (
-              <div className="note__cards-error" role="status">
-                {strings.notes.cardsError}
-              </div>
+              <Notice kind="danger" message={strings.notes.cardsError} />
             )}
             <div className="note__cards-bar">
               {mappedDeck !== undefined && !changingDeck ? (
@@ -1009,11 +1005,14 @@ export function NoteEditor({
                 />
               </div>
               {attachmentError !== null && (
-                <div className="note__attachment-error" role="status">
-                  {attachmentError === "tooLarge"
-                    ? strings.notes.attachmentTooLarge
-                    : strings.notes.attachmentError}
-                </div>
+                <Notice
+                  kind="danger"
+                  message={
+                    attachmentError === "tooLarge"
+                      ? strings.notes.attachmentTooLarge
+                      : strings.notes.attachmentError
+                  }
+                />
               )}
               {attachments.map((attachment) => {
                 // „Pregledaj" is offered only where the stored mime (plus the
