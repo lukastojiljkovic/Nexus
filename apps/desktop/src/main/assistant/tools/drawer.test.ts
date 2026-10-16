@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_TOOLS_PER_TURN,
   TOOL_BUDGET_SHARE,
   answerReserveTokens,
   toolSpecTokens,
@@ -201,7 +202,7 @@ describe("drawer.run", () => {
 });
 
 describe("the drawer's tool budget", () => {
-  it("fits its three specs beside seven tools of typical size in a turn's tool budget", () => {
+  it("fits its three specs beside a full turn's other tools of typical size in the tool budget", () => {
     const contextTokens = 8192;
     const ceiling = contextTokens - answerReserveTokens(contextTokens);
     const budget = Math.floor(ceiling * TOOL_BUDGET_SHARE);
@@ -211,18 +212,21 @@ describe("the drawer's tool budget", () => {
       },
       now: () => 0,
     };
-    // Seven other tools of typical size: the seven whose spec cost sits at the
-    // median of the app's own finance, task and calendar tools. A turn's menu is
-    // usually filled with tools like these; the heaviest ones do not fit beside
-    // any drawer tools, and that is what the chooser's budget is for.
+    // The rest of a full turn (MAX_TOOLS_PER_TURN less the drawer's three) in
+    // tools of typical size: the ones whose spec cost sits at the median of the
+    // app's own finance, task and calendar tools. A turn's menu is usually
+    // filled with tools like these; the heaviest ones do not fit beside any
+    // drawer tools, and that is what the chooser's budget is for.
     const others = [...financeTools(unrun), ...taskTools(unrun), ...calendarTools({ profileDb: unrun.profileDb })]
       .map((tool) => toolSpecTokens(tool))
       .sort((left, right) => left - right);
-    const middle = Math.floor(others.length / 2);
-    const seven = others.slice(middle - 3, middle + 4);
-    const drawer = drawerWith().reduce((sum, tool) => sum + toolSpecTokens(tool), 0);
-    expect(seven).toHaveLength(7);
-    expect(drawer + seven.reduce((sum, cost) => sum + cost, 0)).toBeLessThanOrEqual(budget);
+    const drawerTools = drawerWith();
+    const rest = MAX_TOOLS_PER_TURN - drawerTools.length;
+    const start = Math.floor((others.length - rest) / 2);
+    const typical = others.slice(start, start + rest);
+    const drawer = drawerTools.reduce((sum, tool) => sum + toolSpecTokens(tool), 0);
+    expect(typical).toHaveLength(rest);
+    expect(drawer + typical.reduce((sum, cost) => sum + cost, 0)).toBeLessThanOrEqual(budget);
   });
 });
 
