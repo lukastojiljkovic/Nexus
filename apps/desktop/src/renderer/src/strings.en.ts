@@ -976,6 +976,8 @@ export const en = {
     },
     /** The layout itself could not be read — the one failure that is the page's own. */
     layoutError: "The card layout cannot be loaded.",
+    /** The overflow trigger's name below 900px, which folds the settings gear. */
+    moreActions: "More actions",
     /** Edit mode (ADR-045 section 5) — the header actions and each card's „⋯“ menu. */
     /**
      * The board with no cards on it, and the board still being read. Until

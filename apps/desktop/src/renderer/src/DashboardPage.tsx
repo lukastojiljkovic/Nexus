@@ -9,6 +9,7 @@ import {
   EmptyState,
   Icon,
   LoadingState,
+  Notice,
   PageHeader,
   Select,
   StatBand,
@@ -1187,7 +1188,11 @@ export function DashboardPage({
   const s = strings.dashboard;
 
   return (
-    <div className={`dash${background !== null ? " dash--framed" : ""}`}>
+    <div
+      className={`dash${background !== null ? " dash--framed" : ""}`}
+      role="region"
+      aria-label={moduleName("dashboard")}
+    >
       {background !== null && (
         <>
           <div
@@ -1211,6 +1216,11 @@ export function DashboardPage({
         title={greeting(profileName, now.getHours())}
         subtitle={headerLine}
         sigil="dashboard"
+        primaryAction={
+          <Button variant="primary" size="sm" onClick={editing ? leaveEdit : () => setEditing(true)}>
+            {editing ? s.edit.done : s.edit.enter}
+          </Button>
+        }
         actions={
           <>
             {/* The board switcher (DASH-008 / ADR-055). It reads as a CONTROL —
@@ -1371,23 +1381,15 @@ export function DashboardPage({
                   )}
                 </>
               ))}
-            {editing ? (
-              <>
-                <Button size="sm" onClick={() => setGalleryOpen(true)}>
-                  {s.edit.add}
-                </Button>
-                <Button size="sm" onClick={leaveEdit}>
-                  {s.edit.done}
-                </Button>
-              </>
-            ) : (
-              <Button size="sm" onClick={() => setEditing(true)}>
-                {s.edit.enter}
+            {editing && (
+              <Button size="sm" onClick={() => setGalleryOpen(true)}>
+                {s.edit.add}
               </Button>
             )}
-            <ModuleSettingsGear moduleId="dashboard" />
           </>
         }
+        secondaryActions={[<ModuleSettingsGear key="settings" moduleId="dashboard" />]}
+        overflowLabel={s.moreActions}
       />
 
       {/* „Kako stojim?" before „šta mi je na spisku?". Drawn only when at least
@@ -1398,28 +1400,15 @@ export function DashboardPage({
       {(layoutFailed || actionFailed || setsActionFailed || defaultRestored) && (
         <div className="dash__notices">
           {layoutFailed && (
-            <p className="nx-hint dash__status" role="alert">
-              {s.layoutError}
-              <Button size="sm" onClick={() => setLayoutAttempt((value) => value + 1)}>
-                {s.widget.retry}
-              </Button>
-            </p>
+            <Notice
+              kind="danger"
+              message={s.layoutError}
+              action={{ label: s.widget.retry, onClick: () => setLayoutAttempt((value) => value + 1) }}
+            />
           )}
-          {actionFailed && (
-            <p className="nx-hint dash__status" role="alert">
-              {s.edit.failed}
-            </p>
-          )}
-          {setsActionFailed && (
-            <p className="nx-hint dash__status" role="alert">
-              {s.sets.failed}
-            </p>
-          )}
-          {defaultRestored && (
-            <p className="nx-hint dash__status" role="status">
-              {s.edit.defaultRestored}
-            </p>
-          )}
+          {actionFailed && <Notice kind="danger" message={s.edit.failed} />}
+          {setsActionFailed && <Notice kind="danger" message={s.sets.failed} />}
+          {defaultRestored && <Notice kind="info" message={s.edit.defaultRestored} />}
         </div>
       )}
 

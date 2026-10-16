@@ -990,6 +990,8 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     },
     /** The layout itself could not be read — the one failure that is the page's own. */
     layoutError: "Raspored kartica se ne može učitati.",
+    /** Naziv okidača za dodatne radnje ispod 900px, koji sklapa zupčanik podešavanja. */
+    moreActions: "Još radnji",
     /** Edit mode (ADR-045 section 5) — the header actions and each card's „⋯“ menu. */
     /**
      * The board with no cards on it, and the board still being read. Until
