@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { rmSync } from "node:fs";
-import type { KnowledgeHit, KnowledgeQuery, SourceKind } from "@nexus/core";
+import type { KnowledgeHit, KnowledgeQuery, KnowledgeStatus, SourceKind } from "@nexus/core";
 import type { NexusDatabase } from "@nexus/db";
 import { createKnowledgeService } from "./index.js";
 import type { ManualPage } from "./types.js";
@@ -307,9 +307,13 @@ describe("createKnowledgeService", () => {
       embedder: () => Promise.resolve(null),
     });
 
-    // No `sync` call anywhere: the pass is background work the module starts.
+    // No `sync` call anywhere: the pass is background work the module starts. It
+    // is waited out whole: the note's chunks land before the pass has marked the
+    // sources after it, so a wait for the chunks alone read `pendingSources: 4`
+    // on a loaded CI runner.
     const deadline = Date.now() + 5_000;
-    while ((await svc.status()).indexedChunks < 3 && Date.now() < deadline) {
+    const done = (status: KnowledgeStatus) => status.indexedChunks >= 3 && status.pendingSources === 0;
+    while (!done(await svc.status()) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
