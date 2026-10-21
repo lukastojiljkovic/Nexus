@@ -2,7 +2,7 @@
  * The one switch that says the sync, cloud and web work is ON HOLD.
  *
  * On 2026-10-08 the founder put sync, cloud and the web app on hold permanently
- * until the desktop is complete (CLAUDE.md, „Current focus"), and pull request
+ * until the desktop is complete (AGENTS.md, „Current focus"), and pull request
  * #54 removed them from everything a reader outside the app sees. The code
  * itself stays built, tested and OFF — `main/sync/`, the five `sync-*` packages,
  * the server migrations — **hidden, not deleted**. This file is the whole of the

@@ -232,7 +232,7 @@ export function matchesQuery(expression: string, result: string, query: string):
 /**
  * Names, in the order a Serbian reader alphabetises them.
  *
- * `Intl.Collator(["sr-Latn", "sr"])` and not the default collation (CLAUDE.md's
+ * `Intl.Collator(["sr-Latn", "sr"])` and not the default collation (AGENTS.md's
  * house rule): plain `"sr"` mis-tailors the Latin digraphs, and the default would
  * put „š" after „z".
  */

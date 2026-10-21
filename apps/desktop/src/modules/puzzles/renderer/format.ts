@@ -10,7 +10,7 @@ import type { Locale } from "../../../renderer/src/strings.js";
  * alternative — reading `activeLocale()` inside — would make a test that asks
  * about Serbian depend on whatever the previous test left the shell in.
  *
- * **`sr-Latn`, not `sr`.** CLAUDE.md's rule for sorting has the same reason
+ * **`sr-Latn`, not `sr`.** AGENTS.md's rule for sorting has the same reason
  * here: plain `"sr"` is the Cyrillic tail of the tag, and a Serbian reader of
  * this app reads Latin. The two collide on grouping and on the decimal comma,
  * which is exactly what a count and a distance are printed with.

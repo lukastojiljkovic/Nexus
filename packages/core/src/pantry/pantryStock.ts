@@ -48,7 +48,7 @@ import {
 const MS_PER_DAY = 86_400_000;
 
 /**
- * Serbian Latin ordering for the shopping list, on CLAUDE.md's house rule:
+ * Serbian Latin ordering for the shopping list, on AGENTS.md's house rule:
  * plain `"sr"` mis-tailors š/č/ć/đ, and SQLite's BINARY collation would put
  * „Šećer“ after „So“. Sorted HERE rather than deferred to the renderer for FIN's
  * reason — a store or an engine that hands back an order nobody fixes is a bug

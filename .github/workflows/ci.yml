@@ -51,7 +51,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The five static gates — the rules CLAUDE.md and README.md state in
+      # The five static gates — the rules AGENTS.md and README.md state in
       # prose, made executable. None of them needs build output, all of them
       # are seconds, so they run first and fail before the slower steps spend
       # any time.

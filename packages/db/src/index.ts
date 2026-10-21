@@ -1044,7 +1044,7 @@ export type {
 //
 // `importData` takes a `now` beside the value, unlike the other readers here:
 // every write in this package is stamped by main rather than by a clock inside
-// the store (CLAUDE.md's rule), and an import writes a session row.
+// the store (AGENTS.md's rule), and an import writes a session row.
 export {
   CALCULATOR_EXPORT_VERSION,
   CALC_HISTORY_UNPINNED_LIMIT,

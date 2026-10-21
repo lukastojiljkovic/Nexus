@@ -170,7 +170,7 @@ architecture is logged here and needs founder confirmation before merging.
   (asked as one of four questions opening ADR-085; answer: *„Domenske boje su
   izuzetak SAMO unutar platna"*).
 - **Shipped in:** `v1.4.0` and every release since.
-- **What:** `CLAUDE.md`'s design rules ban blue and orange as system hues. The
+- **What:** `AGENTS.md`'s design rules ban blue and orange as system hues. The
   Elektronika canvas uses both: a wire is red for 5 V, black for ground, blue
   very often for I²C SDA, yellow for signal; an Arduino UNO's silkscreen is
   teal. These arrive as a new token group `--nx-elec-*` in `packages/tokens`.
@@ -303,9 +303,9 @@ the user is not sitting at.
 - **Date:** 2026-10-02 · **Status:** **confirmed by founder 2026-10-02**
   (*„Napravi release i kaži da je signing trenutno stopiran ali da je projekat
   sada open source za sve koji žele da se uvere da je sa kodom sve u redu"*).
-- **Shipped in:** `v1.4.0` through `v2.1.0`, all unsigned.
+- **Shipped in:** `v1.4.0` through `v2.1.1`, all unsigned.
 - **What:** SEC-EL-07 requires releases to be code-signed, and SEC-SC-05
-  releases only CI-built, signed artifacts. Every release from 1.4.0 to 2.1.0
+  releases only CI-built, signed artifacts. Every release from 1.4.0 to 2.1.1
   is CI-built but unsigned: the Windows installers and the Linux files carry no
   Authenticode signature, and Windows shows a SmartScreen warning on first run.
   The macOS dmg, first released with 2.0.0, is unsigned and not notarised, so

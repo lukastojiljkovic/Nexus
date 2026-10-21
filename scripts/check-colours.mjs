@@ -6,7 +6,7 @@
 // than at the offending line. Nothing needs the shebang; the confusion it buys
 // is not worth it.
 //
-// Enforces the design-token rule stated in CLAUDE.md and README.md's
+// Enforces the design-token rule stated in AGENTS.md and README.md's
 // "Styling rules": every colour value in application/component source comes
 // from `packages/tokens` as a `--nx-*` CSS variable, and nothing outside
 // that package may write a raw colour literal. This used to be a grep a

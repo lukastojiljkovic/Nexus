@@ -241,7 +241,7 @@ function reasonFor(
  *
  * `sr-Latn` because this is the app's Serbian: plain `"sr"` would render a
  * decimal point as a comma only by luck of the default calendar, and the
- * collator rule in `CLAUDE.md` exists for exactly this shape of mistake.
+ * collator rule in `AGENTS.md` exists for exactly this shape of mistake.
  */
 function gbText(bytes: number, locale: "sr" | "en"): string {
   const format = new Intl.NumberFormat(locale === "sr" ? "sr-Latn" : "en", {

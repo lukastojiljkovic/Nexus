@@ -85,7 +85,7 @@ const numberFormats = new Map<string, Intl.NumberFormat>();
 /**
  * The repository's one Serbian sort: `sr-Latn` first, because plain `"sr"`
  * resolves to the Cyrillic tailoring, which sorts the Latin š, č, ć, ž and đ by
- * the wrong rules (`CLAUDE.md` states the rule; `intl.ts` is the renderer's copy
+ * the wrong rules (`AGENTS.md` states the rule; `intl.ts` is the renderer's copy
  * of it).
  *
  * Built once and shared: a collator is expensive to construct and every list

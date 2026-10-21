@@ -10,7 +10,7 @@ import type { ExportCard, ExportDeck, ExportEvent, ExportTask, ProfileData } fro
  * The user has a pile of free-form text somewhere else — a syllabus, an email,
  * a lecture handout — and an LLM they already talk to. Nexus does not call that
  * LLM and never will: there is no key, no network and no cloud in this build
- * (CLAUDE.md's current focus), and shipping one would put the user's private
+ * (AGENTS.md's current focus), and shipping one would put the user's private
  * content on somebody's server as a side effect of an import button. So the
  * app does the two things it CAN do honestly:
  *
