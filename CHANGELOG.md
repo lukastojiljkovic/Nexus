@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-10-21
+
+Nexus moves to Electron 44.9.0 and the current releases of the libraries it
+ships. Nothing else changes in how it works.
+
+### Changed
+
+- **Electron 44.9.0**, from 44.7.0. It brings Chromium 152.0.7977.167, Node.js
+  24.22.0 and fixes backported from upstream Chromium and V8. Two of its fixes
+  reach code Nexus runs: the Wikipedia catalogue, which is read through
+  `session.fetch`, no longer fails for good after Chromium's network service
+  restarts, and a utility process, where the assistant's model and its voice
+  run, no longer loses a message it posts just before it exits.
+- **Updated libraries:** React 19.3.1, the Tiptap editor 3.32.0, MapLibre GL
+  6.15.0, music-metadata 12.2.2 and dxf-viewer 1.0.50. The third-party notices
+  list the new versions.
+- **Build tools:** electron-vite 6.0.0, Vitest 5.0.5, ESLint 10.13.0,
+  typescript-eslint 8.71.2 and Turborepo 2.11.9.
+
 ## [2.1.0] - 2026-10-16
 
 The assistant reaches every module. It reads and changes your tasks, notes,
