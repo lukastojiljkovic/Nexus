@@ -116,8 +116,11 @@ grouped the way the sidebar groups them.
 - **Recorder** — a voice and camera diary: record sound or video and play it back.
 - **Astronomy** — the solar system in 3D, day and night on Earth, tonight's sky, and
   the Sun and Moon for a chosen place.
-- **Assistant** — a conversation with a local model that knows the app and your own
-  data. It runs on your computer, with no internet.
+- **Assistant** — a local model that knows the app and your own data, and works in
+  every module: it adds and changes tasks, notes, events, money, training and the
+  rest, and asks before each change. It answers from your notes, the installed
+  packs and the app's own manual, and names its sources. It can sit beside any
+  page (Ctrl+J), and it runs on your computer, with no internet.
 
 ### Life
 
@@ -210,17 +213,15 @@ guides from public, openly licensed sources.
 
 Nexus is still being finished, in this order:
 
-- **A UX overhaul.** A pass over how the app works, not only how it looks: the most
-  common tasks of every module walked and their dead ends fixed, shared patterns for
-  headers, lists, forms and dialogs, and one pass per sidebar group.
+- **Finishing the overhaul.** 2.1 gave every page the same header, lists, forms,
+  dialogs and undo. Still to come: keys that work alike on every page, backups that
+  carry the newest records (library loans and goals, culture tickets), and the
+  last things the assistant cannot do yet, such as moving or deleting a file.
 - **More of the libraries and readers.** More reference libraries as packs, an
   offline map for the regions you choose, OCR language packs for the scanner, and
   printing packs to PDF so the material can be kept on paper.
 - **A finished packs repository.** Every pack public, documented, with its licence and
   attribution.
-- **The local AI assistant, reaching every module.** The assistant comes last. It
-  answers from your notes, the installed packs and the app's own manual, asks before
-  it changes anything, and searches the web only when you turn that on.
 
 The full list is in [SPECIFICATION.md](SPECIFICATION.md), and exactly what is finished
 and what is not is kept up to date in [STATUS.md](STATUS.md).
