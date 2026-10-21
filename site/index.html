@@ -111,7 +111,7 @@
             <img class="shot-dark" src="images/dashboard-dark.png" width="1600" height="1000" alt="The Nexus dashboard with today's agenda, upcoming tasks, expiring documents, exams and study time">
         </div>
         <dl class="readout">
-            <div class="row"><dt>Modules</dt><dd>16, switched on per profile</dd></div>
+            <div class="row"><dt>Modules</dt><dd>40, switched on per profile</dd></div>
             <div class="row"><dt>Storage</dt><dd>Encrypted, on your computer</dd></div>
             <div class="row"><dt>Network</dt><dd>Never required</dd></div>
             <div class="row"><dt>Data sent</dt><dd><b>None</b></dd></div>
@@ -122,6 +122,10 @@
         <h2 class="section-title">What it does</h2>
         <p class="section-lede">Most people run their week across a dozen apps, each with its own account and its own server. In Nexus a task, an exam and an expiring passport share one calendar, one search box and one set of reminders.</p>
         <div class="cells">
+            <article class="cell cell-wide">
+                <h3>An assistant in every module</h3>
+                <p>A language model that runs on your computer and works through 207 of the app's own tools: it adds and changes tasks, notes, events, money and training, and asks before each change. It answers from your notes, your packs and offline Wikipedia, names its sources, and docks beside any page.</p>
+            </article>
             <article class="cell">
                 <h3>Tasks and calendar</h3>
                 <p>To-dos with priorities, subtasks, recurrence and dependencies, as a list, a board or a calendar. Month, week, day and agenda views, with events you drag and resize.</p>
@@ -219,7 +223,7 @@
             <details><summary>Is Nexus free?</summary><p>Yes. Nexus is free and open source under the <a href="https://github.com/lukastojiljkovic/Nexus/blob/main/LICENSE">Apache License 2.0</a>. It has no ads, no online account and no telemetry.</p></details>
             <details><summary>Does Nexus need the internet?</summary><p>No. Everything you write works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, which contact GitHub only for a new version of Nexus, or to downloads, which also fetch the content packs, Wikipedia libraries and models you choose from a short list of hosts. Your notes and data never leave the computer.</p></details>
             <details><summary>Is Nexus available in English?</summary><p>Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English.</p></details>
-            <details><summary>Which platforms does Nexus run on?</summary><p>Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64.</p></details>
+            <details><summary>Which platforms does Nexus run on?</summary><p>Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild) on x64, and macOS on Apple silicon (an unsigned dmg).</p></details>
             <details><summary>How is my data protected?</summary><p>Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them.</p></details>
             <details><summary>Can I take my data with me?</summary><p>Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule.</p></details>
         </div>
