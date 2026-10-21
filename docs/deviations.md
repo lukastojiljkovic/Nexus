@@ -303,9 +303,9 @@ the user is not sitting at.
 - **Date:** 2026-10-02 · **Status:** **confirmed by founder 2026-10-02**
   (*„Napravi release i kaži da je signing trenutno stopiran ali da je projekat
   sada open source za sve koji žele da se uvere da je sa kodom sve u redu"*).
-- **Shipped in:** `v1.4.0` through `v2.1.0`, all unsigned.
+- **Shipped in:** `v1.4.0` through `v2.1.1`, all unsigned.
 - **What:** SEC-EL-07 requires releases to be code-signed, and SEC-SC-05
-  releases only CI-built, signed artifacts. Every release from 1.4.0 to 2.1.0
+  releases only CI-built, signed artifacts. Every release from 1.4.0 to 2.1.1
   is CI-built but unsigned: the Windows installers and the Linux files carry no
   Authenticode signature, and Windows shows a SmartScreen warning on first run.
   The macOS dmg, first released with 2.0.0, is unsigned and not notarised, so

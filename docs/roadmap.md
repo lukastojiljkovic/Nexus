@@ -15,7 +15,7 @@ release.** Commits, migrations, modules and gates live in [STATUS.md](STATUS.md)
 ## Where we are
 
 Nexus is an offline desktop application, in daily use, and released: the current
-release is **2.1.0**, tagged `v2.1.0`. Every release is unsigned for now
+release is **2.1.1**, tagged `v2.1.1`. Every release is unsigned for now
 ([DEV-008](deviations.md)).
 
 Two decisions set the sequence:

@@ -15,7 +15,7 @@ left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
 **Last updated:** 2026-10-21. The state below was verified on that date, in the
-tree the release `v2.1.0` was cut from; every figure says in §1 how a reader
+tree the release `v2.1.1` was cut from; every figure says in §1 how a reader
 re-measures it, because a number that cannot be re-derived is the defect class
 this file keeps recording. Deliberately no commit sha: a sha in a header goes
 stale the moment anything is pushed.
@@ -25,7 +25,7 @@ stale the moment anything is pushed.
 [roadmap.md](roadmap.md) (what order).
 
 **Where things stand (2026-10-21).** The desktop application is finished and
-the repository is public. The latest release, **2.1.0**, is tagged `v2.1.0` on
+the repository is public. The latest release, **2.1.1**, is tagged `v2.1.1` on
 `main`, built by the release workflow and published with its checksums, their
 Ed25519 signature, an SBOM and build provenance; 1.4.0 was the first. Every
 release ships unsigned ([DEV-008](deviations.md)), and sync, cloud and the web
@@ -42,8 +42,8 @@ The network boundary has three modes, and `offline`, the default, cannot make a
 request at all; the two that can reach anything, `updates` and `downloads`, are
 each opt-in and each fixed for the life of a launch. It installs like an
 ordinary Windows program and the founder has used it daily since 2026-08-02.
-Seven releases are tagged — **1.4.0** (2026-10-05, `v1.4.0`, the first public
-one) through **2.1.0** (2026-10-16, `v2.1.0`, the latest); every installer
+Eight releases are tagged — **1.4.0** (2026-10-05, `v1.4.0`, the first public
+one) through **2.1.1** (2026-10-21, `v2.1.1`, the latest); every installer
 before 1.4.0 was built by hand and never tagged, the last being 1.3.0, from
 `eceb07e` on 2026-09-23.
 
@@ -97,17 +97,17 @@ no round has run for real. It is the head of the web/sync queue.
 
 |  |  |
 | --- | --- |
-| Desktop version | **2.1.0**, released as `v2.1.0` (2026-10-16): unsigned, per [DEV-008](deviations.md) |
+| Desktop version | **2.1.1**, released as `v2.1.1` (2026-10-21): unsigned, per [DEV-008](deviations.md) |
 | Windows | an NSIS installer, per user |
 | Linux | an AppImage and a tarball, plus a Gentoo ebuild |
 | macOS | an arm64 dmg — unsigned and un-notarised, like the rest |
 | Modules registered | **42** — 16 compiled in (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and 26 discovered (`apps/desktop/src/modules/*/shared/manifest.ts`) |
-| Local migrations | **97** at `v2.1.0` (latest `097-culture-plan-tickets`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts` |
+| Local migrations | **97** at `v2.1.1` (latest `097-culture-plan-tickets`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts` |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **30** (`check:*` in `package.json`), each its own CI step |
-| Commits | **1 264** on `main` at `v2.1.0` (`git rev-list --count v2.1.0`) |
-| Changes since the release | **none** in the product: what reached `main` after `v2.1.0` is this documentation pass and the Gentoo bump (`git log v2.1.0..HEAD`), so [CHANGELOG.md](../CHANGELOG.md) has no `[Unreleased]` section |
-| Git tags / GitHub releases | `v1.4.0` through `v2.1.0` — seven tags, each a published release |
+| Commits | **1 282** on `main` at `v2.1.1` (`git rev-list --count v2.1.1`) |
+| Changes since the release | **none** in the product: what reached `main` after `v2.1.1` is the agent guide's move to `AGENTS.md` and the Gentoo bump (`git log v2.1.1..HEAD`), so [CHANGELOG.md](../CHANGELOG.md) has no `[Unreleased]` section |
+| Git tags / GitHub releases | `v1.4.0` through `v2.1.1` — eight tags, each a published release |
 | Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass, admins included) |
 
 ---
@@ -698,10 +698,11 @@ schedule is now a migration) — reached `main` through the public-release pull
 request (#39), the English locale followed it, and `v1.4.0` was tagged from
 the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**Six releases followed it,** each in `CHANGELOG.md` with its date: the
+**Seven releases followed it,** each in `CHANGELOG.md` with its date: the
 2026-10-08 release with Settings in categories (ADR-088) and the opt-in update
 check (ADR-089); then 2.0.0 (2026-10-11), 2.0.1, 2.0.2 and 2.0.3 (2026-10-15),
-and 2.1.0 (2026-10-16), in which the assistant reaches every module.
+2.1.0 (2026-10-16), in which the assistant reaches every module, and 2.1.1
+(2026-10-21), which moves to Electron 44.9.0 and updates the libraries.
 The 2026-10-08 release is the first whose `SHA256SUMS.txt` carries the Ed25519
 signature the app's update check verifies, and 2.0.0 is the first with a macOS
 dmg.
@@ -936,7 +937,7 @@ and the app is finished where it is.**
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
   it reports a number nothing could be verified against. The Gentoo ebuild is
-  `nexus-bin-2.1.0`, and its `Manifest` digests the published 2.1.0 tarball.
+  `nexus-bin-2.1.1`, and its `Manifest` digests the published 2.1.1 tarball.
   Each release still needs its own bump: rename the ebuild, regenerate
   `Manifest` from the published tarball (never from a local build) and
   re-check `metadata.xml`. It has still not been run through portage
@@ -950,7 +951,7 @@ and the app is finished where it is.**
   `main` with more packages in it. Fix on the branch, push, and merge promptly;
   the window between push and merge is the window in which the branch can be
   recreated underneath the fix.
-- **`main` is at `v2.1.0`** plus documentation; the next change to the
+- **`main` is at `v2.1.1`** plus documentation; the next change to the
   product opens an `[Unreleased]` section in `CHANGELOG.md`. Whether
   anything is open on GitHub is not a fact this file can carry: ask the
   repository.
@@ -977,7 +978,7 @@ implemented until the founder says otherwise.
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
 | Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Six more releases have been tagged since, through `v2.1.0` (2026-10-16). |
+| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Seven more releases have been tagged since, through `v2.1.1` (2026-10-21). |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)
@@ -1306,10 +1307,10 @@ old number produces a file with the same name reporting the same version from
 there", which 1.1.0 already cost once.
 
 Tagging is settled: `v1.4.0` was the first tag and release (2026-10-05), and
-the six tags since then are the releases §4 lists. The Gentoo ebuild's
+the seven tags since then are the releases §4 lists. The Gentoo ebuild's
 `SRC_URI` points at this repository's releases
 (`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), so it resolves
-for every tag. Its `Manifest` digests the published 2.1.0 tarball, so each bump has to
+for every tag. Its `Manifest` digests the published 2.1.1 tarball, so each bump has to
 regenerate it from the published tarball, never from a local build:
 `dist.mjs` refuses a Linux target from a Windows host, since the native SQLite
 module is built for the host it runs on.
@@ -1326,7 +1327,7 @@ becomes a licence question the day it moves under an organisation.
 These outrank everything in §3 and §4. No piece of work may trade one of them
 away for being convenient.
 
-- **Code signing is still open, and every release from 1.4.0 to 2.1.0 ships
+- **Code signing is still open, and every release from 1.4.0 to 2.1.1 ships
   without it under [DEV-008](deviations.md)** (SEC-EL-07, SEC-SC-05), confirmed
   by the founder on 2026-10-02. The Windows installer is unsigned, so Windows
   shows a SmartScreen warning on first run; the macOS dmg (from 2.0.0) is
