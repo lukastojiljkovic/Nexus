@@ -260,6 +260,7 @@ h3 { font-size: 1.25rem; line-height: 1.25; font-weight: 700; letter-spacing: -0
 /* Features: columns that hang from an ink rule. */
 .cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px var(--gutter); }
 .cell { border-top: 1px solid var(--ink); padding-top: 14px; }
+.cell-wide { grid-column: 1 / -1; }
 .cell p { margin-top: 8px; color: var(--ink-2); }
 
 .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px var(--gutter); margin-top: 72px; }

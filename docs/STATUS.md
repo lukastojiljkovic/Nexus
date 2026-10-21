@@ -14,8 +14,8 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-10-15. The state below was verified on that date, in the
-tree the release `v2.0.3` was cut from; every figure says in §1 how a reader
+**Last updated:** 2026-10-21. The state below was verified on that date, in the
+tree the release `v2.1.0` was cut from; every figure says in §1 how a reader
 re-measures it, because a number that cannot be re-derived is the defect class
 this file keeps recording. Deliberately no commit sha: a sha in a header goes
 stale the moment anything is pushed.
@@ -24,8 +24,8 @@ stale the moment anything is pushed.
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
-**Where things stand (2026-10-15).** The desktop application is finished and
-the repository is public. The latest release, **2.0.3**, is tagged `v2.0.3` on
+**Where things stand (2026-10-21).** The desktop application is finished and
+the repository is public. The latest release, **2.1.0**, is tagged `v2.1.0` on
 `main`, built by the release workflow and published with its checksums, their
 Ed25519 signature, an SBOM and build provenance; 1.4.0 was the first. Every
 release ships unsigned ([DEV-008](deviations.md)), and sync, cloud and the web
@@ -42,8 +42,8 @@ The network boundary has three modes, and `offline`, the default, cannot make a
 request at all; the two that can reach anything, `updates` and `downloads`, are
 each opt-in and each fixed for the life of a launch. It installs like an
 ordinary Windows program and the founder has used it daily since 2026-08-02.
-Six releases are tagged — **1.4.0** (2026-10-05, `v1.4.0`, the first public
-one) through **2.0.3** (2026-10-15, `v2.0.3`, the latest); every installer
+Seven releases are tagged — **1.4.0** (2026-10-05, `v1.4.0`, the first public
+one) through **2.1.0** (2026-10-16, `v2.1.0`, the latest); every installer
 before 1.4.0 was built by hand and never tagged, the last being 1.3.0, from
 `eceb07e` on 2026-09-23.
 
@@ -97,17 +97,17 @@ no round has run for real. It is the head of the web/sync queue.
 
 |  |  |
 | --- | --- |
-| Desktop version | **2.0.3**, released as `v2.0.3` (2026-10-15): unsigned, per [DEV-008](deviations.md) |
+| Desktop version | **2.1.0**, released as `v2.1.0` (2026-10-16): unsigned, per [DEV-008](deviations.md) |
 | Windows | an NSIS installer, per user |
 | Linux | an AppImage and a tarball, plus a Gentoo ebuild |
 | macOS | an arm64 dmg — unsigned and un-notarised, like the rest |
 | Modules registered | **42** — 16 compiled in (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and 26 discovered (`apps/desktop/src/modules/*/shared/manifest.ts`) |
-| Local migrations | **92** at `v2.0.3` (latest `092-assistant-chat-model`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts`; one more, `093-assistant-tool-outcome`, is on this branch under `[Unreleased]` |
+| Local migrations | **97** at `v2.1.0` (latest `097-culture-plan-tickets`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts` |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **30** (`check:*` in `package.json`), each its own CI step |
-| Commits | **1 104** on `main` at `v2.0.3` |
-| Changes since the release | **17** commits on top of `v2.0.3` (`git rev-list --count v2.0.3..HEAD`), recorded in [CHANGELOG.md](../CHANGELOG.md) under `[Unreleased]` |
-| Git tags / GitHub releases | `v1.4.0` through `v2.0.3` — six tags, each a published release |
+| Commits | **1 264** on `main` at `v2.1.0` (`git rev-list --count v2.1.0`) |
+| Changes since the release | **none** in the product: what reached `main` after `v2.1.0` is this documentation pass and the Gentoo bump (`git log v2.1.0..HEAD`), so [CHANGELOG.md](../CHANGELOG.md) has no `[Unreleased]` section |
+| Git tags / GitHub releases | `v1.4.0` through `v2.1.0` — seven tags, each a published release |
 | Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass, admins included) |
 
 ---
@@ -326,7 +326,7 @@ settings gallery draw before any of its chunks load:
 | Drawings (`drawings`) | make | Open an AutoCAD drawing: layers, measurements and print to PDF. DXF right away, DWG with a pack. |
 | Workshop (`workshop`) | make | View STL models, G-code toolpaths and Gerber boards — with nothing else installed. |
 | The Lab (`lab`) | make | Serial, battery, tone and light — what the laptop can do beyond its job. |
-| Assistant (`assistant`) | knowledge | A conversation with a local model that knows the app and your own data, with no internet. |
+| Assistant (`assistant`) | knowledge | A local model that knows the app and your own data and acts in every module through 207 tools, asking before each change. It docks beside any page, and needs no internet. |
 
 Plus **global search** (Ctrl+K over every module, Serbian-fold-correct, with a
 command palette) and **notifications** (OS-level, snoozable, with a cleanup
@@ -698,9 +698,10 @@ schedule is now a migration) — reached `main` through the public-release pull
 request (#39), the English locale followed it, and `v1.4.0` was tagged from
 the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**Five releases followed it,** each in `CHANGELOG.md` with its date: the
+**Six releases followed it,** each in `CHANGELOG.md` with its date: the
 2026-10-08 release with Settings in categories (ADR-088) and the opt-in update
-check (ADR-089); then 2.0.0 (2026-10-11), 2.0.1, 2.0.2 and 2.0.3 (2026-10-15).
+check (ADR-089); then 2.0.0 (2026-10-11), 2.0.1, 2.0.2 and 2.0.3 (2026-10-15),
+and 2.1.0 (2026-10-16), in which the assistant reaches every module.
 The 2026-10-08 release is the first whose `SHA256SUMS.txt` carries the Ed25519
 signature the app's update check verifies, and 2.0.0 is the first with a macOS
 dmg.
@@ -781,6 +782,9 @@ suggestion, cheapest and highest-leverage first.
    `TODO(reachable)`, among them three real gaps of the same shape: TASK
    cannot edit a task's description, and CAL cannot edit an event's
    description or category.
+   **The three gaps closed (2026-10-16):** 2.1.0 edits a task's description
+   and an event's notes and category. The allowlist carries 10 fields today,
+   4 of them `TODO(reachable)`, all the mirrored shortcut `Chord`.
 7. **`ModuleManifest.imex` is declared and nothing fills it.** The archive
    was built in `@nexus/core` from `ProfileData`, one interchange version for
    the whole profile, not from per-module handlers — so the slot ADR-008 lists
@@ -788,12 +792,11 @@ suggestion, cheapest and highest-leverage first.
    plugin path still needs it (a third-party module's rows cannot ride
    `ProfileData`), which is a decision about PLUG rather than a cleanup: either
    the contract states what a plugin would implement, or it goes.
-8. **The duplicated Serbian numeral lexicon.** `pravo.ts` and
-   `racunovodstvo.ts` each embed their own numeral lexicon (both citing
+8. **Done (2026-10-16): the duplicated Serbian numeral lexicon.** `pravo.ts`
+   and `racunovodstvo.ts` each embedded their own numeral lexicon (both citing
    *Pravopis srpskoga jezika*, 2010), their own `stripSeparators`, and their
-   own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart. This
-   is a consolidation rather than a defect, and it is not urgent — it is what
-   declining to retire one of each colliding tool pair costs.
+   own digit-at-a-time ISO 7064 MOD 97-10 under names one character apart.
+   Both now import `srNumeral.ts` and `iso7064.ts` from `packages/core/src/pro/`.
 9. **The shell's own settings cards are in no screenshot.** Twelve per-module
    settings scenes were added and are derived from the registry, which is why
    they cannot go stale. The shell's cards — Profili, Sigurnost, Izgled,
@@ -823,6 +826,24 @@ suggestion, cheapest and highest-leverage first.
     fixtures). What is missing is the guard: a `check:line-endings` gate over
     committed blobs. Until it exists, every scripted edit has to be EOL-aware,
     and that has cost two redoes.
+12. **What 2.1.0 left open** (recorded 2026-10-16, none of it a regression):
+    - **A keyboard pass over the pages, and a screenshot sweep of 2.1's UX
+      changes.** No page has a render test, so those changes were checked by
+      typecheck, unit tests and diff review only.
+    - **Rows the backup does not carry:** a study subject's own retention
+      (`094`), library loans and goals (`096`) and culture plan tickets (`097`).
+      `packages/db/src/imex/restoreStore.test.ts` pins each; the archive needs
+      a place for each.
+    - **What the assistant cannot do yet:** delete or move a file, report a
+      pack install's progress inside the turn, create or edit a study plan,
+      clear a calendar field, run 35 of the developer drawer's 48 tools, or
+      read a decimal comma in the calculator. A draft that the answer check
+      rejects has already streamed when it is asked again.
+    - **Interface loose ends:** Culture's plan, track and entry edits and a
+      visit photo's removal have IPC and no UI; the search palette, the finance
+      month report and the study log have no retry after a failed read; a
+      kitchen shopping line has no undo; and the calendar's single toast lets
+      an error hide the undo.
 
 **Not on the desktop list:** SEC-VER-01 (threat models), the sync transport's
 error model, and the pairing redesign are all web/sync work and stay paused with
@@ -909,13 +930,13 @@ and the app is finished where it is.**
   release, taken from the published tarball, read back as configured the same
   day. Nothing in
   `.github/workflows/` reads them, so the read-back is still a hand step, and no
-  2.0.x release has one recorded. After any change to that file or to
+  release since 2.0.0 has one recorded. After any change to that file or to
   Electron: run `pnpm --filter @nexus/desktop dist`, then
   `npx @electron/fuses read --app apps/desktop/release/win-unpacked/Nexus.exe`,
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
   it reports a number nothing could be verified against. The Gentoo ebuild is
-  `nexus-bin-2.0.3`, and its `Manifest` digests the published 2.0.3 tarball.
+  `nexus-bin-2.1.0`, and its `Manifest` digests the published 2.1.0 tarball.
   Each release still needs its own bump: rename the ebuild, regenerate
   `Manifest` from the published tarball (never from a local build) and
   re-check `metadata.xml`. It has still not been run through portage
@@ -929,8 +950,8 @@ and the app is finished where it is.**
   `main` with more packages in it. Fix on the branch, push, and merge promptly;
   the window between push and merge is the window in which the branch can be
   recreated underneath the fix.
-- **`main` is at `v2.0.3`**, and the work that has landed since the release is
-  in `CHANGELOG.md` under `[Unreleased]`. Whether
+- **`main` is at `v2.1.0`** plus documentation; the next change to the
+  product opens an `[Unreleased]` section in `CHANGELOG.md`. Whether
   anything is open on GitHub is not a fact this file can carry: ask the
   repository.
 
@@ -956,7 +977,7 @@ implemented until the founder says otherwise.
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
 | Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Five more releases have been tagged since, through `v2.0.3` (2026-10-15). |
+| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Six more releases have been tagged since, through `v2.1.0` (2026-10-16). |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)
@@ -1285,10 +1306,10 @@ old number produces a file with the same name reporting the same version from
 there", which 1.1.0 already cost once.
 
 Tagging is settled: `v1.4.0` was the first tag and release (2026-10-05), and
-the five tags since then are the releases §4 lists. The Gentoo ebuild's
+the six tags since then are the releases §4 lists. The Gentoo ebuild's
 `SRC_URI` points at this repository's releases
 (`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), so it resolves
-for every tag. Its `Manifest` digests the published 2.0.3 tarball, so each bump has to
+for every tag. Its `Manifest` digests the published 2.1.0 tarball, so each bump has to
 regenerate it from the published tarball, never from a local build:
 `dist.mjs` refuses a Linux target from a Windows host, since the native SQLite
 module is built for the host it runs on.
@@ -1305,7 +1326,7 @@ becomes a licence question the day it moves under an organisation.
 These outrank everything in §3 and §4. No piece of work may trade one of them
 away for being convenient.
 
-- **Code signing is still open, and every release from 1.4.0 to 2.0.3 ships
+- **Code signing is still open, and every release from 1.4.0 to 2.1.0 ships
   without it under [DEV-008](deviations.md)** (SEC-EL-07, SEC-SC-05), confirmed
   by the founder on 2026-10-02. The Windows installer is unsigned, so Windows
   shows a SmartScreen warning on first run; the macOS dmg (from 2.0.0) is
