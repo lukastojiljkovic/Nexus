@@ -45,13 +45,15 @@ action stay where they are. 900px is the window minimum the desktop enforces, so
 this is the narrowest window that exists rather than a breakpoint nobody
 reaches.
 
-**Adopted by:** all 26 module pages, each rendering one `PageHeader`. The shell's
-Habits page holds its "new habit" primary here; with no habits yet, the page's
-empty state carries that one invitation instead, so there is never a second.
-The settings page's search box is the one control in `actions`, and that is
-deliberate: it is a jump-to that highlights the row it finds, not a filter over
-the page's content, so it does not belong in `filters`. It is 320px wide and
-the header keeps it on the title's line at the 900px minimum.
+**Adopted by:** all 26 module pages, each rendering one `PageHeader`, and 16 of
+the shell's pages (Calendar, Canvas, Dashboard, Electronics, Files, Finance,
+Fitness, Focus, Habits, Notes, Private, Search, Settings, Study, Tasks, Tools).
+The shell's Habits page holds its "new habit" primary here; with no habits yet,
+the page's empty state carries that one invitation instead, so there is never a
+second. The settings page's search box is the one control in `actions`, and that
+is deliberate: it is a jump-to that highlights the row it finds, not a filter over
+the page's content, so it does not belong in `filters`. It is 320px wide and the
+header keeps it on the title's line at the 900px minimum.
 
 
 ## EmptyState
@@ -77,8 +79,9 @@ fails on a copy leaf named like an empty state inside a bare hint line, and
 names the files that still do it: an entry is removed from that list when its
 page converts, and a new one is a regression.
 
-**Adopted by:** 55 inline and 12 page empty states across the module renderers,
-and 39 bare hint lines still in 27 files (the allowlist).
+**Adopted by:** 62 inline and 13 page empty states across the module renderers,
+33 of the shell's files, and 34 bare hint lines still in 24 module files (the
+allowlist).
 
 ## Notice
 
@@ -99,9 +102,11 @@ is not: an action offered for its own sake is worse than none. **Don't** use
 `Toast` for the inline case. A toast belongs to the whole page and may be
 dismissed; a notice belongs to the control it is about.
 
-**Adopted by:** the Tasks page (shell): its rail, tag and dependency failures, and
-the Search page (shell), where a failed query is the line with a Retry. No module
-page yet. The hand-written `*__error` lines are the ones it replaces.
+**Adopted by:** 23 of the shell's files, among them the Tasks page (its rail, tag
+and dependency failures), the Search page (a failed query is the line with a
+Retry), Notes, Calendar, Dashboard and Settings; and four module pages:
+astronomy, cookbook, reader and recorder. The hand-written `*__error` lines are
+the ones it replaces.
 
 ## AsyncSurface
 
@@ -121,9 +126,9 @@ the data is there.
 The header stays with the page (see PageHeader); `AsyncSurface` is the body.
 `asyncSurfacePlan` is the pure decision and the test beside it pins it.
 
-**Adopted by:** the Tasks page (shell), where the rows are the one read. No module
-page yet. The shell surfaces that show a failed read as a dead end are the ones to
-convert.
+**Adopted by:** 12 of the shell's files: the Calendar, Files, Finance, Focus,
+Habits, Notes, Private, Study and Tasks pages (on Tasks the rows are the one
+read), and the documents, people and private-note panels. No module page yet.
 
 ## Dialog
 
@@ -149,10 +154,11 @@ What the component enforces, so a caller cannot forget any of it:
 containing block, so a fixed panel is already positioned against the window, and
 `packages/ui` does not depend on `react-dom`.
 
-**Adopted by:** the shared `ConfirmDialog`, and the shell's module launcher and
-shortcuts reference. Five module renderer files still draw their own
-`role="dialog"` (cookbook, culture, maps, reader, signals), and the
-`recur-dialog__*` recipe still wears the other renderer dialogs.
+**Adopted by:** the shared `ConfirmDialog`, the shell's module launcher and
+shortcuts reference, and two module pages (assistant, cookbook). Five module
+renderer files still draw their own `role="dialog"` (the assistant's dock,
+culture, the maps pin dialog, reader, the signals Morse tab), and the
+`recur-dialog__*` recipe still wears 16 of the shell's dialogs and the reader's.
 
 ## ConfirmDialog
 
@@ -173,9 +179,10 @@ first in the DOM. What it enforces on top of the frame:
 The renderer's `ConfirmDialog` is a re-export of this one, so there is no second
 confirmation recipe in the app.
 
-**Adopted by:** 8 module renderer files (assistant ×2, boards, calculator, car, chess,
-maps, puzzles), and the settings page's reset question, which is destructive and so takes
-the cancelling focus.
+**Adopted by:** 12 module renderer files (assistant ×2, boards, calculator, car,
+chess, cookbook, culture, emergency, pantry, puzzles, timers) and 9 of the
+shell's files, among them the settings page's reset question, which is
+destructive and so takes the cancelling focus.
 
 ## Toast
 
@@ -194,11 +201,13 @@ that is named in the page's words. `kind="error"` is the same component
 announcing assertively with the `error` glyph; both kinds carry a shape as well
 as an ink.
 
-**Adopted by:** the shell's pages Finance, Habits, Notes and Tasks (which holds its
-delete, batch and list offers in the one slot and its action failures in
-`kind="error"`), and the shell's rail, for a failed profile action and a failed
-reload of the device's module order. The library page is the first module page
-to use it; the recorder's `rec__undo` bar predates it and is still to convert.
+**Adopted by:** 14 of the shell's files: the Calendar, Canvas, Electronics,
+Files, Finance, Focus, Habits, Notes, Private, Study and Tasks pages (Tasks holds
+its delete, batch and list offers in the one slot and its action failures in
+`kind="error"`), the documents and people panels, and the shell's rail, for a
+failed profile action and a failed reload of the device's module order. Two
+module pages use it: library, and recorder, where it replaced the `rec__undo`
+bar.
 
 ## ListDetail
 
@@ -271,10 +280,12 @@ in a card, and **do** reach for `Field` the moment a field has a help line, a
 refusal or a required mark. **Don't** hand-write a hint line or an error line
 beside a field.
 
-**Adopted by:** 2 module renderer files use `Field`, and the settings page uses
-it for its passcode and profile-deletion fields and for the module settings
-fields (`SettingsPage`, `moduleSettingsPanels`); `FormLayout` is used by no
-module page. Its `required` mark replaces the native attribute on those fields.
+**Adopted by:** 2 module renderer files use `Field` (cards, the emergency card's
+view), and 4 of the shell's files: the settings page, for its passcode and
+profile-deletion fields and the module settings fields (`SettingsPage`,
+`moduleSettingsPanels`), the Habits page and the tool surfaces. `FormLayout` is
+used by the Habits page alone. Its `required` mark replaces the native attribute
+on those fields.
 
 ## Segmented
 
@@ -290,8 +301,8 @@ has to keep meaning „press this" everywhere.
 A picker that turns several entries on at once (a weekday ladder) is a toggle
 group and not this component.
 
-**Adopted by:** 7 module renderer files paint an option with the class directly;
-none uses the component yet.
+**Adopted by:** 7 module renderer files and 18 of the shell's files paint an
+option with the class directly; no page uses the component yet.
 
 ## Toolbar
 
@@ -303,7 +314,7 @@ with Tab.
 Page-wide controls that act on the whole page belong in the header. The toolbar
 is for controls that are a view of the content below them.
 
-**Adopted by:** no module page yet.
+**Adopted by:** no page yet, in a module or the shell.
 
 ## Section
 
@@ -315,8 +326,8 @@ heading and appears in the outline a screen reader builds; a section without one
 has a paragraph caption and is not in the outline. Pick the level for the
 document, not for the look: the caption looks the same at every level.
 
-**Adopted by:** no module page yet. Section titles are drawn with several
-devices across the module renderers today.
+**Adopted by:** no page yet, in a module or the shell. Section titles are drawn
+with several devices across the renderers today.
 
 ## SettingsRow
 
@@ -331,8 +342,8 @@ arrangement on its own.
 Outcome of a save is announced with `Notice` or `Toast`, not by a bare line
 inside the row.
 
-**Adopted by:** no module settings card yet. Nine module renderer files draw
-their rows with the shell's classes.
+**Adopted by:** no settings card yet. Nine module settings files and four of the
+shell's files draw their rows with the shell's classes.
 
 ## useModalLayer
 
@@ -375,27 +386,28 @@ reads the source text: `<EmptyState` tags split by whether the tag contains
 `variant="inline"`; a bare empty line is the expression of `emptyLine.test.ts`;
 `role="dialog"`, `ConfirmDialog`, `Toast`, `nx-segmented__option` and
 `set__module-row` are substring counts per file. Counts are files, except the
-EmptyState columns, which are tags.
+EmptyState columns, which are tags, and the bare empty lines, which are lines.
+Last counted 2026-10-21, on the tree `v2.1.0` was cut from.
 
 | Module | PageHeader | EmptyState inline | EmptyState page | LoadingState (files) | Bare empty line | Hand-rolled dialog (files) | ConfirmDialog (files) | Toast | Segmented paint (files) | Settings row (files) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | arcade | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 |
-| assistant | 1 | 1 | 1 | 1 | 2 | 0 | 2 | 0 | 0 | 1 |
+| assistant | 1 | 1 | 2 | 1 | 2 | 1 | 2 | 0 | 0 | 1 |
 | astronomy | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | boards | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 1 |
 | calculator | 1 | 2 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 |
 | car | 1 | 8 | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | cards | 1 | 2 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | chess | 1 | 3 | 0 | 1 | 2 | 0 | 1 | 0 | 0 | 0 |
-| cookbook | 1 | 4 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
+| cookbook | 1 | 6 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | culture | 1 | 8 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 |
 | drawings | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | emergency | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 0 | 0 | 0 |
-| lab | 1 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
-| library | 1 | 3 | 0 | 1 | 5 | 0 | 0 | 1 | 0 | 0 |
-| maps | 1 | 4 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
+| lab | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| library | 1 | 3 | 0 | 1 | 6 | 0 | 0 | 1 | 0 | 0 |
+| maps | 1 | 4 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | miniapps | 1 | 0 | 0 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
-| pantry | 1 | 1 | 1 | 1 | 3 | 0 | 0 | 0 | 0 | 0 |
+| pantry | 1 | 1 | 1 | 1 | 3 | 0 | 1 | 0 | 0 | 0 |
 | puzzles | 1 | 2 | 0 | 5 | 0 | 0 | 1 | 0 | 4 | 1 |
 | reader | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | recorder | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 |
@@ -405,11 +417,11 @@ EmptyState columns, which are tags.
 | translator | 1 | 1 | 2 | 2 | 2 | 0 | 0 | 0 | 1 | 0 |
 | wiki | 1 | 6 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | workshop | 1 | 2 | 3 | 1 | 4 | 0 | 0 | 0 | 1 | 1 |
-| **Total** | **26** | **55** | **13** | **24 modules** | **39** | **6** | **8** | **0** | **7** | **9** |
+| **Total** | **26** | **62** | **13** | **24 modules** | **34** | **5** | **12** | **2** | **7** | **9** |
 
 Not counted in this matrix: the shell's pages (`apps/desktop/src/renderer/src`).
 The settings page is one of them and has no row; its adoption is in the sections
 above (Notice, Field, ConfirmDialog).
-Components no module page uses yet: `Dialog`, `Notice`, `AsyncSurface`,
-`Section`, `Toolbar`, `SettingsRow`, the `Segmented` component, `Toast` and
-`FormLayout`.
+Components no module page uses yet: `AsyncSurface`, `Section`, `Toolbar`,
+`SettingsRow`, the `Segmented` component and `FormLayout`. Of these, `Section`,
+`Toolbar`, `SettingsRow` and `Segmented` are in no shell page either.

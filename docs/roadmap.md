@@ -15,7 +15,7 @@ release.** Commits, migrations, modules and gates live in [STATUS.md](STATUS.md)
 ## Where we are
 
 Nexus is an offline desktop application, in daily use, and released: the current
-release is **2.0.3**, tagged `v2.0.3`. Every release is unsigned for now
+release is **2.1.0**, tagged `v2.1.0`. Every release is unsigned for now
 ([DEV-008](deviations.md)).
 
 Two decisions set the sequence:
@@ -47,6 +47,15 @@ Two decisions set the sequence:
   its tools is opened.
 - **Electron** — kept on a supported major, with the screenshot sweep as the
   check that a major bump needs.
+- **The UX overhaul, first pass** — the shared patterns (page header, empty
+  state, notice, list and detail, form, dialog and toast) settled in
+  [design/patterns.md](design/patterns.md) and adopted across the pages, and
+  each module's common tasks walked and their dead ends fixed.
+- **The local AI agent** — on a local model, answering from the user's own
+  data, the installed libraries and the app's manual, and reaching every
+  module through the app's own tools. It asks before it changes anything,
+  treats library text as data and never as instructions, and searches the
+  web only when the user turns that on.
 
 ---
 
@@ -55,15 +64,12 @@ Two decisions set the sequence:
 The open phases of the plan, in the order they run. Each step starts on what the
 previous one left in place.
 
-### 1. The UX overhaul
+### 1. Finishing the overhaul
 
-A method, not a list of screens. The app is inventoried in both languages and
-both themes at the two window sizes the sweep measures; each module's three most
-common tasks are walked and the dead ends recorded; the shared patterns (page
-header, empty state, list and detail, form, dialog and toast) are settled before
-any page is restyled; navigation (groups, pinning, the launcher, search across
-tools) is finished; then each group (Plan, Knowledge, Life, Make, Shell) gets one
-pass with before-and-after screenshots.
+What the first pass left: a keyboard pass, so the same keys work alike on every
+page; the screenshot sweep over the changed pages, in both languages and both
+themes; the rows the backup does not carry yet; and the tools the agent still
+lacks. [STATUS.md](STATUS.md) §4.1 lists each of them.
 
 ### 2. Stage two of the modules, and the lazy copy
 
@@ -74,11 +80,9 @@ each locale loaded on demand, is the design that item asks for.
 
 ### 3. Libraries, packs and readers
 
-- the offline reader for Kiwix libraries, and the reader for packaged books;
-- the packs the app is meant to carry: survival and reference content, recipes,
-  the dictionary, car help and the make-by-hand content;
+- the packs not built yet: the preserving recipes, the planet textures, the
+  chess engine, the DWG converter and the scanner's OCR language data;
 - an offline map, per region, with offline search;
-- DXF and, through a converter pack, DWG; the OCR scanner with its language packs;
 - printing packs to PDF, so the material can be kept on paper as well.
 
 ### 4. The packs repository, as a finished public artifact
@@ -86,14 +90,6 @@ each locale loaded on demand, is the design that item asks for.
 The packs repository becomes a finished public artifact: its signed catalogue
 and packages documented, each package carrying its licence, source and
 attribution, which the app shows on its credits screen.
-
-### 5. The local AI agent, last
-
-The agent comes after the knowledge packs it draws on. It runs on a local model,
-answers from the user's own data and the installed libraries, and reaches every
-module through the same tools the app uses. It asks before it changes anything,
-treats library text as data and never as instructions, and searches the web only
-when the user turns that on.
 
 ---
 
