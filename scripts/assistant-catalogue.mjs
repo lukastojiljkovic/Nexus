@@ -325,7 +325,7 @@ export function activeParametersOf(entry) {
  * The licence the app will show before a download, refused when it is missing.
  *
  * A model whose licence nobody wrote down is a model this product may not offer:
- * `CLAUDE.md`'s rule is that a cited fact comes with its source, and the licence
+ * `AGENTS.md`'s rule is that a cited fact comes with its source, and the licence
  * is the one fact a user has to see BEFORE they spend a gigabyte of their disk.
  */
 function catalogueLicence(entry) {

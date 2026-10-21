@@ -59,7 +59,7 @@ export function isDateTime(value: string): boolean {
 }
 
 /**
- * Serbian Latin ordering for every alphabetical FIN list (CLAUDE.md's house
+ * Serbian Latin ordering for every alphabetical FIN list (AGENTS.md's house
  * rule). Plain `"sr"` mis-tailors the Latin digraphs and diacritics — š, č, ć,
  * ž — so the locale list names the script explicitly.
  *

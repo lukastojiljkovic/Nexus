@@ -10,7 +10,7 @@
  *
  * **Why the locale is `sr-Latn` and not `sr`.** The interface's Serbian is the
  * Latin script, and plain `"sr"` mis-tailors it - the same reason every
- * `Intl.Collator` in this repository names the script (CLAUDE.md's house rule).
+ * `Intl.Collator` in this repository names the script (AGENTS.md's house rule).
  */
 import { activeLocale } from "../../../renderer/src/moduleKit/moduleSurface.js";
 

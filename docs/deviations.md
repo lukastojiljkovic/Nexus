@@ -170,7 +170,7 @@ architecture is logged here and needs founder confirmation before merging.
   (asked as one of four questions opening ADR-085; answer: *„Domenske boje su
   izuzetak SAMO unutar platna"*).
 - **Shipped in:** `v1.4.0` and every release since.
-- **What:** `CLAUDE.md`'s design rules ban blue and orange as system hues. The
+- **What:** `AGENTS.md`'s design rules ban blue and orange as system hues. The
   Elektronika canvas uses both: a wire is red for 5 V, black for ground, blue
   very often for I²C SDA, yellow for signal; an Arduino UNO's silkscreen is
   teal. These arrive as a new token group `--nx-elec-*` in `packages/tokens`.

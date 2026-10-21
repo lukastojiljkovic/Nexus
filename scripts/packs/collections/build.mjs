@@ -101,7 +101,7 @@ const YEAR = /^\d{1,4}$/;
 /**
  * Serbian sorting uses the Latin collator, not plain `"sr"`: the default
  * Serbian tailors Cyrillic, and a creator list or a title list ordered with it
- * puts `š`, `č` and `ć` in the wrong places (`CLAUDE.md`'s rule, and the
+ * puts `š`, `č` and `ć` in the wrong places (`AGENTS.md`'s rule, and the
  * collator the module stores here all use).
  */
 const COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);

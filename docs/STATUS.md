@@ -9,7 +9,7 @@ finishes, and recurring failure shapes go to [defect-classes.md](defect-classes.
 If a sentence here describes work that is already done, that is a defect in this
 file.
 
-**New agent, read in this order:** [../CLAUDE.md](../CLAUDE.md) (how we work and
+**New agent, read in this order:** [../AGENTS.md](../AGENTS.md) (how we work and
 the binding rules) → §1 and §2 below (where we are, what exists) → §4 (what is
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
@@ -185,7 +185,7 @@ no round has run for real. It is the head of the web/sync queue.
   `scripts/ci-workflow.test.mjs`, and the hand-kept copy that used to stand in
   this bullet had already lost four of them — [[DC-109]]: a list beside a
   generated list fails by omission, and the omission looks exactly like a gate
-  that is fine. `CLAUDE.md` carries the full set with the rule each one holds.
+  that is fine. `AGENTS.md` carries the full set with the rule each one holds.
   Every one of them exists because a class in [defect-classes.md](defect-classes.md)
   could not be caught by review. **`check:runner`** (2026-09-22) is the one that
   keeps a process from being started by data; the four added since it —
@@ -585,7 +585,7 @@ in again for an `aal1` session and buy a real `desktop` row with
 `nexus_device_register` and the MK proof; retire the temporary web row and sign
 the `aal2` session out.
 
-That is the „Recovery Kit" route `CLAUDE.md` already names, and it is now
+That is the „Recovery Kit" route `AGENTS.md` already names, and it is now
 **built end to end** (2026-08-16, `3696eda` — see §2). It needed no migration
 and no Edge Function: one transport call, one crypto composition
 (`deriveSyncRecoveryKey` + `unwrapKey`), a main-process flow, and a second mode

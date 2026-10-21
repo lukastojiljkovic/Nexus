@@ -4,7 +4,7 @@
  *
  * ─── Why there is no `fetch` and no origin in this package ──────────────────
  *
- * `CLAUDE.md` states the cloud-off guarantee as a structural one: „the
+ * `AGENTS.md` states the cloud-off guarantee as a structural one: „the
  * local-only path must not be *able* to reach the network." A transport that
  * constructed its own client would hold that ability whether or not a user ever
  * switched cloud on, and the promise would be back to being a boolean somebody

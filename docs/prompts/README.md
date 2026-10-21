@@ -7,7 +7,7 @@
 > documentation phase was sequenced is worth not re-deriving. Re-running any
 > phase would regenerate documents the product has since overtaken.
 >
-> How the project works now is `CLAUDE.md` at the repository root.
+> How the project works now is `AGENTS.md` at the repository root.
 
 Prompts for driving an LLM agent (Claude Code or similar — needs file access and
 web search) through the documentation and planning phases of Nexus. Run the

@@ -4,7 +4,7 @@
 //
 // WHY THIS GATE EXISTS.
 //
-// `CLAUDE.md` bans blue and orange as system hues. [DEV-006] carves exactly one
+// `AGENTS.md` bans blue and orange as system hues. [DEV-006] carves exactly one
 // hole in that ban: inside the Elektronika workbench a wire's colour is DATA —
 // red is 5 V, black is ground, blue is very often I²C SDA — and remapping those
 // onto the eight-accent palette would produce a wiring diagram that is wrong in

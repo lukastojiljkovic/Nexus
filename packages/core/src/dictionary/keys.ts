@@ -45,7 +45,7 @@ export function dictionaryKey(word: string): string {
  * not a collator.
  *
  * The house rule is `Intl.Collator(["sr-Latn", "sr"])` for anything a person
- * reads (CLAUDE.md), and the index is not such a thing: it is sorted by this
+ * reads (AGENTS.md), and the index is not such a thing: it is sorted by this
  * comparison so the searcher can binary-search it without reading it, and a
  * collator's order is a tailoring rule that differs between ICU builds while
  * a code-unit order is one the builder and the reader compute identically. The

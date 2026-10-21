@@ -2,7 +2,7 @@
  * The library's four orders, in one place.
  *
  * **Why a shared comparator rather than four `sort` calls in the renderer.**
- * The house rule (CLAUDE.md) is `Intl.Collator(["sr-Latn", "sr"])` for anything
+ * The house rule (AGENTS.md) is `Intl.Collator(["sr-Latn", "sr"])` for anything
  * a person reads, and plain `"sr"` is not a substitute: it mis-tailors the
  * digraphs and puts `Šuma` after `Zdravlje` in some ICU builds. A store that
  * handed back SQLite's BINARY order and left the renderer to fix it is the
@@ -27,7 +27,7 @@
  * The one collator for the library's lists, exported so the store and every
  * caller share it: two `Intl.Collator` instances with one configuration are
  * equal in behaviour and not in cost, and a second one is a second thing to
- * keep in step with CLAUDE.md.
+ * keep in step with AGENTS.md.
  */
 export const LIBRARY_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 

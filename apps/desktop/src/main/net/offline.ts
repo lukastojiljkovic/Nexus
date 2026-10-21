@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
  * The founder's requirement is not „there is a setting". It is: *„da na desktop
  * app moze da se ugasi web funkcionalnost, da je ugašeno po difoltu"* — a user
  * who never turns cloud on must be in exactly the product 1.0.0 was, with no
- * network calls at all. `CLAUDE.md` records the consequence: „This is a
+ * network calls at all. `AGENTS.md` records the consequence: „This is a
  * structural guarantee, not a promise — the local-only path must not be *able*
  * to reach the network."
  *

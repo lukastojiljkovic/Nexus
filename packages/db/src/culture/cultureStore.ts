@@ -102,7 +102,7 @@ export const MAX_CULTURE_LINK_LENGTH = 2000;
  */
 export type CulturePlanKind = VisitKind;
 
-/** Serbian Latin ordering for the lists a person reads (CLAUDE.md's house rule; plain `"sr"` mis-tailors the Latin š, č and ć). */
+/** Serbian Latin ordering for the lists a person reads (AGENTS.md's house rule; plain `"sr"` mis-tailors the Latin š, č and ć). */
 const CULTURE_COLLATOR = new Intl.Collator(["sr-Latn", "sr"]);
 
 /** Wall-clock `HH:MM`, 00:00-23:59 - the shape `habits.reminder_time` holds and `ntf_settings` validates. */
@@ -1742,7 +1742,7 @@ export class CultureStore {
   /**
    * Every live track in this profile, ordered the way a library is read: artist,
    * then album, then track number, then title - each name by the sr-Latn
-   * collator (CLAUDE.md's house rule; the default sort compares UTF-16 code
+   * collator (AGENTS.md's house rule; the default sort compares UTF-16 code
    * units, which puts `Ljubiša` before `Lola` where a Serbian reader expects the
    * opposite). A missing artist, album or track number groups with the empties,
    * at the TOP: a library sorted the other way would hide the files that still

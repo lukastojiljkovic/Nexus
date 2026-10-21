@@ -125,7 +125,7 @@ afterwards. The switch is in Settings.
 
 ## AI coding tools
 
-They are used on this project, openly. The repository carries `CLAUDE.md`, the
+They are used on this project, openly. The repository carries `AGENTS.md`, the
 working agreement those tools follow — it states the same rules as this file
 (verify before committing, one concern per commit, tests first for store logic,
 tokens only, no secrets) plus the project-specific ones. If you contribute with
