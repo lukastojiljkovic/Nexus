@@ -67,7 +67,7 @@ describe("shouldCompact", () => {
 
 describe("summarizeConversation", () => {
   it("asks for a summary with no tools and a bounded answer, from a fenced transcript", async () => {
-    const model = createScriptedModel([{ text: "  Korisnik je napravio zadatak „Kupi hleb\".  " }]);
+    const model = createScriptedModel([{ text: "  Korisnik je napravio zadatak „Kupi hleb“.  " }]);
     const summary = await summarizeConversation({
       model,
       earlier: null,
@@ -75,7 +75,7 @@ describe("summarizeConversation", () => {
       locale: "sr",
       signal: new AbortController().signal,
     });
-    expect(summary).toBe("Korisnik je napravio zadatak „Kupi hleb\".");
+    expect(summary).toBe("Korisnik je napravio zadatak „Kupi hleb“.");
     expect(model.requests).toHaveLength(1);
     const request = model.requests[0];
     expect(request?.tools).toEqual([]);
