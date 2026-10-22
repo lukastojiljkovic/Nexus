@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   bcp47Tag,
   buildLanguages,
+  languageTags,
   mmsRepoFor,
   nextLink,
   namesFor,
@@ -14,6 +15,7 @@ import {
   renderModule,
   splitNllbCode,
   uromanFlag,
+  voiceWritesScript,
   whisperCodeFor,
 } from "./languages.mjs";
 
@@ -36,6 +38,10 @@ const whisperCodes = new Set(parseWhisperCodes(whisperConfig));
 const uromanByRepo = new Map(
   Object.entries(tokenizerConfigs).map(([repo, config]) => [repo, uromanFlag(config, repo)]),
 );
+
+// Cut vocabularies, as the voices' `vocab.json` keys: a Latin one and a Tifinagh one.
+const LATIN_VOCAB = ["<pad>", "<unk>", "a", "b", "e", "k", "n", "s", "|"];
+const TIFINAGH_VOCAB = ["<pad>", "<unk>", "ⴰ", "ⴱ", "ⴳ", "ⴷ", "|"];
 
 describe("NLLB codes", () => {
   it("takes the language tokens and nothing else, sorted and unique", () => {
@@ -108,6 +114,68 @@ describe("FLORES names", () => {
   });
 });
 
+describe("language tags", () => {
+  const tags = (codes) => {
+    const list = languageTags(codes);
+    return new Map(codes.map((code, index) => [code, list[index]]));
+  };
+
+  it("gives a bare language subtag where the table has one row of that language", () => {
+    const byCode = tags(parseNllbCodes(specialTokens));
+    expect(byCode.get("deu_Latn")).toBe("de");
+    expect(byCode.get("eng_Latn")).toBe("en");
+    expect(byCode.get("srp_Cyrl")).toBe("sr");
+  });
+
+  it("adds the script where several rows share a language subtag", () => {
+    const byCode = tags(["zho_Hans", "zho_Hant", "ace_Arab", "ace_Latn"]);
+    expect(byCode.get("zho_Hans")).toBe("zh-Hans");
+    expect(byCode.get("zho_Hant")).toBe("zh-Hant");
+    expect(byCode.get("ace_Arab")).toBe("ace-Arab");
+    expect(byCode.get("ace_Latn")).toBe("ace-Latn");
+  });
+
+  it("spells a tag two rows would share with each row's ISO 639-3 code", () => {
+    const byCode = tags(["aka_Latn", "twi_Latn", "pes_Arab", "prs_Arab", "ajp_Arab", "apc_Arab"]);
+    expect(byCode.get("aka_Latn")).toBe("aka");
+    expect(byCode.get("twi_Latn")).toBe("twi");
+    expect(byCode.get("pes_Arab")).toBe("pes");
+    expect(byCode.get("prs_Arab")).toBe("prs");
+    expect(byCode.get("ajp_Arab")).toBe("ajp");
+    expect(byCode.get("apc_Arab")).toBe("apc");
+  });
+
+  it("gives every row of the real table a unique, well-formed tag", () => {
+    const codes = parseNllbCodes(specialTokens);
+    const all = languageTags(codes);
+    expect(new Set(all).size).toBe(codes.length);
+    expect(all.every((tag) => /^[a-z]{2,3}(-[A-Z][a-z]{3})?$/.test(tag))).toBe(true);
+  });
+});
+
+describe("voice scripts", () => {
+  it("accepts a voice whose single-letter vocabulary is in the row's script", () => {
+    expect(voiceWritesScript(LATIN_VOCAB, "Latn")).toBe(true);
+    expect(voiceWritesScript(TIFINAGH_VOCAB, "Tfng")).toBe(true);
+  });
+
+  it("refuses a voice written in another script", () => {
+    expect(voiceWritesScript(LATIN_VOCAB, "Arab")).toBe(false);
+    expect(voiceWritesScript(TIFINAGH_VOCAB, "Latn")).toBe(false);
+  });
+
+  it("reads Hans and Hant as Han characters", () => {
+    expect(voiceWritesScript(["<unk>", "中", "国", "人"], "Hans")).toBe(true);
+    expect(voiceWritesScript(["<unk>", "中", "国", "人"], "Latn")).toBe(false);
+  });
+
+  it("looks at the majority of the letters, and ignores keys that are not single letters", () => {
+    expect(voiceWritesScript(["ab", "ⴰ", "a", "b", "c", "<pad>"], "Latn")).toBe(true);
+    expect(voiceWritesScript(["ab", "ⴰ", "ⴱ", "a", "<pad>"], "Latn")).toBe(false);
+    expect(voiceWritesScript(["<pad>", "<unk>", "|"], "Latn")).toBe(false);
+  });
+});
+
 describe("MMS-TTS repositories", () => {
   it("keeps the per-language and per-script repos, and drops dialect splits and the bare repo", () => {
     expect(mmsIds).toContain("facebook/mms-tts-eng");
@@ -156,7 +224,12 @@ describe("display names", () => {
 });
 
 describe("buildLanguages", () => {
+  const vocabKeysByRepo = new Map([
+    ["facebook/mms-tts-eng", LATIN_VOCAB],
+    ["facebook/mms-tts-kmr-script_latin", LATIN_VOCAB],
+  ]);
   const languages = buildLanguages({
+    vocabKeysByRepo,
     codes: ["srp_Cyrl", "eng_Latn", "kmr_Latn", "ace_Latn", "bzd_Latn"],
     flores: new Map([
       ["srp_Cyrl", "Serbian"],
@@ -177,6 +250,7 @@ describe("buildLanguages", () => {
       iso3: "srp",
       script: "Cyrl",
       bcp47: "sr-Cyrl",
+      tag: "sr",
       whisper: "sr",
       tts: null,
       fallbackName: null,
@@ -187,6 +261,33 @@ describe("buildLanguages", () => {
       uroman: false,
     });
     expect(byCode("ace_Latn")).toMatchObject({ whisper: null, tts: null });
+  });
+
+  it("drops a voice whose vocabulary is written in another script than the row", () => {
+    const withAce = buildLanguages({
+      codes: ["ace_Arab", "ace_Latn"],
+      flores: new Map(),
+      whisperCodes,
+      mmsIds: [...mmsIds, "facebook/mms-tts-ace"],
+      uromanByRepo: new Map([...uromanByRepo, ["facebook/mms-tts-ace", false]]),
+      vocabKeysByRepo: new Map([["facebook/mms-tts-ace", LATIN_VOCAB]]),
+    });
+    expect(withAce.map((language) => [language.code, language.tts])).toEqual([
+      ["ace_Arab", null],
+      ["ace_Latn", { repo: "facebook/mms-tts-ace", uroman: false }],
+    ]);
+  });
+
+  it("keeps a uroman voice for a non-Latin row, since its text is romanised first", () => {
+    const korean = buildLanguages({
+      codes: ["kor_Hang"],
+      flores: new Map(),
+      whisperCodes,
+      mmsIds,
+      uromanByRepo,
+      vocabKeysByRepo: new Map([["facebook/mms-tts-kor", LATIN_VOCAB]]),
+    });
+    expect(korean[0].tts).toEqual({ repo: "facebook/mms-tts-kor", uroman: true });
   });
 
   it("uses the FLORES name for both locales only when ICU has none", () => {
@@ -251,5 +352,6 @@ describe("renderModule", () => {
     expect(source).toContain("export const NLLB_LANGUAGES: readonly NllbLanguage[] = [");
     expect(source).toContain("export function languageByCode(code: string): NllbLanguage | undefined");
     expect(source).toContain("code: \"srp_Cyrl\"");
+    expect(source).toContain("tag: \"sr\",");
   });
 });
