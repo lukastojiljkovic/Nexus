@@ -2,11 +2,9 @@
 // Sources:
 //   https://huggingface.co/Xenova/nllb-200-distilled-600M/resolve/main/special_tokens_map.json
 //   https://raw.githubusercontent.com/facebookresearch/flores/main/flores200/README.md
-//   https://huggingface.co/openai/whisper-small/resolve/main/generation_config.json
-//   https://huggingface.co/api/models?author=facebook&search=mms-tts&limit=2000
 // Generated: 2026-10-22
 
-/** One NLLB-200 language: the codes that name it in each system the translator uses. */
+/** One NLLB-200 language: its codes, and a name where ICU has none. */
 export interface NllbLanguage {
   /** The NLLB-200 (FLORES-200) code, `xxx_Ssss`. */
   readonly code: string;
@@ -16,10 +14,6 @@ export interface NllbLanguage {
   readonly script: string;
   /** BCP 47 tag, for `Intl` locale lookups. Two codes may share one (`ak-Latn`). */
   readonly bcp47: string;
-  /** The Whisper language id that hears this language, or `null` when Whisper has none. */
-  readonly whisper: string | null;
-  /** The MMS-TTS voice that speaks it, or `null`. `uroman` is whether its text is romanised first. */
-  readonly tts: { readonly repo: string; readonly uroman: boolean } | null;
   /** The FLORES English name, set where ICU cannot name the language, or where its tag is shared. */
   readonly fallbackName: string | null;
 }
@@ -30,8 +24,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ace",
     script: "Arab",
     bcp47: "ace-Arab",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ace", uroman: false },
     fallbackName: null,
   },
   {
@@ -39,8 +31,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ace",
     script: "Latn",
     bcp47: "ace-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ace", uroman: false },
     fallbackName: null,
   },
   {
@@ -48,8 +38,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "acm",
     script: "Arab",
     bcp47: "acm-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Mesopotamian Arabic",
   },
   {
@@ -57,8 +45,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "acq",
     script: "Arab",
     bcp47: "acq-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Ta’izzi-Adeni Arabic",
   },
   {
@@ -66,8 +52,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "aeb",
     script: "Arab",
     bcp47: "aeb-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Tunisian Arabic",
   },
   {
@@ -75,8 +59,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "afr",
     script: "Latn",
     bcp47: "af-Latn",
-    whisper: "af",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -84,8 +66,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ajp",
     script: "Arab",
     bcp47: "apc-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "South Levantine Arabic",
   },
   {
@@ -93,8 +73,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "aka",
     script: "Latn",
     bcp47: "ak-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-aka", uroman: false },
     fallbackName: "Akan",
   },
   {
@@ -102,8 +80,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "als",
     script: "Latn",
     bcp47: "sq-Latn",
-    whisper: "sq",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -111,8 +87,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "amh",
     script: "Ethi",
     bcp47: "am-Ethi",
-    whisper: "am",
-    tts: { repo: "facebook/mms-tts-amh", uroman: true },
     fallbackName: null,
   },
   {
@@ -120,8 +94,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "apc",
     script: "Arab",
     bcp47: "apc-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "North Levantine Arabic",
   },
   {
@@ -129,8 +101,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "arb",
     script: "Arab",
     bcp47: "ar-Arab",
-    whisper: "ar",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -138,8 +108,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ars",
     script: "Arab",
     bcp47: "ars-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -147,8 +115,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ary",
     script: "Arab",
     bcp47: "ary-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Moroccan Arabic",
   },
   {
@@ -156,8 +122,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "arz",
     script: "Arab",
     bcp47: "arz-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Egyptian Arabic",
   },
   {
@@ -165,8 +129,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "asm",
     script: "Beng",
     bcp47: "as-Beng",
-    whisper: "as",
-    tts: { repo: "facebook/mms-tts-asm", uroman: false },
     fallbackName: null,
   },
   {
@@ -174,8 +136,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ast",
     script: "Latn",
     bcp47: "ast-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -183,8 +143,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "awa",
     script: "Deva",
     bcp47: "awa-Deva",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-awa", uroman: false },
     fallbackName: null,
   },
   {
@@ -192,8 +150,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ayr",
     script: "Latn",
     bcp47: "ay-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ayr", uroman: false },
     fallbackName: null,
   },
   {
@@ -201,8 +157,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "azb",
     script: "Arab",
     bcp47: "azb-Arab",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-azb", uroman: false },
     fallbackName: "South Azerbaijani",
   },
   {
@@ -210,8 +164,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "azj",
     script: "Latn",
     bcp47: "az-Latn",
-    whisper: "az",
-    tts: { repo: "facebook/mms-tts-azj-script_latin", uroman: false },
     fallbackName: null,
   },
   {
@@ -219,8 +171,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bak",
     script: "Cyrl",
     bcp47: "ba-Cyrl",
-    whisper: "ba",
-    tts: { repo: "facebook/mms-tts-bak", uroman: false },
     fallbackName: null,
   },
   {
@@ -228,8 +178,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bam",
     script: "Latn",
     bcp47: "bm-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-bam", uroman: false },
     fallbackName: null,
   },
   {
@@ -237,8 +185,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ban",
     script: "Latn",
     bcp47: "ban-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ban", uroman: false },
     fallbackName: null,
   },
   {
@@ -246,8 +192,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bel",
     script: "Cyrl",
     bcp47: "be-Cyrl",
-    whisper: "be",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -255,8 +199,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bem",
     script: "Latn",
     bcp47: "bem-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-bem", uroman: false },
     fallbackName: null,
   },
   {
@@ -264,8 +206,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ben",
     script: "Beng",
     bcp47: "bn-Beng",
-    whisper: "bn",
-    tts: { repo: "facebook/mms-tts-ben", uroman: false },
     fallbackName: null,
   },
   {
@@ -273,8 +213,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bho",
     script: "Deva",
     bcp47: "bho-Deva",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -282,8 +220,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bjn",
     script: "Arab",
     bcp47: "bjn-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Banjar (Arabic script)",
   },
   {
@@ -291,8 +227,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bjn",
     script: "Latn",
     bcp47: "bjn-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: "Banjar (Latin script)",
   },
   {
@@ -300,8 +234,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bod",
     script: "Tibt",
     bcp47: "bo-Tibt",
-    whisper: "bo",
-    tts: { repo: "facebook/mms-tts-bod", uroman: false },
     fallbackName: null,
   },
   {
@@ -309,8 +241,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bos",
     script: "Latn",
     bcp47: "bs-Latn",
-    whisper: "bs",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -318,8 +248,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bug",
     script: "Latn",
     bcp47: "bug-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -327,8 +255,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "bul",
     script: "Cyrl",
     bcp47: "bg-Cyrl",
-    whisper: "bg",
-    tts: { repo: "facebook/mms-tts-bul", uroman: false },
     fallbackName: null,
   },
   {
@@ -336,8 +262,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "cat",
     script: "Latn",
     bcp47: "ca-Latn",
-    whisper: "ca",
-    tts: { repo: "facebook/mms-tts-cat", uroman: false },
     fallbackName: null,
   },
   {
@@ -345,8 +269,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ceb",
     script: "Latn",
     bcp47: "ceb-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ceb", uroman: false },
     fallbackName: null,
   },
   {
@@ -354,8 +276,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ces",
     script: "Latn",
     bcp47: "cs-Latn",
-    whisper: "cs",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -363,8 +283,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "cjk",
     script: "Latn",
     bcp47: "cjk-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: "Chokwe",
   },
   {
@@ -372,8 +290,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ckb",
     script: "Arab",
     bcp47: "ckb-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -381,8 +297,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "crh",
     script: "Latn",
     bcp47: "crh-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-crh", uroman: false },
     fallbackName: null,
   },
   {
@@ -390,8 +304,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "cym",
     script: "Latn",
     bcp47: "cy-Latn",
-    whisper: "cy",
-    tts: { repo: "facebook/mms-tts-cym", uroman: false },
     fallbackName: null,
   },
   {
@@ -399,8 +311,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "dan",
     script: "Latn",
     bcp47: "da-Latn",
-    whisper: "da",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -408,8 +318,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "deu",
     script: "Latn",
     bcp47: "de-Latn",
-    whisper: "de",
-    tts: { repo: "facebook/mms-tts-deu", uroman: false },
     fallbackName: null,
   },
   {
@@ -417,8 +325,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "dik",
     script: "Latn",
     bcp47: "din-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-dik", uroman: false },
     fallbackName: null,
   },
   {
@@ -426,8 +332,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "dyu",
     script: "Latn",
     bcp47: "dyu-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-dyu", uroman: false },
     fallbackName: null,
   },
   {
@@ -435,8 +339,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "dzo",
     script: "Tibt",
     bcp47: "dz-Tibt",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-dzo", uroman: false },
     fallbackName: null,
   },
   {
@@ -444,8 +346,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ell",
     script: "Grek",
     bcp47: "el-Grek",
-    whisper: "el",
-    tts: { repo: "facebook/mms-tts-ell", uroman: false },
     fallbackName: null,
   },
   {
@@ -453,8 +353,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "eng",
     script: "Latn",
     bcp47: "en-Latn",
-    whisper: "en",
-    tts: { repo: "facebook/mms-tts-eng", uroman: false },
     fallbackName: null,
   },
   {
@@ -462,8 +360,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "epo",
     script: "Latn",
     bcp47: "eo-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -471,8 +367,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "est",
     script: "Latn",
     bcp47: "et-Latn",
-    whisper: "et",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -480,8 +374,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "eus",
     script: "Latn",
     bcp47: "eu-Latn",
-    whisper: "eu",
-    tts: { repo: "facebook/mms-tts-eus", uroman: false },
     fallbackName: null,
   },
   {
@@ -489,8 +381,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ewe",
     script: "Latn",
     bcp47: "ee-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ewe", uroman: false },
     fallbackName: null,
   },
   {
@@ -498,8 +388,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fao",
     script: "Latn",
     bcp47: "fo-Latn",
-    whisper: "fo",
-    tts: { repo: "facebook/mms-tts-fao", uroman: false },
     fallbackName: null,
   },
   {
@@ -507,8 +395,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fij",
     script: "Latn",
     bcp47: "fj-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-fij", uroman: false },
     fallbackName: null,
   },
   {
@@ -516,8 +402,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fin",
     script: "Latn",
     bcp47: "fi-Latn",
-    whisper: "fi",
-    tts: { repo: "facebook/mms-tts-fin", uroman: false },
     fallbackName: null,
   },
   {
@@ -525,8 +409,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fon",
     script: "Latn",
     bcp47: "fon-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-fon", uroman: false },
     fallbackName: null,
   },
   {
@@ -534,8 +416,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fra",
     script: "Latn",
     bcp47: "fr-Latn",
-    whisper: "fr",
-    tts: { repo: "facebook/mms-tts-fra", uroman: false },
     fallbackName: null,
   },
   {
@@ -543,8 +423,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fur",
     script: "Latn",
     bcp47: "fur-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -552,8 +430,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "fuv",
     script: "Latn",
     bcp47: "fuv-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: "Nigerian Fulfulde",
   },
   {
@@ -561,8 +437,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "gaz",
     script: "Latn",
     bcp47: "om-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -570,8 +444,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "gla",
     script: "Latn",
     bcp47: "gd-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -579,8 +451,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "gle",
     script: "Latn",
     bcp47: "ga-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -588,8 +458,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "glg",
     script: "Latn",
     bcp47: "gl-Latn",
-    whisper: "gl",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -597,8 +465,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "grn",
     script: "Latn",
     bcp47: "gn-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-grn", uroman: false },
     fallbackName: null,
   },
   {
@@ -606,8 +472,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "guj",
     script: "Gujr",
     bcp47: "gu-Gujr",
-    whisper: "gu",
-    tts: { repo: "facebook/mms-tts-guj", uroman: false },
     fallbackName: null,
   },
   {
@@ -615,8 +479,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hat",
     script: "Latn",
     bcp47: "ht-Latn",
-    whisper: "ht",
-    tts: { repo: "facebook/mms-tts-hat", uroman: false },
     fallbackName: null,
   },
   {
@@ -624,8 +486,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hau",
     script: "Latn",
     bcp47: "ha-Latn",
-    whisper: "ha",
-    tts: { repo: "facebook/mms-tts-hau", uroman: false },
     fallbackName: null,
   },
   {
@@ -633,8 +493,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "heb",
     script: "Hebr",
     bcp47: "he-Hebr",
-    whisper: "he",
-    tts: { repo: "facebook/mms-tts-heb", uroman: false },
     fallbackName: null,
   },
   {
@@ -642,8 +500,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hin",
     script: "Deva",
     bcp47: "hi-Deva",
-    whisper: "hi",
-    tts: { repo: "facebook/mms-tts-hin", uroman: false },
     fallbackName: null,
   },
   {
@@ -651,8 +507,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hne",
     script: "Deva",
     bcp47: "hne-Deva",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-hne", uroman: false },
     fallbackName: "Chhattisgarhi",
   },
   {
@@ -660,8 +514,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hrv",
     script: "Latn",
     bcp47: "hr-Latn",
-    whisper: "hr",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -669,8 +521,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hun",
     script: "Latn",
     bcp47: "hu-Latn",
-    whisper: "hu",
-    tts: { repo: "facebook/mms-tts-hun", uroman: false },
     fallbackName: null,
   },
   {
@@ -678,8 +528,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "hye",
     script: "Armn",
     bcp47: "hy-Armn",
-    whisper: "hy",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -687,8 +535,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ibo",
     script: "Latn",
     bcp47: "ig-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -696,8 +542,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ilo",
     script: "Latn",
     bcp47: "ilo-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ilo", uroman: false },
     fallbackName: null,
   },
   {
@@ -705,8 +549,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ind",
     script: "Latn",
     bcp47: "id-Latn",
-    whisper: "id",
-    tts: { repo: "facebook/mms-tts-ind", uroman: false },
     fallbackName: null,
   },
   {
@@ -714,8 +556,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "isl",
     script: "Latn",
     bcp47: "is-Latn",
-    whisper: "is",
-    tts: { repo: "facebook/mms-tts-isl", uroman: false },
     fallbackName: null,
   },
   {
@@ -723,8 +563,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ita",
     script: "Latn",
     bcp47: "it-Latn",
-    whisper: "it",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -732,8 +570,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "jav",
     script: "Latn",
     bcp47: "jv-Latn",
-    whisper: "jw",
-    tts: { repo: "facebook/mms-tts-jav", uroman: false },
     fallbackName: null,
   },
   {
@@ -741,8 +577,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "jpn",
     script: "Jpan",
     bcp47: "ja-Jpan",
-    whisper: "ja",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -750,8 +584,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kab",
     script: "Latn",
     bcp47: "kab-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kab", uroman: false },
     fallbackName: null,
   },
   {
@@ -759,8 +591,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kac",
     script: "Latn",
     bcp47: "kac-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kac", uroman: false },
     fallbackName: null,
   },
   {
@@ -768,8 +598,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kam",
     script: "Latn",
     bcp47: "kam-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -777,8 +605,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kan",
     script: "Knda",
     bcp47: "kn-Knda",
-    whisper: "kn",
-    tts: { repo: "facebook/mms-tts-kan", uroman: false },
     fallbackName: null,
   },
   {
@@ -786,8 +612,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kas",
     script: "Arab",
     bcp47: "ks-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -795,8 +619,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kas",
     script: "Deva",
     bcp47: "ks-Deva",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -804,8 +626,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kat",
     script: "Geor",
     bcp47: "ka-Geor",
-    whisper: "ka",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -813,8 +633,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kaz",
     script: "Cyrl",
     bcp47: "kk-Cyrl",
-    whisper: "kk",
-    tts: { repo: "facebook/mms-tts-kaz", uroman: false },
     fallbackName: null,
   },
   {
@@ -822,8 +640,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kbp",
     script: "Latn",
     bcp47: "kbp-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kbp", uroman: false },
     fallbackName: "Kabiyè",
   },
   {
@@ -831,8 +647,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kea",
     script: "Latn",
     bcp47: "kea-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -840,8 +654,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "khk",
     script: "Cyrl",
     bcp47: "mn-Cyrl",
-    whisper: "mn",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -849,8 +661,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "khm",
     script: "Khmr",
     bcp47: "km-Khmr",
-    whisper: "km",
-    tts: { repo: "facebook/mms-tts-khm", uroman: false },
     fallbackName: null,
   },
   {
@@ -858,8 +668,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kik",
     script: "Latn",
     bcp47: "ki-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kik", uroman: false },
     fallbackName: null,
   },
   {
@@ -867,8 +675,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kin",
     script: "Latn",
     bcp47: "rw-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kin", uroman: false },
     fallbackName: null,
   },
   {
@@ -876,8 +682,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kir",
     script: "Cyrl",
     bcp47: "ky-Cyrl",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kir", uroman: false },
     fallbackName: null,
   },
   {
@@ -885,8 +689,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kmb",
     script: "Latn",
     bcp47: "kmb-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -894,8 +696,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kmr",
     script: "Latn",
     bcp47: "ku-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-kmr-script_latin", uroman: false },
     fallbackName: null,
   },
   {
@@ -903,8 +703,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "knc",
     script: "Arab",
     bcp47: "kr-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -912,8 +710,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "knc",
     script: "Latn",
     bcp47: "kr-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -921,8 +717,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kon",
     script: "Latn",
     bcp47: "kg-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -930,8 +724,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "kor",
     script: "Hang",
     bcp47: "ko-Hang",
-    whisper: "ko",
-    tts: { repo: "facebook/mms-tts-kor", uroman: true },
     fallbackName: null,
   },
   {
@@ -939,8 +731,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lao",
     script: "Laoo",
     bcp47: "lo-Laoo",
-    whisper: "lo",
-    tts: { repo: "facebook/mms-tts-lao", uroman: false },
     fallbackName: null,
   },
   {
@@ -948,8 +738,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lij",
     script: "Latn",
     bcp47: "lij-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -957,8 +745,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lim",
     script: "Latn",
     bcp47: "li-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -966,8 +752,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lin",
     script: "Latn",
     bcp47: "ln-Latn",
-    whisper: "ln",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -975,8 +759,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lit",
     script: "Latn",
     bcp47: "lt-Latn",
-    whisper: "lt",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -984,8 +766,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lmo",
     script: "Latn",
     bcp47: "lmo-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -993,8 +773,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ltg",
     script: "Latn",
     bcp47: "ltg-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: "Latgalian",
   },
   {
@@ -1002,8 +780,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ltz",
     script: "Latn",
     bcp47: "lb-Latn",
-    whisper: "lb",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1011,8 +787,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lua",
     script: "Latn",
     bcp47: "lua-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1020,8 +794,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lug",
     script: "Latn",
     bcp47: "lg-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-lug", uroman: false },
     fallbackName: null,
   },
   {
@@ -1029,8 +801,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "luo",
     script: "Latn",
     bcp47: "luo-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1038,8 +808,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lus",
     script: "Latn",
     bcp47: "lus-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1047,8 +815,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "lvs",
     script: "Latn",
     bcp47: "lv-Latn",
-    whisper: "lv",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1056,8 +822,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mag",
     script: "Deva",
     bcp47: "mag-Deva",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-mag", uroman: false },
     fallbackName: null,
   },
   {
@@ -1065,8 +829,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mai",
     script: "Deva",
     bcp47: "mai-Deva",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-mai", uroman: false },
     fallbackName: null,
   },
   {
@@ -1074,8 +836,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mal",
     script: "Mlym",
     bcp47: "ml-Mlym",
-    whisper: "ml",
-    tts: { repo: "facebook/mms-tts-mal", uroman: false },
     fallbackName: null,
   },
   {
@@ -1083,8 +843,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mar",
     script: "Deva",
     bcp47: "mr-Deva",
-    whisper: "mr",
-    tts: { repo: "facebook/mms-tts-mar", uroman: false },
     fallbackName: null,
   },
   {
@@ -1092,8 +850,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "min",
     script: "Latn",
     bcp47: "min-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-min", uroman: false },
     fallbackName: null,
   },
   {
@@ -1101,8 +857,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mkd",
     script: "Cyrl",
     bcp47: "mk-Cyrl",
-    whisper: "mk",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1110,8 +864,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mlt",
     script: "Latn",
     bcp47: "mt-Latn",
-    whisper: "mt",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1119,8 +871,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mni",
     script: "Beng",
     bcp47: "mni-Beng",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1128,8 +878,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mos",
     script: "Latn",
     bcp47: "mos-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-mos", uroman: false },
     fallbackName: null,
   },
   {
@@ -1137,8 +885,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mri",
     script: "Latn",
     bcp47: "mi-Latn",
-    whisper: "mi",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1146,8 +892,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "mya",
     script: "Mymr",
     bcp47: "my-Mymr",
-    whisper: "my",
-    tts: { repo: "facebook/mms-tts-mya", uroman: false },
     fallbackName: null,
   },
   {
@@ -1155,8 +899,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "nld",
     script: "Latn",
     bcp47: "nl-Latn",
-    whisper: "nl",
-    tts: { repo: "facebook/mms-tts-nld", uroman: false },
     fallbackName: null,
   },
   {
@@ -1164,8 +906,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "nno",
     script: "Latn",
     bcp47: "nn-Latn",
-    whisper: "nn",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1173,8 +913,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "nob",
     script: "Latn",
     bcp47: "nb-Latn",
-    whisper: "no",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1182,8 +920,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "npi",
     script: "Deva",
     bcp47: "ne-Deva",
-    whisper: "ne",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1191,8 +927,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "nso",
     script: "Latn",
     bcp47: "nso-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1200,8 +934,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "nus",
     script: "Latn",
     bcp47: "nus-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-nus", uroman: false },
     fallbackName: null,
   },
   {
@@ -1209,8 +941,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "nya",
     script: "Latn",
     bcp47: "ny-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-nya", uroman: false },
     fallbackName: null,
   },
   {
@@ -1218,8 +948,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "oci",
     script: "Latn",
     bcp47: "oc-Latn",
-    whisper: "oc",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1227,8 +955,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ory",
     script: "Orya",
     bcp47: "or-Orya",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-ory", uroman: false },
     fallbackName: null,
   },
   {
@@ -1236,8 +962,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "pag",
     script: "Latn",
     bcp47: "pag-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-pag", uroman: false },
     fallbackName: null,
   },
   {
@@ -1245,8 +969,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "pan",
     script: "Guru",
     bcp47: "pa-Guru",
-    whisper: "pa",
-    tts: { repo: "facebook/mms-tts-pan", uroman: false },
     fallbackName: null,
   },
   {
@@ -1254,8 +976,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "pap",
     script: "Latn",
     bcp47: "pap-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-pap", uroman: false },
     fallbackName: null,
   },
   {
@@ -1263,8 +983,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "pbt",
     script: "Arab",
     bcp47: "pbt-Arab",
-    whisper: null,
-    tts: null,
     fallbackName: "Southern Pashto",
   },
   {
@@ -1272,8 +990,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "pes",
     script: "Arab",
     bcp47: "fa-Arab",
-    whisper: "fa",
-    tts: null,
     fallbackName: "Western Persian",
   },
   {
@@ -1281,8 +997,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "plt",
     script: "Latn",
     bcp47: "mg-Latn",
-    whisper: "mg",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1290,8 +1004,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "pol",
     script: "Latn",
     bcp47: "pl-Latn",
-    whisper: "pl",
-    tts: { repo: "facebook/mms-tts-pol", uroman: false },
     fallbackName: null,
   },
   {
@@ -1299,8 +1011,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "por",
     script: "Latn",
     bcp47: "pt-Latn",
-    whisper: "pt",
-    tts: { repo: "facebook/mms-tts-por", uroman: false },
     fallbackName: null,
   },
   {
@@ -1308,8 +1018,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "prs",
     script: "Arab",
     bcp47: "fa-Arab",
-    whisper: "fa",
-    tts: null,
     fallbackName: "Dari",
   },
   {
@@ -1317,8 +1025,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "quy",
     script: "Latn",
     bcp47: "quy-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-quy", uroman: false },
     fallbackName: "Ayacucho Quechua",
   },
   {
@@ -1326,8 +1032,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ron",
     script: "Latn",
     bcp47: "ro-Latn",
-    whisper: "ro",
-    tts: { repo: "facebook/mms-tts-ron", uroman: false },
     fallbackName: null,
   },
   {
@@ -1335,8 +1039,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "run",
     script: "Latn",
     bcp47: "rn-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-run", uroman: false },
     fallbackName: null,
   },
   {
@@ -1344,8 +1046,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "rus",
     script: "Cyrl",
     bcp47: "ru-Cyrl",
-    whisper: "ru",
-    tts: { repo: "facebook/mms-tts-rus", uroman: false },
     fallbackName: null,
   },
   {
@@ -1353,8 +1053,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "sag",
     script: "Latn",
     bcp47: "sg-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-sag", uroman: false },
     fallbackName: null,
   },
   {
@@ -1362,8 +1060,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "san",
     script: "Deva",
     bcp47: "sa-Deva",
-    whisper: "sa",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1371,8 +1067,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "sat",
     script: "Beng",
     bcp47: "sat-Beng",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1380,8 +1074,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "scn",
     script: "Latn",
     bcp47: "scn-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1389,8 +1081,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "shn",
     script: "Mymr",
     bcp47: "shn-Mymr",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-shn", uroman: false },
     fallbackName: null,
   },
   {
@@ -1398,8 +1088,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "sin",
     script: "Sinh",
     bcp47: "si-Sinh",
-    whisper: "si",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1407,8 +1095,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "slk",
     script: "Latn",
     bcp47: "sk-Latn",
-    whisper: "sk",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1416,8 +1102,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "slv",
     script: "Latn",
     bcp47: "sl-Latn",
-    whisper: "sl",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1425,8 +1109,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "smo",
     script: "Latn",
     bcp47: "sm-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-smo", uroman: false },
     fallbackName: null,
   },
   {
@@ -1434,8 +1116,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "sna",
     script: "Latn",
     bcp47: "sn-Latn",
-    whisper: "sn",
-    tts: { repo: "facebook/mms-tts-sna", uroman: false },
     fallbackName: null,
   },
   {
@@ -1443,8 +1123,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "snd",
     script: "Arab",
     bcp47: "sd-Arab",
-    whisper: "sd",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1452,8 +1130,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "som",
     script: "Latn",
     bcp47: "so-Latn",
-    whisper: "so",
-    tts: { repo: "facebook/mms-tts-som", uroman: false },
     fallbackName: null,
   },
   {
@@ -1461,8 +1137,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "sot",
     script: "Latn",
     bcp47: "st-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1470,8 +1144,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "spa",
     script: "Latn",
     bcp47: "es-Latn",
-    whisper: "es",
-    tts: { repo: "facebook/mms-tts-spa", uroman: false },
     fallbackName: null,
   },
   {
@@ -1479,8 +1151,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "srd",
     script: "Latn",
     bcp47: "sc-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1488,8 +1158,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "srp",
     script: "Cyrl",
     bcp47: "sr-Cyrl",
-    whisper: "sr",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1497,8 +1165,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ssw",
     script: "Latn",
     bcp47: "ss-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1506,8 +1172,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "sun",
     script: "Latn",
     bcp47: "su-Latn",
-    whisper: "su",
-    tts: { repo: "facebook/mms-tts-sun", uroman: false },
     fallbackName: null,
   },
   {
@@ -1515,8 +1179,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "swe",
     script: "Latn",
     bcp47: "sv-Latn",
-    whisper: "sv",
-    tts: { repo: "facebook/mms-tts-swe", uroman: false },
     fallbackName: null,
   },
   {
@@ -1524,8 +1186,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "swh",
     script: "Latn",
     bcp47: "sw-Latn",
-    whisper: "sw",
-    tts: { repo: "facebook/mms-tts-swh", uroman: false },
     fallbackName: null,
   },
   {
@@ -1533,8 +1193,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "szl",
     script: "Latn",
     bcp47: "szl-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1542,8 +1200,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tam",
     script: "Taml",
     bcp47: "ta-Taml",
-    whisper: "ta",
-    tts: { repo: "facebook/mms-tts-tam", uroman: false },
     fallbackName: null,
   },
   {
@@ -1551,8 +1207,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "taq",
     script: "Latn",
     bcp47: "taq-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-taq", uroman: false },
     fallbackName: "Tamasheq (Latin script)",
   },
   {
@@ -1560,8 +1214,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "taq",
     script: "Tfng",
     bcp47: "taq-Tfng",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-taq", uroman: false },
     fallbackName: "Tamasheq (Tifinagh script)",
   },
   {
@@ -1569,8 +1221,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tat",
     script: "Cyrl",
     bcp47: "tt-Cyrl",
-    whisper: "tt",
-    tts: { repo: "facebook/mms-tts-tat", uroman: false },
     fallbackName: null,
   },
   {
@@ -1578,8 +1228,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tel",
     script: "Telu",
     bcp47: "te-Telu",
-    whisper: "te",
-    tts: { repo: "facebook/mms-tts-tel", uroman: false },
     fallbackName: null,
   },
   {
@@ -1587,8 +1235,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tgk",
     script: "Cyrl",
     bcp47: "tg-Cyrl",
-    whisper: "tg",
-    tts: { repo: "facebook/mms-tts-tgk", uroman: false },
     fallbackName: null,
   },
   {
@@ -1596,8 +1242,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tgl",
     script: "Latn",
     bcp47: "fil-Latn",
-    whisper: "tl",
-    tts: { repo: "facebook/mms-tts-tgl", uroman: false },
     fallbackName: null,
   },
   {
@@ -1605,8 +1249,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tha",
     script: "Thai",
     bcp47: "th-Thai",
-    whisper: "th",
-    tts: { repo: "facebook/mms-tts-tha", uroman: false },
     fallbackName: null,
   },
   {
@@ -1614,8 +1256,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tir",
     script: "Ethi",
     bcp47: "ti-Ethi",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-tir", uroman: true },
     fallbackName: null,
   },
   {
@@ -1623,8 +1263,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tpi",
     script: "Latn",
     bcp47: "tpi-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-tpi", uroman: false },
     fallbackName: null,
   },
   {
@@ -1632,8 +1270,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tsn",
     script: "Latn",
     bcp47: "tn-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1641,8 +1277,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tso",
     script: "Latn",
     bcp47: "ts-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-tso", uroman: false },
     fallbackName: null,
   },
   {
@@ -1650,8 +1284,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tuk",
     script: "Latn",
     bcp47: "tk-Latn",
-    whisper: "tk",
-    tts: { repo: "facebook/mms-tts-tuk-script_latin", uroman: false },
     fallbackName: null,
   },
   {
@@ -1659,8 +1291,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tum",
     script: "Latn",
     bcp47: "tum-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1668,8 +1298,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tur",
     script: "Latn",
     bcp47: "tr-Latn",
-    whisper: "tr",
-    tts: { repo: "facebook/mms-tts-tur", uroman: false },
     fallbackName: null,
   },
   {
@@ -1677,8 +1305,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "twi",
     script: "Latn",
     bcp47: "ak-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: "Twi",
   },
   {
@@ -1686,8 +1312,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "tzm",
     script: "Tfng",
     bcp47: "tzm-Tfng",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1695,8 +1319,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "uig",
     script: "Arab",
     bcp47: "ug-Arab",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-uig-script_arabic", uroman: false },
     fallbackName: null,
   },
   {
@@ -1704,8 +1326,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ukr",
     script: "Cyrl",
     bcp47: "uk-Cyrl",
-    whisper: "uk",
-    tts: { repo: "facebook/mms-tts-ukr", uroman: false },
     fallbackName: null,
   },
   {
@@ -1713,8 +1333,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "umb",
     script: "Latn",
     bcp47: "umb-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1722,8 +1340,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "urd",
     script: "Arab",
     bcp47: "ur-Arab",
-    whisper: "ur",
-    tts: { repo: "facebook/mms-tts-urd-script_arabic", uroman: false },
     fallbackName: null,
   },
   {
@@ -1731,8 +1347,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "uzn",
     script: "Latn",
     bcp47: "uz-Latn",
-    whisper: "uz",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1740,8 +1354,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "vec",
     script: "Latn",
     bcp47: "vec-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1749,8 +1361,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "vie",
     script: "Latn",
     bcp47: "vi-Latn",
-    whisper: "vi",
-    tts: { repo: "facebook/mms-tts-vie", uroman: false },
     fallbackName: null,
   },
   {
@@ -1758,8 +1368,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "war",
     script: "Latn",
     bcp47: "war-Latn",
-    whisper: null,
-    tts: { repo: "facebook/mms-tts-war", uroman: false },
     fallbackName: null,
   },
   {
@@ -1767,8 +1375,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "wol",
     script: "Latn",
     bcp47: "wo-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1776,8 +1382,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "xho",
     script: "Latn",
     bcp47: "xh-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1785,8 +1389,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "ydd",
     script: "Hebr",
     bcp47: "yi-Hebr",
-    whisper: "yi",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1794,8 +1396,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "yor",
     script: "Latn",
     bcp47: "yo-Latn",
-    whisper: "yo",
-    tts: { repo: "facebook/mms-tts-yor", uroman: false },
     fallbackName: null,
   },
   {
@@ -1803,8 +1403,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "yue",
     script: "Hant",
     bcp47: "yue-Hant",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1812,8 +1410,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "zho",
     script: "Hans",
     bcp47: "zh-Hans",
-    whisper: "zh",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1821,8 +1417,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "zho",
     script: "Hant",
     bcp47: "zh-Hant",
-    whisper: "zh",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1830,8 +1424,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "zsm",
     script: "Latn",
     bcp47: "ms-Latn",
-    whisper: "ms",
-    tts: null,
     fallbackName: null,
   },
   {
@@ -1839,8 +1431,6 @@ export const NLLB_LANGUAGES: readonly NllbLanguage[] = [
     iso3: "zul",
     script: "Latn",
     bcp47: "zu-Latn",
-    whisper: null,
-    tts: null,
     fallbackName: null,
   },
 ];

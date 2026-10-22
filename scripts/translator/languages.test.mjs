@@ -4,17 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   bcp47Tag,
   buildLanguages,
-  mmsRepoFor,
-  nextLink,
   namesFor,
   parseFloresNames,
-  parseMmsModelIds,
   parseNllbCodes,
-  parseWhisperCodes,
   renderModule,
   splitNllbCode,
-  uromanFlag,
-  whisperCodeFor,
 } from "./languages.mjs";
 
 /**
@@ -26,17 +20,7 @@ import {
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
 
 const specialTokens = JSON.parse(fixture("special_tokens_map.json"));
-const whisperConfig = JSON.parse(fixture("whisper-generation_config.json"));
 const floresMarkdown = fixture("flores-languages.md");
-const mmsModels = JSON.parse(fixture("mms-api-models.json"));
-const tokenizerConfigs = JSON.parse(fixture("mms-tokenizer-configs.json"));
-
-const mmsIds = parseMmsModelIds(mmsModels);
-const whisperCodes = new Set(parseWhisperCodes(whisperConfig));
-const uromanByRepo = new Map(
-  Object.entries(tokenizerConfigs).map(([repo, config]) => [repo, uromanFlag(config, repo)]),
-);
-
 describe("NLLB codes", () => {
   it("takes the language tokens and nothing else, sorted and unique", () => {
     const codes = parseNllbCodes(specialTokens);
@@ -69,33 +53,6 @@ describe("NLLB codes", () => {
   });
 });
 
-describe("Whisper codes", () => {
-  it("reads the language ids out of lang_to_id", () => {
-    const codes = parseWhisperCodes(whisperConfig);
-    // Measured: whisper-small's generation_config.json has 99 language entries.
-    expect(codes).toHaveLength(99);
-    expect(codes).toContain("sr");
-    expect(codes).not.toContain("<|sr|>");
-  });
-
-  it("uses the primary subtag when Whisper has it", () => {
-    expect(whisperCodeFor("sr-Cyrl", whisperCodes)).toBe("sr");
-    expect(whisperCodeFor("hr-Latn", whisperCodes)).toBe("hr");
-    expect(whisperCodeFor("bs-Latn", whisperCodes)).toBe("bs");
-  });
-
-  it("applies the override table where Whisper's code differs", () => {
-    expect(whisperCodeFor("jv-Latn", whisperCodes)).toBe("jw");
-    expect(whisperCodeFor("fil-Latn", whisperCodes)).toBe("tl");
-    expect(whisperCodeFor("nb-Latn", whisperCodes)).toBe("no");
-  });
-
-  it("is null for a language Whisper lacks", () => {
-    expect(whisperCodeFor("ace-Latn", whisperCodes)).toBeNull();
-    expect(whisperCodeFor("ak-Latn", whisperCodes)).toBeNull();
-  });
-});
-
 describe("FLORES names", () => {
   it("reads the name table and ignores the code-to-ISO table beside it", () => {
     const names = parseFloresNames(floresMarkdown);
@@ -105,43 +62,6 @@ describe("FLORES names", () => {
     expect(names.get("acm_Arab")).toBe("Mesopotamian Arabic");
     expect(names.has("bul_Cyrl")).toBe(true);
     expect([...names.values()].includes("bul")).toBe(false);
-  });
-});
-
-describe("MMS-TTS repositories", () => {
-  it("keeps the per-language and per-script repos, and drops dialect splits and the bare repo", () => {
-    expect(mmsIds).toContain("facebook/mms-tts-eng");
-    expect(mmsIds).toContain("facebook/mms-tts-kmr-script_latin");
-    expect(mmsIds.some((id) => id.includes("dialect"))).toBe(false);
-    expect(mmsIds).not.toContain("facebook/mms-tts");
-  });
-
-  it("chooses the per-language repo when one exists", () => {
-    expect(mmsRepoFor("eng_Latn", mmsIds)).toBe("facebook/mms-tts-eng");
-  });
-
-  it("chooses the script split whose script matches the NLLB code", () => {
-    expect(mmsRepoFor("kmr_Latn", mmsIds)).toBe("facebook/mms-tts-kmr-script_latin");
-    expect(mmsRepoFor("kmr_Cyrl", mmsIds)).toBe("facebook/mms-tts-kmr-script_cyrillic");
-    expect(mmsRepoFor("urd_Arab", mmsIds)).toBe("facebook/mms-tts-urd-script_arabic");
-  });
-
-  it("is null when no repo matches the script, or only a dialect split exists", () => {
-    expect(mmsRepoFor("azj_Cyrl", mmsIds)).toBeNull();
-    expect(mmsRepoFor("mam_Latn", mmsIds)).toBeNull();
-    expect(mmsRepoFor("srp_Cyrl", mmsIds)).toBeNull();
-  });
-
-  it("reads is_uroman from each tokenizer config, and refuses one that does not state it", () => {
-    expect(uromanByRepo.get("facebook/mms-tts-kor")).toBe(true);
-    expect(uromanByRepo.get("facebook/mms-tts-eng")).toBe(false);
-    expect(() => uromanFlag({}, "facebook/mms-tts-xyz")).toThrow(/mms-tts-xyz/);
-  });
-
-  it("follows the rel=next link of the API listing", () => {
-    const header = '<https://huggingface.co/api/models?author=facebook&cursor=abc>; rel="next"';
-    expect(nextLink(header)).toBe("https://huggingface.co/api/models?author=facebook&cursor=abc");
-    expect(nextLink(null)).toBeUndefined();
   });
 });
 
@@ -165,28 +85,17 @@ describe("buildLanguages", () => {
       ["ace_Latn", "Acehnese (Latin script)"],
       ["bzd_Latn", "Test Language"],
     ]),
-    whisperCodes,
-    mmsIds,
-    uromanByRepo,
   });
   const byCode = (code) => languages.find((language) => language.code === code);
 
-  it("fills one row per code with the Whisper, MMS and name fields", () => {
+  it("fills one row per code with its codes and a name only where one is needed", () => {
     expect(byCode("srp_Cyrl")).toEqual({
       code: "srp_Cyrl",
       iso3: "srp",
       script: "Cyrl",
       bcp47: "sr-Cyrl",
-      whisper: "sr",
-      tts: null,
       fallbackName: null,
     });
-    expect(byCode("eng_Latn").tts).toEqual({ repo: "facebook/mms-tts-eng", uroman: false });
-    expect(byCode("kmr_Latn").tts).toEqual({
-      repo: "facebook/mms-tts-kmr-script_latin",
-      uroman: false,
-    });
-    expect(byCode("ace_Latn")).toMatchObject({ whisper: null, tts: null });
   });
 
   it("uses the FLORES name for both locales only when ICU has none", () => {
@@ -198,9 +107,6 @@ describe("buildLanguages", () => {
     const shared = buildLanguages({
       codes: ["aka_Latn", "twi_Latn"],
       flores: parseFloresNames(floresMarkdown),
-      whisperCodes,
-      mmsIds,
-      uromanByRepo,
     });
     expect(shared.map((language) => [language.bcp47, language.fallbackName])).toEqual([
       ["ak-Latn", "Akan"],
@@ -213,9 +119,6 @@ describe("buildLanguages", () => {
       buildLanguages({
         codes: ["bzd_Latn"],
         flores: new Map(),
-        whisperCodes,
-        mmsIds,
-        uromanByRepo,
       }),
     ).toThrow(/bzd_Latn/);
   });
@@ -231,9 +134,6 @@ describe("renderModule", () => {
     languages: buildLanguages({
       codes: ["srp_Cyrl"],
       flores: new Map([["srp_Cyrl", "Serbian"]]),
-      whisperCodes,
-      mmsIds,
-      uromanByRepo,
     }),
     sources: ["https://example.test/languages.json"],
     date: "2026-10-22",

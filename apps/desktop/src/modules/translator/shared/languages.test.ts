@@ -5,8 +5,8 @@ import { NLLB_LANGUAGES, languageByCode } from "./languages.js";
 /**
  * The generated language table, checked for the shape the translator relies on.
  * The rows themselves are derived by `scripts/translator/languages.mjs` and tested
- * there; this asserts what the app reads: unique codes, the Whisper codes the
- * speech-in path needs, and voices that are MMS-TTS repos and nothing else.
+ * there; this asserts what the app reads: unique codes, and the BCP 47 tags the
+ * page names languages and splits sentences by.
  */
 describe("NLLB language table", () => {
   it("has unique, well-formed codes, sorted", () => {
@@ -16,23 +16,17 @@ describe("NLLB language table", () => {
     expect([...codes].sort()).toEqual(codes);
   });
 
-  it("gives the Serbian, Croatian, Bosnian, English and German codes their Whisper codes", () => {
+  it("gives the Serbian, Croatian, Bosnian, English and Chinese codes their BCP 47 tags", () => {
     const expected = [
-      ["srp_Cyrl", "sr"],
-      ["hrv_Latn", "hr"],
-      ["bos_Latn", "bs"],
-      ["eng_Latn", "en"],
-      ["deu_Latn", "de"],
+      ["srp_Cyrl", "sr-Cyrl"],
+      ["hrv_Latn", "hr-Latn"],
+      ["bos_Latn", "bs-Latn"],
+      ["eng_Latn", "en-Latn"],
+      ["zho_Hant", "zh-Hant"],
     ] as const;
-    for (const [code, whisper] of expected) {
-      expect(languageByCode(code)?.whisper).toBe(whisper);
+    for (const [code, bcp47] of expected) {
+      expect(languageByCode(code)?.bcp47).toBe(bcp47);
     }
-  });
-
-  it("points every voice at an MMS-TTS repo", () => {
-    const voices = NLLB_LANGUAGES.flatMap((language) => (language.tts === null ? [] : [language.tts]));
-    expect(voices.length).toBeGreaterThan(0);
-    expect(voices.every((voice) => voice.repo.startsWith("facebook/mms-tts-"))).toBe(true);
   });
 
   it("returns undefined for a code the table does not carry", () => {
