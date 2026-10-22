@@ -7,6 +7,7 @@ import {
   AssistantNotFoundError,
   AssistantValidationError,
   ConversationStore,
+  DEFAULT_ASSISTANT_RUNTIME,
   MAX_CONVERSATION_TITLE_LENGTH,
   NexusDatabase,
   emptyAssistantExport,
@@ -397,6 +398,68 @@ describe("ConversationStore", () => {
     expect(rows.n).toBe(0);
   });
 
+  it("answers the model's own runtime and a fifteen-minute idle unload for a profile with no row", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    expect(store.runtimeOptions()).toEqual(DEFAULT_ASSISTANT_RUNTIME);
+    expect(DEFAULT_ASSISTANT_RUNTIME).toEqual({
+      contextTokens: null,
+      temperature: null,
+      topP: null,
+      topK: null,
+      repeatPenalty: null,
+      idleUnloadMinutes: 15,
+    });
+  });
+
+  it("writes the runtime options beside the tier and the chosen model, and keeps them across both", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    const options = {
+      contextTokens: 16_384,
+      temperature: 0.4,
+      topP: 0.9,
+      topK: 40,
+      repeatPenalty: 1.1,
+      idleUnloadMinutes: 0,
+    };
+    expect(store.setRuntimeOptions(options, NOW)).toEqual(options);
+    expect(store.runtimeOptions()).toEqual(options);
+    // The other two answers on the row are untouched, and writing them does not reset these.
+    expect(store.settings()).toEqual({ defaultTier: "balance", chatModelId: null });
+    store.setChatModel("qwen2.5-3b-instruct-q4_k_m", LATER);
+    store.setDefaultTier("speed", LATER);
+    expect(store.runtimeOptions()).toEqual(options);
+    // `null` is "the model's own", and writing it back is how a value is reset.
+    expect(store.setRuntimeOptions(DEFAULT_ASSISTANT_RUNTIME, LATER)).toEqual(DEFAULT_ASSISTANT_RUNTIME);
+  });
+
+  it("refuses a runtime option outside its bounds, and writes nothing for it", () => {
+    const profileId = createProfile();
+    const store = new ConversationStore(db.raw, profileId);
+    const wrong: Partial<Record<keyof typeof DEFAULT_ASSISTANT_RUNTIME, unknown>>[] = [
+      { contextTokens: 1024 },
+      { contextTokens: 8192.5 },
+      { temperature: -0.1 },
+      { temperature: 4.5 },
+      { topP: 1.5 },
+      { topK: -1 },
+      { topK: 2.5 },
+      { repeatPenalty: 0.9 },
+      { idleUnloadMinutes: -5 },
+      { idleUnloadMinutes: null },
+      { temperature: Number.NaN },
+    ];
+    for (const change of wrong) {
+      expect(
+        () => store.setRuntimeOptions({ ...DEFAULT_ASSISTANT_RUNTIME, ...change } as never, NOW),
+        JSON.stringify(change),
+      ).toThrow(AssistantValidationError);
+    }
+    const rows = db.raw
+      .prepare("SELECT count(*) AS n FROM assistant_settings WHERE profile_id = ?")
+      .get(profileId) as { n: number };
+    expect(rows.n).toBe(0);
+  });
+
   it("round-trips through export and import into a fresh database", () => {
     const store = new ConversationStore(db.raw, createProfile());
     const conversation = store.createConversation("Putovanje", NOW);
@@ -521,11 +584,14 @@ describe("ConversationStore", () => {
     store.appendTurn(conversation.id, [{ role: "user", text: "zdravo" }], null, NOW);
     store.setDefaultTier("speed", NOW);
     store.setChatModel("downloaded-model-q4_k_m", NOW);
+    store.setRuntimeOptions({ ...DEFAULT_ASSISTANT_RUNTIME, temperature: 0.2, idleUnloadMinutes: 0 }, NOW);
     store.importData(undefined, LATER);
     expect(store.listConversations()).toEqual([]);
     // The row goes, so the choice goes with it: the column is a column of the
-    // settings row, not a second table a reset could forget.
+    // settings row, not a second table a reset could forget. The runtime
+    // options are on the same row, so they go back to the defaults too.
     expect(store.settings()).toEqual({ defaultTier: "balance", chatModelId: null });
+    expect(store.runtimeOptions()).toEqual(DEFAULT_ASSISTANT_RUNTIME);
     // An import into a profile that never had one is the same answer, and the
     // whole write is one transaction: the counters below it are what a partial
     // import would have left behind.

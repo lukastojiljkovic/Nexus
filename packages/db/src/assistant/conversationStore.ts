@@ -162,6 +162,48 @@ export interface AssistantSettings {
   readonly chatModelId: string | null;
 }
 
+/**
+ * How this profile's chat model is loaded and sampled (migration 98). Every
+ * `null` is "the model's own": the load keeps the catalogue's context cap, and
+ * the sampler keeps the entry's and the library's defaults. Device data, as
+ * `chatModelId` is: the archive does not carry it.
+ */
+export interface AssistantRuntimeOptions {
+  /** The context the model is loaded with, in tokens; still capped by what it was trained on. */
+  readonly contextTokens: number | null;
+  readonly temperature: number | null;
+  readonly topP: number | null;
+  readonly topK: number | null;
+  readonly repeatPenalty: number | null;
+  /** Minutes with nothing asked before the model leaves memory; `0` is never. */
+  readonly idleUnloadMinutes: number;
+}
+
+/**
+ * The bounds a runtime option is held to. The sampling ranges are the ones the
+ * engine's wire accepts (`protocol.ts`); the context runs from the smallest
+ * window a tool-calling turn fits in to the largest any catalogued model is
+ * trained on, and the idle unload to a day.
+ */
+export const ASSISTANT_RUNTIME_LIMITS = {
+  contextTokens: { min: 2048, max: 131_072, integer: true },
+  temperature: { min: 0, max: 4, integer: false },
+  topP: { min: 0, max: 1, integer: false },
+  topK: { min: 0, max: 1000, integer: true },
+  repeatPenalty: { min: 1, max: 4, integer: false },
+  idleUnloadMinutes: { min: 0, max: 1440, integer: true },
+} as const;
+
+/** What a profile with no row answers: the model's own everything, and fifteen idle minutes. */
+export const DEFAULT_ASSISTANT_RUNTIME: AssistantRuntimeOptions = {
+  contextTokens: null,
+  temperature: null,
+  topP: null,
+  topK: null,
+  repeatPenalty: null,
+  idleUnloadMinutes: 15,
+};
+
 /** One conversation as an archive carries it: its rows, without this database's keys. */
 export interface ExportedAssistantMessage {
   readonly role: AssistantRole;
@@ -374,6 +416,39 @@ function asMessageText(value: unknown, field: string): string {
 
 function asModelId(value: unknown, field: string): string | null {
   return asOptionalText(value, field, MAX_ID_LENGTH);
+}
+
+/** One runtime option inside its bounds; `null` only where "the model's own" is a value. */
+function asRuntimeValue(
+  value: unknown,
+  field: keyof AssistantRuntimeOptions,
+  nullable: boolean,
+): number | null {
+  if (value === null && nullable) return null;
+  const { min, max, integer } = ASSISTANT_RUNTIME_LIMITS[field];
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    (integer && !Number.isInteger(value)) ||
+    value < min ||
+    value > max
+  ) {
+    throw new AssistantValidationError(
+      `Assistant data: "${field}" must be ${integer ? "a whole number" : "a number"} from ${min} to ${max}${nullable ? ", or null" : ""}.`,
+    );
+  }
+  return value;
+}
+
+function asRuntimeOptions(value: AssistantRuntimeOptions): AssistantRuntimeOptions {
+  return {
+    contextTokens: asRuntimeValue(value.contextTokens, "contextTokens", true),
+    temperature: asRuntimeValue(value.temperature, "temperature", true),
+    topP: asRuntimeValue(value.topP, "topP", true),
+    topK: asRuntimeValue(value.topK, "topK", true),
+    repeatPenalty: asRuntimeValue(value.repeatPenalty, "repeatPenalty", true),
+    idleUnloadMinutes: asRuntimeValue(value.idleUnloadMinutes, "idleUnloadMinutes", false) as number,
+  };
 }
 
 /** A tool result's outcome: `true`, `false`, or `undefined` where none is recorded. */
@@ -754,6 +829,68 @@ export class ConversationStore {
     return this.settings();
   }
 
+  /** How the chat model is loaded and sampled; a profile with no row answers the defaults. */
+  runtimeOptions(): AssistantRuntimeOptions {
+    const row = this.db
+      .prepare(
+        `SELECT context_tokens, temperature, top_p, top_k, repeat_penalty, idle_unload_minutes
+           FROM assistant_settings WHERE profile_id = ?`,
+      )
+      .get(this.profileId) as
+      | {
+          context_tokens: number | null;
+          temperature: number | null;
+          top_p: number | null;
+          top_k: number | null;
+          repeat_penalty: number | null;
+          idle_unload_minutes: number;
+        }
+      | undefined;
+    if (row === undefined) return DEFAULT_ASSISTANT_RUNTIME;
+    return asRuntimeOptions({
+      contextTokens: row.context_tokens,
+      temperature: row.temperature,
+      topP: row.top_p,
+      topK: row.top_k,
+      repeatPenalty: row.repeat_penalty,
+      idleUnloadMinutes: row.idle_unload_minutes,
+    });
+  }
+
+  /**
+   * Writes all six options at once, so a reset is writing `null` back; the tier
+   * and the chosen model on the same row are left as they are.
+   */
+  setRuntimeOptions(options: AssistantRuntimeOptions, now: string): AssistantRuntimeOptions {
+    const stamp = this.validInstant(now);
+    const value = asRuntimeOptions(options);
+    this.db
+      .prepare(
+        `INSERT INTO assistant_settings (profile_id, default_tier, chat_model_id, updated_at,
+                                         context_tokens, temperature, top_p, top_k, repeat_penalty,
+                                         idle_unload_minutes)
+         VALUES (?, 'balance', NULL, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (profile_id) DO UPDATE SET context_tokens = excluded.context_tokens,
+                                                temperature = excluded.temperature,
+                                                top_p = excluded.top_p,
+                                                top_k = excluded.top_k,
+                                                repeat_penalty = excluded.repeat_penalty,
+                                                idle_unload_minutes = excluded.idle_unload_minutes,
+                                                updated_at = excluded.updated_at`,
+      )
+      .run(
+        this.profileId,
+        stamp,
+        value.contextTokens,
+        value.temperature,
+        value.topP,
+        value.topK,
+        value.repeatPenalty,
+        value.idleUnloadMinutes,
+      );
+    return value;
+  }
+
   // --- The archive -----------------------------------------------------------
 
   /**
@@ -797,7 +934,8 @@ export class ConversationStore {
    * whole write is one transaction, so a section that fails halfway leaves
    * nothing of itself behind. The chosen model is not restored with the tier -
    * the archive does not carry it, so the row arrives with the column NULL and
-   * the profile answers from its tier again.
+   * the profile answers from its tier again. The runtime options are device
+   * data on the same row, so they arrive as the defaults.
    *
    * Ids are re-minted rather than restored: a conversation's id is this
    * database's own key, and an archive carries what the person wrote.
