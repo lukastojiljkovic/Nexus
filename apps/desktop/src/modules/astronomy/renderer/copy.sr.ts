@@ -28,7 +28,6 @@ export const sr = {
   clock: {
     label: "Trenutak prikaza",
     now: "Sada",
-    hint: "Uvek možeš da se vratiš na sadašnji trenutak dugmetom Sada.",
     bad: "Trenutak mora biti datum i vreme, na primer 2026-10-10T20:30.",
   },
   solar: {

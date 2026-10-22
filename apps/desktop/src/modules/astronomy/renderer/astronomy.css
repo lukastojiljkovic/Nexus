@@ -20,34 +20,11 @@
   padding: var(--nx-space-5);
 }
 
-/* The four views, as a wrapping row so a narrow window stacks them rather than
-   scrolling sideways. */
-.astronomy__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nx-space-2);
-  align-items: center;
-}
-
-/* The shared clock. Its row mixes a stacked field with bare buttons, so it
-   aligns its CONTROLS at `end` — `check:rows` is the gate that knows why. */
-.astronomy__clock {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nx-space-2);
-}
-
-.astronomy__clock-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nx-space-3);
-  align-items: end;
-}
-
-/* The instant on screen. Tabular figures, because it is a column of digits that
-   changes once a second and must not wobble while it does. */
+/* The instant on screen, in the header's actions. Tabular figures, because it is
+   a column of digits that changes once a second and must not wobble while it
+   does. */
 .astronomy__instant {
-  font-size: var(--nx-font-size-title);
+  font-size: var(--nx-font-size-body);
   font-weight: var(--nx-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
@@ -58,11 +35,14 @@
   width: 240px;
 }
 
+/* The active view's switch, pushed to the toolbar's trailing edge; when the
+   toolbar wraps below 900px it sits on its own line at the same edge. */
 .astronomy__scales {
   display: flex;
   flex-wrap: wrap;
   gap: var(--nx-space-2);
   align-items: center;
+  margin-left: auto;
 }
 
 /* The selected body's own reading: a column of digits and a name, so tabular

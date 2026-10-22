@@ -22,7 +22,6 @@ export const en: typeof sr = {
   clock: {
     label: "Moment shown",
     now: "Now",
-    hint: "The Now button always brings the view back to the present moment.",
     bad: "The moment must be a date and a time, such as 2026-10-10T20:30.",
   },
   solar: {
