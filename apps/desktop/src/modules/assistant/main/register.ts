@@ -750,23 +750,27 @@ export function register(host: ModuleHostSurface): void {
     return readVoicePacks(services().userData(), services().releasePublicKeyPem());
   }
 
+  /**
+   * The installed voice packs as the assistant sees them: their languages narrowed
+   * to the two it speaks, and a pack that speaks neither (a translator's voice)
+   * left out, because the page names packs that can answer ITS question.
+   */
   function voiceView(): AssistantVoiceView {
-    const packs = voicePacks();
+    const packs = voicePacks().flatMap((pack) => {
+      const languages = pack.descriptor.languages.filter(isSpeechLanguage);
+      return languages.length === 0 ? [] : [{ pack, languages }];
+    });
     const languages = (kind: "stt" | "tts"): AssistantSpeechLanguage[] => [
-      ...new Set(
-        packs
-          .filter((pack) => pack.descriptor.kind === kind)
-          .flatMap((pack) => pack.descriptor.languages),
-      ),
+      ...new Set(packs.filter(({ pack }) => pack.descriptor.kind === kind).flatMap((entry) => entry.languages)),
     ];
     return {
       speechLanguages: languages("stt"),
       voiceLanguages: languages("tts"),
-      packs: packs.map((pack) => ({
+      packs: packs.map(({ pack, languages: spoken }) => ({
         id: pack.id,
         version: pack.version,
         kind: pack.descriptor.kind,
-        languages: [...pack.descriptor.languages],
+        languages: spoken,
       })),
     };
   }
@@ -904,13 +908,17 @@ function tierOf(call: { as: ModuleCall["as"] }, value: unknown): ModelTier {
   return tier as ModelTier;
 }
 
+function isSpeechLanguage(language: string): language is AssistantSpeechLanguage {
+  return language === "sr" || language === "en";
+}
+
 /** The language a voice request is in, off the wire. The app's own two, and nothing else. */
 function speechLanguageOf(
   call: { as: ModuleCall["as"] },
   value: unknown,
 ): AssistantSpeechLanguage {
   const language = call.as.asString(value, "language");
-  if (language !== "sr" && language !== "en") {
+  if (!isSpeechLanguage(language)) {
     throw new Error('Invalid IPC payload: "language" must be "sr" or "en".');
   }
   return language;

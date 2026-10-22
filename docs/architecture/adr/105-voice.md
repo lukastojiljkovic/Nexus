@@ -1,6 +1,6 @@
 # ADR-105 — The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist
 
-**Status:** accepted (2026-10-10) · **Owner:** the voice run of the 2.0 wave
+**Status:** accepted (2026-10-10) · **Owner:** the voice run of the 2.0 wave · **Amended** 2026-10-22: a voice's languages are BCP 47 tags (§9)
 
 Luka's picture of the assistant is a conversation: you are stranded in nature
 waiting for a helicopter, and you talk the situation through with something that
@@ -391,3 +391,18 @@ arithmetic:
   different language, confidently.
 - **Shipping the model inside the installer.** `ADR-091`'s argument, at a
   hundred megabytes per voice: the installer is not where content belongs.
+
+## 9. Amended 2026-10-22: a voice speaks a language tag, not an assistant locale
+
+The 2.5 translator reads aloud in every language it has a voice for, and its
+voices are the same `vits` packs, converted here from `facebook/mms-tts-*`. So
+`voice.json`'s `languages` holds BCP 47 tags: a language subtag, and a script
+subtag only where the language is written in more than one (`zh-Hans`,
+`ace-Latn`). Format 1 is widened rather than bumped, because every pack that
+uses a tag outside `sr` and `en` needs 2.5.0 and is never offered to an older
+app (ADR-103 §11).
+
+§5's rule is unchanged: a request takes the first pack that DECLARES its tag,
+exactly, and nothing else. The assistant still asks for `sr` or `en`, and its
+voice view leaves out a pack that speaks neither, so a German voice installed for
+the translator is never named on the assistant's page.

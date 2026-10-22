@@ -21,9 +21,12 @@
  * can be REFUSED rather than approximated — a Serbian answer is not read aloud
  * by an English voice, because an English voice reads Serbian orthography
  * through English phonemes and the result is not Serbian.
+ *
+ * A language is a BCP 47 tag: a language subtag, and a script subtag only where
+ * the language is written in more than one (`zh-Hans`). The assistant asks for
+ * its two locales, `sr` and `en`; the translator (2.5) asks for the tag of the
+ * language it translated into, so one voice pack serves both.
  */
-
-import type { AssistantLocale } from "@nexus/core";
 
 /** What a voice pack does. */
 export type VoiceKind = "stt" | "tts";
@@ -48,8 +51,8 @@ const MAX_SAMPLE_RATE = 48_000;
 export interface VoiceDescriptor {
   readonly kind: VoiceKind;
   readonly engine: VoiceEngine;
-  /** The languages the model handles; a request in another is refused. */
-  readonly languages: readonly AssistantLocale[];
+  /** The languages the model handles, as BCP 47 tags; a request in another is refused. */
+  readonly languages: readonly string[];
   /** The rate the model's own audio is at: 16 000 for all of these. */
   readonly sampleRate: number;
   /** Where the weights came from, so the pack can be rebuilt and the notice written. */
@@ -67,7 +70,8 @@ export interface VoicePack {
 
 const DESCRIPTOR_KEYS = ["format", "kind", "engine", "languages", "sampleRate", "upstream"] as const;
 const UPSTREAM_KEYS = ["repo", "revision"] as const;
-const LOCALES: readonly AssistantLocale[] = ["sr", "en"];
+/** A language subtag (ISO 639, two or three letters), and optionally a script (ISO 15924). */
+const LANGUAGE_TAG = /^[a-z]{2,3}(-[A-Z][a-z]{3})?$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -109,8 +113,8 @@ export function voiceDescriptorProblem(value: unknown): string | null {
   }
   const seen = new Set<string>();
   for (const language of languages) {
-    if (!LOCALES.includes(language as AssistantLocale)) {
-      return `"languages" contains ${JSON.stringify(language)}, which is not a language the assistant speaks.`;
+    if (typeof language !== "string" || !LANGUAGE_TAG.test(language)) {
+      return `"languages" contains ${JSON.stringify(language)}, which is not a language tag such as "sr" or "zh-Hans".`;
     }
     if (seen.has(language as string)) return `"languages" lists ${JSON.stringify(language)} twice.`;
     seen.add(language as string);
@@ -151,7 +155,7 @@ export function parseVoiceDescriptor(value: unknown): VoiceDescriptor {
   return {
     kind: record["kind"] as VoiceKind,
     engine: record["engine"] as VoiceEngine,
-    languages: [...(record["languages"] as AssistantLocale[])],
+    languages: [...(record["languages"] as string[])],
     sampleRate: record["sampleRate"] as number,
     upstream: { repo: upstream["repo"] as string, revision: upstream["revision"] as string },
   };
@@ -215,21 +219,21 @@ function ofKind(packs: readonly VoicePack[], kind: VoiceKind): readonly VoicePac
  * Serbian speech, which is the worst possible failure — it looks like an
  * answer. No pack declaring it means no transcription, and the caller says so.
  */
-export function pickSttPack(packs: readonly VoicePack[], language: AssistantLocale | "auto"): VoicePack | null {
+export function pickSttPack(packs: readonly VoicePack[], language: string): VoicePack | null {
   const candidates = ofKind(packs, "stt");
   if (language === "auto") return candidates[0] ?? null;
   return candidates.find((pack) => pack.descriptor.languages.includes(language)) ?? null;
 }
 
 /** The text-to-speech pack for `language`, or `null` when no installed voice speaks it. */
-export function pickTtsPack(packs: readonly VoicePack[], language: AssistantLocale): VoicePack | null {
+export function pickTtsPack(packs: readonly VoicePack[], language: string): VoicePack | null {
   return (
     ofKind(packs, "tts").find((pack) => pack.descriptor.languages.includes(language)) ?? null
   );
 }
 
 /** Whether anything installed can speak `language`; the page uses it to hide a control it cannot honour. */
-export function speaksLanguage(packs: readonly VoicePack[], language: AssistantLocale): boolean {
+export function speaksLanguage(packs: readonly VoicePack[], language: string): boolean {
   return pickTtsPack(packs, language) !== null;
 }
 
