@@ -1,6 +1,6 @@
 # translator
 
-A Serbian-English dictionary and travel phrases, which work offline. Sentence translation runs in a local worker.
+A Serbian-English dictionary and travel phrases, which work offline. Translation runs on an installed NLLB model, in the main process.
 
 ## Manifest
 
@@ -15,13 +15,30 @@ A Serbian-English dictionary and travel phrases, which work offline. Sentence tr
 
 - **Channels** — [`shared/ipc.ts`](shared/ipc.ts) declares the ops below; [`main/register.ts`](main/register.ts) registers one handler per op. Channels are named `<id>:<op>`. Ops: `status`, `search`, `phrases`, `packs`.
 - **Store** — none: the module reads its packs from disk and has no migration.
-- **Content pack** — `dictionary-sr-en` (`PACK_ID` in [`main/pack.ts`](main/pack.ts)). The sentence translator loads the `translate-sr-en` pack in its renderer worker ([`renderer/sentences/`](renderer/sentences/)).
+- **Content packs** — `dictionary-sr-en` (`PACK_ID` in [`main/pack.ts`](main/pack.ts)) for the dictionary, and the NLLB models `nllb-600m`, `nllb-1.3b` and `nllb-3.3b` for translation ([`main/nllb/`](main/nllb/)).
 
 ## Renderer half
 
-- **Page** — [`renderer/Page.tsx`](renderer/Page.tsx), with [`renderer/format.ts`](renderer/format.ts) and the sentence translation under [`renderer/sentences/`](renderer/sentences/).
+- **Page** — [`renderer/Page.tsx`](renderer/Page.tsx), with [`renderer/format.ts`](renderer/format.ts) and the Translate tab under [`renderer/translate/`](renderer/translate/).
 - **Settings** — [`renderer/Settings.tsx`](renderer/Settings.tsx). Prefs: [`renderer/prefs.ts`](renderer/prefs.ts).
 - **Widget** — none: a dashboard card would draw a fact about the profile, and this module holds none.
+
+## Translate
+
+The Translate tab is the page's first and default tab. One text is translated
+between any two of NLLB-200's languages as the user types: a change starts a
+translation after a short pause, and the output fills in one sentence at a
+time while the model works. The language pickers name each language in the
+interface language and search by name, English name or NLLB code. Detection
+(`renderer/translate/detect.ts`) guesses the source with franc, and the guess
+is shown on the picker until the user chooses a language.
+
+The timing lives in `renderer/translate/session.ts`, a unit with no React in
+it: a change restarts the pause, a running job is polled until it is done, and
+a new translation replaces the old one in main. The model is the one the user
+chose if it is installed, else the smallest one installed. Serbian is read in
+Cyrillic only, so Latin input is converted before it is sent, and Cyrillic
+output can be shown in Latin.
 
 ## Records
 

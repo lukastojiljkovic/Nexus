@@ -349,11 +349,6 @@ export const SERBIAN_LITERAL_ALLOWLIST = [
     contains: "Fascikla",
     reason: "the same, for a folder whose own name sanitizes to nothing",
   },
-  {
-    file: "apps/desktop/src/modules/translator/renderer/sentences/split.ts",
-    contains: "čl",
-    reason: "the Serbian abbreviation `čl.` the sentence splitter RECOGNISES in the user's own text — a vocabulary read from input, never shown",
-  },
 ];
 
 /** Directory names the walk never enters. */

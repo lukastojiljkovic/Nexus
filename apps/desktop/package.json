@@ -25,7 +25,6 @@
     "dist:portable": "node scripts/dist-portable.mjs"
   },
   "dependencies": {
-    "@browsermt/bergamot-translator": "^0.4.9",
     "@excalidraw/excalidraw": "^0.18.1",
     "@huggingface/transformers": "^4.3.1",
     "@nexus/core": "workspace:*",
@@ -49,6 +48,7 @@
     "@zxing/library": "^0.23.0",
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "dxf-viewer": "^1.0.50",
+    "franc": "^6.2.0",
     "gerber-to-svg": "^4.2.8",
     "katex": "^0.19.0",
     "maplibre-gl": "^6.15.0",

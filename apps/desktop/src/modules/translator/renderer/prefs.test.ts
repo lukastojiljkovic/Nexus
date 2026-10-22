@@ -10,10 +10,21 @@ import {
   persistDirection,
   persistRecent,
   persistRecentLimit,
+  persistRecentLanguages,
+  persistSerbianScript,
+  persistTranslateModel,
+  persistTranslateSource,
+  persistTranslateTarget,
   readRecent,
+  readRecentLanguages,
   readStoredDirection,
   readStoredRecentLimit,
+  readStoredSerbianScript,
+  readStoredTranslateModel,
+  readStoredTranslateSource,
+  readStoredTranslateTarget,
   withLookup,
+  withRecentLanguage,
 } from "./prefs.js";
 
 /**
@@ -121,5 +132,63 @@ describe("the device preferences in storage", () => {
     expect(readRecent("profile-1")).toEqual([]);
     localStorage.setItem("nexus.translator.recent.profile-1", JSON.stringify(["kafa", 7, "", null]));
     expect(readRecent("profile-1")).toEqual(["kafa"]);
+  });
+});
+
+describe("the translate page's preferences", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", memoryStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("answers the defaults on a machine that has never set them", () => {
+    expect(readStoredTranslateSource()).toBe("auto");
+    expect(readStoredTranslateTarget("eng_Latn")).toBe("eng_Latn");
+    expect(readStoredTranslateModel()).toBeNull();
+    expect(readStoredSerbianScript()).toBe("latin");
+    expect(readRecentLanguages("source")).toEqual([]);
+  });
+
+  it("round-trips the source, the target, the model, the script and the recent languages", () => {
+    persistTranslateSource("deu_Latn");
+    persistTranslateTarget("srp_Cyrl");
+    persistTranslateModel("nllb-1.3b");
+    persistSerbianScript("cyrillic");
+    persistRecentLanguages("target", ["srp_Cyrl", "deu_Latn"]);
+    expect(readStoredTranslateSource()).toBe("deu_Latn");
+    expect(readStoredTranslateTarget("eng_Latn")).toBe("srp_Cyrl");
+    expect(readStoredTranslateModel()).toBe("nllb-1.3b");
+    expect(readStoredSerbianScript()).toBe("cyrillic");
+    expect(readRecentLanguages("target")).toEqual(["srp_Cyrl", "deu_Latn"]);
+    expect(readRecentLanguages("source")).toEqual([]);
+  });
+
+  it("reads a value it did not write as the default", () => {
+    localStorage.setItem("nexus.translator.translate.source", "de");
+    localStorage.setItem("nexus.translator.translate.target", "xyz_Latn");
+    localStorage.setItem("nexus.translator.translate.model", "nllb-7b");
+    localStorage.setItem("nexus.translator.translate.script", "klingon");
+    expect(readStoredTranslateSource()).toBe("auto");
+    expect(readStoredTranslateTarget("eng_Latn")).toBe("eng_Latn");
+    expect(readStoredTranslateModel()).toBeNull();
+    expect(readStoredSerbianScript()).toBe("latin");
+  });
+
+  it("keeps only the languages the table carries, once each", () => {
+    localStorage.setItem("nexus.translator.translate.recent.source", JSON.stringify(["deu_Latn", "nope", 7, "deu_Latn"]));
+    expect(readRecentLanguages("source")).toEqual(["deu_Latn"]);
+  });
+
+  it("puts the newest language first on each side, keeps four, and never repeats one", () => {
+    expect(withRecentLanguage(["a_Latn", "b_Latn", "c_Latn", "d_Latn"], "e_Latn")).toEqual([
+      "e_Latn",
+      "a_Latn",
+      "b_Latn",
+      "c_Latn",
+    ]);
+    expect(withRecentLanguage(["deu_Latn", "eng_Latn"], "deu_Latn")).toEqual(["deu_Latn", "eng_Latn"]);
   });
 });
