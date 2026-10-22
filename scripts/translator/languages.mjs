@@ -76,34 +76,6 @@ export function bcp47Tag(code) {
   return `${new Intl.Locale(iso3).language}-${script}`;
 }
 
-/**
- * The tag each code gets in `tag`, in order: the language subtag of its BCP 47
- * tag, plus the script only where other codes share that language subtag. Where
- * two codes would still get the same tag (`ajp`/`apc` both read `apc-Arab`), each
- * of them uses its own ISO 639-3 code instead, by the same rule: `ajp`, `apc`.
- */
-export function languageTags(codes) {
-  const rows = codes.map((code) => ({ ...splitNllbCode(code), primary: bcp47Tag(code).split("-")[0] }));
-  const withScript = (key, row) =>
-    rows.filter((other) => other[key] === row[key]).length > 1 ? `${row[key]}-${row.script}` : row[key];
-  const first = rows.map((row) => withScript("primary", row));
-  return rows.map((row, index) =>
-    first.indexOf(first[index]) === first.lastIndexOf(first[index]) ? first[index] : withScript("iso3", row),
-  );
-}
-
-/**
- * Whether a voice's vocabulary is written in the script the row needs. Only the
- * single-letter keys count, and the script most of them belong to must be that
- * script; `Hans` and `Hant` both mean `Hani`. A uroman voice is fed Latin text
- * (`uroman`), so its script is Latin whatever the row's.
- */
-export function voiceWritesScript(vocabKeys, script) {
-  const letters = vocabKeys.filter((key) => /^\p{L}$/u.test(key));
-  const wanted = new RegExp(`\\p{Script=${script === "Hans" || script === "Hant" ? "Hani" : script}}`, "u");
-  return letters.length > 0 && letters.filter((letter) => wanted.test(letter)).length * 2 > letters.length;
-}
-
 /** The language ids of a Whisper `generation_config.json`, from its `lang_to_id` keys. */
 export function parseWhisperCodes(generationConfig) {
   return Object.keys(generationConfig.lang_to_id).map((token) => {
@@ -169,28 +141,24 @@ export function namesFor(tag) {
  * One row per code, sorted. `fallbackName` is set where ICU cannot name the
  * language in both locales, and where its tag is shared with another code:
  * ICU names `ak-Latn` "Akan" for both Akan and Twi, so the FLORES name is the
- * only correct one for either. A voice is kept only when its vocabulary is
- * written in the row's script, so `ace_Arab` does not get the Latin `ace` voice.
+ * only correct one for either.
  */
-export function buildLanguages({ codes, flores, whisperCodes, mmsIds, uromanByRepo, vocabKeysByRepo }) {
-  const bcp47s = codes.map(bcp47Tag);
-  const tags = languageTags(codes);
+export function buildLanguages({ codes, flores, whisperCodes, mmsIds, uromanByRepo }) {
+  const tags = codes.map(bcp47Tag);
   return codes
     .map((code, index) => {
       const { iso3, script } = splitNllbCode(code);
-      const bcp47 = bcp47s[index];
+      const bcp47 = tags[index];
       const names = namesFor(bcp47);
       const repo = mmsRepoFor(code, mmsIds);
-      const uroman = repo === null ? false : uromanFor(repo, uromanByRepo);
-      const shared = bcp47s.indexOf(bcp47) !== bcp47s.lastIndexOf(bcp47);
+      const shared = tags.indexOf(bcp47) !== tags.lastIndexOf(bcp47);
       return {
         code,
         iso3,
         script,
         bcp47,
-        tag: tags[index],
         whisper: whisperCodeFor(bcp47, whisperCodes),
-        tts: repo !== null && voiceWrites(repo, uroman ? "Latn" : script, vocabKeysByRepo) ? { repo, uroman } : null,
+        tts: repo === null ? null : { repo, uroman: uromanFor(repo, uromanByRepo) },
         fallbackName:
           shared || names.en === undefined || names.srLatn === undefined
             ? floresNameFor(code, flores)
@@ -204,12 +172,6 @@ function uromanFor(repo, uromanByRepo) {
   const flag = uromanByRepo.get(repo);
   if (flag === undefined) throw new Error(`languages: no tokenizer config was read for ${repo}`);
   return flag;
-}
-
-function voiceWrites(repo, script, vocabKeysByRepo) {
-  const keys = vocabKeysByRepo.get(repo);
-  if (keys === undefined) throw new Error(`languages: no vocab was read for ${repo}`);
-  return voiceWritesScript(keys, script);
 }
 
 function floresNameFor(code, flores) {
@@ -229,7 +191,6 @@ export function renderModule({ languages, sources, date }) {
       `    iso3: ${JSON.stringify(language.iso3)},`,
       `    script: ${JSON.stringify(language.script)},`,
       `    bcp47: ${JSON.stringify(language.bcp47)},`,
-      `    tag: ${JSON.stringify(language.tag)},`,
       `    whisper: ${JSON.stringify(language.whisper)},`,
       `    tts: ${language.tts === null ? "null" : `{ repo: ${JSON.stringify(language.tts.repo)}, uroman: ${String(language.tts.uroman)} }`},`,
       `    fallbackName: ${JSON.stringify(language.fallbackName)},`,
@@ -252,8 +213,6 @@ export function renderModule({ languages, sources, date }) {
     "  readonly script: string;",
     "  /** BCP 47 tag, for `Intl` locale lookups. Two codes may share one (`ak-Latn`). */",
     "  readonly bcp47: string;",
-    "  /** The tag a voice pack lists in `languages`: the language subtag, plus the script where the table has several rows of it. Unique per row. */",
-    "  readonly tag: string;",
     "  /** The Whisper language id that hears this language, or `null` when Whisper has none. */",
     "  readonly whisper: string | null;",
     "  /** The MMS-TTS voice that speaks it, or `null`. `uroman` is whether its text is romanised first. */",
@@ -330,7 +289,6 @@ async function main() {
   const mmsIds = parseMmsModelIds(await fetchMmsModels(folder));
 
   const uromanByRepo = new Map();
-  const vocabKeysByRepo = new Map();
   const repos = new Set(codes.map((code) => mmsRepoFor(code, mmsIds)).filter((repo) => repo !== null));
   for (const repo of repos) {
     const name = repo.replace("facebook/", "");
@@ -342,18 +300,9 @@ async function main() {
       ),
     );
     uromanByRepo.set(repo, uromanFlag(config, repo));
-    const vocab = JSON.parse(
-      await cachedText(join(folder, "vocabs"), `${name}.json`, `https://huggingface.co/${repo}/resolve/main/vocab.json`),
-    );
-    vocabKeysByRepo.set(repo, Object.keys(vocab));
   }
 
-  const languages = buildLanguages({ codes, flores, whisperCodes, mmsIds, uromanByRepo, vocabKeysByRepo });
-  for (const language of languages) {
-    if (mmsRepoFor(language.code, mmsIds) !== null && language.tts === null) {
-      console.log(`languages: ${language.code} loses its voice ${mmsRepoFor(language.code, mmsIds)}: its script is not the voice's`);
-    }
-  }
+  const languages = buildLanguages({ codes, flores, whisperCodes, mmsIds, uromanByRepo });
   const date = new Date().toISOString().slice(0, 10);
   writeFileSync(
     values.out,

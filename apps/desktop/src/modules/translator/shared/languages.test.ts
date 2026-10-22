@@ -29,18 +29,6 @@ describe("NLLB language table", () => {
     }
   });
 
-  it("gives every row a unique, well-formed voice-pack tag", () => {
-    const tags = NLLB_LANGUAGES.map((language) => language.tag);
-    expect(new Set(tags).size).toBe(tags.length);
-    expect(tags.every((tag) => /^[a-z]{2,3}(-[A-Z][a-z]{3})?$/.test(tag))).toBe(true);
-    expect(languageByCode("deu_Latn")?.tag).toBe("de");
-  });
-
-  it("gives no voice to a row whose script the voice does not write", () => {
-    expect(languageByCode("ace_Arab")?.tts).toBeNull();
-    expect(languageByCode("ace_Latn")?.tts?.repo).toBe("facebook/mms-tts-ace");
-  });
-
   it("points every voice at an MMS-TTS repo", () => {
     const voices = NLLB_LANGUAGES.flatMap((language) => (language.tts === null ? [] : [language.tts]));
     expect(voices.length).toBeGreaterThan(0);
