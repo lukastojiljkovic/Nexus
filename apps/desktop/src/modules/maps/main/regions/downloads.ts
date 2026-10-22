@@ -62,9 +62,9 @@ import { DETAIL_MAX_ZOOM, regionRanges, regionTarget, regionTargetBounds } from 
  * The most directory entries a plan may keep, because the plan holds every one
  * in main's memory (ADR-118 §9). A policy value with room above Europe to zoom
  * 12: its 1,453,618 entries plan within a 384 MiB heap and not within 256 MiB
- * (measured against the 2026-10-22 build with `--max-old-space-size`). The
- * world to zoom 12 (6,316,341) and the United States at full detail
- * (16,910,065) are past it.
+ * (measured against the 2026-10-22 build with `--max-old-space-size`).
+ * Germany at full detail (890,435) is under it; France at full detail
+ * (2,123,478) and the world to zoom 12 (6,316,341) are past it.
  */
 export const PLAN_MAX_ENTRIES = 2_000_000;
 

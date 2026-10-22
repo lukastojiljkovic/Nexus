@@ -196,18 +196,30 @@ downloads. The page then offers less detail or a smaller region.
 The cap is 2,000,000 entries, a policy value set from these measurements
 against the 2026-10-22 build:
 
-| Region | Directory entries it keeps | Tiles |
-|---|---|---|
-| The world, overview (zooms 0–8) | 33,310 | 559 MB |
-| Europe, towns (zooms 0–12) | 1,453,618 | 7.88 GB |
-| The world, towns (zooms 0–12) | 6,316,341 | 17.75 GB |
-| The United States, full detail | 16,910,065 | 19.83 GB |
-| Europe, full detail | more than 16,777,216 (the measurement's `Set` overflowed) | — |
+| Region | Directory entries it keeps | Tiles | Under the cap |
+|---|---|---|---|
+| The world, overview (zooms 0–8) | 33,310 | 559 MB | yes |
+| Serbia, full detail | 154,144 | 399 MB | yes |
+| Germany, full detail | 890,435 | 5.67 GB | yes |
+| Europe, towns (zooms 0–12) | 1,453,618 | 7.88 GB | yes |
+| France, full detail | 2,123,478 | 11.00 GB | no |
+| Australia, full detail | 4,252,515 | 2.13 GB | no |
+| Brazil, full detail | 6,032,203 | 4.46 GB | no |
+| The world, towns (zooms 0–12) | 6,316,341 | 17.75 GB | no |
+| China, full detail | 9,684,619 | 6.35 GB | no |
+| The United States, full detail | 16,910,065 | 19.83 GB | no |
+| Canada, full detail | 34,551,791 | 17.96 GB | no |
+| Russia, full detail | 36,010,885 | 20.61 GB | no |
+| Europe, full detail | more than 16,777,216 (the measurement's `Set` overflowed) | — | no |
+
+The count follows how much of a territory is mapped to zoom 15 and how much of
+it is empty, not its size on disk: Australia keeps twice France's entries for a
+fifth of its bytes.
 
 Europe to zoom 12 plans within a 384 MiB heap and fails within 256 MiB
 (`--max-old-space-size`, the planner as committed). The cap leaves room above
 it, and refuses the world's towns and the largest countries at full detail,
-which a person can still take at less detail.
+France among them. A person can still take any of them at less detail.
 
 Before the cap was set, the planner held every entry twice, plus two maps keyed
 by offset, and Europe to zoom 12 did not fit in 512 MiB. It now rewrites the
