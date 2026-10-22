@@ -291,3 +291,48 @@
   gap: var(--nx-space-2);
   align-items: end;
 }
+
+/* The runtime card: the memory row above, then the five model values in a grid of
+   their own, so the card reads as a form rather than a long column. */
+.asst__memory {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.asst__runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--nx-layout-field-min), 1fr));
+  gap: var(--nx-space-3) var(--nx-space-4);
+  align-items: start;
+}
+
+.asst__runtime-field,
+.asst__runtime-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+/* The summary's line: a rule either side of its words, quieter than any message above it. */
+.asst__summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  max-width: var(--nx-layout-prose);
+}
+
+.asst__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+}
+
+.asst__divider::before,
+.asst__divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--nx-border-subtle);
+}

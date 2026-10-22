@@ -57,6 +57,9 @@ export const sr = {
       "Asistent poznaje tvoje beleške, zadatke, događaje i priručnik same aplikacije, i odgovara bez interneta. Izaberi razgovor ili napiši pitanje ispod.",
     thinking: "Razmišljam…",
     loadingModel: "Učitavam model…",
+    summarizing: "Sažimam ranije poruke…",
+    summaryDivider: "Ranije poruke su sažete za asistenta.",
+    summaryLabel: "Sažetak",
     /**
      * Šta se kaže kada se krug završi bez odgovora, po kodu koji je petlja
      * poslala (`packages/core/src/assistant/contract.ts`). Ključ je sam kod, pa
@@ -304,6 +307,7 @@ export const sr = {
     hint: "Enter šalje poruku, Shift+Enter prelazi u novi red.",
     send: "Pošalji",
     stop: "Zaustavi",
+    summarize: "Sažmi ranije poruke",
   },
   workflows: {
     title: "Recepti",
@@ -373,6 +377,51 @@ export const sr = {
     tierBalance: "Ravnoteža",
     tierSpeed: "Brzina",
   },
+  runtime: {
+    title: "Rad modela",
+    inMemory: "U memoriji",
+    chat: "Model za odgovore",
+    nothingLoaded: "Nijedan model nije u memoriji.",
+    unload: "Izbaci iz memorije",
+    range: "Opseg",
+    modelDefault: "Vrednost modela",
+    fields: {
+      contextTokens: {
+        label: "Veličina konteksta (tokeni)",
+        hint: "Koliko razgovora model čita odjednom. Veća veličina troši više memorije.",
+      },
+      temperature: {
+        label: "Temperatura",
+        hint: "Veća vrednost daje raznovrsnije, a manja predvidljivije odgovore.",
+      },
+      topP: {
+        label: "Top-p",
+        hint: "Model bira samo među najverovatnijim rečima, dok njihov zbir verovatnoća ne dostigne ovaj udeo.",
+      },
+      topK: {
+        label: "Top-k",
+        hint: "Model bira samo među ovoliko najverovatnijih reči.",
+      },
+      repeatPenalty: {
+        label: "Kazna za ponavljanje",
+        hint: "Odvraća model od toga da se ponavlja.",
+      },
+      idleUnloadMinutes: {
+        label: "Izbaci posle (minuta)",
+        hint: "0 znači da model ostaje u memoriji dok ga ne izbaciš ručno.",
+      },
+    },
+    autoCompact: "Automatski sažimaj duge razgovore",
+    autoCompactHint:
+      "Kada razgovor postane duži nego što model može da pročita odjednom, ranije poruke se prvo sažimaju.",
+    save: "Sačuvaj",
+    defaults: "Vrednosti modela",
+    problem: {
+      notANumber: "Unesi broj.",
+      notWhole: "Unesi ceo broj.",
+      outOfRange: "Vrednost je van opsega.",
+    },
+  },
   knowledge: {
     indexed: "Indeksirano odlomaka",
     pending: "Izvora čeka",
@@ -395,6 +444,8 @@ export const sr = {
     action: "Izmena nije sačuvana.",
     send: "Poruka nije poslata.",
     lostStream: "Odgovor nije mogao da se pročita. Poruka je sačuvana, a odgovor može biti u razgovoru.",
+    compact: "Razgovor nije sažet.",
+    compactFailed: "Ranije poruke nisu mogle da se sažmu, pa razgovor ostaje kakav je.",
     retry: "Pokušaj ponovo",
   },
 };
