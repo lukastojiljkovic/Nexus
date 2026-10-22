@@ -254,6 +254,23 @@ export function renderKnowledgeBlock(
 }
 
 /**
+ * A compacted thread's summary, for the end of the system prompt: the turns it
+ * stands for are not in the request, so this is where the model learns them.
+ *
+ * Fenced, because the model wrote it from the user's words and the tools'
+ * results, and an instruction quoted there is still only something that was
+ * said. In the system prompt rather than the messages, because the budget may
+ * drop an old message but never the prompt (`budget.ts`).
+ */
+export function renderSummaryBlock(summary: string, boundary: string): string {
+  return [
+    `# Earlier in this conversation`,
+    `The start of this conversation was summarized to make room; the messages after the summary follow as usual. Use it as you would those messages.`,
+    fenceUntrusted(summary, { label: "CONVERSATION SUMMARY", boundary }),
+  ].join("\n");
+}
+
+/**
  * Whether an answer drew on a safety pack, which is the question the page asks
  * before it draws {@link SAFETY_NOTICE}.
  *

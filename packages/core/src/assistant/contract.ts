@@ -382,6 +382,11 @@ export interface AgentTurnInput {
   /** The user's local day, `YYYY-MM-DD`: what „today" and „tomorrow" mean this turn. */
   readonly today: string;
   /**
+   * What the thread's first messages said, when it was compacted (`compact.ts`):
+   * `history` then holds only the messages after them.
+   */
+  readonly summary?: string;
+  /**
    * The module whose page the user has open beside the assistant, or absent on
    * the assistant's own page: what „this" and „here" refer to this turn.
    */
