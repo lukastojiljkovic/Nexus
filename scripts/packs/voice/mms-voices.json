@@ -1,0 +1,125 @@
+{
+  "format": 1,
+  "voices": [
+    {
+      "id": "mms-tts-deu",
+      "repo": "facebook/mms-tts-deu",
+      "revision": "5cbe521869fcf9da4b2b3e85d7810e3005a121dc",
+      "languages": [
+        "de"
+      ],
+      "files": [
+        {
+          "path": "config.json",
+          "bytes": 1803,
+          "sha256": "efb031de427aadf230481dfb0de5a8fb0e83a2183ae344799c97ba2b4ab3e5e2"
+        },
+        {
+          "path": "onnx/model_quantized.onnx",
+          "bytes": 38320952,
+          "sha256": "1e6dbfd7d0d33b117cf1ab7d74f8a25b0cc44a04b317697f065313900f873a75"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 2423,
+          "sha256": "5950b198c8661f710251be5b753efd32de78802b7ef4d6d53161361afe21b509"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 711,
+          "sha256": "7f4d6450b36a32391ebfda037c6bc589f83140c3a99a58258d5cad6b7951b604"
+        },
+        {
+          "path": "vocab.json",
+          "bytes": 543,
+          "sha256": "9630c76ac442ad1d571745ccda2eef7d5e5410b2d5b0f9602e0b8377d8530922"
+        },
+        {
+          "path": "voice.json",
+          "bytes": 225,
+          "sha256": "c2042fb6a6d8fbdac855d2e2540f9e2eaf4ba7b2f2db3c1ad359113221e169d7"
+        }
+      ]
+    },
+    {
+      "id": "mms-tts-ell",
+      "repo": "facebook/mms-tts-ell",
+      "revision": "69b47edbab5b4793475f5c381c7213e620829a2f",
+      "languages": [
+        "el"
+      ],
+      "files": [
+        {
+          "path": "config.json",
+          "bytes": 1803,
+          "sha256": "7ab5d5c0c1dbca94324213a27aa3b2d366d98a3d94295e7599e37cb41ef7017a"
+        },
+        {
+          "path": "onnx/model_quantized.onnx",
+          "bytes": 38324600,
+          "sha256": "73914ce3a25514f212c4d0e73391b4ef4bd76abaefe9fe726a68c2d5462837e6"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 3150,
+          "sha256": "c8c69a438848949f9c9b1b6921a56964841c9db382d5a7f1c1c363e7f716dfe6"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 711,
+          "sha256": "a879fdbba89caee619b5798155a3713e0902c38ad3e2e44c4f7298908305d89f"
+        },
+        {
+          "path": "vocab.json",
+          "bytes": 799,
+          "sha256": "277965ab47498798e204773d89638b39a4e53b5cbc017a54bd33b3d5f67ddf0d"
+        },
+        {
+          "path": "voice.json",
+          "bytes": 225,
+          "sha256": "a786175dea46bb7359537bd574f5bf35d871c6666fbc6e9836350c22df139e75"
+        }
+      ]
+    },
+    {
+      "id": "mms-tts-fra",
+      "repo": "facebook/mms-tts-fra",
+      "revision": "5806d92d6247218c0e81e5f1a7462f6f636f70a2",
+      "languages": [
+        "fr"
+      ],
+      "files": [
+        {
+          "path": "config.json",
+          "bytes": 1803,
+          "sha256": "3be89ae20c0486d68a9f1934717bbfdf7bb903f4d72074bcf252d9be17f41c2b"
+        },
+        {
+          "path": "onnx/model_quantized.onnx",
+          "bytes": 38320759,
+          "sha256": "3683ae4e687b81782268f3420bd4f0ebc5d1d4ab5cc6c629f074ffebe201ab2e"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 2485,
+          "sha256": "9ceb3fa31269d11be54819dc94337075a726a6f3e0725be716fcfe2226934148"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 713,
+          "sha256": "9165322cc38a7c315361b28a42aa4758f1505cfadf3d7e38417afcc6a4622232"
+        },
+        {
+          "path": "vocab.json",
+          "bytes": 539,
+          "sha256": "da0c65766421102e4d6b35b66c0909a3ec7482dfcf520d662f030b634ad0201a"
+        },
+        {
+          "path": "voice.json",
+          "bytes": 225,
+          "sha256": "bdaf198ff1cb1802210d814ac8bda987437b252378776f8d1f7db6ea598b3aaf"
+        }
+      ]
+    }
+  ]
+}
