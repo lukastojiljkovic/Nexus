@@ -450,17 +450,6 @@ describe("the assistant module through the kit", () => {
     expect(assistantMicArmedAt(NOW + 60_000)).toBe(false);
   });
 
-  it("leaves out a translator's voice, which speaks neither of the assistant's languages", async () => {
-    const host = harness();
-    installVoicePack({ id: "speaks-en", kind: "tts", languages: ["en", "de"] });
-    installVoicePack({ id: "speaks-de", kind: "tts", languages: ["de"] });
-    expect(await host.dispatch("assistant:voice", TRUSTED, { profileId })).toEqual({
-      speechLanguages: [],
-      voiceLanguages: ["en"],
-      packs: [{ id: "speaks-en", version: expect.any(String) as string, kind: "tts", languages: ["en"] }],
-    });
-  });
-
   it("transcribes a captured utterance through the worker, and speaks a sentence back", async () => {
     const host = harness();
     installVoicePack({ id: "voice-sr", kind: "stt", languages: ["sr", "en"] });

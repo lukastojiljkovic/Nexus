@@ -116,7 +116,7 @@ directory is the decision log behind it.
 | [102](102-portable-build.md) | A portable build: Nexus on a stick, and the data on the stick too | Accepted; amends ADR-089 | 2026-10-10 |
 | [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3 | 2026-10-10 |
 | [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
-| [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted; amended 2026-10-22 (§9, language tags) | 2026-10-10 |
+| [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
 | [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted; §8 amended by ADR-114 | 2026-10-10 |
 | [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
 | [108](108-kit-blobs.md) | Module attachments travel in the archive and count in the blob store | Accepted; extends ADR-090 §5 | 2026-10-10 |
