@@ -133,6 +133,7 @@ export class AssistantProfile {
       userData,
       packPublicKeyPem: this.services.releasePublicKeyPem(),
       embedder: () => this.embedder(),
+      embedderId: () => this.embedderId(),
       // The offline wiki is passed whenever this build has a ZIM service,
       // whether or not a library is on disk at this moment: the adapter reads
       // `libraries()` on every call, so a library downloaded while the app runs
@@ -317,6 +318,13 @@ export class AssistantProfile {
    * user who has none keeps working - full text alone is a described state of the
    * knowledge base, not a degraded one.
    */
+  /** The embedding model `embedder` loads, by id, read off the disk and never loaded for it. */
+  async embedderId(): Promise<string | null> {
+    if (this.embedderCache !== undefined) return this.embedderCache?.modelId ?? null;
+    const installed = await this.modelHost().installed();
+    return installed.find((candidate) => candidate.capabilities.includes("embedding"))?.id ?? null;
+  }
+
   async embedder(): Promise<Embedder | null> {
     if (this.embedderCache !== undefined) return this.embedderCache;
     try {

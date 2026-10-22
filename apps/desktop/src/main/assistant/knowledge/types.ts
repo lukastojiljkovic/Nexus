@@ -165,6 +165,12 @@ export interface KnowledgeDeps {
    */
   readonly embedder: () => Promise<Embedder | null>;
   /**
+   * The id of the embedding model `embedder` would answer with, WITHOUT loading
+   * it: what the status row names. The page reads the status every time it
+   * opens, and a name is not worth a model load.
+   */
+  readonly embedderId: () => Promise<string | null>;
+  /**
    * The offline wiki, as `zimWiki.ts` adapts the ZIM service to it. Absent means
    * the wiki kind answers nothing at all - no reader, no titles.
    */

@@ -434,6 +434,16 @@ describe("the assistant module through the kit", () => {
     expect(after.webSearch).toEqual({ enabled: true, modeAllows: false, mode: "offline" });
   });
 
+  it("names the installed embedding model in the list without loading it", async () => {
+    // The fake's `loadEmbedder` throws, so a list that loaded the model would reject.
+    installedEntries = [ENTRY, EMBEDDING];
+    const host = harness();
+    const view = (await host.dispatch("assistant:list", TRUSTED, { profileId })) as {
+      knowledge: { embedderId: string | null };
+    };
+    expect(view.knowledge.embedderId).toBe("embed-model");
+  });
+
   it("says which voice packs are installed, and arms the microphone when the page asks", async () => {
     const host = harness();
     // Nothing installed is the ordinary state of a fresh profile: two empty
