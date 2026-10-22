@@ -35,6 +35,18 @@ export const NONOGRAM_MIN = 5;
 export const NONOGRAM_MAX = 20;
 
 /**
+ * The id of a picture in a pack: its board size, then lowercase words joined by
+ * single hyphens, at most 96 characters (`10-carl-olsen-flame`). The size is one
+ * the generator builds, written without a leading zero, so an id names its size
+ * without a parse. The cap keeps an id a bounded string wherever it is stored.
+ */
+export const NONOGRAM_PICTURE_ID = /^(?=.{1,96}$)(?:[5-9]|1\d|20)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function isNonogramPictureId(value: unknown): value is string {
+  return typeof value === "string" && NONOGRAM_PICTURE_ID.test(value);
+}
+
+/**
  * How many candidate pictures one seed may draw before giving up. Measured: at
  * every size this generator supports the acceptance rate is high enough that a
  * hundred draws is far past the point where failing says something real — see

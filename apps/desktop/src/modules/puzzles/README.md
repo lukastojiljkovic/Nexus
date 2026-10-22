@@ -13,9 +13,9 @@ Sudoku, nonograms, mahjong and Broj. Every game is saved and picks up where it s
 
 ## Main half
 
-- **Channels** — [`shared/ipc.ts`](shared/ipc.ts) declares the ops below; [`main/register.ts`](main/register.ts) registers one handler per op. Channels are named `<id>:<op>`. Ops: `list`, `save`, `clearSave`, `finish`, `setCheckWhileTyping`.
+- **Channels** — [`shared/ipc.ts`](shared/ipc.ts) declares the ops below; [`main/register.ts`](main/register.ts) registers one handler per op. Channels are named `<id>:<op>`. Ops: `list`, `save`, `clearSave`, `finish`, `setCheckWhileTyping`, `packs`.
 - **Store** — `PuzzlesStore` in [`packages/db/src/puzzles/`](../../../../../packages/db/src/puzzles/), migration [`088-puzzles.ts`](../../../../../packages/db/src/migrations/088-puzzles.ts).
-- **Content pack** — none.
+- **Content pack** — `nonograms-pictures`, read by [`main/pictures.ts`](main/pictures.ts) and handed to the page by the `packs` op. With the pack installed, a nonogram at 10, 15 or 20 is dealt one of its pictures and the save keeps the picture's id; the solved line names the picture and credits its author, which CC BY 3.0 requires. Main drops any picture that fails a check and never sends a path to the renderer, and without the pack the board stays random.
 
 ## Renderer half
 

@@ -2726,9 +2726,11 @@ export {
   NONOGRAM_ATTEMPT_LIMIT,
   NONOGRAM_MAX,
   NONOGRAM_MIN,
+  NONOGRAM_PICTURE_ID,
   checkNonogram,
   cluesOf,
   generateNonogram,
+  isNonogramPictureId,
   solveNonogramLines,
 } from "./games/nonogram/nonogram.js";
 export type {

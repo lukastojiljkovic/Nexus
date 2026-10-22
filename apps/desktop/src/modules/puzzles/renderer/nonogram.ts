@@ -1,5 +1,6 @@
 import { NONOGRAM_MAX, NONOGRAM_MIN, checkNonogram, cluesOf } from "@nexus/core";
 import type { NonogramPuzzle } from "@nexus/core";
+import type { NonogramPictureView } from "../shared/ipc.js";
 
 /**
  * Nonograms' board arithmetic, as pure functions (ADR-090).
@@ -116,4 +117,44 @@ export function nonogramSizeOf(variant: string): { width: number; height: number
 export function zoomCellSize(level: number): number {
   const index = Math.min(Math.max(Math.trunc(level), 0), ZOOM_CELL_SIZES.length - 1);
   return ZOOM_CELL_SIZES[index] as number;
+}
+
+/**
+ * A pack picture as the puzzle it plays. Its rows are the solution, and the clues
+ * are read from them by the engine's own `cluesOf`, so a picture carries no clue
+ * of its own to disagree with. `seed` and `attempts` record how the generator made
+ * a board, and a picture was not generated, so both are zero.
+ */
+export function pictureToPuzzle(picture: NonogramPictureView): NonogramPuzzle {
+  const filled = picture.rows.map((row) => [...row].map((cell) => cell === "1"));
+  return {
+    width: picture.size,
+    height: picture.size,
+    rowClues: filled.map((line) => cluesOf(line)),
+    colClues: Array.from({ length: picture.size }, (_, column) =>
+      cluesOf(filled.map((line) => line[column] ?? false)),
+    ),
+    solution: filled.flat(),
+    seed: 0,
+    attempts: 0,
+  };
+}
+
+/**
+ * The picture a new game of `size` is dealt from, or `null` when the pack has none
+ * at that size. The game's seed picks among the size's pictures, so the same seed
+ * deals the same picture, and the picture just played (`previous`, by id) is
+ * skipped when the size has another, so a new game is never the one before it.
+ */
+export function choosePicture(
+  pictures: readonly NonogramPictureView[],
+  size: number,
+  seed: number,
+  previous: string | null,
+): NonogramPictureView | null {
+  const sized = pictures.filter((picture) => picture.size === size);
+  const others = sized.filter((picture) => picture.id !== previous);
+  const pool = others.length > 0 ? others : sized;
+  if (pool.length === 0) return null;
+  return pool[seed % pool.length] ?? null;
 }

@@ -7,6 +7,24 @@ cat, a castle, a ship, which the player uncovers cell by cell.
 The pack is one file of puzzles, `nonograms.json`, plus the attribution that
 CC BY 3.0 requires. Nothing in it is executed: it is JSON and text.
 
+## In the app
+
+With the pack installed, Puzzles plays its pictures. A new nonogram at 10 × 10, 15 × 15 or
+20 × 20 is dealt one of the pack's pictures of that size, chosen by the game's seed and never
+the one just played. A 5 × 5 board, and any size the pack has no picture for, stays random.
+No setting turns this on or off: the pictures come with the pack.
+
+A game keeps its picture by id, so a later version of the pack that reorders or adds pictures
+does not change a board already in progress. If a saved picture is no longer in the pack, the
+game shows a short notice and a New game button, and no random board takes its place.
+
+Without the pack, a line under each 10 to 20 board names the pack and where to install it, on
+the Content packs card in Settings.
+
+When a picture is solved, the solved line gives its title in the app's language, and a credit
+line gives its author, game-icons.net and CC BY 3.0. The licence requires that credit, so it
+is shown whenever the picture is.
+
 ## What it contains
 
 **119 puzzles**, from the 119 pictures this build has titles for and that
