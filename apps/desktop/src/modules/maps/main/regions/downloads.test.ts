@@ -78,6 +78,21 @@ describe("measuring a region", () => {
       problem: "too-large",
     });
   });
+
+  it("stops a measurement a newer one replaces, and shares one asked for twice", async () => {
+    const downloads = downloadsWith();
+    const first = downloads.estimate("SRB", "overview");
+    expect(downloads.estimate("SRB", "overview")).toBe(first);
+    const second = downloads.estimate("MNE", "overview");
+    expect(await first).toMatchObject({ ok: false });
+    expect(await second).toMatchObject({ ok: true });
+    const buildReads = () => host.requests.filter(([url]) => url !== BUILDS_URL).length;
+    const reads = buildReads();
+
+    host.requests.length = 0;
+    await downloadsWith().estimate("MNE", "overview");
+    expect(reads).toBe(buildReads());
+  });
 });
 
 describe("downloading a region", () => {

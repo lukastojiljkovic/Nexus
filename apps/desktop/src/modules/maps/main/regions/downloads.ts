@@ -210,13 +210,28 @@ export function createRegionDownloads(deps: RegionDownloadsDeps): RegionDownload
     return planned;
   }
 
-  async function estimate(id: string, detail: MapRegionDetail): Promise<MapRegionEstimate> {
-    try {
-      const { build, plan } = await planFor(id, detail, new AbortController().signal, null);
-      return { ok: true, build: build.key, bytes: plan.bytes };
-    } catch (failure) {
-      return { ok: false, problem: problemOf(failure) };
-    }
+  /**
+   * One measurement at a time. The page measures whatever the person last
+   * picked, so a newer question stops the one in flight rather than leaving two
+   * continent-sized plans in memory, and the same question shares one plan.
+   */
+  let measuring: { key: string; controller: AbortController; result: Promise<MapRegionEstimate> } | null = null;
+
+  function estimate(id: string, detail: MapRegionDetail): Promise<MapRegionEstimate> {
+    const key = `${id}|${detail}`;
+    if (measuring?.key === key) return measuring.result;
+    measuring?.controller.abort();
+    const controller = new AbortController();
+    const result = planFor(id, detail, controller.signal, null).then(
+      ({ build, plan }): MapRegionEstimate => ({ ok: true, build: build.key, bytes: plan.bytes }),
+      (failure: unknown): MapRegionEstimate => ({ ok: false, problem: problemOf(failure) }),
+    );
+    const current = { key, controller, result };
+    measuring = current;
+    void result.finally(() => {
+      if (measuring === current) measuring = null;
+    });
+    return result;
   }
 
   function download(id: string, detail: MapRegionDetail): MapRegionsView {
