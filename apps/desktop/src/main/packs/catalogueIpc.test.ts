@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { catalogueEntryState } from "./catalogueIpc.js";
+import { catalogueEntryState, isUsableEntry } from "./catalogueIpc.js";
 
 /**
  * The one decision the catalogue layer makes on its own (ADR-103): what this
@@ -30,5 +30,17 @@ describe("the state a catalogue entry is in on this device", () => {
   it("is installed, not an update, when the catalogue's version is older or one it cannot read", () => {
     expect(catalogueEntryState("2026.9.0", "2026.10.0")).toBe("installed");
     expect(catalogueEntryState("latest", "2026.10.0")).toBe("installed");
+  });
+});
+
+describe("which entries a build shows", () => {
+  it("shows an entry whose floor is this version or older", () => {
+    expect(isUsableEntry({ minAppVersion: "2.5.0" }, "2.5.0")).toBe(true);
+    expect(isUsableEntry({ minAppVersion: "1.0.0" }, "2.5.0")).toBe(true);
+  });
+
+  it("hides an entry published for a newer app, and one whose floor it cannot read", () => {
+    expect(isUsableEntry({ minAppVersion: "2.6.0" }, "2.5.0")).toBe(false);
+    expect(isUsableEntry({ minAppVersion: "2.5.0" }, "dev")).toBe(false);
   });
 });

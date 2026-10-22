@@ -14,6 +14,7 @@ import {
   type DownloadResponse,
 } from "../download/service.js";
 import type { NetworkMode } from "../net/offline.js";
+import { packAssetName } from "./assets.js";
 import type { PackCatalogueEntry } from "./catalogue.js";
 import { createPackDownloader, downloadStageRoot } from "./download.js";
 import { baseManifest, entry as manifestEntry, makeKey, writePack } from "./fixtures.js";
@@ -190,25 +191,47 @@ function fixture(): Fixture {
   return { key, dir, files, content };
 }
 
-/** The catalogue entry for `fixture()`, with every file address pointing at `origin`. */
+function digest(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** The server path one file of the fixture is published under: the release asset's name. */
+function assetPath(path: string, bytes: Uint8Array): string {
+  return `/files/${packAssetName("safety-kit", path, digest(bytes))}`;
+}
+
+/** Every file of the fixture, keyed by its asset path, with `edit` replacing what one path serves. */
+function routesOf(pack: Fixture, edit: (path: string, served: Served) => Served = (_path, served) => served) {
+  return new Map(
+    [...pack.files.entries()].map(([path, bytes]): [string, Served] => [assetPath(path, bytes), edit(path, { bytes })]),
+  );
+}
+
+/**
+ * The format-2 catalogue entry for `fixture()`, its assets under `origin`: the
+ * manifest and signature pinned by the entry, the content by the manifest.
+ */
 function catalogueEntry(fixtureValue: Fixture, origin: string): PackCatalogueEntry {
-  const listed = [...fixtureValue.files.entries()].map(([path, bytes]) => ({
-    path,
-    url: `${origin}/files/${path}`,
-    size: bytes.byteLength,
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-  }));
+  const pinned = (path: string) => {
+    const bytes = fixtureValue.files.get(path);
+    if (bytes === undefined) throw new Error(`the fixture has no ${path}`);
+    return { size: bytes.byteLength, sha256: digest(bytes) };
+  };
   return {
     id: "safety-kit",
     version: "1.0.0",
     kind: "content",
     title: { sr: "Prva pomoć", en: "First aid" },
     description: { sr: "Osnovna prva pomoć.", en: "Basic first aid." },
-    size: listed.reduce((sum, file) => sum + file.size, 0),
+    size: [...fixtureValue.files.values()].reduce((sum, bytes) => sum + bytes.byteLength, 0),
+    fileCount: fixtureValue.files.size,
     licence: { spdx: "CC-BY-SA-4.0", attribution: "Nexus examples", url: "https://example.org/l" },
     source: { name: "Nexus examples", url: "https://example.org/s" },
     notice: "safety",
-    files: listed,
+    minAppVersion: "1.0.0",
+    assets: `${origin}/files/`,
+    manifest: pinned("pack.json"),
+    signature: pinned("pack.json.sig"),
   };
 }
 
@@ -245,11 +268,7 @@ function downloader(options: {
 describe("downloading a catalogue pack", () => {
   it("fetches every file, verifies each hash, and installs the pack", async () => {
     const pack = fixture();
-    const server = await listen(
-      new Map(
-        [...pack.files.entries()].map(([path, bytes]) => [`/files/${path}`, { bytes }]),
-      ),
-    );
+    const server = await listen(routesOf(pack));
     const entry = catalogueEntry(pack, server.origin);
     const progress: string[] = [];
     const outcome = await downloader({
@@ -270,11 +289,12 @@ describe("downloading a catalogue pack", () => {
     expect(readFileSync(join(packsRoot(userData), "safety-kit", "1.0.0", "content", "readme.txt"), "utf8")).toBe(
       pack.content,
     );
-    // Every file was asked for exactly once, and progress was reported.
-    expect(server.requests.map((request) => request.url).sort()).toEqual([
-      "/files/content/readme.txt",
-      "/files/pack.json",
-      "/files/pack.json.sig",
+    // Every file was asked for exactly once, the manifest and its signature
+    // first, and progress was reported.
+    expect(server.requests.map((request) => request.url)).toEqual([
+      "/files/safety-kit__pack.json",
+      "/files/safety-kit__pack.json.sig",
+      "/files/safety-kit__content__readme.txt",
     ]);
     expect(progress).toContain("safety-kit");
     // Nothing is left staged: the download's folder is swept after the install.
@@ -283,13 +303,11 @@ describe("downloading a catalogue pack", () => {
 
   it("refuses bytes that are not the bytes the catalogue pins, and leaves nothing behind", async () => {
     const pack = fixture();
-    const routes = new Map(
-      [...pack.files.entries()].map(([path, bytes]): [string, Served] => [
-        `/files/${path}`,
-        { bytes: path === "content/readme.txt" ? Buffer.from("not what was signed", "utf8") : bytes },
-      ]),
+    const server = await listen(
+      routesOf(pack, (path, served) =>
+        path === "content/readme.txt" ? { bytes: Buffer.from("not what was signed", "utf8") } : served,
+      ),
     );
-    const server = await listen(routes);
     const outcome = await downloader({
       origin: server.origin,
       publicKeyPem: pack.key.publicKeyPem,
@@ -314,15 +332,11 @@ describe("downloading a catalogue pack", () => {
 
   it("pauses mid-file and resumes it with a Range request", async () => {
     const pack = fixture();
-    const routes = new Map<string, Served>(
-      [...pack.files.entries()].map(([path, bytes]): [string, Served] => [
-        `/files/${path}`,
-        // Only the content file is served in two writes: the gap is the pause
-        // point, and the two metadata files are small enough to arrive whole.
-        path === "content/readme.txt" ? { bytes, gapMs: 40 } : { bytes },
-      ]),
+    // Only the content file is served in two writes: the gap is the pause
+    // point, and the two metadata files are small enough to arrive whole.
+    const server = await listen(
+      routesOf(pack, (path, served) => (path === "content/readme.txt" ? { ...served, gapMs: 40 } : served)),
     );
-    const server = await listen(routes);
     const entry = catalogueEntry(pack, server.origin);
     // The files before `content/readme.txt` are the two metadata files, so a
     // byte count above their sizes is the content file's first chunk: the
@@ -347,16 +361,16 @@ describe("downloading a catalogue pack", () => {
     expect(first.outcome).toBe("paused");
     const second = await dl.resume("safety-kit");
     expect(second.outcome).toBe("installed");
-    const contentRequests = server.requests.filter((request) => request.url === "/files/content/readme.txt");
+    const contentRequests = server.requests.filter(
+      (request) => request.url === "/files/safety-kit__content__readme.txt",
+    );
     expect(contentRequests.length).toBe(2);
     expect(contentRequests[1]?.range).not.toBeNull();
   }, 20_000);
 
   it("cancels a download and removes what it staged", async () => {
     const pack = fixture();
-    const server = await listen(
-      new Map([...pack.files.entries()].map(([path, bytes]) => [`/files/${path}`, { bytes }])),
-    );
+    const server = await listen(routesOf(pack));
     const entry = catalogueEntry(pack, server.origin);
     // Cancel on the first progress row: the download has begun, so this is a
     // running job being cancelled rather than a call that arrives before there
@@ -375,6 +389,38 @@ describe("downloading a catalogue pack", () => {
     expect(existsSync(join(packsRoot(userData), "safety-kit"))).toBe(false);
     expect(readdirSync(join(packsRoot(userData), PACKS_STAGING_DIR))).toEqual([]);
   }, 20_000);
+});
+
+describe("what a download refuses before any content is fetched", () => {
+  it("refuses a manifest the release key did not sign, and asks for no content", async () => {
+    const pack = fixture();
+    const server = await listen(routesOf(pack));
+    // The catalogue and the bytes agree, but the key that would check them is
+    // another one: exactly the case of a manifest signed by somebody else.
+    const outcome = await downloader({ origin: server.origin, publicKeyPem: makeKey().publicKeyPem }).download(
+      catalogueEntry(pack, server.origin),
+    );
+
+    expect(outcome).toEqual({ outcome: "refused", code: "signature" });
+    expect(server.requests.map((request) => request.url)).toEqual([
+      "/files/safety-kit__pack.json",
+      "/files/safety-kit__pack.json.sig",
+    ]);
+    expect(readdirSync(join(packsRoot(userData), PACKS_STAGING_DIR))).toEqual([]);
+  });
+
+  it("refuses an entry whose stated size is not its signed manifest's, and asks for no content", async () => {
+    const pack = fixture();
+    const server = await listen(routesOf(pack));
+    const entry = catalogueEntry(pack, server.origin);
+    const outcome = await downloader({ origin: server.origin, publicKeyPem: pack.key.publicKeyPem }).download({
+      ...entry,
+      size: entry.size + 1,
+    });
+
+    expect(outcome).toEqual({ outcome: "refused", code: "catalogue-entry" });
+    expect(server.requests).toHaveLength(2);
+  });
 });
 
 describe("the download staging directory", () => {

@@ -6,7 +6,23 @@
 //
 // WHAT IT DOES.
 //
-//   node scripts/packs/catalogue.mjs --packs <dir> --out <dir> --base <url template>
+//   node scripts/packs/catalogue.mjs --packs <dir> --out <dir> --base <url template> [--only a,b] [--merge <catalogue.json>]
+//   node scripts/packs/catalogue.mjs --from-v1 <format-1 catalogue.json> --out <dir>
+//
+// FORMAT 2 (2.5). An entry pins the pack's `pack.json` and `pack.json.sig` by
+// size and SHA-256 and names the base its release assets live under; the app
+// fetches the pair, checks the signature, and derives every other address from
+// the SIGNED manifest with the same `assetName` rule this file defines
+// (`apps/desktop/src/main/packs/assets.ts` spells it again; the test holds the
+// two together). Format 1 listed every file of every pack and reached 966,906
+// bytes of a 1 MiB cap with 22 packs; it stays published, frozen, for 2.1.
+//
+// `--merge` keeps every entry of an existing format-2 catalogue that this run
+// does not rebuild, so publishing three new packs does not need the folders of
+// the twenty already out. `--from-v1` writes the format-2 entries of packs that
+// were published under format 1: it fetches each pinned manifest (to read its
+// `minAppVersion`, which format 1 did not carry), checks it against the pin, and
+// refuses any file whose published URL is not the one the asset rule gives.
 //
 // `--packs` is the folder the builders write (`build-lib.mjs`'s
 // `PACKS_OUT_ROOT`): one folder per pack, already signed by `pack-sign.mjs`,
@@ -49,7 +65,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** The document's own format, `catalogue.ts`'s `PACK_CATALOGUE_FORMAT`. */
-const FORMAT = 1;
+const FORMAT = 2;
 
 /** The two files a pack carries besides its content. Both are listed, and the install refuses a folder without them. */
 export const PACK_MANIFEST_FILE = "pack.json";
@@ -114,7 +130,7 @@ function assetRow(packId, path, asset, file) {
  * can install, and the place to find that out is here rather than in a
  * download failure a week later.
  */
-export async function buildCatalogue({ packIds, packsDir, outDir, baseUrl }) {
+export async function buildCatalogue({ packIds, packsDir, outDir, baseUrl, merge }) {
   const assetsDir = join(outDir, "assets");
   mkdirSync(assetsDir, { recursive: true });
 
@@ -133,8 +149,10 @@ export async function buildCatalogue({ packIds, packsDir, outDir, baseUrl }) {
     }
 
     const files = [];
-    // The manifest and its signature travel as content, because the catalogue
-    // is outside the manifest and can pin the pair the manifest itself cannot.
+    // The manifest and its signature are the two files the entry pins, because
+    // the catalogue is outside the manifest and can pin the pair the manifest
+    // itself cannot.
+    const pinned = {};
     for (const name of [PACK_MANIFEST_FILE, PACK_SIGNATURE_FILE]) {
       const absolute = join(dir, name);
       const size = statSync(absolute).size;
@@ -142,7 +160,8 @@ export async function buildCatalogue({ packIds, packsDir, outDir, baseUrl }) {
       const asset = assetName(id, name, sha256);
       copyFileSync(absolute, join(assetsDir, asset));
       assets.push(assetRow(id, name, asset, join(assetsDir, asset)));
-      files.push({ path: name, url: `${base}${asset}`, size, sha256 });
+      files.push({ path: name, size });
+      pinned[name] = { size, sha256 };
     }
     for (const file of manifest.files) {
       const absolute = join(dir, ...file.path.split("/"));
@@ -155,31 +174,114 @@ export async function buildCatalogue({ packIds, packsDir, outDir, baseUrl }) {
       const asset = assetName(id, file.path, file.sha256);
       copyFileSync(absolute, join(assetsDir, asset));
       assets.push(assetRow(id, file.path, asset, join(assetsDir, asset)));
-      files.push({ path: file.path, url: `${base}${asset}`, size, sha256: file.sha256 });
+      files.push({ path: file.path, size });
     }
 
-    const entry = {
-      id: manifest.id,
-      version: manifest.version,
-      kind: manifest.kind,
-      title: manifest.title,
-      description: manifest.description,
-      size: files.reduce((sum, file) => sum + file.size, 0),
-      licence: manifest.licence,
-      source: manifest.source,
-      files,
-    };
-    if (manifest.notice !== undefined) entry.notice = manifest.notice;
-    entries.push(entry);
+    entries.push(
+      catalogueEntry(manifest, {
+        size: files.reduce((sum, file) => sum + file.size, 0),
+        fileCount: files.length,
+        assets: base,
+        manifest: pinned[PACK_MANIFEST_FILE],
+        signature: pinned[PACK_SIGNATURE_FILE],
+      }),
+    );
   }
 
-  entries.sort((a, b) => (a.id < b.id ? -1 : 1));
-  writeFileSync(
-    join(outDir, "catalogue.json"),
-    `${JSON.stringify({ format: FORMAT, packs: entries }, null, 2)}\n`,
-  );
+  const packs = mergeEntries(merge?.packs ?? [], entries);
+  writeCatalogue(outDir, packs);
   writeFileSync(join(outDir, "assets.json"), `${JSON.stringify(assets, null, 2)}\n`);
-  return { entries, assets };
+  return { entries: packs, assets };
+}
+
+/**
+ * One format-2 entry, in the key order the document has always used: what the
+ * pack IS comes from its manifest, where its bytes are from the caller.
+ */
+function catalogueEntry(manifest, { size, fileCount, assets, manifest: manifestPin, signature }) {
+  const entry = {
+    id: manifest.id,
+    version: manifest.version,
+    kind: manifest.kind,
+    title: manifest.title,
+    description: manifest.description,
+    size,
+    fileCount,
+    licence: manifest.licence,
+    source: manifest.source,
+  };
+  if (manifest.notice !== undefined && manifest.notice !== null) entry.notice = manifest.notice;
+  return { ...entry, minAppVersion: manifest.minAppVersion, assets, manifest: manifestPin, signature };
+}
+
+/** `existing` with every entry `fresh` rebuilds replaced, sorted by id: a merge never lists one pack twice. */
+export function mergeEntries(existing, fresh) {
+  const byId = new Map(existing.map((entry) => [entry.id, entry]));
+  for (const entry of fresh) byId.set(entry.id, entry);
+  return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+function writeCatalogue(outDir, packs) {
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, "catalogue.json"), `${JSON.stringify({ format: FORMAT, packs }, null, 2)}\n`);
+}
+
+/**
+ * The format-2 entries of packs published under format 1, whose assets are
+ * already uploaded and are not uploaded again.
+ *
+ * `fetchBytes(url)` reads one small file (injected, so the test needs no
+ * network). Each manifest it reads is checked against the format-1 pin before a
+ * field of it is used; and every published file's URL must be exactly the base
+ * plus the asset rule's name, because that is the address a 2.5 app will ask
+ * for — a file uploaded under any other name would be a pack whose every
+ * download 404s, found here rather than by a user.
+ */
+export async function fromFormat1(document, fetchBytes) {
+  if (document?.format !== 1 || !Array.isArray(document.packs)) {
+    throw new Error("catalogue: --from-v1 reads a format-1 catalogue.");
+  }
+  const entries = [];
+  for (const old of document.packs) {
+    const find = (path) => {
+      const file = old.files.find((listed) => listed.path === path);
+      if (file === undefined) throw new Error(`catalogue: "${old.id}" does not pin ${path}.`);
+      return file;
+    };
+    const manifestFile = find(PACK_MANIFEST_FILE);
+    const signatureFile = find(PACK_SIGNATURE_FILE);
+    const name = assetName(old.id, PACK_MANIFEST_FILE, manifestFile.sha256);
+    if (!manifestFile.url.endsWith(`/${name}`)) {
+      throw new Error(`catalogue: "${old.id}" publishes its manifest at ${manifestFile.url}, not under "${name}".`);
+    }
+    const base = manifestFile.url.slice(0, -name.length);
+    for (const file of old.files) {
+      const expected = `${base}${assetName(old.id, file.path, file.sha256)}`;
+      if (file.url !== expected) {
+        throw new Error(`catalogue: "${old.id}" publishes ${file.path} at ${file.url}, not ${expected}.`);
+      }
+    }
+
+    const bytes = await fetchBytes(manifestFile.url);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (bytes.byteLength !== manifestFile.size || digest !== manifestFile.sha256) {
+      throw new Error(`catalogue: the manifest of "${old.id}" is not the one format 1 pins.`);
+    }
+    const manifest = JSON.parse(Buffer.from(bytes).toString("utf8"));
+    if (manifest.id !== old.id || manifest.version !== old.version) {
+      throw new Error(`catalogue: ${manifestFile.url} is the manifest of "${manifest.id}" ${manifest.version}.`);
+    }
+    entries.push(
+      catalogueEntry(manifest, {
+        size: old.size,
+        fileCount: old.files.length,
+        assets: base,
+        manifest: { size: manifestFile.size, sha256: manifestFile.sha256 },
+        signature: { size: signatureFile.size, sha256: signatureFile.sha256 },
+      }),
+    );
+  }
+  return entries.sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
 /** `--name value` pairs from argv, refusing anything unexpected — `pack-sign.mjs`'s own arg reader, one file over. */
@@ -216,22 +318,42 @@ export function packIdsIn(packsDir, only) {
   return found.filter((id) => only.includes(id));
 }
 
+/** One small file over https, whole: the `--from-v1` reader. */
+async function fetchWhole(url) {
+  const reply = await fetch(url, { redirect: "follow" });
+  if (!reply.ok) throw new Error(`catalogue: ${url} answered ${String(reply.status)}.`);
+  return new Uint8Array(await reply.arrayBuffer());
+}
+
 async function main() {
   const args = readArgs(process.argv.slice(2));
+  if (args["from-v1"] !== undefined && args.out !== undefined) {
+    const packs = await fromFormat1(JSON.parse(readFileSync(args["from-v1"], "utf8")), fetchWhole);
+    writeCatalogue(args.out, packs);
+    process.stdout.write(`catalogue: ${String(packs.length)} pack(s) → ${join(args.out, "catalogue.json")}\n`);
+    return;
+  }
   for (const needed of ["packs", "out", "base"]) {
     if (args[needed] === undefined) {
       process.stderr.write(
-        "usage: node scripts/packs/catalogue.mjs --packs <dir> --out <dir> --base <release url>\n",
+        "usage: node scripts/packs/catalogue.mjs --packs <dir> --out <dir> --base <release url> " +
+          "[--only a,b] [--merge <catalogue.json>]\n" +
+          "       node scripts/packs/catalogue.mjs --from-v1 <catalogue.json> --out <dir>\n",
       );
       process.exit(2);
     }
   }
   const only = args.only === undefined ? undefined : args.only.split(",").map((id) => id.trim());
+  const merge = args.merge === undefined ? undefined : JSON.parse(readFileSync(args.merge, "utf8"));
+  if (merge !== undefined && merge.format !== FORMAT) {
+    throw new Error(`catalogue: --merge reads a format-${String(FORMAT)} catalogue.`);
+  }
   const { entries, assets } = await buildCatalogue({
     packIds: packIdsIn(args.packs, only),
     packsDir: args.packs,
     outDir: args.out,
     baseUrl: args.base,
+    merge,
   });
   const bytes = entries.reduce((sum, entry) => sum + entry.size, 0);
   process.stdout.write(

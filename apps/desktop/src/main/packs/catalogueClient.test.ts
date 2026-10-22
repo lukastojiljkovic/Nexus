@@ -28,38 +28,23 @@ function sha256(contents: string): string {
   return createHash("sha256").update(contents).digest("hex");
 }
 
+/** A format-2 entry: the manifest and its signature pinned, the content counted. */
 function entry() {
   const content = "zim bytes";
-  const files = [
-    {
-      path: "pack.json",
-      url: `https://github.com/pack/pack.json`,
-      size: Buffer.byteLength("{}", "utf8"),
-      sha256: sha256("{}"),
-    },
-    {
-      path: "pack.json.sig",
-      url: `https://github.com/pack/pack.json.sig`,
-      size: Buffer.byteLength("sig", "utf8"),
-      sha256: sha256("sig"),
-    },
-    {
-      path: "content.zim",
-      url: `https://github.com/pack/content.zim`,
-      size: Buffer.byteLength(content, "utf8"),
-      sha256: sha256(content),
-    },
-  ];
   return {
     id: "wikipedia-sr",
     version: "2026.10.0",
     kind: "zim",
     title: { sr: "Vikipedija", en: "Wikipedia" },
     description: { sr: "ZIM.", en: "A ZIM." },
-    size: files.reduce((sum, listed) => sum + listed.size, 0),
+    size: Buffer.byteLength("{}", "utf8") + Buffer.byteLength("sig", "utf8") + Buffer.byteLength(content, "utf8"),
+    fileCount: 3,
     licence: { spdx: "CC-BY-SA-4.0", attribution: "authors", url: "https://example.org/licence" },
     source: { name: "Kiwix", url: "https://www.kiwix.org/" },
-    files,
+    minAppVersion: "2.5.0",
+    assets: "https://github.com/lukastojiljkovic/nexus-packs/releases/download/wikipedia-sr-2026.10.0/",
+    manifest: { size: Buffer.byteLength("{}", "utf8"), sha256: sha256("{}") },
+    signature: { size: Buffer.byteLength("sig", "utf8"), sha256: sha256("sig") },
   };
 }
 
@@ -131,7 +116,7 @@ async function codeOf(read: Promise<unknown>): Promise<string | null> {
 describe("reading the catalogue", () => {
   it("verifies the signature before it parses, and answers the entries", async () => {
     const key = makeKey();
-    const bytes = Buffer.from(JSON.stringify({ format: 1, packs: [entry()] }), "utf8");
+    const bytes = Buffer.from(JSON.stringify({ format: 2, packs: [entry()] }), "utf8");
     const routes = new Map<string, Reply>([
       [PACK_CATALOGUE_URL, { status: 200, body: bytes.toString("utf8") }],
       [
@@ -148,7 +133,7 @@ describe("reading the catalogue", () => {
 
   it("refuses a document whose signature is over other bytes", async () => {
     const key = makeKey();
-    const bytes = Buffer.from(JSON.stringify({ format: 1, packs: [entry()] }), "utf8");
+    const bytes = Buffer.from(JSON.stringify({ format: 2, packs: [entry()] }), "utf8");
     const routes = new Map<string, Reply>([
       [PACK_CATALOGUE_URL, { status: 200, body: bytes.toString("utf8") }],
       [

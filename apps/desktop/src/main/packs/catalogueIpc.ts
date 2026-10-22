@@ -31,7 +31,7 @@ import type {
 import { createDownloadService, freeSpaceBytes, type DownloadHttp } from "../download/service.js";
 import { modeAllowsDownloads, type NetworkMode } from "../net/offline.js";
 import { compareVersions } from "../update/version.js";
-import type { PackCatalogueEntry } from "./catalogue.js";
+import type { PackCatalogue, PackCatalogueEntry } from "./catalogue.js";
 import { createCatalogueClient } from "./catalogueClient.js";
 import { createPackDownloader, type PackDownloadOutcome } from "./download.js";
 import { packRefusalCode, type PackRefusalCode } from "./errors.js";
@@ -99,6 +99,22 @@ export function catalogueEntryState(
   return order !== null && order > 0 ? "update-available" : "installed";
 }
 
+/**
+ * Whether this build can use an entry: its `minAppVersion` is this app's
+ * version or older.
+ *
+ * A newer entry is HIDDEN rather than refused. The catalogue is one document
+ * for every build from 2.5 on, so a pack published for 2.6 is a line a 2.5 card
+ * has nothing to do with — not an error in the document, and not a reason to
+ * show nothing else. A version either side cannot read answers "not usable",
+ * `source.ts`'s direction: offering a download the install would then refuse is
+ * the worse mistake.
+ */
+export function isUsableEntry(entry: Pick<PackCatalogueEntry, "minAppVersion">, appVersion: string): boolean {
+  const order = compareVersions(appVersion, entry.minAppVersion);
+  return order !== null && order >= 0;
+}
+
 export function createPackCatalogueIpc(deps: PackCatalogueIpcDeps): PackCatalogueIpc {
   const client = createCatalogueClient({
     http: deps.http,
@@ -147,7 +163,7 @@ export function createPackCatalogueIpc(deps: PackCatalogueIpcDeps): PackCatalogu
       title: entry.title,
       description: entry.description,
       size: entry.size,
-      fileCount: entry.files.length,
+      fileCount: entry.fileCount,
       licence: entry.licence,
       source: entry.source,
       notice: entry.notice,
@@ -168,12 +184,17 @@ export function createPackCatalogueIpc(deps: PackCatalogueIpcDeps): PackCatalogu
   async function entryFor(id: string): Promise<PackCatalogueEntry | { readonly code: PackRefusalCode }> {
     try {
       const catalogue = await client.read();
-      return catalogue.packs.find((entry) => entry.id === id) ?? { code: "catalogue-entry" };
+      return usable(catalogue).find((entry) => entry.id === id) ?? { code: "catalogue-entry" };
     } catch (error) {
       const code = packRefusalCode(error);
       if (code === null) throw error;
       return { code };
     }
+  }
+
+  /** The entries this build may show and download, in the document's order. */
+  function usable(catalogue: PackCatalogue): PackCatalogueEntry[] {
+    return catalogue.packs.filter((entry) => isUsableEntry(entry, deps.appVersion));
   }
 
   function toDownloadResult(outcome: PackDownloadOutcome): PackDownloadResult {
@@ -198,7 +219,7 @@ export function createPackCatalogueIpc(deps: PackCatalogueIpcDeps): PackCatalogu
         const installed = installedPacks();
         return {
           outcome: "ready",
-          entries: document.packs.map((entry) => toEntryView(entry, installed)),
+          entries: usable(document).map((entry) => toEntryView(entry, installed)),
         };
       } catch (error) {
         const code = packRefusalCode(error);
