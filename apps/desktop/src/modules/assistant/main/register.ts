@@ -14,6 +14,7 @@ import {
   type ModelTier,
 } from "@nexus/core";
 import {
+  ASSISTANT_RUNTIME_LIMITS,
   ASSISTANT_TIERS,
   MAX_CONVERSATION_TITLE_LENGTH,
   MAX_MESSAGE_CHARS,
@@ -23,6 +24,7 @@ import {
   type AssistantExport,
   type AssistantMessage,
   type AssistantMessageInput,
+  type AssistantRuntimeOptions,
 } from "@nexus/db";
 import { noRecommendation } from "../../../main/assistant/runtime/recommend.js";
 import { localDay } from "../../../main/assistant/tools/support.js";
@@ -263,6 +265,8 @@ export function register(host: ModuleHostSurface): void {
       chatModelId: chosenId,
       downloadsAllowed: profile.downloadsAllowed(),
       networkMode: services().networkMode(),
+      runtime: { options: profile.runtimeOptions(), limits: ASSISTANT_RUNTIME_LIMITS },
+      resident: profile.modelHost().resident(),
     };
   }
 
@@ -724,6 +728,23 @@ export function register(host: ModuleHostSurface): void {
     return await setupView(profile);
   });
 
+  ctx.handle("setRuntime", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const runtime = runtimeOf(call, payload.runtime);
+    const profile = profileFor(call, profileId);
+    profile.setRuntimeOptions(runtime);
+    return await setupView(profile);
+  });
+
+  // Gives the memory back now, whatever the idle time says. The next turn
+  // loads the model again, as it would after an idle unload.
+  ctx.handle("unloadModels", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const profile = profileFor(call, profileId);
+    await profile.modelHost().unloadAll();
+    return await setupView(profile);
+  });
+
   ctx.handle("setWebSearch", (payload, call): AssistantSettingsView => {
     const profileId = call.as.asId(payload.profileId, "profileId");
     const enabled = call.as.asBoolean(payload.enabled, "enabled");
@@ -905,6 +926,30 @@ function tierOf(call: { as: ModuleCall["as"] }, value: unknown): ModelTier {
     );
   }
   return tier as ModelTier;
+}
+
+/**
+ * The six runtime options, off the wire, each inside the store's own bounds; a
+ * `null` is the model's own value, which the idle time has none of.
+ */
+function runtimeOf(call: { as: ModuleCall["as"] }, value: unknown): AssistantRuntimeOptions {
+  const record = call.as.asRecord(value);
+  const bounded = (field: keyof AssistantRuntimeOptions): number => {
+    const { min, max, integer } = ASSISTANT_RUNTIME_LIMITS[field];
+    return integer
+      ? call.as.asBoundedInteger(record[field], field, min, max)
+      : call.as.asBoundedNumber(record[field], field, min, max);
+  };
+  const nullable = (field: keyof AssistantRuntimeOptions): number | null =>
+    record[field] === null ? null : bounded(field);
+  return {
+    contextTokens: nullable("contextTokens"),
+    temperature: nullable("temperature"),
+    topP: nullable("topP"),
+    topK: nullable("topK"),
+    repeatPenalty: nullable("repeatPenalty"),
+    idleUnloadMinutes: bounded("idleUnloadMinutes"),
+  };
 }
 
 /** The language a voice request is in, off the wire. The app's own two, and nothing else. */

@@ -5,6 +5,7 @@ import type {
   HardwareProfile,
   ModelEntry,
   ModelTier,
+  ResidentModels,
   ToolCall,
 } from "@nexus/core";
 import { defineModuleContract, type ModuleApiOf } from "../../../shared/moduleApi.js";
@@ -194,6 +195,32 @@ export interface AssistantInstalledView {
   readonly chosen: boolean;
 }
 
+/**
+ * How this profile's chat model is loaded and sampled. Each `null` is the
+ * model's own value; `idleUnloadMinutes` of `0` keeps it in memory until it is
+ * unloaded by hand. The store's `AssistantRuntimeOptions`, restated for the page.
+ */
+export interface AssistantRuntimeOptionsView {
+  readonly contextTokens: number | null;
+  readonly temperature: number | null;
+  readonly topP: number | null;
+  readonly topK: number | null;
+  readonly repeatPenalty: number | null;
+  readonly idleUnloadMinutes: number;
+}
+
+export interface AssistantRuntimeView {
+  readonly options: AssistantRuntimeOptionsView;
+  /** The bounds main holds each option to, so the page's inputs offer exactly those. */
+  readonly limits: {
+    readonly [K in keyof AssistantRuntimeOptionsView]: {
+      readonly min: number;
+      readonly max: number;
+      readonly integer: boolean;
+    };
+  };
+}
+
 /** Everything the setup and models screens read from the disk and the profile: no probe, so it answers at once. */
 export interface AssistantSetupView {
   readonly installed: readonly AssistantInstalledView[];
@@ -207,6 +234,9 @@ export interface AssistantSetupView {
   /** Whether this launch may download at all: only the `downloads` network mode may (ADR-092). */
   readonly downloadsAllowed: boolean;
   readonly networkMode: AssistantNetworkMode;
+  readonly runtime: AssistantRuntimeView;
+  /** The models in memory right now, by id. */
+  readonly resident: ResidentModels;
 }
 
 /**
@@ -305,6 +335,11 @@ interface SetTierPayload {
   tier: ModelTier;
 }
 
+interface SetRuntimePayload {
+  profileId: string;
+  runtime: AssistantRuntimeOptionsView;
+}
+
 interface SetChatModelPayload {
   profileId: string;
   /** The installed chat model to answer with, or `null` to let the default tier decide again. */
@@ -389,6 +424,8 @@ type AssistantOps = {
   removeModel: { request: ModelIdPayload; response: AssistantSetupView };
   setDefaultTier: { request: SetTierPayload; response: AssistantSetupView };
   setChatModel: { request: SetChatModelPayload; response: AssistantSetupView };
+  setRuntime: { request: SetRuntimePayload; response: AssistantSetupView };
+  unloadModels: { request: ProfilePayload; response: AssistantSetupView };
   setWebSearch: { request: SetWebSearchPayload; response: AssistantSettingsView };
   reindexKnowledge: { request: ProfilePayload; response: AssistantKnowledgeView };
   voice: { request: ProfilePayload; response: AssistantVoiceView };
@@ -424,6 +461,8 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "removeModel",
   "setDefaultTier",
   "setChatModel",
+  "setRuntime",
+  "unloadModels",
   "setWebSearch",
   "reindexKnowledge",
   "voice",

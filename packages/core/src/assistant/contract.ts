@@ -409,6 +409,25 @@ export interface DownloadProgress {
   readonly totalBytes: number;
 }
 
+/**
+ * What a profile changes about how a chat model runs. Each absent field keeps the
+ * entry's own: its context cap, and its sampling or the library's defaults.
+ */
+export interface ChatLoadOverrides {
+  /** The context to load with, in tokens; still no more than the model was trained on. */
+  readonly contextTokens?: number;
+  readonly temperature?: number;
+  readonly topP?: number;
+  readonly topK?: number;
+  readonly repeatPenalty?: number;
+}
+
+/** The models in memory now, by id; `null` where none is. */
+export interface ResidentModels {
+  readonly chat: string | null;
+  readonly embedder: string | null;
+}
+
 /** Models on disk and in memory. Runs in main; inference itself runs off the main thread. */
 export interface ModelHost {
   hardware(): Promise<HardwareProfile>;
@@ -421,8 +440,15 @@ export interface ModelHost {
   download(entry: ModelEntry, onProgress: (progress: DownloadProgress) => void, signal: AbortSignal): Promise<void>;
   importFile(path: string): Promise<ModelEntry>;
   remove(id: string): Promise<void>;
-  loadChat(id: string, signal: AbortSignal): Promise<ChatModel>;
+  /** A changed `overrides` is a different model to run, so it reloads one that is resident. */
+  loadChat(id: string, signal: AbortSignal, overrides?: ChatLoadOverrides): Promise<ChatModel>;
   loadEmbedder(id: string, signal: AbortSignal): Promise<Embedder>;
+  resident(): ResidentModels;
+  /**
+   * How long the models stay in memory once no request is pending, in minutes;
+   * `0` keeps them until `unloadAll`. Never set, they are kept.
+   */
+  keepLoadedFor(minutes: number): void;
   unloadAll(): Promise<void>;
 }
 

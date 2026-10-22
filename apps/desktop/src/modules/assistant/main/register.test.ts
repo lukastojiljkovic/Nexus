@@ -4,13 +4,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createScriptedModel,
+  type ChatLoadOverrides,
   type HardwareProfile,
   type ModelEntry,
   type ModelHost,
   type ModelRecommendation,
   type ScriptedChatModel,
 } from "@nexus/core";
-import { NexusDatabase, TaskListStore, openDatabase, uuidv7 } from "@nexus/db";
+import {
+  DEFAULT_ASSISTANT_RUNTIME,
+  NexusDatabase,
+  TaskListStore,
+  openDatabase,
+  uuidv7,
+} from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import type { VoiceReply, VoiceRequest } from "../../../main/assistant/voice/protocol.js";
@@ -125,8 +132,13 @@ let hardwareReads = 0;
 let loadError: Error | null = null;
 /** The models on this machine, written by the tests that add or remove one. */
 let installedEntries: ModelEntry[] = [];
-/** Every model id `loadChat` was asked for, in order. */
+/** Every model id `loadChat` was asked for, in order, and the overrides each load carried. */
 let loaded: string[] = [];
+let loadOverrides: (ChatLoadOverrides | undefined)[] = [];
+/** Every idle time the host was told to keep its models for, in minutes. */
+let keptFor: number[] = [];
+/** The chat model the fake host holds, as `resident()` answers it. */
+let residentChat: string | null = null;
 /** The voice worker, as this module sees it: one canned reply per request kind. */
 let voiceRequests: VoiceRequest[] = [];
 let voiceDisposals = 0;
@@ -196,9 +208,11 @@ function fakeHost(): ModelHost {
     async remove(id: string): Promise<void> {
       installedEntries = installedEntries.filter((candidate) => candidate.id !== id);
     },
-    async loadChat(id: string) {
+    async loadChat(id: string, _signal: AbortSignal, overrides?: ChatLoadOverrides) {
       loaded.push(id);
+      loadOverrides.push(overrides);
       if (loadError !== null) throw loadError;
+      residentChat = id;
       // The window the app itself loads: a chat model is asked for
       // `CHAT_CONTEXT_TOKENS` (8_192). The fake's own default is 4_096, and the
       // tool registry the merged build offers needs more room than that - its
@@ -217,8 +231,15 @@ function fakeHost(): ModelHost {
     async loadEmbedder() {
       throw new Error("this machine has no embedding model");
     },
+    resident() {
+      return { chat: residentChat, embedder: null };
+    },
+    keepLoadedFor(minutes: number): void {
+      keptFor.push(minutes);
+    },
     async unloadAll(): Promise<void> {
       unloads += 1;
+      residentChat = null;
     },
   };
 }
@@ -287,6 +308,9 @@ beforeEach(() => {
   loadError = null;
   installedEntries = [ENTRY];
   loaded = [];
+  loadOverrides = [];
+  keptFor = [];
+  residentChat = null;
   voiceRequests = [];
   voiceDisposals = 0;
   voiceTranscript = "Zdravo iz mikrofona.";
@@ -1090,5 +1114,103 @@ describe("the assistant module through the kit", () => {
     };
     expect(view.chatModelId).toBeNull();
     expect(view.installed.some((row) => row.chosen)).toBe(false);
+  }, 30_000);
+});
+
+describe("the assistant's runtime: context, sampling and memory", () => {
+  const RUNTIME = {
+    contextTokens: 16_384,
+    temperature: 0.4,
+    topP: null,
+    topK: 40,
+    repeatPenalty: null,
+    idleUnloadMinutes: 5,
+  };
+
+  async function sendOne(host: ModuleHost): Promise<void> {
+    const created = (await host.dispatch("assistant:createConversation", TRUSTED, {
+      profileId,
+      title: "Rad",
+    })) as { conversations: { id: string }[] };
+    const started = (await host.dispatch("assistant:send", TRUSTED, {
+      profileId,
+      conversationId: created.conversations[0]?.id ?? "",
+      text: "zdravo",
+      workflowId: null,
+    })) as { turnId: string };
+    await pollUntil(host, started.turnId, (events) => events.some((entry) => entry.event.type === "done"));
+  }
+
+  it("answers the defaults and the bounds in the setup view of a profile that set nothing", async () => {
+    const host = harness();
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      runtime: { options: unknown; limits: { contextTokens: { min: number; max: number } } };
+      resident: unknown;
+    };
+    expect(view.runtime.options).toEqual(DEFAULT_ASSISTANT_RUNTIME);
+    expect(view.runtime.limits.contextTokens).toMatchObject({ min: 2048, max: 131_072 });
+    expect(view.resident).toEqual({ chat: null, embedder: null });
+  });
+
+  it("loads with the profile's runtime options, and keeps the model for the idle time they name", async () => {
+    const host = harness();
+    script = [{ text: "Odgovor." }];
+    const view = (await host.dispatch("assistant:setRuntime", TRUSTED, {
+      profileId,
+      runtime: RUNTIME,
+    })) as { runtime: { options: unknown } };
+    expect(view.runtime.options).toEqual(RUNTIME);
+    // A changed idle time applies to the model in memory now, not at the next turn.
+    expect(keptFor.at(-1)).toBe(5);
+
+    await sendOne(host);
+    // Only what the profile set travels: a `null` is the model's own value.
+    expect(loadOverrides).toEqual([{ contextTokens: 16_384, temperature: 0.4, topK: 40 }]);
+    expect(keptFor.at(-1)).toBe(5);
+  }, 30_000);
+
+  it("loads a profile that set nothing with no overrides at all", async () => {
+    const host = harness();
+    script = [{ text: "Odgovor." }];
+    await sendOne(host);
+    expect(loadOverrides).toEqual([{}]);
+    expect(keptFor.at(-1)).toBe(15);
+  }, 30_000);
+
+  it("refuses a runtime option outside its bounds, and keeps the last one", async () => {
+    const host = harness();
+    await host.dispatch("assistant:setRuntime", TRUSTED, { profileId, runtime: RUNTIME });
+    for (const wrong of [
+      { ...RUNTIME, temperature: 9 },
+      { ...RUNTIME, contextTokens: 100 },
+      { ...RUNTIME, topK: 2.5 },
+      { ...RUNTIME, idleUnloadMinutes: null },
+      { ...RUNTIME, idleUnloadMinutes: undefined },
+      "all of them",
+    ]) {
+      await expect(
+        host.dispatch("assistant:setRuntime", TRUSTED, { profileId, runtime: wrong }),
+        JSON.stringify(wrong),
+      ).rejects.toThrow();
+    }
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      runtime: { options: unknown };
+    };
+    expect(view.runtime.options).toEqual(RUNTIME);
+  });
+
+  it("names the model in memory, and lets it go on request", async () => {
+    const host = harness();
+    script = [{ text: "Odgovor." }];
+    await sendOne(host);
+    const before = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      resident: { chat: string | null };
+    };
+    expect(before.resident.chat).toBe(ENTRY.id);
+    const after = (await host.dispatch("assistant:unloadModels", TRUSTED, { profileId })) as {
+      resident: { chat: string | null };
+    };
+    expect(unloads).toBe(1);
+    expect(after.resident.chat).toBeNull();
   }, 30_000);
 });
