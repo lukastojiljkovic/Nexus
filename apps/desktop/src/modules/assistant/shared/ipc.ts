@@ -73,10 +73,22 @@ export interface AssistantMessageView {
   readonly createdAt: string;
 }
 
+/**
+ * What a compacted thread's first `through` messages said. The model reads this
+ * in their place; the page still draws every message, and marks where the
+ * summary ends.
+ */
+export interface AssistantSummaryView {
+  readonly text: string;
+  readonly through: number;
+}
+
 /** One thread with its messages. */
 export interface AssistantThreadView {
   readonly conversation: AssistantConversationView;
   readonly messages: readonly AssistantMessageView[];
+  /** `null` until the thread is first compacted. */
+  readonly summary: AssistantSummaryView | null;
 }
 
 /** The device's network mode, restated for the wire: no file under `shared/` may reach main's copy of it. */
@@ -198,7 +210,9 @@ export interface AssistantInstalledView {
 /**
  * How this profile's chat model is loaded and sampled. Each `null` is the
  * model's own value; `idleUnloadMinutes` of `0` keeps it in memory until it is
- * unloaded by hand. The store's `AssistantRuntimeOptions`, restated for the page.
+ * unloaded by hand. `autoCompact` lets a turn summarize a thread that outgrew
+ * the window before it answers. The store's `AssistantRuntimeOptions`,
+ * restated for the page.
  */
 export interface AssistantRuntimeOptionsView {
   readonly contextTokens: number | null;
@@ -207,13 +221,14 @@ export interface AssistantRuntimeOptionsView {
   readonly topK: number | null;
   readonly repeatPenalty: number | null;
   readonly idleUnloadMinutes: number;
+  readonly autoCompact: boolean;
 }
 
 export interface AssistantRuntimeView {
   readonly options: AssistantRuntimeOptionsView;
-  /** The bounds main holds each option to, so the page's inputs offer exactly those. */
+  /** The bounds main holds each number to, so the page's inputs offer exactly those. */
   readonly limits: {
-    readonly [K in keyof AssistantRuntimeOptionsView]: {
+    readonly [K in Exclude<keyof AssistantRuntimeOptionsView, "autoCompact">]: {
       readonly min: number;
       readonly max: number;
       readonly integer: boolean;
@@ -242,10 +257,12 @@ export interface AssistantSetupView {
 /**
  * What one turn emits, for the page.
  *
- * The contract's own `AgentEvent`s, plus the one this module adds: a tool asking
- * the user before it acts. `effect` is never `read` - a read never asks - and the
- * page's dialog draws `summary`, the tool's own one-line sentence in the user's
- * language.
+ * The contract's own `AgentEvent`s, plus the two this module adds. A tool asking
+ * the user before it acts: `effect` is never `read` - a read never asks - and
+ * the page's dialog draws `summary`, the tool's own one-line sentence in the
+ * user's language. And a compaction, which a turn may run before it answers
+ * and `compact` runs on its own: `running` while the model writes the summary,
+ * then `done`, or `failed` when the thread was left as it was.
  */
 export type AssistantTurnEventView =
   | AgentEvent
@@ -255,7 +272,8 @@ export type AssistantTurnEventView =
       readonly tool: string;
       readonly summary: string;
       readonly effect: "write" | "navigate" | "network";
-    };
+    }
+  | { readonly type: "compaction"; readonly status: "running" | "done" | "failed" };
 
 /** One buffered event, with the sequence number a cursor counts. */
 export interface AssistantTurnEventEntry {
@@ -411,6 +429,8 @@ type AssistantOps = {
   removeConversation: { request: ConversationPayload; response: AssistantView };
   open: { request: ConversationPayload; response: AssistantThreadView };
   send: { request: SendPayload; response: AssistantTurnStartView };
+  /** Summarizes a thread's head as a turn of its own, which the page polls and may stop. */
+  compact: { request: ConversationPayload; response: AssistantTurnStartView };
   poll: { request: PollPayload; response: AssistantPollView };
   stop: { request: StopPayload; response: null };
   answerConfirm: { request: AnswerConfirmPayload; response: null };
@@ -448,6 +468,7 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "removeConversation",
   "open",
   "send",
+  "compact",
   "poll",
   "stop",
   "answerConfirm",
