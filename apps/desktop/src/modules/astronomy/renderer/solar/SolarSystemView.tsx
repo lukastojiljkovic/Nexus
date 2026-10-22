@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { BodyId, OrbitPath, SolarSystemSnapshot, Vector3 } from "@nexus/core";
+import { Button } from "@nexus/ui";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import { activeLocale } from "../../../../renderer/src/strings.js";
+import { copy } from "../copy.js";
 import { bodyLabel } from "./bodies.js";
 import { FLIGHT_MS, flyToPath, followPose, poseFor, type CameraPose } from "./camera.js";
 import { placeLabels, type LabelAnchor } from "./labels.js";
+import { MIN_PICK_RADIUS_PX, pickAnchor, type PickAnchor } from "./pick.js";
 import { solarPalette } from "./palette.js";
 import { SceneResources } from "./resources.js";
 import { type SolarScale } from "./scale.js";
@@ -56,7 +59,7 @@ export interface SolarSystemViewProps {
   /** One sampled path per body. Rebuilds the orbit lines when the array's identity changes. */
   readonly orbits: readonly OrbitPath[];
   readonly selected: BodyId | null;
-  readonly onSelect: (id: BodyId) => void;
+  readonly onSelect: (id: BodyId | null) => void;
   readonly scale: SolarScale;
   /** The pack's layout, or `null` for the textureless view. */
   readonly textures: PlanetTextures | null;
@@ -91,7 +94,6 @@ interface ViewState {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly controls: OrbitControls;
-  readonly raycaster: THREE.Raycaster;
   readonly textureLoader: THREE.TextureLoader;
   readonly viewport: HTMLDivElement;
   readonly labelLayer: HTMLDivElement;
@@ -104,6 +106,8 @@ interface ViewState {
   orbits: readonly OrbitPath[];
   texturesSource: PlanetTextures | null;
   flight: { readonly from: CameraPose; readonly to: CameraPose; readonly startedAt: number } | null;
+  /** The body the camera keeps in view while time runs, with where it was when the camera last moved with it. */
+  followed: { readonly id: BodyId; readonly at: Vector3 } | null;
   dragOrigin: { readonly x: number; readonly y: number } | null;
   frame: number;
   requestRender: () => void;
@@ -127,6 +131,23 @@ function currentPose(state: ViewState): CameraPose {
     position: [position.x, position.y, position.z],
     target: [target.x, target.y, target.z],
   };
+}
+
+/** The whole system framed from the direction the view opens in. */
+function wholeSystemPose(built: BuiltSolarScene): CameraPose {
+  return poseFor(
+    [0, 0, 0],
+    sceneFitRadius(built) || 1,
+    FIELD_OF_VIEW_DEG,
+    WHOLE_SYSTEM_FILL,
+    OPENING_VIEW_DIRECTION,
+  );
+}
+
+/** Flies from wherever the camera stands to `to`, replacing any flight already running. */
+function flyTo(state: ViewState, to: CameraPose): void {
+  state.flight = { from: currentPose(state), to, startedAt: window.performance.now() };
+  state.requestRender();
 }
 
 /** The direction the camera stands off in, so a flight moves it without turning the sky over. */
@@ -187,9 +208,18 @@ export function SolarSystemView({
   });
 
   /** Selecting a body, from anywhere in this view, always through the newest prop. */
-  const selectBody = useCallback((id: BodyId): void => {
+  const selectBody = useCallback((id: BodyId | null): void => {
     liveRef.current.onSelect(id);
   }, []);
+
+  /** The way back from any body: deselect, and fly to the whole system. */
+  const showWholeSystem = useCallback((): void => {
+    const state = stateRef.current;
+    const built = state?.built ?? null;
+    if (state === null || built === null) return;
+    flyTo(state, wholeSystemPose(built));
+    selectBody(null);
+  }, [selectBody]);
 
   /**
    * Replaces the graph: another layout, other orbit paths, another texture set.
@@ -203,6 +233,9 @@ export function SolarSystemView({
       if (state === null) return;
       const previous = state.built;
       state.flight = null;
+      // The followed body's old position belongs to the old layout; the camera
+      // reopens on the whole system, so nothing is followed until a body is picked.
+      state.followed = null;
       if (previous !== null) {
         state.scene.remove(previous.root);
         previous.resources.disposeAll();
@@ -246,16 +279,7 @@ export function SolarSystemView({
 
       syncLabels(state, built, selectBody);
       applySelection(built, liveRef.current.selected);
-      setPose(
-        state,
-        poseFor(
-          [0, 0, 0],
-          sceneFitRadius(built) || 1,
-          FIELD_OF_VIEW_DEG,
-          WHOLE_SYSTEM_FILL,
-          OPENING_VIEW_DIRECTION,
-        ),
-      );
+      setPose(state, wholeSystemPose(built));
       state.requestRender();
     },
     [selectBody],
@@ -293,12 +317,19 @@ export function SolarSystemView({
       CAMERA_FAR_UNITS,
     );
     const controls = new OrbitControls(camera, renderer.domElement);
-    // No damping: inertia would mean a loop that keeps running after the gesture
-    // has ended, and this view's performance story is that it idles.
-    controls.enableDamping = false;
+    // Damping eases the camera to a stop after a gesture. Its inertia costs frames
+    // only while it runs: `paint` asks the controls whether they are still
+    // settling, so the view still idles once the motion has ended.
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.12;
+    controls.zoomToCursor = true;
     controls.enablePan = true;
     controls.addEventListener("change", () => {
       state.requestRender();
+    });
+    controls.addEventListener("start", () => {
+      // The user taking the camera back ends a flight; the follow stays armed.
+      state.flight = null;
     });
 
     const textureLoader = new THREE.TextureLoader();
@@ -312,7 +343,6 @@ export function SolarSystemView({
       scene: new THREE.Scene(),
       camera,
       controls,
-      raycaster: new THREE.Raycaster(),
       textureLoader,
       viewport,
       labelLayer,
@@ -322,6 +352,7 @@ export function SolarSystemView({
       orbits: liveRef.current.orbits,
       texturesSource: liveRef.current.textures,
       flight: null,
+      followed: null,
       dragOrigin: null,
       frame: 0,
       requestRender: () => undefined,
@@ -344,9 +375,10 @@ export function SolarSystemView({
       // the next change (or the return of visibility) calls `requestRender`.
       if (document.hidden || !onScreen) return;
       const stillFlying = advanceFlight();
+      const settling = state.controls.update();
       updateLabels();
       renderer.render(state.scene, state.camera);
-      if (stillFlying) state.requestRender();
+      if (stillFlying || settling) state.requestRender();
     }
 
     state.requestRender = () => {
@@ -398,9 +430,9 @@ export function SolarSystemView({
      * A body's centre and drawn radius in CSS pixels, or `null` when it is
      * behind the camera or has left the screen. The pixel radius is the sphere's
      * angular size against the vertical field of view — the disc the label must
-     * clear.
+     * clear. `depth` is the camera's distance to it, which decides overlaps.
      */
-    function project(handle: BuiltSolarBody): LabelAnchor | null {
+    function project(handle: BuiltSolarBody): (LabelAnchor & { readonly depth: number }) | null {
       const width = viewport.clientWidth;
       const height = viewport.clientHeight;
       if (width === 0 || height === 0) return null;
@@ -421,7 +453,7 @@ export function SolarSystemView({
       const distance = camera.position.distanceTo(handle.group.position);
       const halfFrame = Math.tan((FIELD_OF_VIEW_DEG * Math.PI) / 360) * distance;
       const radiusPx = halfFrame === 0 ? 0 : (handle.mesh.scale.x / halfFrame) * (height / 2);
-      return { id: handle.id, x, y, radiusPx, widthPx: 0 };
+      return { id: handle.id, x, y, radiusPx, widthPx: 0, depth: distance };
     }
 
     /**
@@ -470,23 +502,21 @@ export function SolarSystemView({
       }
     }
 
-    function pick(clientX: number, clientY: number): void {
+    /**
+     * The body a pointer is over, in client pixels. Bodies are hit by what they
+     * look like on screen, not by their spheres: in true scale a planet is a
+     * pixel across, so the minimum disc is what a click can actually reach.
+     */
+    function bodyAt(clientX: number, clientY: number): BodyId | null {
       const built = state.built;
-      if (built === null) return;
+      if (built === null) return null;
       const bounds = viewport.getBoundingClientRect();
-      if (bounds.width === 0 || bounds.height === 0) return;
-      const pointer = new THREE.Vector2(
-        ((clientX - bounds.left) / bounds.width) * 2 - 1,
-        -(((clientY - bounds.top) / bounds.height) * 2 - 1),
-      );
-      state.raycaster.setFromCamera(pointer, camera);
-      const hit = state.raycaster.intersectObjects(
-        built.bodies.map((handle) => handle.mesh),
-        false,
-      )[0];
-      if (hit === undefined) return;
-      const id: unknown = hit.object.userData["bodyId"];
-      if (typeof id === "string") liveRef.current.onSelect(id as BodyId);
+      const anchors: PickAnchor<BodyId>[] = [];
+      for (const handle of built.bodies) {
+        const anchor = project(handle);
+        if (anchor !== null) anchors.push(anchor);
+      }
+      return pickAnchor(anchors, clientX - bounds.left, clientY - bounds.top, MIN_PICK_RADIUS_PX);
     }
 
     const resizeObserver = new ResizeObserver(() => {
@@ -506,17 +536,30 @@ export function SolarSystemView({
 
     const onPointerDown = (event: PointerEvent): void => {
       state.dragOrigin = { x: event.clientX, y: event.clientY };
+      renderer.domElement.classList.add("solar__canvas--dragging");
+    };
+    const onPointerMove = (event: PointerEvent): void => {
+      // While a button is held the cursor is already "grabbing"; over empty space
+      // it is "grab", and over a body it says that a click will select it.
+      if (state.dragOrigin !== null) return;
+      renderer.domElement.classList.toggle(
+        "solar__canvas--over-body",
+        bodyAt(event.clientX, event.clientY) !== null,
+      );
     };
     const onPointerUp = (event: PointerEvent): void => {
       const origin = state.dragOrigin;
       state.dragOrigin = null;
+      renderer.domElement.classList.remove("solar__canvas--dragging");
       // A pointer that travelled was an orbit; only a click selects. The canvas
       // check keeps a click on a label from selecting whatever is behind it.
       if (origin === null || event.target !== renderer.domElement) return;
       if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > DRAG_SLOP_PX) return;
-      pick(event.clientX, event.clientY);
+      const id = bodyAt(event.clientX, event.clientY);
+      if (id !== null) liveRef.current.onSelect(id);
     };
     viewport.addEventListener("pointerdown", onPointerDown);
+    viewport.addEventListener("pointermove", onPointerMove);
     viewport.addEventListener("pointerup", onPointerUp);
 
     rebuild({
@@ -533,6 +576,7 @@ export function SolarSystemView({
       screenObserver.disconnect();
       document.removeEventListener("visibilitychange", onDocumentVisibility);
       viewport.removeEventListener("pointerdown", onPointerDown);
+      viewport.removeEventListener("pointermove", onPointerMove);
       viewport.removeEventListener("pointerup", onPointerUp);
       controls.dispose();
       const built = state.built;
@@ -570,14 +614,17 @@ export function SolarSystemView({
     if (state === null || built === null) return;
     applySnapshot(built, snapshot);
     // Time advancing on the same screen would slide a watched body out of frame
-    // within minutes, so the camera keeps its standoff and travels with it —
-    // through `followPose`, and only while no flight is running.
-    const watching = liveRef.current.selected;
-    if (watching !== null && state.flight === null) {
-      const handle = handleFor(state, watching);
+    // within minutes, so the camera travels with it by the body's displacement —
+    // through `followPose`, and only while no flight is running. A pan the user
+    // made survives, because the target is moved, not put back on the body.
+    const followed = state.followed;
+    if (followed !== null && state.flight === null) {
+      const handle = handleFor(state, followed.id);
       if (handle !== undefined) {
         const position = handle.group.position;
-        setPose(state, followPose(currentPose(state), [position.x, position.y, position.z]));
+        const now: Vector3 = [position.x, position.y, position.z];
+        setPose(state, followPose(currentPose(state), followed.at, now));
+        state.followed = { id: followed.id, at: now };
       }
     }
     state.requestRender();
@@ -591,28 +638,36 @@ export function SolarSystemView({
     applySelection(built, selected);
     const handle = selected === null ? undefined : handleFor(state, selected);
     if (handle === undefined) {
+      state.followed = null;
       state.requestRender();
       return;
     }
     const position = handle.group.position;
-    state.flight = {
-      from: currentPose(state),
-      to: poseFor(
-        [position.x, position.y, position.z],
-        Math.max(handle.mesh.scale.x, 1e-6),
-        FIELD_OF_VIEW_DEG,
-        SELECTED_FILL,
-        viewDirectionOf(state),
-      ),
-      startedAt: window.performance.now(),
-    };
-    state.requestRender();
+    const to = poseFor(
+      [position.x, position.y, position.z],
+      Math.max(handle.mesh.scale.x, 1e-6),
+      FIELD_OF_VIEW_DEG,
+      SELECTED_FILL,
+      viewDirectionOf(state),
+    );
+    // Armed now rather than when the flight lands: a gesture that cancels the
+    // flight must leave the body followed from where the camera stands.
+    state.followed = { id: handle.id, at: to.target };
+    flyTo(state, to);
   }, [selected]);
 
   return (
     <div className="solar">
       <div className="solar__viewport" ref={viewportRef}>
         <div className="solar__labels" ref={labelLayerRef} />
+        <Button
+          className="solar__overview"
+          size="sm"
+          variant="ghost"
+          onClick={showWholeSystem}
+        >
+          {copy.solar.overview}
+        </Button>
       </div>
     </div>
   );

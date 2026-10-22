@@ -21,9 +21,7 @@ import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import {
   dateTimeFormat,
   declaredText,
-  numberFormat,
 } from "../../../renderer/src/moduleKit/moduleSurface.js";
-import { fill } from "../../../renderer/src/strings.js";
 import type { AstronomyPacksView } from "../shared/ipc.js";
 import { manifest } from "../shared/manifest.js";
 import {
@@ -45,7 +43,7 @@ import {
   type AstronomyPrefs,
 } from "./prefs.js";
 import { readTexturePacks } from "./packs.js";
-import { bodyLabel } from "./solar/bodies.js";
+import { BodyCardPanel } from "./BodyCardPanel.js";
 import { textureCredits } from "./solar/credit.js";
 import { orbitPaths } from "./solar/orbits.js";
 import { type SolarScale } from "./solar/scale.js";
@@ -418,7 +416,7 @@ function ClockBar({
  * the choice, so the layout's own two lies (`scale.ts`) are stated where the
  * choice is made rather than in a manual.
  */
-function SolarSection({
+export function SolarSection({
   snapshot,
   orbits,
   textures,
@@ -434,36 +432,30 @@ function SolarSection({
   readonly packsRead: boolean;
   readonly scale: SolarScale;
   readonly selected: BodyId | null;
-  readonly onSelect: (id: BodyId) => void;
+  readonly onSelect: (id: BodyId | null) => void;
 }) {
   const credits = textureCredits(textures);
-  const chosen =
-    selected === null ? null : (snapshot.bodies.find((b) => b.id === selected) ?? null);
-  const numbers = numberFormat({ maximumFractionDigits: 3 });
 
   return (
     <>
-      <SolarSystemView
-        snapshot={snapshot}
-        orbits={orbits}
-        selected={selected}
-        onSelect={onSelect}
-        scale={scale}
-        textures={textures}
-      />
+      <div className="astronomy__stage">
+        <SolarSystemView
+          snapshot={snapshot}
+          orbits={orbits}
+          selected={selected}
+          onSelect={onSelect}
+          scale={scale}
+          textures={textures}
+        />
+        {selected !== null && (
+          <BodyCardPanel snapshot={snapshot} id={selected} onClose={() => onSelect(null)} />
+        )}
+      </div>
 
       <p className="nx-hint">
         {scale === "true" ? copy.solar.scaleTrueHint : copy.solar.scaleReadableHint}
       </p>
       <p className="nx-hint">{copy.solar.selectHint}</p>
-      {chosen !== null && (
-        <p className="astronomy__choice">
-          {fill(copy.solar.selected, {
-            body: bodyLabel(chosen.id),
-            distance: numbers.format(chosen.distanceFromEarthAu),
-          })}
-        </p>
-      )}
 
       {/* ADR-103's attribution, where the textures are used: the pack's own
           per-body credit lines, drawn on the surface that shows the maps. */}

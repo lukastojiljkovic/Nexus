@@ -45,10 +45,90 @@
   margin-left: auto;
 }
 
-/* The selected body's own reading: a column of digits and a name, so tabular
-   figures again. */
-.astronomy__choice {
+/* The view and the body card that opens over it. The card is placed against the
+   stage's top-right corner while the stage is wide enough, and falls under the
+   view below 900px. */
+.astronomy__stage {
+  position: relative;
+}
+
+.astronomy__bodycard {
+  position: absolute;
+  top: var(--nx-space-3);
+  right: var(--nx-space-3);
+  width: min(320px, 100% - 2 * var(--nx-space-3));
+  max-height: calc(100% - 2 * var(--nx-space-3));
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .astronomy__bodycard {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin-top: var(--nx-space-3);
+  }
+}
+
+.astronomy__bodycard-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--nx-space-3);
+}
+
+.astronomy__bodycard-head p {
   margin: 0;
+}
+
+.astronomy__bodycard-name {
+  margin: 0;
+  font-size: var(--nx-font-size-h2);
+  font-weight: var(--nx-font-weight-semibold);
+}
+
+.astronomy__bodycard-heading {
+  margin: var(--nx-space-2) 0 0;
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text-subtle);
+}
+
+.astronomy__bodycard-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  margin: 0;
+}
+
+.astronomy__bodycard-others summary {
+  cursor: pointer;
+  margin-top: var(--nx-space-2);
+  font-size: var(--nx-font-size-body-sm);
+  font-weight: var(--nx-font-weight-semibold);
+  color: var(--nx-text-subtle);
+}
+
+.astronomy__bodycard-others .astronomy__bodycard-list {
+  margin-top: var(--nx-space-2);
+}
+
+.astronomy__bodycard-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--nx-space-3);
+  font-size: var(--nx-font-size-body-sm);
+}
+
+.astronomy__bodycard-row dt {
+  color: var(--nx-text-muted);
+}
+
+.astronomy__bodycard-row dd {
+  margin: 0;
+  text-align: end;
   font-variant-numeric: tabular-nums;
 }
 

@@ -59,7 +59,7 @@ const ALLOWLIST: Record<string, Reason> = {
   "assistant/renderer/Page.tsx": "safetyNotice",
   "assistant/renderer/copy.ts": "strings",
   "assistant/renderer/thread.test.ts": "strings",
-  "astronomy/renderer/Page.tsx": "strings",
+  "astronomy/renderer/bodyCard.test.ts": "strings",
   "astronomy/renderer/copy.ts": "strings",
   "astronomy/renderer/earth/EarthDayNightMap.tsx": "intl",
   "astronomy/renderer/earth/copy.ts": "strings",

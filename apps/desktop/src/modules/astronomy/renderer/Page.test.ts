@@ -1,8 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { BodyId, BodyState, SolarSystemSnapshot } from "@nexus/core";
+import { BodyCardPanel } from "./BodyCardPanel.js";
 import { copy } from "./copy.js";
-import { AstronomyToolbar } from "./Page.js";
+import { AstronomyToolbar, SolarSection } from "./Page.js";
 
 type TabId = "solar" | "earth" | "stars" | "sunmoon";
 
@@ -50,5 +52,67 @@ describe("AstronomyToolbar", () => {
       expect(html).toMatch(TOOLBAR_OPEN);
       expect(html).not.toContain("astronomy__scales");
     }
+  });
+});
+
+const IDS: readonly BodyId[] = [
+  "sun",
+  "mercury",
+  "venus",
+  "earth",
+  "moon",
+  "mars",
+  "jupiter",
+  "saturn",
+  "uranus",
+  "neptune",
+  "pluto",
+];
+
+const snapshot: SolarSystemSnapshot = {
+  instantMs: 0,
+  bodies: IDS.map(
+    (id, index): BodyState => ({
+      id,
+      position: [index * 0.1, 0, 0],
+      radiusKm: 1000,
+      rotationDeg: 0,
+      northPole: [0, 0, 1],
+      distanceFromEarthAu: 0,
+    }),
+  ),
+};
+
+describe("BodyCard", () => {
+  it("draws the body's name, the close button and the facts heading for the Earth", () => {
+    const html = renderToStaticMarkup(
+      createElement(BodyCardPanel, { snapshot, id: "earth", onClose: () => {} }),
+    );
+    expect(html).toContain(`aria-label="Zemlja"`);
+    expect(html).toContain(`aria-label="${copy.card.close}"`);
+    expect(html).toContain(copy.card.facts);
+  });
+});
+
+describe("SolarSection", () => {
+  const section = (selected: BodyId | null) =>
+    renderToStaticMarkup(
+      createElement(SolarSection, {
+        snapshot,
+        orbits: [],
+        textures: null,
+        packsRead: false,
+        scale: "readable",
+        selected,
+        onSelect: () => {},
+      }),
+    );
+
+  it("draws no body card while nothing is selected", () => {
+    expect(section(null)).not.toContain("astronomy__bodycard");
+  });
+
+  it("draws the body card while a body is selected", () => {
+    expect(section("earth")).toContain("astronomy__bodycard");
   });
 });

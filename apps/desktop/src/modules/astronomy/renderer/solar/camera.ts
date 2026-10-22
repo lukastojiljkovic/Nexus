@@ -162,21 +162,21 @@ export function flyToPath(from: CameraPose, to: CameraPose, t: number): CameraPo
 }
 
 /**
- * The pose after the body it is watching has moved.
+ * The pose after the body it is watching has moved from `from` to `to`.
  *
  * Time advances on the same screen the camera is pointed at, so a selected body
  * that drifts while its planet travels on would slide out of frame within
- * minutes. The camera keeps its standoff and follows: the offset from the old
- * target is applied to the new one. Called only while a body is selected and no
- * flight is running — during a flight the path is the answer.
+ * minutes. The camera moves by the body's displacement, position and target
+ * alike: its standoff and any offset the user has panned to survive, where
+ * putting the target back on the body would undo the pan within a second.
+ * Called only while a body is selected and no flight is running.
  */
-export function followPose(pose: CameraPose, target: Vector3): CameraPose {
+export function followPose(pose: CameraPose, from: Vector3, to: Vector3): CameraPose {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const dz = to[2] - from[2];
   return {
-    position: [
-      pose.position[0] + target[0] - pose.target[0],
-      pose.position[1] + target[1] - pose.target[1],
-      pose.position[2] + target[2] - pose.target[2],
-    ],
-    target,
+    position: [pose.position[0] + dx, pose.position[1] + dy, pose.position[2] + dz],
+    target: [pose.target[0] + dx, pose.target[1] + dy, pose.target[2] + dz],
   };
 }
