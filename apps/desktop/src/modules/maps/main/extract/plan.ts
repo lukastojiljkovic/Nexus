@@ -62,6 +62,18 @@ export interface ExtractInput {
   readonly ranges: readonly TileRange[];
   /** The region's box, written into the new header for the map to fit to. */
   readonly bounds: { readonly minLon: number; readonly minLat: number; readonly maxLon: number; readonly maxLat: number };
+  /** The most directory entries the plan may keep; see {@link PlanTooLarge}. */
+  readonly maxEntries?: number;
+}
+
+/**
+ * The plan holds every entry the new file keeps, so a region past the cap is
+ * refused while the directories are read, before the entries fill memory.
+ */
+export class PlanTooLarge extends Error {
+  constructor(readonly maxEntries: number) {
+    super(`The region keeps more than ${String(maxEntries)} directory entries.`);
+  }
 }
 
 /**
@@ -91,7 +103,7 @@ interface Leaf extends Located {
   readonly end: number;
 }
 
-export async function planExtract({ source, ranges, bounds }: ExtractInput): Promise<ExtractPlan> {
+export async function planExtract({ source, ranges, bounds, maxEntries = Infinity }: ExtractInput): Promise<ExtractPlan> {
   const head = await source.read(0, ROOT_SPAN);
   const header = readHeader(head);
   if (!header.clustered) {
@@ -111,6 +123,7 @@ export async function planExtract({ source, ranges, bounds }: ExtractInput): Pro
       for (const [start, stop] of clip(ranges, entry.tileId, entry.tileId + entry.runLength)) {
         kept.push({ tileId: start, runLength: stop - start, offset: entry.offset, length: entry.length });
       }
+      if (kept.length > maxEntries) throw new PlanTooLarge(maxEntries);
     });
   };
   visit(decodeDirectory(await bytesAt(source, head, header.rootDirectoryOffset, header.rootDirectoryLength), header.internalCompression), Infinity);
@@ -129,24 +142,30 @@ export async function planExtract({ source, ranges, bounds }: ExtractInput): Pro
   if (kept.length === 0) throw new Error("The region holds no tiles of this archive.");
   kept.sort((left, right) => left.tileId - right.tileId);
 
-  // Each stored tile once, in the source's order.
-  const lengths = new Map<number, number>();
-  for (const entry of kept) lengths.set(entry.offset, entry.length);
-  const order = [...lengths.keys()].sort((left, right) => left - right);
-  const placed = new Map<number, number>();
+  // Each stored tile once, in the source's order. The kept entries are this
+  // plan's own objects, so their offsets are rewritten in place: a continent
+  // keeps over a million, and a copy or a map keyed by offset would hold them twice.
+  const bySource = Uint32Array.from(kept.keys()).sort(
+    (left, right) => (kept[left] as Entry).offset - (kept[right] as Entry).offset,
+  );
+  const stored: Located[] = [];
   let dataLength = 0;
-  for (const offset of order) {
-    placed.set(offset, dataLength);
-    dataLength += lengths.get(offset) as number;
+  let previous = -1;
+  for (const index of bySource) {
+    const entry = kept[index] as Entry;
+    if (entry.offset !== previous) {
+      previous = entry.offset;
+      stored.push({ offset: header.tileDataOffset + entry.offset, length: entry.length });
+      dataLength += entry.length;
+    }
+    entry.offset = dataLength - entry.length;
   }
-  const entries = kept.map((entry) => ({ ...entry, offset: placed.get(entry.offset) as number }));
-  const fetches = coalesce(
-    order.map((offset) => ({ offset: header.tileDataOffset + offset, length: lengths.get(offset) as number })),
-  ).map((group) => ({
+  const fetches = coalesce(stored).map((group) => ({
     offset: group.offset,
     length: group.length,
     keep: group.items.map((item) => [item.offset - group.offset, item.length] as const),
   }));
+  const entries = kept;
 
   const { root, leaves: leafBytes } = packDirectories(entries);
   const metadata = gzipSync(
@@ -168,7 +187,7 @@ export async function planExtract({ source, ranges, bounds }: ExtractInput): Pro
     tileDataLength: dataLength,
     numAddressedTiles: entries.reduce((sum, entry) => sum + entry.runLength, 0),
     numTileEntries: entries.length,
-    numTileContents: order.length,
+    numTileContents: stored.length,
     clustered: false,
     internalCompression: Compression.Gzip,
     tileCompression: header.tileCompression,

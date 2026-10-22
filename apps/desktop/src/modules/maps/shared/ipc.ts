@@ -77,6 +77,77 @@ export interface MapsView {
   readonly location: MapsLocationView | null;
 }
 
+/**
+ * How much of a region a download keeps (ADR-118): the zooms up to 8 (the
+ * country and its cities), up to 12 (towns and main roads), or every zoom the
+ * build has (streets and buildings).
+ */
+export const MAP_REGION_DETAILS = ["overview", "towns", "full"] as const;
+
+export type MapRegionDetail = (typeof MAP_REGION_DETAILS)[number];
+
+/** Why a region could not be measured or downloaded. Machine codes; the page words each. */
+export type RegionProblem =
+  /** This launch is not running in "downloads". */
+  | "mode"
+  /** A host the launch does not allow. Nothing was sent to it. */
+  | "url"
+  | "network"
+  /** The build changed under a download, so its bytes could not be mixed with the new ones. */
+  | "build-changed"
+  /** A whole build arrived with another MD5 than the list gave. */
+  | "hash"
+  /** The list names no build this app's style can read. */
+  | "no-build"
+  /** The region at this detail is more than the app can plan; less detail, or a smaller region, fits. */
+  | "too-large"
+  | "no-space"
+  | "io"
+  /** Another region is downloading. */
+  | "busy"
+  /** Not a territory, a continent or the world as the outline names them. */
+  | "region";
+
+/** A region on this machine: which one, at what detail, cut from which build. */
+export interface MapRegionView {
+  /** A territory's outline id (`SRB`), `continent:<name>`, or `world`. */
+  readonly id: string;
+  readonly detail: MapRegionDetail;
+  /** The build's date, `yyyymmdd`. */
+  readonly build: string;
+  readonly bytes: number;
+  /** Where the map reads the file: `nx-map://region/<file>`, served by main from the registry alone. */
+  readonly url: string;
+}
+
+/** The download in progress, paused or failed. There is at most one. */
+export interface MapRegionJobView {
+  readonly id: string;
+  readonly detail: MapRegionDetail;
+  readonly state: "measuring" | "downloading" | "paused" | "failed";
+  readonly receivedBytes: number;
+  /** The finished file's size, once the plan has measured it. */
+  readonly totalBytes: number | null;
+  readonly problem: RegionProblem | null;
+}
+
+export interface MapRegionsView {
+  readonly installed: readonly MapRegionView[];
+  readonly job: MapRegionJobView | null;
+  /** The newest build the list named when it was last read, or `null` before it has been read. */
+  readonly newestBuild: string | null;
+}
+
+/** What a region would download, measured from the newest build's directories. */
+export type MapRegionEstimate =
+  | { readonly ok: true; readonly build: string; readonly bytes: number }
+  | { readonly ok: false; readonly problem: RegionProblem };
+
+interface RegionPayload {
+  id: string;
+  detail: MapRegionDetail;
+}
+
 /** One read: whose view is being asked for. */
 interface ListPayload {
   profileId: string;
@@ -126,6 +197,12 @@ type MapsOps = {
   removePin: { request: RowPayload; response: MapsView };
   setLocation: { request: LocationPayload; response: MapsView };
   clearLocation: { request: ListPayload; response: MapsView };
+  regions: { request: Record<string, never>; response: MapRegionsView };
+  estimateRegion: { request: RegionPayload; response: MapRegionEstimate };
+  downloadRegion: { request: RegionPayload; response: MapRegionsView };
+  pauseRegion: { request: Record<string, never>; response: MapRegionsView };
+  cancelRegion: { request: Record<string, never>; response: MapRegionsView };
+  removeRegion: { request: { id: string }; response: MapRegionsView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -145,6 +222,12 @@ export const contract = defineModuleContract<"maps", MapsOps>("maps", [
   "removePin",
   "setLocation",
   "clearLocation",
+  "regions",
+  "estimateRegion",
+  "downloadRegion",
+  "pauseRegion",
+  "cancelRegion",
+  "removeRegion",
 ]);
 
 /**

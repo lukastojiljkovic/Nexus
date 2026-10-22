@@ -218,6 +218,16 @@ export const ALLOWLIST = new Map([
     ["node-http"],
   ],
   [
+    // A plan against the real planet build (ADR-118), opt-in the way
+    // `live.test.ts` is: it skips unless `NEXUS_PLANET_URL` names a build, and
+    // nothing in it ships. It reads the build with the global `fetch` because it
+    // runs in plain Node, outside the app's sessions. The app's own reads go
+    // through `regions/http.ts` and the download service's port, which this
+    // gate still covers.
+    "apps/desktop/src/modules/maps/main/extract/plan.slow.test.ts",
+    ["fetch"],
+  ],
+  [
     // The external-link rule's Electron half (ADR-103). Its one flagged
     // construct is `shell.openExternal`, which the `load-remote` rule reads as
     // "a remote URL handed to a loader" — and it is, deliberately: the loader is

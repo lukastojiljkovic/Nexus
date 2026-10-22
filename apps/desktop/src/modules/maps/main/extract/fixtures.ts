@@ -104,7 +104,7 @@ export function buildArchive(
 export function bufferSource(bytes: Uint8Array): Source {
   return {
     getKey: () => "fixture",
-    getBytes: async (offset, length) => ({ data: bytes.slice(offset, offset + length).buffer }),
+    getBytes: async (offset, length) => ({ data: new Uint8Array(bytes.subarray(offset, offset + length)).buffer }),
   };
 }
 

@@ -89,14 +89,16 @@ press Install.
 
 **Downloads.** Everything above, and the content you choose to download: the
 signed content packs and their catalogue, Wikipedia and other Kiwix libraries,
-and language models from Hugging Face. The connection is limited to these hosts,
+language models from Hugging Face, and map regions from Protomaps. The connection is limited to these hosts,
 matched exactly, over `https`:
 
 - the three GitHub hosts above, which also serve the content packs from
   `lukastojiljkovic/nexus-packs`;
 - `opds.library.kiwix.org`, `lb.download.kiwix.org` and
   `mirror.download.kiwix.org` — the Kiwix library catalogue and its files;
-- `huggingface.co` and `us.aws.cdn.hf.co` — model search and the model files.
+- `huggingface.co` and `us.aws.cdn.hf.co` — model search and the model files;
+- `build-metadata.protomaps.dev` and `build.protomaps.com` — the list of map
+  builds, and the parts of one build a map region is cut from.
 
 Nothing is fetched until you ask for it. A search for a model sends the words you
 typed to Hugging Face; the catalogues and downloads send nothing about you beyond

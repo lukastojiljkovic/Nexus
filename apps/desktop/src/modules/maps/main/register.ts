@@ -6,21 +6,36 @@ import {
   MapsStore,
 } from "@nexus/db";
 import type { ModuleHostSurface } from "../../../main/moduleIpc.js";
-import { MAPS_PIN_COLORS, contract, type MapsPinColor, type MapsView } from "../shared/ipc.js";
+import {
+  MAP_REGION_DETAILS,
+  MAPS_PIN_COLORS,
+  contract,
+  type MapRegionDetail,
+  type MapsPinColor,
+  type MapsView,
+} from "../shared/ipc.js";
 import { buildMapsExport, parseMapsExport } from "./imex.js";
+import { mapRegions } from "./regions/services.js";
+import { regionTarget } from "./regions/targets.js";
 
 /**
  * MAPS in the main process (ADR-090): its handlers, the position it remembers,
  * and its archive section.
  *
- * **What this file does NOT do, and that is the design.** It reads no pack. The
+ * **What this file does NOT do, and that is the design.** It reads no tile. The
  * tiles, the style and the place index are not this profile's data and are not
- * behind the IPC wall: the renderer reads them through the `nx-pack://` scheme,
- * which is a range request answered inside this process by the pack's own
- * protocol handler, with no path crossing the bridge (ADR-091 §6). A module
- * handler that took a pack path would be a renderer-named file read, and a
- * module handler cannot reach `userData` at all — `main/index.ts` hands a module
+ * behind the IPC wall: the renderer reads them through the `nx-pack://` and
+ * `nx-map://` schemes, range requests answered inside this process by their own
+ * protocol handlers, with no path crossing the bridge (ADR-091 §6). A module
+ * handler that took a path would be a renderer-named file read, and a module
+ * handler cannot reach `userData` at all — `main/index.ts` hands a module
  * "a handler per channel it declared, and nothing else".
+ *
+ * **The region ops are the machine's, not a profile's** (ADR-118). A downloaded
+ * region is a file every profile's map reads, so its ops take no profile id and
+ * answer the region view the service in `regions/` keeps: what is installed and
+ * the one download in flight. They take a region id and a detail, both checked
+ * against what the outline and the wire name, and never a path or a URL.
  *
  * **Where the machine is lives in memory.** A GPS fix is a fact about NOW: it
  * belongs to the session, not to the profile, so it is a `Map` keyed by profile
@@ -126,6 +141,24 @@ export function register(host: ModuleHostSurface): void {
     return viewOf(call, profileId);
   });
 
+  // --- The map's regions (ADR-118) -------------------------------------------
+
+  ctx.handle("regions", () => mapRegions().view());
+
+  ctx.handle("estimateRegion", (payload, call) =>
+    mapRegions().estimate(regionId(call, payload.id), regionDetail(call, payload.detail)),
+  );
+
+  ctx.handle("downloadRegion", (payload, call) =>
+    mapRegions().download(regionId(call, payload.id), regionDetail(call, payload.detail)),
+  );
+
+  ctx.handle("pauseRegion", () => mapRegions().pause());
+
+  ctx.handle("cancelRegion", () => mapRegions().cancel());
+
+  ctx.handle("removeRegion", (payload, call) => mapRegions().remove(regionId(call, payload.id)));
+
   // --- The session ----------------------------------------------------------
 
   ctx.onSessionEnd(() => {
@@ -226,6 +259,30 @@ function pinColor(
     throw new Error(`Invalid IPC payload: "color" is not a pin colour this build knows.`);
   }
   return color as MapsPinColor;
+}
+
+/** A region id off the wire: a territory, a continent or the world as the outline names them. */
+function regionId(
+  call: { readonly as: { asNonEmptyString(value: unknown, field: string): string } },
+  value: unknown,
+): string {
+  const id = call.as.asNonEmptyString(value, "id");
+  if (regionTarget(id) === null) {
+    throw new Error(`Invalid IPC payload: "id" is not a region the map's outline names.`);
+  }
+  return id;
+}
+
+/** A region detail off the wire, one of the three the wire declares. */
+function regionDetail(
+  call: { readonly as: { asString(value: unknown, field: string): string } },
+  value: unknown,
+): MapRegionDetail {
+  const detail = call.as.asString(value, "detail");
+  if (!(MAP_REGION_DETAILS as readonly string[]).includes(detail)) {
+    throw new Error(`Invalid IPC payload: "detail" is not a detail this build knows.`);
+  }
+  return detail as MapRegionDetail;
 }
 
 /** How many pins one profile may hold, re-exported so the module's test asserts the store's own number. */

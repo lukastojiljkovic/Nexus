@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { HEADER_BYTES, decodeDirectory, encodeDirectory, readHeader, writeHeader } from "./archive.js";
 import { rangesOf } from "./cover.js";
 import { allTiles, bufferReader, bufferSource, buildArchive, tileBytes } from "./fixtures.js";
-import { extractInto, planExtract, type ExtractPlan } from "./plan.js";
+import { extractInto, planExtract, PlanTooLarge, type ExtractPlan } from "./plan.js";
 
 const BOUNDS = { minLon: 0, minLat: 0, maxLon: 45, maxLat: 40 };
 
@@ -82,6 +82,15 @@ describe("cutting a region out of an archive", () => {
     const reads = reader.requests.length;
     await extractInto(plan, reader, async () => undefined);
     expect(reader.requests.length - reads).toBe(plan.fetches.length);
+  });
+
+  it("refuses a region that keeps more entries than the cap, and plans one at the cap", async () => {
+    const plan = await planExtract({ source: bufferReader(source), ranges, bounds: BOUNDS });
+    const entries = readHeader(plan.prefix).numTileEntries;
+    await expect(
+      planExtract({ source: bufferReader(source), ranges, bounds: BOUNDS, maxEntries: entries - 1 }),
+    ).rejects.toBeInstanceOf(PlanTooLarge);
+    await expect(planExtract({ source: bufferReader(source), ranges, bounds: BOUNDS, maxEntries: entries })).resolves.toEqual(plan);
   });
 
   it("refuses a source it cannot cut", async () => {

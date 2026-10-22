@@ -572,6 +572,8 @@ import { createModuleHost } from "./moduleHost.js";
 // store, blob-reference union, packs root). Its arts guide reads images through
 // the shell's `nx-pack:` protocol (ADR-100), like every other pack reader.
 import { configureCultureServices } from "../modules/culture/main/services.js";
+import { configureMapRegions } from "../modules/maps/main/regions/services.js";
+import { MAP_SCHEME, createMapProtocolHandler } from "../modules/maps/main/regions/protocol.js";
 import { createDictionaryReader } from "../modules/translator/main/dictionary.js";
 import { installedPacksRoot } from "../modules/translator/main/packDir.js";
 import { packsRoot } from "./packs/registry.js";
@@ -1015,6 +1017,10 @@ protocol.registerSchemesAsPrivileged([
   // and the entry), and `stream` is what lets a large image be answered without
   // being held whole.
   { scheme: "nx-zim", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  // A downloaded map region (ADR-118): a PMTiles file the map reads by ranges,
+  // served by `modules/maps/main/regions/protocol.ts` only when the registry
+  // names it. The same privileges as `nx-pack:`, for the same reader.
+  { scheme: MAP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 // Stable product name so userData resolves to a clean, branded directory
@@ -1686,6 +1692,22 @@ configureCultureServices({
   blobRefCount,
   packsRoot: () => packsRoot(userDataDir()),
   releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+});
+
+// MAPS' region downloads (ADR-118), on the download service's terms: the same
+// session, the same host rule read with the mode this launch may act on, and
+// the same free-space probe. A function, because the session exists only after
+// `ready` and the service is built on a page's first call, long after it.
+configureMapRegions(() => {
+  const mode = (): ReturnType<typeof activeNetworkMode> =>
+    activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir()));
+  return {
+    userData: userDataDir(),
+    mode,
+    isAllowedUrl: (url) => isSessionRequestAllowed(mode(), url),
+    http: createDownloadHttp(requireUpdateSession()),
+    freeSpaceBytes,
+  };
 });
 
 /**
@@ -14669,6 +14691,8 @@ app.whenReady().then(async () => {
   // Building the service here also means every `wiki:` handler already has one
   // (they reach it through `zimHost()`).
   installZimProtocol(zimService());
+  // A downloaded map region (ADR-118): only a file the region registry names.
+  protocol.handle(MAP_SCHEME, createMapProtocolHandler({ userData: userDataDir() }));
 
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the

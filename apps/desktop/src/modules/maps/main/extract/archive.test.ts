@@ -53,6 +53,11 @@ describe("the PMTiles v3 header", () => {
     expect(readHeader(bytes)).toMatchObject(HEADER);
   });
 
+  it("reads a header out of a Node Buffer that is a view into a larger one", () => {
+    const pooled = Buffer.concat([Buffer.alloc(9, 1), Buffer.from(writeHeader(HEADER))]).subarray(9);
+    expect(readHeader(pooled)).toEqual(bytesToHeader(writeHeader(HEADER).buffer as ArrayBuffer));
+  });
+
   it("refuses bytes that are not a version 3 archive", () => {
     const bytes = writeHeader(HEADER);
     expect(() => readHeader(bytes.subarray(0, 100))).toThrow(/127 bytes/);

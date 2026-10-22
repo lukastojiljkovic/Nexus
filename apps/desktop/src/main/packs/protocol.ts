@@ -231,33 +231,42 @@ export function createPackProtocolHandler(
       return new Response(null, { status: 404 });
     }
 
-    const headers = new Headers({
-      "Content-Type": packContentType(path),
-      "X-Content-Type-Options": "nosniff",
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "no-store",
-    });
-
-    const range = parseRangeHeader(request.headers.get("range"), size);
-    if (range === "unsatisfiable") {
-      headers.set("Content-Range", `bytes */${String(size)}`);
-      return new Response(null, { status: 416, headers });
-    }
-    if (range === null) {
-      headers.set("Content-Length", String(size));
-      return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
-        status: 200,
-        headers,
-      });
-    }
-
-    headers.set("Content-Length", String(range.end - range.start + 1));
-    headers.set("Content-Range", `bytes ${String(range.start)}-${String(range.end)}/${String(size)}`);
-    return new Response(
-      Readable.toWeb(createReadStream(file, { start: range.start, end: range.end })) as ReadableStream,
-      { status: 206, headers },
-    );
+    return fileResponse(request, file, size, packContentType(path));
   };
+}
+
+/**
+ * A file on this machine as the answer to `request`: whole (200), the one
+ * range it asks for (206), or 416 for a range past its end. Shared by every
+ * read protocol that serves a file a reader seeks in.
+ */
+export function fileResponse(request: Request, file: string, size: number, contentType: string): Response {
+  const headers = new Headers({
+    "Content-Type": contentType,
+    "X-Content-Type-Options": "nosniff",
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "no-store",
+  });
+
+  const range = parseRangeHeader(request.headers.get("range"), size);
+  if (range === "unsatisfiable") {
+    headers.set("Content-Range", `bytes */${String(size)}`);
+    return new Response(null, { status: 416, headers });
+  }
+  if (range === null) {
+    headers.set("Content-Length", String(size));
+    return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
+      status: 200,
+      headers,
+    });
+  }
+
+  headers.set("Content-Length", String(range.end - range.start + 1));
+  headers.set("Content-Range", `bytes ${String(range.start)}-${String(range.end)}/${String(size)}`);
+  return new Response(
+    Readable.toWeb(createReadStream(file, { start: range.start, end: range.end })) as ReadableStream,
+    { status: 206, headers },
+  );
 }
 
 /**

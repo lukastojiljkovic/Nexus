@@ -38,7 +38,8 @@ export function readHeader(bytes: Uint8Array): Header {
     throw new Error("The file is not a PMTiles archive.");
   }
   if (bytes[7] !== 3) throw new Error(`The archive is PMTiles version ${String(bytes[7])}; only version 3 is read.`);
-  return bytesToHeader(bytes.slice(0, HEADER_BYTES).buffer);
+  // Copied through the constructor: a Node `Buffer`'s `slice` is a view of a shared pool.
+  return bytesToHeader(new Uint8Array(bytes.subarray(0, HEADER_BYTES)).buffer);
 }
 
 /** The 127 header bytes for `header`. */
@@ -129,14 +130,24 @@ export function decodeDirectory(bytes: Uint8Array, compression: Compression): En
 
 /** A directory's bytes: the spec's four varint columns, gzip-compressed. */
 export function encodeDirectory(entries: readonly Entry[]): Uint8Array {
-  const out: number[] = [];
+  // Bytes, not a `number[]`: a continent's directory is millions of them.
+  let out = new Uint8Array(1024);
+  let used = 0;
+  const push = (byte: number) => {
+    if (used === out.length) {
+      const grown = new Uint8Array(out.length * 2);
+      grown.set(out);
+      out = grown;
+    }
+    out[used++] = byte;
+  };
   const varint = (value: number) => {
     let rest = value;
     while (rest >= 0x80) {
-      out.push((rest % 0x80) + 0x80);
+      push((rest % 0x80) + 0x80);
       rest = Math.floor(rest / 0x80);
     }
-    out.push(rest);
+    push(rest);
   };
   varint(entries.length);
   let lastId = 0;
@@ -150,7 +161,7 @@ export function encodeDirectory(entries: readonly Entry[]): Uint8Array {
     const previous = entries[index - 1];
     varint(previous !== undefined && entry.offset === previous.offset + previous.length ? 0 : entry.offset + 1);
   });
-  return new Uint8Array(gzipSync(Uint8Array.from(out)));
+  return new Uint8Array(gzipSync(out.subarray(0, used)));
 }
 
 /**
