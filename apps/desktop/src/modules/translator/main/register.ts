@@ -20,7 +20,7 @@ import { installedPacksRoot } from "./packDir.js";
 
 /**
  * TRANSLATOR in the main process (ADR-090): three reads over a content pack, and
- * the list of installed packs the sentence translator's models come from.
+ * the list of installed packs the Translate tab's models come from.
  *
  * **Why there is no store here.** The dictionary is not the user's data — it is
  * a signed pack on the machine (ADR-091), the same for every profile — and a
@@ -75,7 +75,7 @@ export function register(host: ModuleHostSurface): void {
   });
 
   /**
-   * The installed packs, for the sentence translator's model lookup.
+   * The installed packs, for the Translate tab's model lookup.
    *
    * **Why main lists them rather than the renderer.** A pack is a signed folder
    * on this machine (ADR-091), and the kit's whole point is that a renderer never

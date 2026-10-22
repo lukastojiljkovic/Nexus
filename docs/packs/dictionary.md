@@ -177,8 +177,8 @@ no signature and reads no key: signing is the maintainer's, with the release key
   the API.
 - **PanLex** (CC BY-NC-SA, written permission needed for commercial use) and
   **Wikidata lexemes** (CC0, but about a thousand Serbian entries).
-- Any sentence translation: that is the sentence-translation run's pack, and this
-  pack carries words and phrases only.
+- Translating a whole text: that is the NLLB packs' job (`docs/packs/nllb.md`), and
+  this pack carries words and phrases only.
 
 ## Attribution
 

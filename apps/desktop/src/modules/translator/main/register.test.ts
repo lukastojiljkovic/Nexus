@@ -151,11 +151,11 @@ describe("the translator handler surface", () => {
       "translator:status",
       "translator:search",
       "translator:phrases",
-      // The sentence translator's model lookup: the installed packs, by id and
-      // kind, so a pack the user installs makes a direction offerable without a
-      // reload (ADR-107's wiring of `sentences/SentenceTranslator.tsx`).
+      // The Translate tab's model lookup: the installed packs, by id and kind, so
+      // a pack the user installs makes a model choosable without a reload (ADR-107's
+      // wiring of `renderer/translate/TranslateTab.tsx`).
       "translator:packs",
-      // The sentence translator: a job the page polls, and cancels when the text changes.
+      // The Translate tab: a job the page polls, and cancels when the text changes.
       "translator:translate",
       "translator:translation",
       "translator:cancelTranslation",
@@ -367,7 +367,7 @@ describe("the phrasebook", () => {
 });
 
 /**
- * The sentence translator's model lookup.
+ * The Translate tab's model lookup.
  *
  * What is asserted is the boundary rather than the engine: the list is the
  * REGISTRY's — a signed folder on this machine, verified against the key main
@@ -375,7 +375,7 @@ describe("the phrasebook", () => {
  * is a real one written by the pack suite's own fixture builder, so this drives
  * the same `readInstalled` the Packs card does.
  */
-describe("the installed packs the sentence translator reads", () => {
+describe("the installed packs the Translate tab reads", () => {
   it("answers nothing when no pack is installed, rather than refusing", async () => {
     expect(await call(harness(), "translator:packs", {})).toEqual({ packs: [] });
   });
@@ -383,11 +383,11 @@ describe("the installed packs the sentence translator reads", () => {
   it("answers every installed pack by id and kind, and not by path", async () => {
     const contents = { "model.bin": "not a real model, and not read here" };
     writePack({
-      dir: join(state.root, "translate-sr-en", "1.0.0"),
+      dir: join(state.root, "nllb-600m", "1.0.0"),
       key: packKey.privateKey,
       contents,
       manifest: baseManifest([entry("model.bin", contents["model.bin"])], {
-        id: "translate-sr-en",
+        id: "nllb-600m",
         kind: "model",
       }),
     });
@@ -397,7 +397,7 @@ describe("the installed packs the sentence translator reads", () => {
     // seen it. That is the reader split the module's header records.
     installPack();
     expect(await call(harness(), "translator:packs", {})).toEqual({
-      packs: [{ id: "translate-sr-en", kind: "model" }],
+      packs: [{ id: "nllb-600m", kind: "model" }],
     });
   });
 });

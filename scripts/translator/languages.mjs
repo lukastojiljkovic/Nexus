@@ -155,6 +155,20 @@ export function renderModule({ languages, sources, date }) {
     "  return BY_CODE.get(code);",
     "}",
     "",
+    "/**",
+    " * The row a language tag names: an NLLB code, else a BCP 47 tag (ignoring case),",
+    " * else the first row in table order whose primary language subtag is the tag.",
+    " */",
+    "export function languageFromTag(value: string): NllbLanguage | undefined {",
+    "  const exact = languageByCode(value);",
+    "  if (exact !== undefined) return exact;",
+    "  const tag = value.toLowerCase();",
+    "  return (",
+    "    NLLB_LANGUAGES.find((language) => language.bcp47.toLowerCase() === tag) ??",
+    '    NLLB_LANGUAGES.find((language) => language.bcp47.replace(/-.*/, "").toLowerCase() === tag)',
+    "  );",
+    "}",
+    "",
   ].join("\n");
 }
 

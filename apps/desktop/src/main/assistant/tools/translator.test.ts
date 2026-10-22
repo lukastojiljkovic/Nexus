@@ -212,8 +212,8 @@ describe("translator.phrases", () => {
 });
 
 describe("translator.translate", () => {
-  it("opens the Translator page on the text, with its direction, and says it cannot read the result", async () => {
-    const tool = toolNamed(toolsWith({}, ["translate-en-sr"]), "translator.translate");
+  it("opens the Translator page on the text, with the NLLB codes of both languages, and says it cannot read the result", async () => {
+    const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
     const result = await tool.run({ text: "Good morning.", from: "en", to: "sr" }, context("en"));
     expect(result).toEqual({
       ok: true,
@@ -221,31 +221,59 @@ describe("translator.translate", () => {
         "Opened the Translator page with that text. The translation appears on that page and I cannot read it, so do not translate the text yourself.",
       navigateTo: {
         module: "translator",
-        action: { name: "translate", payload: { text: "Good morning.", from: "en", to: "sr" } },
+        action: { name: "translate", payload: { text: "Good morning.", from: "eng_Latn", to: "srp_Cyrl" } },
       },
     });
   });
 
-  it("refuses a pair with no English on either side, and a pair the pack list does not carry", async () => {
-    const pair = toolNamed(toolsWith({}, ["translate-en-sr"]), "translator.translate");
-    expect(await pair.run({ text: "Dobar dan", from: "sr", to: "sr" }, context("en"))).toEqual({
-      ok: false,
-      content: "Failed: The pair “sr” → “sr” is not supported: one language must be English.",
-    });
-
-    const missing = toolNamed(toolsWith({}, []), "translator.translate");
-    expect(await missing.run({ text: "Good morning.", from: "en", to: "sr" }, context("en"))).toEqual({
-      ok: false,
-      content:
-        "Failed: The “translate-en-sr” pack is not installed. Install it on the “Content packs” card.",
+  it("takes an NLLB code as well as a language tag, and resolves a tag with a script", async () => {
+    const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
+    const result = await tool.run({ text: "你好", from: "zh-hant", to: "eng_Latn" }, context("en"));
+    expect(result.navigateTo).toEqual({
+      module: "translator",
+      action: { name: "translate", payload: { text: "你好", from: "zho_Hant", to: "eng_Latn" } },
     });
   });
 
-  it("refuses an empty text and a language outside the four it knows", async () => {
-    const tool = toolNamed(toolsWith({}, ["translate-en-sr"]), "translator.translate");
-    expect((await tool.run({ text: "   ", from: "en", to: "sr" }, context("en"))).ok).toBe(false);
-    const language = await tool.run({ text: "Hello", from: "de", to: "sr" }, context("en"));
-    expect(language.ok).toBe(false);
-    expect(language.content).toContain("from");
+  it("leaves the source to detection when from is absent or auto", async () => {
+    const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
+    const absent = await tool.run({ text: "Dobar dan", to: "en" }, context("sr"));
+    const auto = await tool.run({ text: "Dobar dan", from: "auto", to: "en" }, context("sr"));
+    expect(absent.navigateTo?.action?.payload).toEqual({ text: "Dobar dan", from: "auto", to: "eng_Latn" });
+    expect(auto.navigateTo?.action?.payload).toEqual({ text: "Dobar dan", from: "auto", to: "eng_Latn" });
+  });
+
+  it("refuses a language the table does not carry, and names what it takes", async () => {
+    const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
+    const source = await tool.run({ text: "Hello", from: "xx", to: "sr" }, context("en"));
+    expect(source).toEqual({
+      ok: false,
+      content:
+        "Failed: The language “xx” is not in the language table. Give an NLLB code (for example srp_Cyrl) or a language tag (for example sr).",
+    });
+    const target = await tool.run({ text: "Hello", from: "en", to: "xx" }, context("en"));
+    expect(target.ok).toBe(false);
+    expect(target.content).toContain("“xx”");
+  });
+
+  it("refuses the same language on both sides", async () => {
+    const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
+    expect(await tool.run({ text: "Hello", from: "en", to: "eng_Latn" }, context("en"))).toEqual({
+      ok: false,
+      content: "Failed: The source and the target language are the same (“eng_Latn”).",
+    });
+  });
+
+  it("refuses when no NLLB model is installed, naming nllb-600m as the one to install", async () => {
+    const tool = toolNamed(toolsWith({}, ["dictionary-sr-en"]), "translator.translate");
+    expect(await tool.run({ text: "Good morning.", from: "en", to: "sr" }, context("en"))).toEqual({
+      ok: false,
+      content: "Failed: No NLLB model is installed. Install nllb-600m on the “Content packs” card.",
+    });
+  });
+
+  it("refuses an empty text", async () => {
+    const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
+    expect((await tool.run({ text: "   ", to: "sr" }, context("en"))).ok).toBe(false);
   });
 });

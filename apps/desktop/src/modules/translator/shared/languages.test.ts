@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { NLLB_LANGUAGES, languageByCode } from "./languages.js";
+import { NLLB_LANGUAGES, languageByCode, languageFromTag } from "./languages.js";
 
 /**
  * The generated language table, checked for the shape the translator relies on.
@@ -31,5 +31,27 @@ describe("NLLB language table", () => {
 
   it("returns undefined for a code the table does not carry", () => {
     expect(languageByCode("xxx_Latn")).toBeUndefined();
+  });
+});
+
+describe("languageFromTag", () => {
+  it("takes an NLLB code as it is", () => {
+    expect(languageFromTag("srp_Cyrl")?.code).toBe("srp_Cyrl");
+  });
+
+  it("takes a full BCP 47 tag, ignoring case", () => {
+    expect(languageFromTag("zh-Hant")?.code).toBe("zho_Hant");
+    expect(languageFromTag("zh-hant")?.code).toBe("zho_Hant");
+  });
+
+  it("takes a primary language subtag, ignoring case, as the first row in table order", () => {
+    expect(languageFromTag("sr")?.code).toBe("srp_Cyrl");
+    expect(languageFromTag("EN")?.code).toBe("eng_Latn");
+    expect(languageFromTag("zh")?.code).toBe("zho_Hans");
+  });
+
+  it("returns undefined for a value the table does not carry, and for an empty one", () => {
+    expect(languageFromTag("xx")).toBeUndefined();
+    expect(languageFromTag("")).toBeUndefined();
   });
 });

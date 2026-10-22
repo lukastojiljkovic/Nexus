@@ -1,13 +1,14 @@
 /**
  * The TRANSLATOR module through the assistant's eyes: the dictionary's words and
- * phrases, and the sentence translation that happens on the page.
+ * phrases, and the translation of a whole text, which the Translate tab shows.
  *
  * **Who answers what.** A word and a phrase are reads of the installed dictionary
  * pack, which main already holds (`modules/translator/main/dictionary.ts`), so
  * these tools call the same reader the page's channels call. A sentence is
- * translated by the renderer's Bergamot worker, which exists only in the page, so
- * `translator.translate` opens the page with the text and the page does the work
- * (`navigateTo` with an `action`, the way Canvas does it).
+ * translated by an NLLB model in main, for the page. `translator.translate` opens
+ * the page with the text and the two languages, because the result is shown there
+ * and the page owns the choices (model, script, recent languages); the assistant
+ * cannot read the result.
  *
  * **Why a missing pack is an answer, not a failure.** The dictionary is an
  * optional pack, and "not installed yet" is a state the user can fix, so the word
@@ -17,10 +18,12 @@
 import { foldSearchText, type Tool } from "@nexus/core";
 import type { DictionaryReader } from "../../../modules/translator/main/dictionary.js";
 import {
+  NLLB_PACK_IDS,
   TRANSLATOR_TEXT_MAX_CHARS,
   type TranslatorEntryView,
   type TranslatorTopicView,
 } from "../../../modules/translator/shared/ipc.js";
+import { languageFromTag } from "../../../modules/translator/shared/languages.js";
 import { asArgs, asEnum, asOptionalCount, asOptionalText, asText } from "./args.js";
 import type { PacksLookup } from "./packs.js";
 import {
@@ -46,7 +49,8 @@ const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
 
 const DIRECTION_CHOICES = ["auto", "en-sr", "sr-en"] as const;
-const LANGUAGES = ["sr", "en", "hr", "bs"] as const;
+/** The longest language a tool takes, as an NLLB code (eight characters) or a tag. A policy cap, like `MAX_TERM_CHARS`. */
+const MAX_LANGUAGE_CHARS = 16;
 
 const NOT_INSTALLED: { sr: string; en: string } = {
   sr: "Rečnik nije instaliran. Instaliraj paket dictionary-sr-en na kartici „Paketi sadržaja“ u Podešavanjima.",
@@ -98,14 +102,21 @@ const PHRASES_MORE: AssistantPhrase<[shown: number]> = {
   en: (shown) => `Showing only the first ${shown} phrases.`,
 };
 
-const PAIR_UNSUPPORTED: AssistantPhrase<[from: string, to: string]> = {
-  sr: (from, to) => `Par „${from}“ → „${to}“ nije podržan: jedan jezik mora biti engleski.`,
-  en: (from, to) => `The pair “${from}” → “${to}” is not supported: one language must be English.`,
+const UNKNOWN_LANGUAGE: AssistantPhrase<[value: string]> = {
+  sr: (value) =>
+    `Jezik „${value}“ nije u tabeli jezika. Navedi NLLB kod (na primer srp_Cyrl) ili oznaku jezika (na primer sr).`,
+  en: (value) =>
+    `The language “${value}” is not in the language table. Give an NLLB code (for example srp_Cyrl) or a language tag (for example sr).`,
 };
 
-const PACK_MISSING: AssistantPhrase<[pack: string]> = {
-  sr: (pack) => `Paket „${pack}“ nije instaliran. Instaliraj ga na kartici „Paketi sadržaja“.`,
-  en: (pack) => `The “${pack}” pack is not installed. Install it on the “Content packs” card.`,
+const SAME_LANGUAGE: AssistantPhrase<[code: string]> = {
+  sr: (code) => `Izvorni i ciljni jezik su isti („${code}“).`,
+  en: (code) => `The source and the target language are the same (“${code}”).`,
+};
+
+const NO_MODEL: { sr: string; en: string } = {
+  sr: "Nijedan NLLB model nije instaliran. Instaliraj nllb-600m na kartici „Paketi sadržaja“.",
+  en: "No NLLB model is installed. Install nllb-600m on the “Content packs” card.",
 };
 
 const OPENED: { sr: string; en: string } = {
@@ -226,17 +237,17 @@ export function translatorTools(deps: TranslatorToolDeps): readonly Tool[] {
   const translate: Tool = {
     name: "translator.translate",
     description: {
-      sr: "Prevodi rečenice i pasuse, ne pojedinačne reči. Otvara Prevodilac sa tekstom; prevod se prikazuje na toj stranici, a asistent ga ne vidi. Koristi kad korisnik traži prevod celog teksta.",
-      en: "Translates sentences and paragraphs, not single words. Opens the Translator page with the text; the translation appears there and the assistant cannot read it. Use it when the user asks to translate a whole text.",
+      sr: "Prevodi rečenice i pasuse, ne pojedinačne reči. Otvara Prevodilac sa tekstom; prevod se prikazuje na toj stranici, a asistent ga ne vidi. Koristi kad korisnik traži prevod celog teksta. Jezik je NLLB kod (na primer srp_Cyrl) ili oznaka jezika (na primer sr, zh-Hant); from može biti i auto.",
+      en: "Translates sentences and paragraphs, not single words. Opens the Translator page with the text; the translation appears there and the assistant cannot read it. Use it when the user asks to translate a whole text. A language is an NLLB code (for example srp_Cyrl) or a language tag (for example sr, zh-Hant); from may also be auto.",
     },
     parameters: {
       type: "object",
       properties: {
         text: { type: "string", minLength: 1, maxLength: TRANSLATOR_TEXT_MAX_CHARS },
-        from: { type: "string", enum: [...LANGUAGES] },
-        to: { type: "string", enum: [...LANGUAGES] },
+        from: { type: "string", minLength: 1, maxLength: MAX_LANGUAGE_CHARS },
+        to: { type: "string", minLength: 1, maxLength: MAX_LANGUAGE_CHARS },
       },
-      required: ["text", "from", "to"],
+      required: ["text", "to"],
       additionalProperties: false,
     },
     effect: "read",
@@ -245,19 +256,29 @@ export function translatorTools(deps: TranslatorToolDeps): readonly Tool[] {
         assertLive(context);
         const args = asArgs(rawArgs);
         const body = asText(args["text"], "text", TRANSLATOR_TEXT_MAX_CHARS);
-        const from = asEnum(args["from"], "from", LANGUAGES);
-        const to = asEnum(args["to"], "to", LANGUAGES);
-        // The six directions the page offers: English on exactly one side.
-        if ((from === "en") === (to === "en")) {
-          return failResult(context.locale, phrase(context.locale, PAIR_UNSUPPORTED, from, to));
+        const from = asOptionalText(args["from"], "from", MAX_LANGUAGE_CHARS) ?? "auto";
+        const to = asText(args["to"], "to", MAX_LANGUAGE_CHARS);
+
+        // `null` is detection; `undefined` is a language the table does not carry.
+        const source = from === "auto" ? null : languageFromTag(from);
+        if (source === undefined) return failResult(context.locale, phrase(context.locale, UNKNOWN_LANGUAGE, from));
+        const target = languageFromTag(to);
+        if (target === undefined) return failResult(context.locale, phrase(context.locale, UNKNOWN_LANGUAGE, to));
+        if (source?.code === target.code) {
+          return failResult(context.locale, phrase(context.locale, SAME_LANGUAGE, target.code));
         }
-        const packId = `translate-${from}-${to}`;
-        const installed = (await deps.packs.list()).some((pack) => pack.id === packId);
-        if (!installed) return failResult(context.locale, phrase(context.locale, PACK_MISSING, packId));
+
+        const installed = new Set((await deps.packs.list()).map((pack) => pack.id));
+        if (!NLLB_PACK_IDS.some((id) => installed.has(id))) {
+          return failResult(context.locale, text(context.locale, NO_MODEL));
+        }
         return okResult(text(context.locale, OPENED), {
           navigateTo: {
             module: "translator",
-            action: { name: "translate", payload: { text: body, from, to } },
+            action: {
+              name: "translate",
+              payload: { text: body, from: source?.code ?? "auto", to: target.code },
+            },
           },
         });
       }),

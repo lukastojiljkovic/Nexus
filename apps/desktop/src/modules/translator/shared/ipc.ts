@@ -28,7 +28,7 @@ export type TranslatorDirection = (typeof TRANSLATOR_DIRECTIONS)[number];
 export const TRANSLATOR_DIRECTION_CHOICES = ["auto", "en-sr", "sr-en"] as const;
 
 /**
- * The longest text the assistant may hand the sentence translator, in characters.
+ * The longest text the assistant may hand the Translate tab, in characters.
  * A policy choice, not a measurement: the page translates as you type, and a
  * paragraph is what it is for. The assistant's tool refuses more, and the page
  * refuses it again because the request travelled through a window event.
@@ -99,7 +99,7 @@ export interface TranslatorPhrasesView {
 }
 
 /**
- * One installed pack, as the sentence translator needs it: its id, and what kind
+ * One installed pack, as the Translate tab needs it: its id, and what kind
  * of content it carries.
  *
  * Deliberately NOT the shell's `InstalledPackView`: a translation model is a
