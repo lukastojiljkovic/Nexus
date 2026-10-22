@@ -4,6 +4,14 @@
 kit), ADR-091 (content packs), ADR-093 (the map is a *knowledge* module).
 **Does not cover:** routing, which is its own project (§7).
 
+> **Amended by [ADR-118](118-maps-cut-from-the-planet-build.md)** (2026-10-23):
+> the map's data is no longer a pack. The app cuts a territory, a continent or
+> the world from the Protomaps planet build at the detail a person chooses, and
+> reads it through `nx-map:`. §2's pack, §7's "a second region is a second pack"
+> and §9's "it adds no content host" no longer hold. §4 to §6 hold until
+> ADR-118 records the style, labels and search for regions. §8's ODbL duties
+> are unchanged.
+
 ## 1. The finding
 
 Nexus is an offline-first app whose whole network story is "nothing unless the
