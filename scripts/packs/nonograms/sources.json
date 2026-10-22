@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "notes": [
+    "Where the nonogram pictures come from, and the licence evidence that lets them ship at all.",
+    "The pictures are the silhouettes of the game-icons.net repository, read from its archive by",
+    "build.mjs; `archive` is written by `build.mjs --update-sources` from the bytes it actually read,",
+    "and every other run refuses an archive whose SHA-256 differs from the one recorded here.",
+    "",
+    "The licence sentence is quoted verbatim from the archive's own license.txt, and build.mjs refuses",
+    "to build when it is not there. That file says the icons are CC BY 3.0 or CC0 'if mentioned below':",
+    "the contributors marked CC0 there (Viscious Speed, Zeromancer) are left out, and so is every folder",
+    "with no named contributor (badges, various-artists) or whose folder name is not the author's (lucasms).",
+    "",
+    "`fetchedAt` is the date the archive was read for the hash recorded here."
+  ],
+  "source": {
+    "name": "game-icons.net",
+    "url": "https://game-icons.net",
+    "repository": "https://github.com/game-icons/icons"
+  },
+  "archive": {
+    "url": "https://github.com/game-icons/icons/archive/refs/heads/master.zip",
+    "bytes": 4248680,
+    "sha256": "b8024011acae3cd0c601b75c3c48479f1bb14f37f5fd5e7fb74839f88cb825fe",
+    "fetchedAt": "2026-10-22"
+  },
+  "licence": {
+    "spdx": "CC-BY-3.0",
+    "url": "https://creativecommons.org/licenses/by/3.0/",
+    "sentence": "Icons provided under the Creative Commons 3.0 BY or CC0 if mentioned below.",
+    "sentenceUrl": "https://github.com/game-icons/icons/blob/master/license.txt"
+  }
+}

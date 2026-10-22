@@ -23,6 +23,7 @@ record, written beside the code in `scripts/packs/`.
 | [libredwg.md](libredwg.md) | `libredwg` *(tool)* | GPL-3.0-or-later | `scripts/packs/libredwg/build.mjs` | Drawings — DWG to DXF, as a child process |
 | [make.md](make.md) | `make-by-hand` *(content)* | public domain, plus three CC BY-SA 4.0 pages | `scripts/packs/make/build.mjs` | the Reader — mending and making by hand |
 | [map-serbia.md](map-serbia.md) | `map-serbia` *(map)* | ODbL-1.0 | `scripts/packs/map-serbia/build.mjs` | Maps — vector tiles, styles and the place index |
+| [nonograms-pictures.md](nonograms-pictures.md) | `nonograms-pictures` *(dataset)* | CC BY 3.0 (game-icons.net) | `scripts/packs/nonograms/build.mjs` | Games — the pictures the nonogram puzzles reveal |
 | [planet-textures.md](planet-textures.md) | `planet-textures` *(dataset)* | CC BY 4.0 (Solar System Scope), NASA material not subject to US copyright | `scripts/packs/planet-textures/build.mjs` | Astronomy — the 3D solar system's maps |
 | [recipes-world.md](recipes-world.md) | `recipes-world` *(dataset)* | CC BY-SA 4.0 (Wikibooks) and public-domain books | `scripts/packs/recipes/build.mjs` | Cookbook — world and historical recipes |
 | [reference.md](reference.md) | `reference-en`, `reference-sr` *(content)* | CC BY-SA 4.0 and public-domain texts | `scripts/packs/reference/build.mjs` | the Reader — charters, constitutions, laws ([reference-en.md](reference-en.md), [reference-sr.md](reference-sr.md)) |
