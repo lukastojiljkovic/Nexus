@@ -98,68 +98,6 @@ So `mms-tts-eng` is the only voice that can be built today, and
 reading Serbian through an English voice. The day a Serbian voice appears with a
 shippable licence, it is one entry in `sources.json` and one run of the builder.
 
-## Translator voices (MMS)
-
-The translator speaks with MMS-TTS checkpoints (`facebook/mms-tts-<code>`). Those
-are published as PyTorch, not ONNX, so `scripts/packs/voice/mms.mjs` converts
-each one, proves that it speaks, and builds it as a `kind: "tts"` pack with the
-same `voice.json` as the packs above. The voices are the distinct non-uroman
-repositories of the translator's language table; `mms-tts-eng` is excluded, as
-it ships as the pack above.
-
-```text
-node scripts/packs/voice/mms.mjs --convert --only deu,fra,ell
-node scripts/packs/voice/mms.mjs --build --only deu,fra,ell
-```
-
-**Conversion.** The converter runs in `~\.nexus-build\tjs` with the Python of
-its venv, and it takes two flags that are both required:
-
-- `--skip_validation`: VITS draws random noise for its durations, so two runs
-  differ in length and the exporter's comparison always fails.
-- `--skip_onnxslim`: onnxslim folds the duration predictor's `Where` nodes with
-  the dummy input's shape, and onnxruntime then refuses to load the model
-  (`[ShapeInferenceError] Incompatible dimensions`).
-
-The export is `q8`, which is what `dtype: "q8"` loads. Each run's output is in
-`~\.nexus-build\mms-logs\<pack>.log`, and `convert.json` beside the model records
-the repository's commit, the time of conversion and the command.
-
-**Proof.** A converted voice is loaded from its local folder with remote models
-disabled, and it speaks the first 24 letters of its own vocabulary, in groups of
-four. The proof is refused under 0.2 s of speech or an RMS under 0.005, and the
-full-precision `model.onnx` is deleted once the voice is proved. The three voices
-built on 2026-10-22 on this machine:
-
-| Voice | Speech | RMS | Proof time |
-| --- | --- | --- | --- |
-| `facebook/mms-tts-deu` | 2.704 s | 0.0699 | 4 757 ms |
-| `facebook/mms-tts-fra` | 2.976 s | 0.0630 | 5 830 ms |
-| `facebook/mms-tts-ell` | 2.208 s | 0.0651 | 5 102 ms |
-
-**Licence.** The pack is built only when the repository's card states
-`license: cc-by-nc-4.0` in its front matter and „The model is licensed as
-**CC-BY-NC 4.0**.“ in its text. The card is cached and checked on every build,
-and the pack carries `CC-BY-NC-4.0` with the attribution „MMS-TTS by Meta AI;
-converted to ONNX for Nexus“.
-
-**Languages.** `voice.json` lists the tags of the table rows the voice serves.
-A row whose script the voice does not write gets no voice: `ace_Arab`,
-`taq_Tfng` and `crh_Latn` lose theirs, because the `ace`, `taq` and `crh` voices
-write Latin, Latin and Cyrillic respectively.
-
-**The packs built on 2026-10-22** (`--build`, measured on this machine). Each has
-five model and tokenizer files and `voice.json`:
-
-| Pack | Languages | Total bytes | Build time |
-| --- | --- | --- | --- |
-| `mms-tts-deu` | `de` | 38 326 657 | 460 ms |
-| `mms-tts-fra` | `fr` | 38 326 524 | 363 ms |
-| `mms-tts-ell` | `el` | 38 331 288 | 480 ms |
-
-Their file names, sizes and SHA-256 are in `scripts/packs/voice/mms-voices.json`.
-The packs are not signed; `pack-sign.mjs` takes each `<id>.meta.json` next.
-
 ## Tests
 
 `node node_modules/vitest/vitest.mjs run --configLoader runner --config vitest.scripts.config.mjs scripts/packs/voice/build.test.mjs`
@@ -171,7 +109,3 @@ accepts, the refusals (a config whose `model_type` disagrees with the entry, an
 unpinned revision, a source with no licence evidence, a cache file whose bytes
 do not match the recorded hash) and the assertion that a pack is never written
 outside the packs folder.
-
-`scripts/packs/voice/mms.test.mjs` has twenty more, with no network and no Python:
-the pack ids, the voice list, the conversion arguments, the probe, the proof
-thresholds, the licence refusals and the metadata and descriptor shapes.
