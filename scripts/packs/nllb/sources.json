@@ -134,6 +134,17 @@
           "url": "https://huggingface.co/facebook/nllb-200-3.3B/raw/main/README.md",
           "line": "license: \"cc-by-nc-4.0\""
         }
+      },
+      "files": {
+        "config.json": "fd229528b0b9a8f9bc6841cdfc33940d177d0b37a7caaee18e0d50cd6c64b8c4",
+        "generation_config.json": "b6ae1a6b04f7ce7cddda10ecc4ac5ee299b3d2a4c50a9e3cd5085c229e8ea067",
+        "onnx/decoder_model_merged_quantized.onnx": "6fcf930b32434027bc1bdbb4386722958abb60f2830d4217080d4aee2f396ee6",
+        "onnx/decoder_model_merged_quantized.onnx_data": "9d9b8412bdc487ca5ff2207105688f4c8a574ec3641c114162ffa63377532fe0",
+        "onnx/decoder_model_merged_quantized.onnx_data_1": "4a899e209af65113289c62f0e6f9859cbc0757e7b76671ea43a4468ff5f85de7",
+        "onnx/encoder_model_quantized.onnx": "9d711ff0fcb9aeb290c5fd1eea92404dca0bb1af549fc0c3da65f22efc9c2243",
+        "special_tokens_map.json": "27d4e8cb8b9a7c0f8234273dfefa64568f859c796f058037b4228948b84cd5fc",
+        "tokenizer.json": "b3be18cc91c94d4a1d83731ace4dac0b90a7db024edecdeb9fe7d19ec01ce901",
+        "tokenizer_config.json": "78f074bb0808578ea85ec87d35300180a988df88d23e9d9d3c93661e1a0f9415"
       }
     }
   ]

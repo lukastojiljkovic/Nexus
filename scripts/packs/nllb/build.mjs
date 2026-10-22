@@ -167,15 +167,24 @@ export async function fetchLicence({ sources, pack, cacheDir, fetchImpl }) {
 
 /**
  * Every file of one pack, sorted by path. A downloaded pack is exactly its `paths`.
- * A local folder adds each external-data file that sits beside its quantized weights,
- * because a model larger than one file is stored as several, and the pack must hold
- * all of them or it loads half a model.
+ * A local folder adds the external-data chunks of the pack's own graphs -
+ * `<graph>.onnx_data`, `<graph>.onnx_data_1`, ..., the names
+ * `@huggingface/transformers` loads - because a model larger than one file is
+ * stored as several, and the pack must hold all of them or it loads half a model.
+ * The converter's other graphs leave their data in the same folder; none of it
+ * is the pack's.
  */
 export function listFiles(pack) {
   if (pack.origin.download !== undefined) return [...pack.paths].sort();
   const onnx = join(pack.origin.local, "onnx");
+  const graphs = new Set(pack.paths.filter((path) => path.endsWith(".onnx")).map((path) => path.slice("onnx/".length)));
   const external = existsSync(onnx)
-    ? readdirSync(onnx).filter((name) => name.includes("_quantized.onnx_data")).map((name) => `onnx/${name}`)
+    ? readdirSync(onnx)
+        .filter((name) => {
+          const chunk = /^(.+\.onnx)_data(?:_\d+)?$/.exec(name);
+          return chunk !== null && graphs.has(chunk[1]);
+        })
+        .map((name) => `onnx/${name}`)
     : [];
   return [...pack.paths, ...external].sort();
 }

@@ -87,13 +87,24 @@ describe("listFiles", () => {
     expect(listFiles(packById(sources, "nllb-600m"))).toEqual([...REQUIRED].sort());
   });
 
-  it("adds the external-data files a local folder holds beside its quantized weights, and nothing else", () => {
+  it("adds the external-data chunks of the pack's own graphs, and nothing else", () => {
+    // The converter leaves every graph it exported in the folder: the
+    // non-merged decoders' data is not the pack's, and each is over the limit.
     const folder = localFolder("external", [
       "onnx/decoder_model_merged_quantized.onnx_data",
+      "onnx/decoder_model_merged_quantized.onnx_data_1",
       "onnx/decoder_model_merged.onnx",
+      "onnx/decoder_model_quantized.onnx_data",
+      "onnx/decoder_with_past_model_quantized.onnx_data",
     ]);
     const pack = { ...packById(sources, "nllb-1.3b"), origin: { local: folder } };
-    expect(listFiles(pack)).toEqual([...REQUIRED, "onnx/decoder_model_merged_quantized.onnx_data"].sort());
+    expect(listFiles(pack)).toEqual(
+      [
+        ...REQUIRED,
+        "onnx/decoder_model_merged_quantized.onnx_data",
+        "onnx/decoder_model_merged_quantized.onnx_data_1",
+      ].sort(),
+    );
   });
 });
 

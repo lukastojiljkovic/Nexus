@@ -32,7 +32,7 @@ node scripts/pack-sign.mjs --dir ~\.nexus-packs\nllb-600m ^
 
 ## The packs, and what each contains
 
-Every pack holds the same seven files and nothing else:
+Every pack holds the same seven files, plus the decoder's weight chunks where it has them:
 
 | File | Role |
 | --- | --- |
@@ -41,8 +41,12 @@ Every pack holds the same seven files and nothing else:
 | `onnx/encoder_model_quantized.onnx` | quantized encoder |
 | `onnx/decoder_model_merged_quantized.onnx` | quantized decoder |
 
-A local pack also takes any `onnx/*_quantized.onnx_data*` external-data file beside its
-weights, should a conversion split one out. None was present in the 1.3B folder.
+A local pack also takes the external-data chunks of its own two graphs -
+`<graph>.onnx_data`, `<graph>.onnx_data_1`, ..., the names `@huggingface/transformers`
+loads when `use_external_data_format` is the chunk count. The converter leaves the
+data of the graphs it exported but the pack does not use (`decoder_model_quantized`,
+`decoder_with_past_model_quantized`) in the same folder, and none of it is taken. The
+1.3B has no chunks; the 3.3B decoder has two (below).
 `quantize_config.json` and `sentencepiece.bpe.model` are not in the pack; the file list is the
 one `sources.json` fixes.
 
@@ -52,19 +56,21 @@ Measured by the builder's own output on 2026-10-22, on this machine:
 | --- | --- | --- | --- | --- |
 | `nllb-600m` | `facebook/nllb-200-distilled-600M` (from `Xenova/nllb-200-distilled-600M`) | 7 | 911 962 632 B | 44 387 ms, downloaded |
 | `nllb-1.3b` | `facebook/nllb-200-distilled-1.3B` (converted here) | 7 | 1 940 515 828 B | 57 556 ms, read in place |
-| `nllb-3.3b` | `facebook/nllb-200-3.3B` (converted here) | — | not built | the folder held `config.json` and `generation_config.json` only |
+| `nllb-3.3b` | `facebook/nllb-200-3.3B` (converted here) | 9 | 4 466 791 113 B | 13 508 ms, read in place |
 
 The per-file sizes of the two built packs:
 
-| File | `nllb-600m` | `nllb-1.3b` |
-| --- | ---: | ---: |
-| `config.json` | 873 B | 934 B |
-| `generation_config.json` | 189 B | 193 B |
-| `special_tokens_map.json` | 3 548 B | 4 487 B |
-| `tokenizer.json` | 17 331 224 B | 32 240 136 B |
-| `tokenizer_config.json` | 544 B | 41 770 B |
-| `onnx/encoder_model_quantized.onnx` | 419 120 483 B | 770 503 603 B |
-| `onnx/decoder_model_merged_quantized.onnx` | 475 505 771 B | 1 137 724 705 B |
+| File | `nllb-600m` | `nllb-1.3b` | `nllb-3.3b` |
+| --- | ---: | ---: | ---: |
+| `config.json` | 873 B | 934 B | 924 B |
+| `generation_config.json` | 189 B | 193 B | 193 B |
+| `special_tokens_map.json` | 3 548 B | 4 487 B | 4 487 B |
+| `tokenizer.json` | 17 331 224 B | 32 240 136 B | 32 240 136 B |
+| `tokenizer_config.json` | 544 B | 41 770 B | 41 770 B |
+| `onnx/encoder_model_quantized.onnx` | 419 120 483 B | 770 503 603 B | 1 740 060 006 B |
+| `onnx/decoder_model_merged_quantized.onnx` | 475 505 771 B | 1 137 724 705 B | 6 877 773 B |
+| `onnx/decoder_model_merged_quantized.onnx_data` | — | — | 1 899 626 496 B |
+| `onnx/decoder_model_merged_quantized.onnx_data_1` | — | — | 787 939 328 B |
 
 The 600M files were downloaded in that run, and the 1.3B files were hashed in place; the run
 wrote their hashes into `sources.json` with `--update-sources`. A second run on the final code
@@ -77,13 +83,36 @@ description reads: 202.
 ## How the two local packs were converted
 
 Both are converted by the transformers.js 3.7.0 `scripts/convert.py` with
-`--quantize --modes q8`, and nothing else is run on the output. The environment sets
+`--quantize --modes q8`, and nothing else is run on the output but the 3.3B decoder's
+split (below). The environment sets
 `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`: the unquantized 1.3B graph is larger than
 2 GiB, and the default protobuf backend refuses to serialize it (`EncodeError: Failed to
 serialize proto`), where the pure-Python one writes it with its weights as external data. The
 1.3B was converted on 2026-10-22 and checked the same day: it loads in
 `@huggingface/transformers` with `dtype: { encoder_model: "q8", decoder_model_merged: "q8" }`
 and translates English, Serbian and German correctly.
+
+The 3.3B was converted on 2026-10-22 the same way. Its quantized decoder came out as a
+6.9 MB graph and one 2 665 885 696 B weight file, which no release asset can hold: the
+decoder carries the 256 206-token vocabulary twice, as the input embedding and as the
+output projection. `scripts/packs/nllb/split-external-data.py` rewrites the graph so its
+tensors live in two files under 1.9 GB each, copying the bytes unchanged:
+
+```text
+python scripts/packs/nllb/split-external-data.py <folder>/onnx/decoder_model_merged_quantized.onnx <out>
+```
+
+The split model was checked the same day through `@huggingface/transformers` 4.3.1 with
+`use_external_data_format: { "decoder_model_merged_quantized.onnx": 2 }`: it loaded in
+10 545 ms and translated English to Serbian (Cyrillic) and German, and Serbian to English,
+correctly. Two rules came out of that check:
+
+- **The chunk count is read from the pack.** The worker counts the
+  `decoder_model_merged_quantized.onnx_data*` files beside the graph and passes that
+  count; with none it passes nothing, as for the 600M and the 1.3B.
+- **A weight file must not be a hard link.** ONNX Runtime 1.30 refuses external data
+  with more than one link ("a potential hardlink attack"), so a pack's files are
+  copied into place, never linked.
 
 ## Licences, and the evidence for each
 
