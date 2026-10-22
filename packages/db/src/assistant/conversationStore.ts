@@ -59,6 +59,13 @@ export const MAX_CONVERSATIONS = 500;
 /** The most messages one conversation holds. A local model's context is a few thousand tokens; this is far past the point a thread stops being replayed. */
 export const MAX_MESSAGES_PER_CONVERSATION = 2000;
 
+/**
+ * A conversation's summary, in characters. The summary is written by the model
+ * under a token limit (`compact.ts` in `@nexus/core`); this is the store's own
+ * bound on whatever reaches it, at a quarter of a message's.
+ */
+export const MAX_CONVERSATION_SUMMARY_CHARS = 8000;
+
 /** One message's text, in characters. A pasted document is the case the bound is for. */
 export const MAX_MESSAGE_CHARS = 32_000;
 
@@ -111,6 +118,10 @@ export interface AssistantConversation {
   modelId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** What the first `summaryThrough` messages said, for the model; `null` before a compaction. */
+  summary: string | null;
+  /** How many leading messages `summary` stands for; `0` when there is none. */
+  summaryThrough: number;
 }
 
 /** One message of a thread, with its JSON columns already read. */
@@ -177,7 +188,12 @@ export interface AssistantRuntimeOptions {
   readonly repeatPenalty: number | null;
   /** Minutes with nothing asked before the model leaves memory; `0` is never. */
   readonly idleUnloadMinutes: number;
+  /** Whether a turn that would not fit the window summarizes the thread's start first (migration 99). */
+  readonly autoCompact: boolean;
 }
+
+/** The runtime options that are numbers, each with its bounds. */
+export type AssistantRuntimeNumber = Exclude<keyof AssistantRuntimeOptions, "autoCompact">;
 
 /**
  * The bounds a runtime option is held to. The sampling ranges are the ones the
@@ -202,6 +218,7 @@ export const DEFAULT_ASSISTANT_RUNTIME: AssistantRuntimeOptions = {
   topK: null,
   repeatPenalty: null,
   idleUnloadMinutes: 15,
+  autoCompact: true,
 };
 
 /** One conversation as an archive carries it: its rows, without this database's keys. */
@@ -243,6 +260,8 @@ interface ConversationRow {
   model_id: string | null;
   created_at: string;
   updated_at: string;
+  summary: string | null;
+  summary_through: number;
 }
 
 interface MessageRow {
@@ -268,6 +287,8 @@ function conversationFromRow(row: ConversationRow): AssistantConversation {
     modelId: row.model_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    summary: row.summary,
+    summaryThrough: row.summary_through,
   };
 }
 
@@ -421,7 +442,7 @@ function asModelId(value: unknown, field: string): string | null {
 /** One runtime option inside its bounds; `null` only where "the model's own" is a value. */
 function asRuntimeValue(
   value: unknown,
-  field: keyof AssistantRuntimeOptions,
+  field: AssistantRuntimeNumber,
   nullable: boolean,
 ): number | null {
   if (value === null && nullable) return null;
@@ -448,7 +469,15 @@ function asRuntimeOptions(value: AssistantRuntimeOptions): AssistantRuntimeOptio
     topK: asRuntimeValue(value.topK, "topK", true),
     repeatPenalty: asRuntimeValue(value.repeatPenalty, "repeatPenalty", true),
     idleUnloadMinutes: asRuntimeValue(value.idleUnloadMinutes, "idleUnloadMinutes", false) as number,
+    autoCompact: asFlag(value.autoCompact, "autoCompact"),
   };
+}
+
+function asFlag(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new AssistantValidationError(`Assistant data: "${field}" must be true or false.`);
+  }
+  return value;
 }
 
 /** A tool result's outcome: `true`, `false`, or `undefined` where none is recorded. */
@@ -594,7 +623,7 @@ export class ConversationStore {
   listConversations(): AssistantConversation[] {
     const rows = this.db
       .prepare(
-        `SELECT id, profile_id, title, model_id, created_at, updated_at
+        `SELECT id, profile_id, title, model_id, created_at, updated_at, summary, summary_through
            FROM assistant_conversations
           WHERE profile_id = ?
           ORDER BY updated_at DESC, id DESC`,
@@ -606,7 +635,7 @@ export class ConversationStore {
   conversation(id: string): AssistantConversation | null {
     const row = this.db
       .prepare(
-        `SELECT id, profile_id, title, model_id, created_at, updated_at
+        `SELECT id, profile_id, title, model_id, created_at, updated_at, summary, summary_through
            FROM assistant_conversations
           WHERE id = ? AND profile_id = ?`,
       )
@@ -658,6 +687,37 @@ export class ConversationStore {
    * means exactly that - the rows go, and `ON DELETE CASCADE` takes the messages
    * with them.
    */
+  /**
+   * Writes what the thread's first `through` messages said, in place of any
+   * earlier summary. A compaction only ever covers more of the thread, so a
+   * `through` below the last one is refused; the thread's place in the list is
+   * left alone, because a summary is not something the user wrote.
+   */
+  setSummary(id: string, summary: string, through: number): AssistantConversation {
+    const conversation = this.requireConversation(id);
+    const text = summary.trim();
+    if (text.length === 0 || text.length > MAX_CONVERSATION_SUMMARY_CHARS) {
+      throw new AssistantValidationError(
+        `Assistant data: "summary" must be 1 to ${MAX_CONVERSATION_SUMMARY_CHARS} characters.`,
+      );
+    }
+    const { n } = this.db
+      .prepare("SELECT count(*) AS n FROM assistant_messages WHERE conversation_id = ? AND profile_id = ?")
+      .get(id, this.profileId) as { n: number };
+    if (!Number.isInteger(through) || through < Math.max(1, conversation.summaryThrough) || through > n) {
+      throw new AssistantValidationError(
+        `Assistant data: "through" must be a whole number from ${Math.max(1, conversation.summaryThrough)} to ${n}.`,
+      );
+    }
+    this.db
+      .prepare(
+        `UPDATE assistant_conversations SET summary = ?, summary_through = ?
+          WHERE id = ? AND profile_id = ?`,
+      )
+      .run(text, through, id, this.profileId);
+    return this.requireConversation(id);
+  }
+
   removeConversation(id: string): void {
     const result = this.db
       .prepare("DELETE FROM assistant_conversations WHERE id = ? AND profile_id = ?")
@@ -833,7 +893,8 @@ export class ConversationStore {
   runtimeOptions(): AssistantRuntimeOptions {
     const row = this.db
       .prepare(
-        `SELECT context_tokens, temperature, top_p, top_k, repeat_penalty, idle_unload_minutes
+        `SELECT context_tokens, temperature, top_p, top_k, repeat_penalty, idle_unload_minutes,
+                auto_compact
            FROM assistant_settings WHERE profile_id = ?`,
       )
       .get(this.profileId) as
@@ -844,6 +905,7 @@ export class ConversationStore {
           top_k: number | null;
           repeat_penalty: number | null;
           idle_unload_minutes: number;
+          auto_compact: number;
         }
       | undefined;
     if (row === undefined) return DEFAULT_ASSISTANT_RUNTIME;
@@ -854,6 +916,7 @@ export class ConversationStore {
       topK: row.top_k,
       repeatPenalty: row.repeat_penalty,
       idleUnloadMinutes: row.idle_unload_minutes,
+      autoCompact: row.auto_compact === 1,
     });
   }
 
@@ -868,14 +931,15 @@ export class ConversationStore {
       .prepare(
         `INSERT INTO assistant_settings (profile_id, default_tier, chat_model_id, updated_at,
                                          context_tokens, temperature, top_p, top_k, repeat_penalty,
-                                         idle_unload_minutes)
-         VALUES (?, 'balance', NULL, ?, ?, ?, ?, ?, ?, ?)
+                                         idle_unload_minutes, auto_compact)
+         VALUES (?, 'balance', NULL, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (profile_id) DO UPDATE SET context_tokens = excluded.context_tokens,
                                                 temperature = excluded.temperature,
                                                 top_p = excluded.top_p,
                                                 top_k = excluded.top_k,
                                                 repeat_penalty = excluded.repeat_penalty,
                                                 idle_unload_minutes = excluded.idle_unload_minutes,
+                                                auto_compact = excluded.auto_compact,
                                                 updated_at = excluded.updated_at`,
       )
       .run(
@@ -887,6 +951,7 @@ export class ConversationStore {
         value.topK,
         value.repeatPenalty,
         value.idleUnloadMinutes,
+        value.autoCompact ? 1 : 0,
       );
     return value;
   }

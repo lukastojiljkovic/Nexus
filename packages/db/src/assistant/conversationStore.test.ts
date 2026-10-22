@@ -8,6 +8,7 @@ import {
   AssistantValidationError,
   ConversationStore,
   DEFAULT_ASSISTANT_RUNTIME,
+  MAX_CONVERSATION_SUMMARY_CHARS,
   MAX_CONVERSATION_TITLE_LENGTH,
   NexusDatabase,
   emptyAssistantExport,
@@ -398,6 +399,46 @@ describe("ConversationStore", () => {
     expect(rows.n).toBe(0);
   });
 
+  it("summarizes the head of a thread and keeps every message under it", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    const thread = store.createConversation("Dugo", NOW);
+    expect(thread).toMatchObject({ summary: null, summaryThrough: 0 });
+    for (const text of ["prvo", "drugo", "treće"]) {
+      store.appendTurn(thread.id, [{ role: "user", text }, { role: "assistant", text: `o ${text}` }], null, NOW);
+    }
+    const before = store.conversation(thread.id);
+    const summarized = store.setSummary(thread.id, "Korisnik je pitao o prvom i drugom.", 4);
+    expect(summarized).toMatchObject({ summary: "Korisnik je pitao o prvom i drugom.", summaryThrough: 4 });
+    // A summary is not a write by the user: the thread keeps its place in the list.
+    expect(summarized.updatedAt).toBe(before?.updatedAt);
+    expect(store.listMessages(thread.id)).toHaveLength(6);
+    // A later compaction covers more of the thread; the summary it writes replaces the last one.
+    expect(store.setSummary(thread.id, "Sve do trećeg.", 6)).toMatchObject({ summaryThrough: 6 });
+    expect(store.listConversations()[0]).toMatchObject({ summary: "Sve do trećeg.", summaryThrough: 6 });
+  });
+
+  it("refuses a summary that is empty, too long, or stands for messages the thread does not hold", () => {
+    const store = new ConversationStore(db.raw, createProfile());
+    const thread = store.createConversation("Dugo", NOW);
+    store.appendTurn(thread.id, [{ role: "user", text: "a" }, { role: "assistant", text: "b" }], null, NOW);
+    store.setSummary(thread.id, "Prvi deo.", 2);
+    const wrong: [string, number][] = [
+      ["   ", 2],
+      ["x".repeat(MAX_CONVERSATION_SUMMARY_CHARS + 1), 2],
+      ["Više nego što ima.", 3],
+      ["Unazad.", 1],
+      ["Ništa.", 0],
+      ["Pola.", 1.5],
+    ];
+    for (const [summary, through] of wrong) {
+      expect(() => store.setSummary(thread.id, summary, through), `${summary.slice(0, 20)} ${through}`).toThrow(
+        AssistantValidationError,
+      );
+    }
+    expect(() => store.setSummary("missing", "Nema.", 1)).toThrow(AssistantNotFoundError);
+    expect(store.conversation(thread.id)).toMatchObject({ summary: "Prvi deo.", summaryThrough: 2 });
+  });
+
   it("answers the model's own runtime and a fifteen-minute idle unload for a profile with no row", () => {
     const store = new ConversationStore(db.raw, createProfile());
     expect(store.runtimeOptions()).toEqual(DEFAULT_ASSISTANT_RUNTIME);
@@ -408,6 +449,7 @@ describe("ConversationStore", () => {
       topK: null,
       repeatPenalty: null,
       idleUnloadMinutes: 15,
+      autoCompact: true,
     });
   });
 
@@ -420,6 +462,7 @@ describe("ConversationStore", () => {
       topK: 40,
       repeatPenalty: 1.1,
       idleUnloadMinutes: 0,
+      autoCompact: false,
     };
     expect(store.setRuntimeOptions(options, NOW)).toEqual(options);
     expect(store.runtimeOptions()).toEqual(options);
@@ -447,6 +490,8 @@ describe("ConversationStore", () => {
       { idleUnloadMinutes: -5 },
       { idleUnloadMinutes: null },
       { temperature: Number.NaN },
+      { autoCompact: "yes" },
+      { autoCompact: null },
     ];
     for (const change of wrong) {
       expect(
@@ -481,6 +526,10 @@ describe("ConversationStore", () => {
     // A chosen model is DEVICE data - a file on this machine - so the section
     // carries the tier and says nothing about the choice.
     store.setChatModel("downloaded-model-q4_k_m", LATER);
+    // A summary is derived from the messages, which travel whole: the archive
+    // keeps its version, and the restored thread is summarized again when it
+    // next outgrows the window.
+    store.setSummary(conversation.id, "Pitanje o trajanju puta.", 1);
     const section = store.exportData();
 
     // The section is a plain, versioned value: it survives JSON, which is what an
@@ -495,6 +544,7 @@ describe("ConversationStore", () => {
     const [thread] = restored.listConversations();
     expect(thread?.title).toBe("Putovanje");
     expect(thread?.modelId).toBe("llama-3.2-3b-instruct-q4_k_m");
+    expect(thread).toMatchObject({ summary: null, summaryThrough: 0 });
     const messages = restored.listMessages(thread?.id ?? "");
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
     expect(messages[1]?.citations).toEqual([SAFETY_CITATION]);
