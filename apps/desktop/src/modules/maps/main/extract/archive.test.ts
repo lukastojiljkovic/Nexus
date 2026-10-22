@@ -1,9 +1,13 @@
 import { bytesToHeader, Compression, PMTiles, TileType, type Entry } from "pmtiles";
+import { gzipSync } from "node:zlib";
+
 import { describe, expect, it } from "vitest";
 
 import {
   HEADER_BYTES,
+  INFLATED_MAX_BYTES,
   decodeDirectory,
+  decompress,
   encodeDirectory,
   packDirectories,
   readHeader,
@@ -79,6 +83,12 @@ describe("a directory", () => {
     const gzipped = encodeDirectory(entries);
     expect(() => decodeDirectory(gzipped, Compression.Brotli)).toThrow(/compression 3/);
     expect(() => decodeDirectory(new Uint8Array([2, 0]), Compression.None)).toThrow(/ends early/);
+  });
+
+  it("refuses to inflate past the cap, so a few kilobytes cannot fill memory", () => {
+    const bomb = gzipSync(new Uint8Array(INFLATED_MAX_BYTES + 1));
+    expect(bomb.length).toBeLessThan(INFLATED_MAX_BYTES / 100);
+    expect(() => decompress(bomb, Compression.Gzip)).toThrow(/larger than/);
   });
 });
 

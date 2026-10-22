@@ -74,6 +74,13 @@ export const FETCH_GAP_BYTES = 64 * 1024;
 /** The most one request asks for, so a fetch held in memory before it is written stays bounded. */
 export const FETCH_MAX_BYTES = 16 * 1024 * 1024;
 
+/**
+ * How many levels of leaves below the root the plan follows: the `pmtiles`
+ * library's own limit, so an archive it would refuse to read is refused here
+ * too, and a leaf that points back at itself ends the plan instead of looping.
+ */
+const MAX_LEAF_DEPTH = 3;
+
 interface Located {
   readonly offset: number;
   readonly length: number;
@@ -107,7 +114,8 @@ export async function planExtract({ source, ranges, bounds }: ExtractInput): Pro
     });
   };
   visit(decodeDirectory(await bytesAt(source, head, header.rootDirectoryOffset, header.rootDirectoryLength), header.internalCompression), Infinity);
-  while (leaves.length > 0) {
+  for (let depth = 1; leaves.length > 0; depth += 1) {
+    if (depth > MAX_LEAF_DEPTH) throw new Error("The archive's directories nest deeper than a reader follows.");
     const batch = leaves;
     leaves = [];
     for (const group of coalesce(batch)) {

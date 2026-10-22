@@ -1,7 +1,7 @@
-import { PMTiles, zxyToTileId } from "pmtiles";
+import { Compression, PMTiles, zxyToTileId } from "pmtiles";
 import { describe, expect, it } from "vitest";
 
-import { HEADER_BYTES, readHeader, writeHeader } from "./archive.js";
+import { HEADER_BYTES, decodeDirectory, encodeDirectory, readHeader, writeHeader } from "./archive.js";
 import { rangesOf } from "./cover.js";
 import { allTiles, bufferReader, bufferSource, buildArchive, tileBytes } from "./fixtures.js";
 import { extractInto, planExtract, type ExtractPlan } from "./plan.js";
@@ -92,4 +92,29 @@ describe("cutting a region out of an archive", () => {
       /not clustered/,
     );
   });
+
+  it("refuses directories that nest deeper than a reader follows, a leaf that points at itself among them", async () => {
+    // A leaf whose one entry is a pointer to the leaf itself: its length is its own size.
+    let leaf = encodeDirectory([{ tileId: 0, runLength: 0, offset: 0, length: 0 }]);
+    while (leaf[0] === undefined || decodedLength(leaf) !== leaf.length) {
+      leaf = encodeDirectory([{ tileId: 0, runLength: 0, offset: 0, length: leaf.length }]);
+    }
+    const header = readHeader(source);
+    const looped = new Uint8Array(Buffer.concat([
+      writeHeader({
+        ...header,
+        rootDirectoryOffset: HEADER_BYTES,
+        rootDirectoryLength: leaf.length,
+        leafDirectoryOffset: HEADER_BYTES,
+        leafDirectoryLength: leaf.length,
+      }),
+      leaf,
+    ]));
+    await expect(planExtract({ source: bufferReader(looped), ranges, bounds: BOUNDS })).rejects.toThrow(/deeper/);
+  });
 });
+
+/** The length a single-entry directory names, read back from its own bytes. */
+function decodedLength(directory: Uint8Array): number {
+  return decodeDirectory(directory, Compression.Gzip)[0]?.length ?? -1;
+}

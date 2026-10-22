@@ -78,10 +78,26 @@ export function writeHeader(header: Header): Uint8Array {
   return bytes;
 }
 
+/**
+ * The most one directory or the metadata may inflate to. A policy value: far
+ * above anything the planet build stores, and low enough that a malformed or
+ * hostile archive cannot fill memory from a few kilobytes of gzip.
+ */
+export const INFLATED_MAX_BYTES = 64 * 1024 * 1024;
+
 /** `bytes` with the archive's internal compression undone. */
 export function decompress(bytes: Uint8Array, compression: Compression): Uint8Array {
   if (compression === Compression.None) return bytes;
-  if (compression === Compression.Gzip) return new Uint8Array(gunzipSync(bytes));
+  if (compression === Compression.Gzip) {
+    try {
+      return new Uint8Array(gunzipSync(bytes, { maxOutputLength: INFLATED_MAX_BYTES }));
+    } catch (failure) {
+      if ((failure as NodeJS.ErrnoException).code !== "ERR_BUFFER_TOO_LARGE") throw failure;
+      throw new Error(`The archive holds a directory larger than ${String(INFLATED_MAX_BYTES)} bytes.`, {
+        cause: failure,
+      });
+    }
+  }
   throw new Error(`The archive uses internal compression ${String(compression)}; only none and gzip are read.`);
 }
 
