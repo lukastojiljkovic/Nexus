@@ -16,6 +16,9 @@
  * one (`check:address` exists because of that), and this page addresses the
  * reader directly: „Spusti tačku", not „Spustio si tačku".
  */
+import type { RegionProblem } from "../shared/ipc.js";
+import type { Continent } from "./regions/names.js";
+
 export const sr = {
   page: {
     subtitle: "Karta Srbije koja radi bez interneta — pretraga mesta, tačke i merenje razdaljine.",
@@ -98,5 +101,63 @@ export const sr = {
   errors: {
     load: "Tačke nisu učitane.",
     mutate: "Izmena nije sačuvana.",
+  },
+  regions: {
+    close: "Zatvori karticu",
+    scope: "Šta se preuzima",
+    world: "Ceo svet",
+    continents: {
+      Africa: "Afrika",
+      Antarctica: "Antarktik",
+      Asia: "Azija",
+      Europe: "Evropa",
+      "North America": "Severna Amerika",
+      Oceania: "Okeanija",
+      "Seven seas (open ocean)": "Otvoreno more",
+      "South America": "Južna Amerika",
+    } satisfies Record<Continent, string>,
+    detail: "Detaljnost",
+    details: {
+      overview: "Pregled",
+      towns: "Naselja i putevi",
+      full: "Puna detaljnost",
+    },
+    detailHints: {
+      overview: "Gradovi i glavni putevi. Najmanja datoteka.",
+      towns: "Gradovi, sela i većina puteva.",
+      full: "Ulice i zgrade. Najveća datoteka.",
+    },
+    notInstalled: "Mapa nije preuzeta.",
+    installed: "Preuzeto: {detail}, {size}, podaci od {date}.",
+    update: "Dostupni su noviji podaci, od {date}.",
+    preparing: "Priprema se preuzimanje…",
+    downloading: "Preuzima se: {received} od {total}.",
+    paused: "Pauzirano: {received} od {total}.",
+    failed: "Preuzimanje je stalo.",
+    otherBusy: "Preuzima se druga mapa: {name}.",
+    measuring: "Računa se veličina…",
+    download: "Preuzmi ({size})",
+    updateAction: "Ažuriraj ({size})",
+    replace: "Zameni ({size})",
+    show: "Prikaži na mapi",
+    remove: "Ukloni",
+    pause: "Pauziraj",
+    resume: "Nastavi",
+    cancel: "Otkaži preuzimanje",
+    removeTitle: "Ukloniti mapu?",
+    removeBody: "Mapa „{name}“ ({size}) se briše sa diska. Može se ponovo preuzeti.",
+    problems: {
+      mode: "Preuzimanje radi samo u mrežnom režimu Preuzimanja. Promeni režim u Podešavanjima.",
+      url: "Ova adresa nije dozvoljena u ovom pokretanju.",
+      network: "Server sa mapama nije dostupan. Proveri vezu i pokušaj ponovo.",
+      "build-changed": "Podaci na serveru su se promenili tokom preuzimanja. Pokreni ga ponovo.",
+      hash: "Preuzeta datoteka nije prošla proveru i obrisana je.",
+      "no-build": "Server ne nudi mapu koju ova verzija Nexusa može da prikaže.",
+      "too-large": "Region je prevelik za ovu detaljnost. Izaberi manju detaljnost ili manji region.",
+      "no-space": "Na disku nema dovoljno mesta za ovu mapu.",
+      io: "Mapa nije mogla da se zapiše na disk.",
+      busy: "Već se preuzima druga mapa.",
+      region: "Ovaj region nije na spisku mape.",
+    } satisfies Record<RegionProblem, string>,
   },
 };

@@ -1,0 +1,78 @@
+/* REFERENCE (the MAPS region card, M5). Tokens exclusively — raw colour values are
+ * forbidden outside @nexus/tokens, and this stylesheet is checked by the same gates
+ * the shell's own are (`check:colours`, `check:tokens`, `check:layers`).
+ *
+ * Class prefix `maps-region`, for the reason the shell's split states: a rule belongs
+ * to the module whose prefix it carries. The card places no layer and no position of
+ * its own; the page decides where it sits, and it scrolls inside its container when
+ * it is taller than that.
+ */
+
+.maps-region {
+  inline-size: min(340px, 100%);
+  max-block-size: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.maps-region__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+
+.maps-region__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  min-inline-size: 0;
+}
+
+.maps-region__title {
+  margin: 0;
+  font-size: var(--nx-font-size-title);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+}
+
+.maps-region__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.maps-region__status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.maps-region__line {
+  margin: 0;
+}
+
+.maps-region__track {
+  display: block;
+  block-size: 0.5rem;
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-round);
+  background: var(--nx-surface-sunken);
+  overflow: hidden;
+}
+
+.maps-region__bar {
+  display: block;
+  block-size: 100%;
+  background: var(--nx-accent);
+}
+
+.maps-region__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+  align-items: center;
+}
