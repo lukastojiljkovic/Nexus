@@ -14,6 +14,7 @@ import {
   Select,
   TextArea,
   TextField,
+  type AsyncState,
 } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { activeLocale, declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
@@ -21,6 +22,7 @@ import { SafetyNotice } from "../../../renderer/src/safetyNotice.js";
 import { manifest } from "../shared/manifest.js";
 import type {
   AssistantKnowledgeView,
+  AssistantProbeView,
   AssistantSetupView,
   AssistantSettingsView,
   AssistantThreadView,
@@ -50,7 +52,7 @@ import {
   type ThreadToolLine,
 } from "./thread.js";
 import { placeOf, turnLocations } from "./turnLocations.js";
-import { effectCopy, loadPhase, webStatus } from "./surfaceStates.js";
+import { effectCopy, hasAnsweringModel, loadPhase, webStatus } from "./surfaceStates.js";
 import "./assistant.css";
 
 /**
@@ -137,6 +139,7 @@ export function AssistantSurface({
 }) {
   const [view, setView] = useState<AssistantView | null>(null);
   const [setup, setSetup] = useState<AssistantSetupView | null>(null);
+  const [probe, setProbe] = useState<AsyncState<AssistantProbeView>>({ status: "loading" });
   const [thread, setThread] = useState<AssistantThreadView | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** True when the first load failed; the page then says so and offers a retry, rather than a skeleton. */
@@ -198,12 +201,29 @@ export function AssistantSurface({
     }
   }, [profileId]);
 
-  /** Loads both reads again, from the first load and from the retry the failure offers. */
+  /**
+   * The hardware probe and the picks, read beside the page rather than before it:
+   * the probe loads the native runtime in the model worker, which takes seconds on
+   * a cold start, and only the models pane draws what it found. A failure is that
+   * pane's to say; the rest of the page works without it.
+   */
+  const refreshProbe = useCallback(async () => {
+    setProbe({ status: "loading" });
+    try {
+      setProbe({ status: "ready", data: await window.nexus.modules.assistant.probe({ profileId }) });
+    } catch (failure) {
+      setProbe({ status: "failed" });
+      console.error("Nexus: the assistant could not read this computer's hardware:", failure);
+    }
+  }, [profileId]);
+
+  /** Loads every read again, from the first load and from the retry the failure offers. */
   const reload = useCallback(() => {
     setLoadFailed(false);
     void refresh();
     void refreshSetup();
-  }, [refresh, refreshSetup]);
+    void refreshProbe();
+  }, [refresh, refreshSetup, refreshProbe]);
 
   useEffect(() => {
     reload();
@@ -478,9 +498,8 @@ export function AssistantSurface({
   // A model is ready when one can answer: the tier's own pick, or the model the
   // user chose by hand - which serves no tier at all, and is exactly the case
   // this page has to be able to open a conversation for.
-  const modelReady =
-    setup !== null &&
-    setup.installed.some((entry) => entry.chosen || entry.servesTiers.length > 0);
+  const probed = probe.status === "ready" ? probe.data : null;
+  const modelReady = setup !== null && hasAnsweringModel(setup.installed, probed);
   const conversation = thread?.conversation ?? null;
   /** The question the dialog draws: the oldest one a parked tool is waiting on. */
   const confirm = headConfirm(confirms);
@@ -635,7 +654,7 @@ export function AssistantSurface({
 
           <div className="asst__main">
             {modelsOpen || !modelReady ? (
-              <ModelPanel profileId={profileId} setup={setup} onSetup={setSetup} />
+              <ModelPanel profileId={profileId} setup={setup} probe={probe} onSetup={setSetup} />
             ) : conversation === null ? (
               <EmptyState
                 title={copy.thread.emptyTitle}

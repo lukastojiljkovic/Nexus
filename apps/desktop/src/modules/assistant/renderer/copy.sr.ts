@@ -336,6 +336,8 @@ export const sr = {
     noGpu: "Bez grafičke kartice — model radi na procesoru.",
     picksTitle: "Preporuka za ovaj računar",
     unavailable: "Ponuda modela trenutno nije dostupna.",
+    probing: "Proveravamo hardver ovog računara i biramo modele koji mu odgovaraju…",
+    probeFailed: "Hardver ovog računara nije mogao da se pročita, pa preporuka za sada nema.",
     installed: "Instaliran",
     serves: "Služi",
     useForAnswers: "Koristi za odgovore",

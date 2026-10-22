@@ -120,6 +120,8 @@ let dir: string;
 let db: NexusDatabase;
 let profileId: string;
 let unloads = 0;
+/** How many times the host was asked for the hardware reading: the probe that loads the native runtime. */
+let hardwareReads = 0;
 let loadError: Error | null = null;
 /** The models on this machine, written by the tests that add or remove one. */
 let installedEntries: ModelEntry[] = [];
@@ -172,6 +174,7 @@ function fakeHost(): ModelHost {
   ];
   return {
     async hardware(): Promise<HardwareProfile> {
+      hardwareReads += 1;
       return HARDWARE;
     },
     async catalogue(): Promise<readonly ModelEntry[]> {
@@ -280,6 +283,7 @@ beforeEach(() => {
   // it, and the `tasks.create` tool this file drives writes through that store.
   new TaskListStore(db.raw, profileId).ensureInbox(new Date(NOW).toISOString());
   unloads = 0;
+  hardwareReads = 0;
   loadError = null;
   installedEntries = [ENTRY];
   loaded = [];
@@ -971,6 +975,31 @@ describe("the assistant module through the kit", () => {
       conversationId: created.conversations[0]?.id ?? "",
     })) as { messages: unknown[] };
     expect(thread.messages).toEqual([]);
+  });
+
+  it("answers setup from the disk alone, without waiting for the hardware probe", async () => {
+    const host = harness();
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as Record<string, unknown>;
+    expect(hardwareReads).toBe(0);
+    expect(view["installed"]).toEqual([{ model: ENTRY, chosen: false }]);
+    expect(Object.keys(view)).not.toContain("hardware");
+  });
+
+  it("reads the hardware and the picks in probe, and offers the picks for download", async () => {
+    installedEntries = [];
+    const host = harness();
+    await host.dispatch("assistant:setup", TRUSTED, { profileId });
+    // A pick nobody has been shown yet cannot be named by a download.
+    await expect(
+      host.dispatch("assistant:downloadModel", TRUSTED, { profileId, modelId: ENTRY.id }),
+    ).rejects.toThrow(/was offered/);
+    const probe = await host.dispatch("assistant:probe", TRUSTED, { profileId });
+    expect(probe).toEqual({
+      hardware: HARDWARE,
+      recommendations: [{ tier: "balance", model: ENTRY, reason: { sr: "Sredina.", en: "The middle." } }],
+      unavailable: null,
+    });
+    await host.dispatch("assistant:downloadModel", TRUSTED, { profileId, modelId: ENTRY.id });
   });
 
   it("reports the chosen model on the setup view, and that a tier clears the choice", async () => {

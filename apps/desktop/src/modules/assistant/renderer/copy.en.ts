@@ -325,6 +325,8 @@ export const en: typeof sr = {
     noGpu: "No graphics card — the model runs on the processor.",
     picksTitle: "The picks for this machine",
     unavailable: "The model list is not available right now.",
+    probing: "Reading this computer's hardware and picking the models that fit it…",
+    probeFailed: "This computer's hardware could not be read, so there are no picks for now.",
     installed: "Installed",
     serves: "Serves",
     useForAnswers: "Use for answers",

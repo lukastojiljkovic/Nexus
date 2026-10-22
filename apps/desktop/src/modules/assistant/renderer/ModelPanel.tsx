@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Button, Card, Chip, ConfirmDialog, EmptyState, ListRow, TextField } from "@nexus/ui";
+import { Button, Card, Chip, ConfirmDialog, EmptyState, ListRow, TextField, type AsyncState } from "@nexus/ui";
 import type { ModelEntry, ModelTier } from "@nexus/core";
 import { ExternalLink } from "../../../renderer/src/moduleKit/ExternalLink.js";
 import { activeLocale, numberFormat } from "../../../renderer/src/moduleKit/moduleSurface.js";
-import type { AssistantSetupView } from "../shared/ipc.js";
+import type { AssistantProbeView, AssistantSetupView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 import { openAppLocation } from "./location.js";
+import { pickInstalled, servesTiers } from "./surfaceStates.js";
 
 /**
  * THE MODELS AND SETUP PANE (ADR-106 item 6): what this machine can run, what it
@@ -15,7 +16,9 @@ import { openAppLocation } from "./location.js";
  * is the runtime's own logic made visible: the picks are computed from the RAM
  * and the card this machine has, so the numbers they were computed from are
  * shown above them - a recommendation a reader cannot check is a recommendation
- * they have to take on faith.
+ * they have to take on faith. Both come from the probe (`AssistantProbeView`),
+ * which answers after the rest of the pane, so until it does the pane says it is
+ * reading the machine, and the shelf below works already.
  *
  * **A download is offered only where it can happen.** The runtime refuses
  * outside the `downloads` network mode (ADR-092), so this pane says WHICH mode
@@ -46,10 +49,12 @@ type PanelCard = "setup" | "installed" | "search";
 export function ModelPanel({
   profileId,
   setup,
+  probe,
   onSetup,
 }: {
   readonly profileId: string;
   readonly setup: AssistantSetupView;
+  readonly probe: AsyncState<AssistantProbeView>;
   readonly onSetup: (view: AssistantSetupView) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -98,78 +103,87 @@ export function ModelPanel({
     ) : null;
 
   const download = setup.download;
+  const probed = probe.status === "ready" ? probe.data : null;
 
   return (
     <div className="asst__models">
       <Card className="asst__card" title={copy.setup.title} aria-busy={working?.card === "setup" || undefined}>
         <p className="nx-hint">{copy.setup.intro}</p>
-        <div className="asst__facts">
-          <span className="nx-hint">{copy.setup.hardwareTitle}</span>
-          <span>{`${copy.setup.ram}: ${formatBytes(setup.hardware.totalRamBytes)}`}</span>
-          <span>{`${copy.setup.cpu}: ${String(setup.hardware.cpuThreads)}`}</span>
-          <span>
-            {setup.hardware.gpus.length === 0
-              ? copy.setup.noGpu
-              : `${copy.setup.gpu}: ${setup.hardware.gpus
-                  .map((gpu) => `${gpu.name} (${formatBytes(gpu.vramBytes)})`)
-                  .join(", ")}`}
-          </span>
-        </div>
+        {probed === null ? (
+          <p className="nx-hint" role="status">
+            {probe.status === "failed" ? copy.setup.probeFailed : copy.setup.probing}
+          </p>
+        ) : (
+          <>
+            <div className="asst__facts">
+              <span className="nx-hint">{copy.setup.hardwareTitle}</span>
+              <span>{`${copy.setup.ram}: ${formatBytes(probed.hardware.totalRamBytes)}`}</span>
+              <span>{`${copy.setup.cpu}: ${String(probed.hardware.cpuThreads)}`}</span>
+              <span>
+                {probed.hardware.gpus.length === 0
+                  ? copy.setup.noGpu
+                  : `${copy.setup.gpu}: ${probed.hardware.gpus
+                      .map((gpu) => `${gpu.name} (${formatBytes(gpu.vramBytes)})`)
+                      .join(", ")}`}
+              </span>
+            </div>
 
-        <div className="asst__picks">
-          <span className="nx-eyebrow">{copy.setup.picksTitle}</span>
-          {setup.recommendations.length === 0 ? (
-            <p className="nx-hint">
-              {setup.unavailable === null
-                ? copy.setup.unavailable
-                : setup.unavailable[activeLocale()]}
-            </p>
-          ) : (
-            setup.recommendations.map((pick) => (
-              <ListRow
-                key={pick.tier}
-                leading={
-                  <span className="asst__tier">
-                    <Chip>{tierLabel(pick.tier)}</Chip>
-                  </span>
-                }
-                trailing={
-                  pick.installed ? (
-                    <Chip variant="data">{copy.setup.installed}</Chip>
-                  ) : (
-                    <span className="asst__actions">
-                      {workingHint(`download:${pick.model.id}`)}
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        disabled={busy || !setup.downloadsAllowed}
-                        onClick={() =>
-                          void run("setup", `download:${pick.model.id}`, () =>
-                            window.nexus.modules.assistant.downloadModel({
-                              profileId,
-                              modelId: pick.model.id,
-                            }),
-                          )
-                        }
-                      >
-                        {copy.setup.download}
-                      </Button>
+            <div className="asst__picks">
+              <span className="nx-eyebrow">{copy.setup.picksTitle}</span>
+              {probed.recommendations.length === 0 ? (
+                <p className="nx-hint">
+                  {probed.unavailable === null
+                    ? copy.setup.unavailable
+                    : probed.unavailable[activeLocale()]}
+                </p>
+              ) : (
+                probed.recommendations.map((pick) => (
+                  <ListRow
+                    key={pick.tier}
+                    leading={
+                      <span className="asst__tier">
+                        <Chip>{tierLabel(pick.tier)}</Chip>
+                      </span>
+                    }
+                    trailing={
+                      pickInstalled(setup.installed, pick.model.id) ? (
+                        <Chip variant="data">{copy.setup.installed}</Chip>
+                      ) : (
+                        <span className="asst__actions">
+                          {workingHint(`download:${pick.model.id}`)}
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            disabled={busy || !setup.downloadsAllowed}
+                            onClick={() =>
+                              void run("setup", `download:${pick.model.id}`, () =>
+                                window.nexus.modules.assistant.downloadModel({
+                                  profileId,
+                                  modelId: pick.model.id,
+                                }),
+                              )
+                            }
+                          >
+                            {copy.setup.download}
+                          </Button>
+                        </span>
+                      )
+                    }
+                  >
+                    <span className="asst__pick">
+                      <span className="asst__pick-name">{pick.model.title}</span>
+                      <span className="nx-hint">
+                        {`${copy.setup.size}: ${formatBytes(pick.model.sizeBytes)} · ${copy.setup.licence}: `}
+                        <ExternalLink href={pick.model.licence.url}>{pick.model.licence.name}</ExternalLink>
+                      </span>
+                      <span className="nx-hint">{pick.reason[activeLocale()]}</span>
                     </span>
-                  )
-                }
-              >
-                <span className="asst__pick">
-                  <span className="asst__pick-name">{pick.model.title}</span>
-                  <span className="nx-hint">
-                    {`${copy.setup.size}: ${formatBytes(pick.model.sizeBytes)} · ${copy.setup.licence}: `}
-                    <ExternalLink href={pick.model.licence.url}>{pick.model.licence.name}</ExternalLink>
-                  </span>
-                  <span className="nx-hint">{pick.reason[activeLocale()]}</span>
-                </span>
-              </ListRow>
-            ))
-          )}
-        </div>
+                  </ListRow>
+                ))
+              )}
+            </div>
+          </>
+        )}
 
         {download !== null && (
           <div className="asst__download" role="status">
@@ -260,9 +274,9 @@ export function ModelPanel({
               leading={<span className="asst__pick-name">{entry.model.title}</span>}
               trailing={
                 <span className="asst__actions">
-                  {entry.servesTiers.length > 0 && (
+                  {servesTiers(probed, entry.model.id).length > 0 && (
                     <Chip variant="data">
-                      {`${copy.setup.serves}: ${entry.servesTiers.map(tierLabel).join(", ")}`}
+                      {`${copy.setup.serves}: ${servesTiers(probed, entry.model.id).map(tierLabel).join(", ")}`}
                     </Chip>
                   )}
                   {entry.chosen ? (

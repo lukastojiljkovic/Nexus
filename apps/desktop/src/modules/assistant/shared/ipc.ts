@@ -148,17 +148,34 @@ export interface AssistantView {
   readonly knowledge: AssistantKnowledgeView;
 }
 
-/** One of the three machine picks, with what this profile has of it. */
+/** One of the three machine picks. Whether it is installed is the setup view's to say; the page joins the two. */
 export interface AssistantRecommendationView {
   readonly tier: ModelTier;
   readonly model: ModelEntry;
   /** Why this one, in the user's language - the runtime's own sentence. */
   readonly reason: AssistantText;
-  readonly installed: boolean;
 }
 
 /**
- * One installed model, and the tiers it is the current pick for.
+ * What the hardware probe found, and the three picks made from it.
+ *
+ * Its own read, apart from the setup view, because the probe loads the native
+ * runtime in the model worker: a cold start measured 17.3 s on the maintainer's
+ * laptop (the `node-llama-cpp` import), a warm one 1.0 to 1.5 s (the import, then
+ * the Vulkan backend). Nothing else the page draws needs it, so the page draws
+ * first and fills this in when it answers. It is read once per session: the
+ * runtime caches the reading, and the picks follow from it and the bundled
+ * catalogue alone.
+ */
+export interface AssistantProbeView {
+  readonly hardware: HardwareProfile;
+  /** Empty when nothing fits; `unavailable` then carries the runtime's sentence. */
+  readonly recommendations: readonly AssistantRecommendationView[];
+  readonly unavailable: AssistantText | null;
+}
+
+/**
+ * One installed model. The tiers it serves are the probe's picks, joined on the page.
  *
  * There is no "installed at" field, and the reason is a fact about the contract
  * rather than an omission: `ModelHost.installed()` answers `ModelEntry[]`, which
@@ -167,8 +184,6 @@ export interface AssistantRecommendationView {
  */
 export interface AssistantInstalledView {
   readonly model: ModelEntry;
-  /** Which of the three tiers this model serves on THIS machine, in tier order. */
-  readonly servesTiers: readonly ModelTier[];
   /**
    * True on the one model this profile answers with by hand.
    *
@@ -179,12 +194,8 @@ export interface AssistantInstalledView {
   readonly chosen: boolean;
 }
 
-/** Everything the setup and models screens read. */
+/** Everything the setup and models screens read from the disk and the profile: no probe, so it answers at once. */
 export interface AssistantSetupView {
-  readonly hardware: HardwareProfile;
-  /** Empty when nothing fits; `unavailable` then carries the runtime's sentence. */
-  readonly recommendations: readonly AssistantRecommendationView[];
-  readonly unavailable: AssistantText | null;
   readonly installed: readonly AssistantInstalledView[];
   /** The last Hugging Face search's results, or `null` when none was run this session. */
   readonly search: readonly ModelEntry[] | null;
@@ -369,6 +380,7 @@ type AssistantOps = {
   stop: { request: StopPayload; response: null };
   answerConfirm: { request: AnswerConfirmPayload; response: null };
   setup: { request: ProfilePayload; response: AssistantSetupView };
+  probe: { request: ProfilePayload; response: AssistantProbeView };
   searchModels: { request: SearchModelsPayload; response: AssistantSetupView };
   importModel: { request: ProfilePayload; response: AssistantSetupView };
   downloadModel: { request: ModelIdPayload; response: AssistantSetupView };
@@ -403,6 +415,7 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "stop",
   "answerConfirm",
   "setup",
+  "probe",
   "searchModels",
   "importModel",
   "downloadModel",

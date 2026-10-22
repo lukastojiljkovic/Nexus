@@ -41,7 +41,7 @@ import {
   type AssistantKnowledgeView,
   type AssistantMessageView,
   type AssistantPollView,
-  type AssistantRecommendationView,
+  type AssistantProbeView,
   type AssistantSettingsView,
   type AssistantSetupView,
   type AssistantSpeechLanguage,
@@ -232,22 +232,11 @@ export function register(host: ModuleHostSurface): void {
   }
 
   async function setupView(profile: AssistantProfile): Promise<AssistantSetupView> {
-    // The three picks are read once per profile (the probe loads the native
-    // addon), and the installed list is read fresh: a download that just finished
-    // must show up on the next poll without a restart.
-    const recommendations = await profile.recommendations();
+    // Read from the disk and the profile alone, so it answers at once: the
+    // hardware probe is `probeView`'s, and the page joins the two. The installed
+    // list is read fresh, because a download that just finished must show up on
+    // the next poll without a restart.
     const available = await profile.installedEntries();
-    const installedIds = new Set(available.map((entry) => entry.id));
-    const unavailable =
-      recommendations.length === 0
-        ? (noRecommendation(await profile.hardware(), await profile.catalogue()) ?? null)
-        : null;
-    const recommendationsView: AssistantRecommendationView[] = recommendations.map((pick) => ({
-      tier: pick.tier,
-      model: pick.model,
-      reason: pick.reason,
-      installed: installedIds.has(pick.model.id),
-    }));
     // The choice the profile's page may draw, and the EFFECTIVE one: a stored id
     // that names a model this machine no longer has (or that is not a chat
     // model) marks nothing, so the page reads the tier as what answers - the
@@ -261,18 +250,12 @@ export function register(host: ModuleHostSurface): void {
           )?.id ?? null);
     const installedView: AssistantInstalledView[] = available.map((entry) => ({
       model: entry,
-      servesTiers: recommendations
-        .filter((pick) => pick.model.id === entry.id)
-        .map((pick) => pick.tier),
       chosen: entry.id === chosenId,
     }));
     // Every entry main produced is remembered, so `downloadModel` can only name
     // one this process offered.
-    profile.offer([...recommendations.map((pick) => pick.model), ...available]);
+    profile.offer(available);
     return {
-      hardware: await profile.hardware(),
-      recommendations: recommendationsView,
-      unavailable,
       installed: installedView,
       search: profile.searchResults(),
       download: profile.downloadView(),
@@ -280,6 +263,21 @@ export function register(host: ModuleHostSurface): void {
       chatModelId: chosenId,
       downloadsAllowed: profile.downloadsAllowed(),
       networkMode: services().networkMode(),
+    };
+  }
+
+  /** The hardware reading and the picks made from it: slow the first time, because the probe loads the native runtime. */
+  async function probeView(profile: AssistantProfile): Promise<AssistantProbeView> {
+    const hardware = await profile.hardware();
+    const recommendations = await profile.recommendations();
+    profile.offer(recommendations.map((pick) => pick.model));
+    return {
+      hardware,
+      recommendations: recommendations.map(({ tier, model, reason }) => ({ tier, model, reason })),
+      unavailable:
+        recommendations.length === 0
+          ? (noRecommendation(hardware, await profile.catalogue()) ?? null)
+          : null,
     };
   }
 
@@ -628,6 +626,11 @@ export function register(host: ModuleHostSurface): void {
   ctx.handle("setup", async (payload, call) => {
     const profileId = call.as.asId(payload.profileId, "profileId");
     return await setupView(profileFor(call, profileId));
+  });
+
+  ctx.handle("probe", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    return await probeView(profileFor(call, profileId));
   });
 
   ctx.handle("searchModels", async (payload, call) => {

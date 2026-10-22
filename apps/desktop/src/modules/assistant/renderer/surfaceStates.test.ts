@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { copy } from "./copy.js";
-import { effectCopy, loadPhase, webStatus, type ConfirmEffect } from "./surfaceStates.js";
+import {
+  effectCopy,
+  loadPhase,
+  hasAnsweringModel,
+  pickInstalled,
+  servesTiers,
+  webStatus,
+  type ConfirmEffect,
+} from "./surfaceStates.js";
 
 /**
  * THE PAGE'S LOAD AND ITS PERMISSION COPY ARE DECIDED HERE, NOT IN THE JSX.
@@ -56,5 +64,48 @@ describe("the status row's web search", () => {
 
   it("is blocked when given but the network mode refuses it", () => {
     expect(webStatus({ enabled: true, modeAllows: false })).toBe("blocked");
+  });
+});
+
+/**
+ * The setup read answers from the disk and the probe answers seconds later, so
+ * the page joins the two itself. The defect these pin is the setup screen
+ * flashing at everyone who has a model, every time the page opens.
+ */
+describe("which model answers, before and after the hardware probe", () => {
+  const chat = (id: string, chosen = false) => ({ model: { id, capabilities: ["chat"] }, chosen });
+  const embedding = { model: { id: "embed", capabilities: ["embedding"] }, chosen: false };
+  const probe = {
+    recommendations: [
+      { tier: "balance" as const, model: { id: "pick" } },
+      { tier: "speed" as const, model: { id: "pick" } },
+    ],
+  };
+
+  it("is ready with a chosen model, whatever the probe says", () => {
+    expect(hasAnsweringModel([chat("mine", true)], null)).toBe(true);
+    expect(hasAnsweringModel([chat("mine", true)], probe)).toBe(true);
+  });
+
+  it("takes an installed chat model to answer until the probe has said which tier it serves", () => {
+    expect(hasAnsweringModel([chat("other")], null)).toBe(true);
+    expect(hasAnsweringModel([embedding], null)).toBe(false);
+    expect(hasAnsweringModel([], null)).toBe(false);
+  });
+
+  it("is ready after the probe only when an installed model is a tier's pick", () => {
+    expect(hasAnsweringModel([chat("pick")], probe)).toBe(true);
+    expect(hasAnsweringModel([chat("other")], probe)).toBe(false);
+  });
+
+  it("names the tiers an installed model serves, in the probe's order, and none before it answers", () => {
+    expect(servesTiers(probe, "pick")).toEqual(["balance", "speed"]);
+    expect(servesTiers(probe, "other")).toEqual([]);
+    expect(servesTiers(null, "pick")).toEqual([]);
+  });
+
+  it("marks a pick installed when the disk has it", () => {
+    expect(pickInstalled([chat("pick")], "pick")).toBe(true);
+    expect(pickInstalled([chat("other")], "pick")).toBe(false);
   });
 });
