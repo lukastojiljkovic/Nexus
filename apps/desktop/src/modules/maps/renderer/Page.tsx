@@ -58,6 +58,7 @@ import {
 // restated them would break on the next MapLibre minor. Nothing in this module
 // uses a MapLibre control, so what arrives is one canvas and no chrome.
 import "maplibre-gl/dist/maplibre-gl.css";
+import "./mapLibre.js";
 import "./maps.css";
 
 /**

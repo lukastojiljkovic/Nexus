@@ -79,6 +79,13 @@ explored body by body.
 - **The Nonograms tab opens.** Its zoom readout asked the number formatter for
   a pixel unit no formatter offers, so the tab showed "Screen failed to load"
   from 2.0.0 on. The size is now printed with "px" after it.
+- **The map draws in the installed app.** MapLibre names its worker only when
+  it is loaded over http, so at `file://` it started none that worked, and the
+  outline and every region stayed blank; only development builds drew. The
+  app now names the bundled worker.
+- **Map regions and planet textures load.** The page read a region's file with
+  `fetch` and a planet's image into WebGL, both from another origin than its
+  own, and the two schemes refused any such read. They now allow it.
 - **The Tuner opens.** Signals' Tuner tab failed the same way over a hertz
   unit; frequencies are now printed with "Hz" after them.
 - **Voice input and output.** The voice worker's process loaded a module that
