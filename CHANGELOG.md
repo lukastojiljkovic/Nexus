@@ -98,6 +98,10 @@ explored body by body.
   table of contents no pack builder writes, so the seven published content
   packs (car help, make by hand, the English and Serbian references, survival,
   and the English and Serbian tales) were never indexed. They are now.
+- **A model download shows its progress.** The models pane drew the answer that
+  started a download and never read again, so it stayed at 0 MB and a finished
+  model appeared only once the page was opened again. It now follows the
+  download each second until it ends.
 - **The assistant's page opens at once.** It waited for the hardware probe
   before drawing anything, and its status row loaded the embedding model only
   to name it. The page now draws the chat while the probe runs, and the row

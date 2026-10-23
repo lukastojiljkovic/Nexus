@@ -57,7 +57,7 @@ import {
   type ThreadToolLine,
 } from "./thread.js";
 import { placeOf, turnLocations } from "./turnLocations.js";
-import { effectCopy, hasAnsweringModel, loadPhase, webStatus } from "./surfaceStates.js";
+import { downloadRunning, effectCopy, hasAnsweringModel, loadPhase, webStatus } from "./surfaceStates.js";
 import "./assistant.css";
 
 /**
@@ -235,6 +235,15 @@ export function AssistantSurface({
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // A running model download is followed by reading `setup` each second, the way
+  // Maps follows a region: the bytes, then the model in the installed list.
+  const downloading = downloadRunning(setup);
+  useEffect(() => {
+    if (!downloading) return;
+    const handle = window.setInterval(() => void refreshSetup(), 1000);
+    return () => window.clearInterval(handle);
+  }, [downloading, refreshSetup]);
 
   const openConversation = useCallback(
     async (conversationId: string) => {

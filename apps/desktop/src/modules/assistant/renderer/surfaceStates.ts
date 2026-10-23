@@ -59,6 +59,17 @@ export function hasAnsweringModel(installed: readonly InstalledModel[], probe: P
   return installed.some((entry) => servesTiers(probe, entry.model.id).length > 0);
 }
 
+/**
+ * Whether a model download is running, so the page reads `setup` again until it
+ * ends. Main has no push: its progress, its end (the model joins the installed
+ * list) and its failure reach the page only through the next read.
+ */
+export function downloadRunning(
+  setup: { readonly download: { readonly status: "running" | "stopped" | "failed" } | null } | null,
+): boolean {
+  return setup?.download?.status === "running";
+}
+
 /** What a parked tool's permission asks the user to notice: the app, a page, or the internet. */
 export type ConfirmEffect = "write" | "navigate" | "network";
 

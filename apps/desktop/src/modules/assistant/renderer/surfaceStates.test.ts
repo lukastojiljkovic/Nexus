@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { copy } from "./copy.js";
 import {
+  downloadRunning,
   effectCopy,
   loadPhase,
   hasAnsweringModel,
@@ -107,5 +108,25 @@ describe("which model answers, before and after the hardware probe", () => {
   it("marks a pick installed when the disk has it", () => {
     expect(pickInstalled([chat("pick")], "pick")).toBe(true);
     expect(pickInstalled([chat("other")], "pick")).toBe(false);
+  });
+});
+
+/**
+ * Main has no push, so the page reads `setup` again while a model downloads. The
+ * defect this pins: the page drew the reply that started the download, "0 MB",
+ * and never read again, so the bytes, the end and a failure all went unseen.
+ */
+describe("a model download", () => {
+  const row = (status: "running" | "stopped" | "failed") => ({ download: { status } });
+
+  it("is followed while it runs", () => {
+    expect(downloadRunning(row("running"))).toBe(true);
+  });
+
+  it("is not followed once it stops, fails or ends, or before the page has read it", () => {
+    expect(downloadRunning(row("stopped"))).toBe(false);
+    expect(downloadRunning(row("failed"))).toBe(false);
+    expect(downloadRunning({ download: null })).toBe(false);
+    expect(downloadRunning(null)).toBe(false);
   });
 });
