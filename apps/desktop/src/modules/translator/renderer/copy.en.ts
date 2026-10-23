@@ -69,7 +69,7 @@ export const en: typeof sr = {
     search: "Search languages",
     recent: "Recent",
     all: "All languages",
-    noLanguage: "No language matches „{query}“.",
+    noLanguage: "No language matches “{query}”.",
     swap: "Swap languages",
     model: "Model",
     modelHint: "Larger models translate better and more slowly.",
@@ -90,7 +90,7 @@ export const en: typeof sr = {
     translateFailed: "The translation stopped.",
     noModel: {
       title: "No translation model is installed yet",
-      body: "The translator uses one of three models: „nllb-600m“, „nllb-1.3b“ or „nllb-3.3b“. Install one in Settings, on the „Content packs“ card, and come back to this page.",
+      body: "The translator uses one of three models: “nllb-600m”, “nllb-1.3b” or “nllb-3.3b”. Install one in Settings, on the “Content packs” card, and come back to this page.",
     },
   },
   notInstalled: {
