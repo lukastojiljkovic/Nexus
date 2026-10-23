@@ -330,7 +330,9 @@ again; 2.5 refuses it with `"format-unknown"`, as §2 says of any format it does
 not read. The format-2 entries of the packs already published are written from
 format 1 by `catalogue.mjs --from-v1`, which reads each pinned manifest for its
 floor and refuses any file whose published name is not the one the rule
-derives. Their assets are not uploaded again.
+derives. Their assets are not uploaded again. The six `translate-*` packs are
+left out of format 2, because 2.5 has no reader for them ([ADR-119](119-translator-on-nllb.md) §9);
+format 1 keeps them for 2.1.
 
 **Rejected:** raising the cap (2.1 clients keep the old one, so they would
 still lose the list); one catalogue per kind (more signed documents, the same
