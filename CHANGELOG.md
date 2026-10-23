@@ -119,6 +119,12 @@ explored body by body.
   replaces. 2.5 neither lists nor reads them; the format-1 catalogue keeps them
   for 2.1.
 
+### Security
+
+- **DOMPurify 3.4.17**, the sanitiser between a diagram's Mermaid source and
+  the window, for three advisories against 3.4.16 published on 2026-10-22, one
+  of them critical.
+
 ## [2.1.1] - 2026-10-21
 
 Nexus moves to Electron 44.9.0 and the current releases of the libraries it
