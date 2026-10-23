@@ -1,7 +1,7 @@
 import { eld } from "eld/small";
 import { franc } from "franc";
 
-import type { Locale } from "../../../../renderer/src/strings.js";
+import type { Locale } from "../../../../renderer/src/moduleKit/moduleSurface.js";
 import { languageByCode, languageFromTag, NLLB_LANGUAGES, type NllbLanguage } from "../../shared/languages.js";
 
 /** Less text than this is too little to decide on, and the page makes no guess at all. */

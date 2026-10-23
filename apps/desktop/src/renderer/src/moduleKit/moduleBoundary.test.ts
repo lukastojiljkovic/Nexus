@@ -34,7 +34,8 @@ function shellReaches(source: string): string[] {
 }
 
 const REASONS = {
-  strings: "reads the shell's string helpers (fill, Locale, countUnit) directly; moduleSurface does not re-export them yet",
+  strings:
+    "reads the shell's string helpers (fill, countUnit) directly; moduleSurface does not re-export them yet (Locale is on it, so an import of Locale converts)",
   intl: "reads the shell's Intl helpers directly; the call site converts when the file is next touched",
   money: "formats money through the shell directly; formatMoney is on moduleSurface, so the call site converts",
   links: "opens links through the shell's helper directly; openExternal is on moduleSurface, so the call site converts",
