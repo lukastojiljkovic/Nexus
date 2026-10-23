@@ -41,6 +41,7 @@ import { REGION_TILE_SCHEME, createRegionTiles } from "./regionTiles.js";
 import { RegionCard } from "./regions/RegionCard.js";
 import type { Locale } from "./regions/names.js";
 import { coverBounds, installedTerritories } from "./regions/scope.js";
+import { SEARCH_START, answeredWith, askedFor, pickedPlace, shownResults, type SearchState } from "./searchState.js";
 import type { SearchMessage, SearchResponse } from "./searchWorker.js";
 import {
   OUTLINE_LAND_LAYER,
@@ -219,14 +220,6 @@ interface PickState {
   readonly selected: string | null;
 }
 
-/** What the search box is showing. `count` is how many places the index holds once it is ready. */
-interface SearchState {
-  readonly status: "loading" | "ready" | "failed";
-  readonly count: number;
-  readonly query: string;
-  readonly results: readonly MapPlace[];
-}
-
 type Run = (action: (maps: typeof window.nexus.modules.maps) => Promise<MapsView>) => Promise<void>;
 
 export default function MapsPage({ profileId }: ModulePageProps) {
@@ -246,7 +239,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   const [scale, setScale] = useState<{ metres: number; pixels: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [search, setSearch] = useState<SearchState>({ status: "loading", count: 0, query: "", results: [] });
+  const [search, setSearch] = useState<SearchState>(SEARCH_START);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -258,6 +251,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   const installed = regions?.installed ?? null;
   const installedKey = installed?.map((region) => region.url).join("|") ?? null;
   const pickingOn = !measuring && (picking ?? installed?.length === 0);
+  const results = shownResults(search);
   const pickedTerritory = picked === null ? undefined : regionById(picked);
 
   /**
@@ -491,17 +485,13 @@ export default function MapsPage({ profileId }: ModulePageProps) {
         return;
       }
       if (answer.type === "failed") {
-        setSearch({ status: "failed", count: 0, query: "", results: [] });
+        setSearch({ ...SEARCH_START, status: "failed" });
         return;
       }
       // An answer for a query the user has already typed past is dropped: the
       // box shows what was asked for last, never what came back last.
       if (answer.id !== searchId.current) return;
-      setSearch((current) => ({
-        ...current,
-        status: "ready",
-        results: answer.hits.map((hit) => hit.place),
-      }));
+      setSearch((current) => answeredWith(current, answer.hits.map((hit) => hit.place)));
     };
     return () => {
       worker.terminate();
@@ -524,7 +514,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   const askSearch = useCallback((query: string) => {
     const trimmed = query.trim();
     searchId.current += 1;
-    setSearch((current) => ({ ...current, query, results: [] }));
+    setSearch((current) => askedFor(current, query));
     // A cleared box asks nothing: the answer that would arrive is "everything
     // matches nothing", and drawing it would be a list of nothing under an
     // empty field.
@@ -543,7 +533,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     // place is, and a glide nobody requested is motion this app must not add.
     mapRef.current?.jumpTo({ center: [place.lon, place.lat], zoom: 12 });
     setSelectedId(null);
-    setSearch((current) => ({ ...current, query: place.name, results: [] }));
+    setSearch((current) => pickedPlace(current, place.name));
   }, []);
 
   const copyCoordinates = useCallback(async (point: GeoPoint) => {
@@ -622,14 +612,14 @@ export default function MapsPage({ profileId }: ModulePageProps) {
               {search.status === "ready" && regions.installed.length === 0 && (
                 <p className="nx-hint">{copy.search.none}</p>
               )}
-              {search.status !== "loading" && search.query.trim() !== "" && (
+              {results !== null && (
                 <ul className="maps__results" aria-label={copy.search.results}>
-                  {search.results.length === 0 && (
+                  {results.length === 0 && (
                     <li className="maps__result-empty">
                       <span className="nx-hint">{copy.search.empty}</span>
                     </li>
                   )}
-                  {search.results.map((place) => (
+                  {results.map((place) => (
                     <li key={place.id}>
                       <button type="button" className="maps__result" onClick={() => selectResult(place)}>
                         <span className="maps__result-name">
