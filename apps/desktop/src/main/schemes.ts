@@ -14,12 +14,14 @@ const READ = { standard: true, secure: true, supportFetchAPI: true, stream: true
  * scope, before the app's "ready" event, or Electron ignores them (SEC-EL).
  *
  * **`corsEnabled` only where the page reads across origins.** The page is at
- * `file://`, so a `fetch` or a WebGL texture from one of these schemes is a
- * cross-origin request, which Chromium refuses outright on a scheme without
- * it. The map reads its regions with `fetch` and Astronomy draws the planets
- * from a pack's images, so `nx-pack:` and `nx-map:` have it; an `<img>` needs
- * no CORS, so the others do not. Their handlers answer with the headers
- * (`packs/protocol.ts`, `fileResponse`).
+ * `file://`, so a `fetch`, a WebGL texture or a framed document from one of
+ * these schemes is a cross-origin request, which Chromium refuses outright on a
+ * scheme without it. The map reads its regions with `fetch`, Astronomy draws
+ * the planets from a pack's images, and Reference frames a ZIM document, so
+ * `nx-pack:`, `nx-map:` and `nx-zim:` have it. An `<img>` needs no CORS, so
+ * the others do not. The handlers answer with the headers
+ * (`packs/protocol.ts`, `fileResponse`; `zim/protocol.ts`,
+ * `zimResponseHeaders`).
  */
 export const PRIVILEGED_SCHEMES: readonly CustomScheme[] = [
   // ADR-014: an attachment, by the hash on the URL's host.
@@ -34,7 +36,7 @@ export const PRIVILEGED_SCHEMES: readonly CustomScheme[] = [
   { scheme: "nx-pack", privileges: { ...READ, corsEnabled: true } },
   // The offline library's read protocol (ADR-098): ZIM entries, one library per
   // host, served by `zim/zimElectron.ts` from a file on this machine.
-  { scheme: "nx-zim", privileges: READ },
+  { scheme: "nx-zim", privileges: { ...READ, corsEnabled: true } },
   // A downloaded map region (ADR-118): a PMTiles file the map reads by ranges,
   // served by `modules/maps/main/regions/protocol.ts` only when the registry names it.
   { scheme: MAP_SCHEME, privileges: { ...READ, corsEnabled: true } },

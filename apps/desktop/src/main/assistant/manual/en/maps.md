@@ -2,7 +2,7 @@
 id: maps
 title: Maps
 location: { module: maps }
-keywords: [maps, map, download, territory, continent, world, pin, coordinates, distance, offline]
+keywords: [maps, map, download, territory, continent, world, pin, coordinates, distance, offline, disputed]
 ---
 Maps is a map that works offline: download a territory, a continent or the whole world, then search places, drop pins and measure a distance.
 
@@ -15,6 +15,8 @@ How to use it:
 5. "Search places" looks a place up by name in the downloaded maps; each result names its kind (city, village…), and picking one moves the map there.
 6. The tools are: "Zoom in", "Zoom out", "New pin", "I am here", "Remove my position", "Measure" ("Stop measuring", "Clear the measurement"), "Copy coordinates" and "Pin list".
 7. "New pin" asks for a "Title", a "Note" and a "Colour", and the coordinates are shown as decimals or as "Degrees, minutes, seconds"; the pin is placed at the centre of the map. The "Pin list" carries "Edit" and "Remove".
+
+The world outline also marks disputed areas with a hatch, and disputed islands too small for a polygon are dashed circles. A territory's card lists each disputed area in or overlapping it and names the parties in alphabetical order, without naming an owner.
 
 The maps are cut from the Protomaps build of OpenStreetMap and kept as files on this computer, outside the profile; the card shows the date of each map's data. Pins are kept by the profile and stay when a map is removed. The credit is shown beside the map: © OpenStreetMap contributors, Protomaps, and the land cover © ESA WorldCover; the data is under the ODbL.
 

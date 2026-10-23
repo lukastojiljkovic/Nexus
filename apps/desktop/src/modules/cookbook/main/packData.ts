@@ -85,6 +85,9 @@ const MAX_LICENCE_TEXT = 200;
 const MAX_LICENCE_URL = 500;
 const MAX_ATTRIBUTION = 500;
 const MAX_LICENCE_ID = 64;
+/** A signed pack may carry a legacy method longer than one stored step; the recipe is then read-only. */
+const MAX_PACK_STEPS = 10_000;
+const MAX_PACK_STEP_TEXT = 64 * 1024;
 
 /** Sodium in one gram of salt, in milligrams. M(Na) 22.99 / M(NaCl) 58.44 = 0.3934 — so 1 g of salt carries 393.4 mg of sodium. */
 const SODIUM_MG_PER_SALT_G = 393.4;
@@ -112,6 +115,8 @@ export interface PackRecipe {
   readonly title: string;
   readonly language: string;
   readonly servings: number | null;
+  /** False when a legacy source exceeds a cap the profile store enforces on copy. */
+  readonly saveable: boolean;
   readonly ingredients: readonly string[];
   readonly steps: readonly string[];
   readonly tags: readonly string[];
@@ -376,23 +381,24 @@ export function parseRecipesLayout(value: unknown, packId = "recipes.json"): Pac
 
     const servings = entry["servings"];
     const source = asRecord(entry["source"], packId, `${field}.source`);
-    const licence = asText(source["licence"], packId, `${field}.source.licence`, MAX_LICENCE_ID);
-    if (!isRecipeLicenceId(licence)) {
-      throw refusal(packId, `"${field}.source.licence" must be an SPDX identifier or "public-domain".`);
-    }
+    const licence = recipeLicence(source["licence"], packId, `${field}.source.licence`);
     const url = asText(source["url"], packId, `${field}.source.url`, MAX_LICENCE_URL);
     if (!/^https?:\/\/\S+$/.test(url)) {
       throw refusal(packId, `"${field}.source.url" must be an http(s) url.`);
     }
+    const title = asText(entry["title"], packId, `${field}.title`, MAX_TITLE);
+    const ingredients = asTextArray(entry["ingredients"], packId, `${field}.ingredients`, MAX_INGREDIENTS, MAX_TEXT);
+    const steps = packSteps(entry["steps"], packId, `${field}.steps`);
+    const tags = asTextArray(entry["tags"], packId, `${field}.tags`, MAX_TAGS, MAX_TAG);
     return {
       id,
-      title: asText(entry["title"], packId, `${field}.title`, MAX_TITLE),
+      title,
       language: asLanguage(entry["language"], packId, `${field}.language`),
-      servings:
-        servings === undefined ? null : asInteger(servings, packId, `${field}.servings`, 1, MAX_SERVINGS),
-      ingredients: asTextArray(entry["ingredients"], packId, `${field}.ingredients`, MAX_INGREDIENTS, MAX_TEXT),
-      steps: asTextArray(entry["steps"], packId, `${field}.steps`, MAX_STEPS, MAX_STEP_TEXT),
-      tags: asTextArray(entry["tags"], packId, `${field}.tags`, MAX_TAGS, MAX_TAG),
+      servings: recipeServings(servings, packId, `${field}.servings`),
+      saveable: steps.length <= MAX_STEPS && steps.every((step) => step.length <= MAX_STEP_TEXT),
+      ingredients,
+      steps,
+      tags,
       source: {
         title: asText(source["title"], packId, `${field}.source.title`, MAX_LICENCE_TEXT),
         url,
@@ -513,6 +519,55 @@ function asTextArray(
   return value.map((entry, index) =>
     asText(entry, packId, `${field}[${String(index)}]`, maxLength),
   );
+}
+
+/** Steps are kept whole for reading; `saveable` records whether the store can copy them. */
+function packSteps(value: unknown, packId: string, field: string): string[] {
+  if (!Array.isArray(value)) throw refusal(packId, `"${field}" must be an array.`);
+  if (value.length > MAX_PACK_STEPS) {
+    throw refusal(packId, `"${field}" may hold at most ${String(MAX_PACK_STEPS)} entries.`);
+  }
+  return value.map((entry, index) =>
+    asText(entry, packId, `${field}[${String(index)}]`, MAX_PACK_STEP_TEXT),
+  );
+}
+
+/**
+ * The licence identifier a recipe stores. The current builder writes SPDX ids;
+ * the already-published recipes-world pack used the human names beside them,
+ * so those two known spellings are normalised instead of hiding the whole pack.
+ */
+function recipeLicence(value: unknown, packId: string, field: string): string {
+  const text = asText(value, packId, field, MAX_LICENCE_ID);
+  const folded = text.toLowerCase().replace(/\s+/g, " ");
+  const licence =
+    folded === "cc by-sa 4.0" || folded === "cc-by-sa-4.0"
+      ? "CC-BY-SA-4.0"
+      : folded === "public domain" || folded === "public-domain"
+        ? "public-domain"
+        : text;
+  if (!isRecipeLicenceId(licence)) {
+    throw refusal(packId, `"${field}" must be an SPDX identifier or "public-domain".`);
+  }
+  return licence;
+}
+
+/**
+ * A serving count from the current integer layout or the published pack's
+ * human phrase. A phrase that states something other than an integer count is
+ * omitted, which is the same answer the corrected builder gives it.
+ */
+function recipeServings(value: unknown, packId: string, field: string): number | null {
+  if (value === undefined) return null;
+  if (typeof value === "number") return asInteger(value, packId, field, 1, MAX_SERVINGS);
+  if (typeof value !== "string") {
+    throw refusal(packId, `"${field}" must be a whole number or a serving phrase.`);
+  }
+  const match =
+    /^(?:(?:za\s+broj\s+osoba|serves|servings?|portions?|yield|makes)\s*:?\s*)?(\d{1,3})(?:\s*(?:osob[ae]?|porcij[ae]?|servings?|portions?))?$/iu.exec(
+      value.trim(),
+    );
+  return match === null ? null : asInteger(Number(match[1]), packId, field, 1, MAX_SERVINGS);
 }
 
 /** Serbian Latin ordering, the app's one collator spelling — plain `"sr"` mis-tailors the Latin š/č/ć/ž a Serbian corpus is full of. */

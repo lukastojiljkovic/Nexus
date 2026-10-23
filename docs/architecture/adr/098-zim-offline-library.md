@@ -121,9 +121,12 @@ catalogue.
 ## 4. Serving a page: the `nx-zim://` scheme
 
 **`nx-zim://<library id>/<path>`**, registered `standard`, `secure`,
-`supportFetchAPI` and `stream` — one entry at the END of the
-`registerSchemesAsPrivileged` array in `main/index.ts`, with the handler in
+`supportFetchAPI`, `stream` and `corsEnabled` — the entry in
+the `PRIVILEGED_SCHEMES` table in `main/schemes.ts`, with the handler in
 `main/zim/zimElectron.ts` and its rules in `main/zim/protocol.ts`.
+The handler returns `Access-Control-Allow-Origin: *`, and the packaged renderer's
+CSP includes `frame-src nx-zim:`, so the `file://` page can frame the local
+scheme.
 
 Three fences, and each catches what the others cannot:
 

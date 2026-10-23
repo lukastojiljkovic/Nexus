@@ -225,7 +225,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // button read „Sakrij detalje" and „Detalji" matched nothing — and the
     // scene named after TASK's detail form photographed the list, in a mode,
     // for as long as it has existed.
-    prepare: CLICK_THEN("text:Lista", "text:Detalji"),
+    prepare: CLICK_THEN("text:Lista|List", "text:Detalji|Details"),
     fanout: null,
   },
   {
@@ -250,14 +250,14 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "tasks",
     prepare: OPEN_CREATE_FORM({ open: ".tasks__new-list" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "tasks-new-tag",
     module: "tasks",
     prepare: OPEN_CREATE_FORM({ open: ".tasks__new-tag" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // „Nova sekcija" is the one TASK create form with a precondition: it is
@@ -289,7 +289,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "tasks",
     prepare: OPEN_CREATE_FORM({ open: ".tasks__new-section" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   { id: "calendar", module: "calendar" },
   // CAL's two template panels, neither of which the sweep had ever seen. They
@@ -320,7 +320,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "calendar",
     prepare: OPEN_CREATE_FORM({
       path: ["text:Agenda", ".cal__edit", ".cal__template-menu"],
-      open: "text:Sačuvaj kao šablon",
+      open: "text:Sačuvaj kao šablon|Save as template",
       expect: ".cal__template-form",
     }),
     fanout: null,
@@ -337,7 +337,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     id: "calendar-documents-renew",
     module: "calendar",
     prepare: OPEN_CREATE_FORM({
-      path: ["text:Dokumenta"],
+      path: ["text:Dokumenta|Documents"],
       open: ".documents__renew-start",
       // The ROW, not the renewal line inside it. What is waited for is also
       // what is scrolled to the top of the frame, and scrolling to the line
@@ -377,23 +377,23 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // wears that same class, so a selector would give both scenes the folder.
     id: "notes-new-folder",
     module: "notes",
-    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova fascikla" }),
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova fascikla|New folder" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".note__org-toggle"),
   },
   {
     id: "notes-new-tag",
     module: "notes",
     prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: ".note__new-tag" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".note__org-toggle"),
   },
   {
     id: "notes-new-category",
     module: "notes",
-    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova kategorija" }),
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova kategorija|New category" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".note__org-toggle"),
   },
   { id: "priv", module: "priv", fanout: null },
   { id: "files", module: "files" },
@@ -414,30 +414,30 @@ const SCENE_PLAN: readonly ShotScene[] = [
   {
     id: "study-new-subject",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj predmet" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj predmet|Add subject" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "study-new-exam",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj ispit" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj ispit|Add exam" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "study-new-deck",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj špil" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj špil|Add deck" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "study-new-plan",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Novi plan" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Novi plan|New plan" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // The deck DRILL-IN, which is a route rather than a form — and the reason
@@ -450,7 +450,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // page it did not ask for.
     id: "study-cards",
     module: "study",
-    prepare: CLICK_THEN("text:Kartice"),
+    prepare: CLICK_THEN("text:Kartice|Cards"),
     fanout: null,
     cleanup: CLICK_THEN(".study__back"),
   },
@@ -467,9 +467,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // the two whose placeholders are worked examples rather than names.
     id: "study-new-card",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ path: ["text:Kartice"], open: "text:Dodaj karticu" }),
+    prepare: OPEN_CREATE_FORM({ path: ["text:Kartice|Cards"], open: "text:Dodaj karticu|Add card" }),
     fanout: ".study__segmented .nx-button",
-    cleanup: CLICK_THEN("text:Otkaži", ".study__back"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".study__back"),
   },
   { id: "finance", module: "finance" },
   {
@@ -482,30 +482,30 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "finance",
     prepare: OPEN_CREATE_FORM({
       path: [".fin__segmented .nx-segmented__option"],
-      open: "text:Novi račun",
+      open: "text:Novi račun|New account",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "finance-new-category",
     module: "finance",
     prepare: OPEN_CREATE_FORM({
       path: [".fin__segmented .nx-segmented__option"],
-      open: "text:Nova kategorija",
+      open: "text:Nova kategorija|New category",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "finance-new-subscription",
     module: "finance",
     prepare: OPEN_CREATE_FORM({
       path: [".fin__segmented .nx-segmented__option:nth-child(3)"],
-      open: "text:Nova pretplata",
+      open: "text:Nova pretplata|New subscription",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".fin__segmented .nx-segmented__option"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".fin__segmented .nx-segmented__option"),
   },
   { id: "habits", module: "habits", fanout: null },
   {
@@ -519,9 +519,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
   {
     id: "habits-new",
     module: "habits",
-    prepare: OPEN_CREATE_FORM({ open: "text:Nova navika" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Nova navika|New habit" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "fitness",
@@ -581,10 +581,10 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(3)"],
-      open: "text:Nova rutina",
+      open: "text:Nova rutina|New routine",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // The routine form with ITEMS in it, which „Nova rutina" above can never
@@ -606,20 +606,20 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(3)"],
-      open: '.fit__section[aria-label="Rutine"] .fit__row-action',
+      open: '.fit__section:is([aria-label="Rutine"], [aria-label="Routines"]) .fit__row-action',
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "fitness-new-exercise",
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(3)"],
-      open: "text:Nova vežba",
+      open: "text:Nova vežba|New exercise",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // „Ishrana" is the second tab, and its food form is the widest of the three
@@ -632,11 +632,11 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // neither of the controls the block is for.
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(2)"],
-      open: "text:Nova namirnica",
-      then: ["text:Dodaj meru"],
+      open: "text:Nova namirnica|New food",
+      then: ["text:Dodaj meru|Add measure"],
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   { id: "focus", module: "focus", fanout: null },
   {
@@ -672,9 +672,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // below it.
     id: "canvas-new-board",
     module: "canvas",
-    prepare: OPEN_CREATE_FORM({ open: "text:Nova tabla" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Nova tabla|New board" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // The workbench with the demo profile's three circuits on it. `fanout: null`
@@ -692,9 +692,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // have to own.
     id: "electronics-new-circuit",
     module: "electronics",
-    prepare: OPEN_CREATE_FORM({ open: "text:Novo kolo" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Novo kolo|New circuit" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // „Mašina" (E4c) — the nine-field form, and a MODAL, so it is invisible to
@@ -1282,7 +1282,9 @@ function CLICK_THEN(...steps: readonly string[]): string {
       const target = step.startsWith("text:")
         ? Array.prototype.find.call(
             document.querySelectorAll("button"),
-            (node) => (node.textContent || "").trim().startsWith(step.slice(5)),
+            (node) => step.slice(5).split("|").some(
+              (label) => (node.textContent || "").trim().startsWith(label),
+            ),
           )
         : document.querySelector(step);
       if (target) target.click();
@@ -1324,8 +1326,10 @@ function OPEN_FIRST_TASK_LIST(): string {
       const list = lists()[index];
       if (!list) break;
       list.click();
-      await frame();
-      if (document.querySelector(".tasks__rows .nx-list-row")) return true;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await frame();
+        if (document.querySelector(".tasks__rows .nx-list-row")) return true;
+      }
     }
     return "none: no list in the rail drew a row";
   })()`;
@@ -1553,12 +1557,12 @@ function SET_WAVE_KINDS(kinds: readonly string[]): string {
 function OPEN_WIDGET_CONFIG(): string {
   return `(async () => {
     const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const button = (text) =>
+    const button = (...texts) =>
       Array.prototype.find.call(
         document.querySelectorAll("button"),
-        (node) => (node.textContent || "").trim() === text,
+        (node) => texts.includes((node.textContent || "").trim()),
       );
-    const enter = button("Uredi");
+    const enter = button("Uredi", "Edit");
     if (enter) {
       enter.click();
       await frame();
@@ -1568,7 +1572,7 @@ function OPEN_WIDGET_CONFIG(): string {
     for (const trigger of triggers) {
       trigger.click();
       await frame();
-      const configure = button("Podesi…");
+      const configure = button("Podesi…", "Configure…");
       if (configure) {
         configure.click();
         await frame();
@@ -1589,7 +1593,7 @@ function LEAVE_EDIT_MODE(): string {
     await frame();
     const done = Array.prototype.find.call(
       document.querySelectorAll("button"),
-      (node) => (node.textContent || "").trim() === "Gotovo",
+      (node) => ["Gotovo", "Done"].includes((node.textContent || "").trim()),
     );
     if (done) {
       done.click();
@@ -1627,7 +1631,9 @@ function OPEN_RECURRENCE_EDITOR(): string {
     if (!document.querySelector(".tasks__fields")) {
       const toggle = Array.prototype.find.call(
         document.querySelectorAll("button"),
-        (node) => (node.textContent || "").trim().startsWith("Detalji"),
+        (node) => ["Detalji", "Details"].some(
+          (label) => (node.textContent || "").trim().startsWith(label),
+        ),
       );
       if (!toggle) return "none: no Detalji toggle on this view";
       toggle.click();
@@ -1769,7 +1775,9 @@ function OPEN_CREATE_FORM(spec: {
     step.startsWith("text:")
       ? Array.prototype.find.call(
           document.querySelectorAll("button"),
-          (node) => (node.textContent || "").trim() === step.slice(5),
+          (node) => step.slice(5).split("|").some(
+            (label) => (node.textContent || "").trim() === label,
+          ),
         )
       : document.querySelector(step);
   for (const step of ${jsLiteral(spec.path ?? [])}) {
@@ -2533,6 +2541,8 @@ export interface ShotFixtures {
    * could delete the wrong file.
    */
   readonly userDataDir: string;
+  /** Puts every module back in the device-wide rail before a new pass. */
+  readonly restoreShell: () => void;
 }
 
 /**
@@ -3427,6 +3437,7 @@ async function sweep(
     for (const pass of plan.languages.flatMap((language) =>
       plan.themes.map((theme) => ({ language, theme })),
     )) {
+      fixtures.restoreShell();
       await serveLocale(win, pass.language);
       await serveTheme(win, pass.theme);
       const dir = join(outDir, passDir(size.id, pass.theme, pass.language));

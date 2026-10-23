@@ -228,6 +228,11 @@
   overflow-wrap: anywhere;
 }
 
+.maps__legend {
+  display: block;
+  margin-block-start: var(--nx-space-1);
+}
+
 .maps__list {
   position: absolute;
   z-index: var(--nx-layer-panel);

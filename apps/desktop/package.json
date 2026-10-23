@@ -77,7 +77,7 @@
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^5.0.0",
-    "electron": "^44.9.0",
+    "electron": "^44.9.1",
     "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0",
     "pngjs": "7.0.0",

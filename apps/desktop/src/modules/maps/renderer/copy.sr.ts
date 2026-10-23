@@ -116,6 +116,7 @@ export const sr = {
     grafit: "Grafitna",
   },
   attribution: {
+    disputed: "Šrafirano: sporna teritorija",
     credit: "© OpenStreetMap contributors · Protomaps · zemljišni pokrivač © ESA WorldCover",
     licence: "Podaci pod licencom ODbL — https://www.openstreetmap.org/copyright",
     label: "Izvor podataka",
@@ -126,6 +127,12 @@ export const sr = {
     regions: "Spisak preuzetih mapa nije učitan.",
   },
   regions: {
+    disputes: {
+      label: "Sporna područja",
+      disputed: "Sporna teritorija",
+      parties: "Strane u sporu: {parties}",
+      unclaimed: "Nijedna država ne polaže pravo na nju",
+    },
     close: "Zatvori karticu",
     scope: "Šta se preuzima",
     world: "Ceo svet",

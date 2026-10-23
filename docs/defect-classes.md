@@ -1,6 +1,6 @@
 # The defect-class ledger
 
-**One hundred and forty-nine recurring failure shapes, each recorded the first
+**One hundred and fifty-two recurring failure shapes, each recorded the first
 time it was recognised.** Opened 2026-08-07 on the founder's rule that *a reported bug is a
 sample and never an incident* — so the entry here is never the bug, it is the
 **rule that was wrong**, written so the next instance is something we spot
@@ -15,7 +15,7 @@ rather than something we discover.
 >
 > **How many of them are executable is not the gate count, and the arithmetic is
 > worth stating because it does not match — and is not meant to.** There are
-> **thirty** `check:` scripts and **one hundred and forty-nine** classes
+> **thirty** `check:` scripts and **one hundred and fifty-two** classes
 > below, and neither number is the other's inverse. `check:contrast` answers no
 > class at all, because it came from a design rule rather than from an observed
 > failure; `check:controls` answers TWO, [[DC-98]]'s native control that skips
@@ -228,6 +228,9 @@ file, and the class numbers are permanent: they are never reused.
 | [DC-147](#dc-147) | (title on the next line) |
 | [DC-148](#dc-148) | (title on the next line) |
 | [DC-149](#dc-149) | (title on the next line) |
+| [DC-150](#dc-150) | a local scheme treated as readable by a packaged page because its handler exists, without the cross-origin privileges and policy the browser actually checks. |
+| [DC-151](#dc-151) | a pack producer and its reader sharing a layout name while disagreeing about the runtime type or vocabulary of a field. |
+| [DC-152](#dc-152) | one shared metadata cluster rendered in two card shapes while only one container supplied the wrapping rule. |
 
 ---
 
@@ -6270,6 +6273,85 @@ repository can put a real edit 700 ms before a real minimize.
 *Related:* [[DC-148]] (the same window, the other half: what the last write
 says when it fails), [[DC-144]] (a flush that reads its subject after the
 subject is gone).
+
+<a name="dc-150"></a>
+
+**DC-150 — a local scheme treated as readable by a packaged page because its
+handler exists, without the cross-origin privileges and policy the browser
+actually checks (2026-10-23).** Reference rendered a downloaded ZIM document in
+an iframe. The handler was registered and the scheme was standard, secure,
+fetchable and streaming, which was enough in development; in the packaged app
+the page is at a file origin, so the same frame was a cross-origin load. The
+scheme lacked corsEnabled, the response carried no Access-Control-Allow-Origin,
+and the renderer policy had no frame-src entry for it. Each was independently
+sufficient to leave the frame blank.
+
+*Root cause, as the rule that was wrong:* a custom protocol was described by the
+bytes it could serve, not by every browser decision its consumer required. The
+handler, the privilege table and the embedding page's CSP are three different
+trust boundaries, and none of them can infer another's answer.
+
+*Fix:* nx-zim now carries corsEnabled; every served ZIM entry names the wildcard
+origin, and the shared renderer CSP names frame-src nx-zim: in both build modes.
+The article's own CSP still admits no scripts or network connections.
+
+*Executable:* schemes.test.ts pins the cross-origin scheme set;
+zim/protocol.test.ts pins the handler headers; rendererCsp.test.ts evaluates the
+production and development policies and requires the frame source.
+
+*Related:* [[DC-02]] and [[DC-08]] (the same rule declared or enforced on only
+one of the paths it reaches).
+
+<a name="dc-151"></a>
+
+**DC-151 — a pack producer and its reader sharing a layout name while
+disagreeing about the runtime type or vocabulary of a field (2026-10-23).** The
+recipes-world builder declared layout 1, and the Cookbook reader read layout 1,
+so both sides appeared to agree. The builder wrote source yields such as
+"4 portions" into servings, where the reader requires an integer, and wrote
+"CC BY-SA 4.0" and "Public domain" where the reader accepts the SPDX identifiers
+"CC-BY-SA-4.0" and "public-domain". The reader rejects the document whole on the
+first bad record, so one field mismatch made the entire pack invisible.
+
+*Root cause, as the rule that was wrong:* a format name is not a schema. The
+builder's own prose tests and the reader's owned fixtures each passed because
+they faced their own assumptions; neither test fed the builder's output to the
+reader's boundary, and the fields with a stricter vocabulary were not asserted
+as values the store can accept.
+
+*Fix:* the builder writes integer serving counts, omits a yield that is a
+quantity or range rather than guessing, and writes the two licence identifiers
+the reader stores. The reader also normalises those two spellings from the
+already-published pack, so correcting the producer does not strand the corpus
+people already downloaded.
+
+*Executable:* scripts/packs/recipes/convert.test.mjs pins the integer type, the
+ambiguous-yield omission and both licence identifiers.
+
+*Related:* [[DC-02]] (one fact declared twice) and [[DC-08]] (a validation rule
+present on one path but absent at the producer).
+
+<a name="dc-152"></a>
+
+**DC-152 — one shared metadata cluster rendered in two card shapes while only
+one container supplied the wrapping rule (2026-10-23).** TASK draws the same
+description, progress, tag, priority and due-date chips on Cards and on Board.
+Cards wrapped the cluster beneath the title; Board's `.nx-kanban-card__tag`
+kept the inherited inline row, so five chips plus a date exceeded the card
+width. The date chip overlapped the title at the minimum and default window
+sizes.
+
+*Root cause, as the rule that was wrong:* wrapping belongs to every container
+that can receive the shared cluster. Putting it on one card type described the
+first caller and silently exempted the second.
+
+*Fix:* the Kanban card tag supplies the same `display: flex; flex-wrap: wrap`
+rule as the Cards container.
+
+*Executable:* the screenshot sweep's overlap audit failed on the Board chip
+cluster before the rule and is the regression check after it.
+
+*Related:* [[DC-109]] (a rule copied beside a generated set fails by omission).
 
 **Still open in C, and the only part of it that is:** item 14 (Tasks' capture
 form — its four bare selects are fixed, see DC-05), item 15 (Focus's two side-by-side primaries,

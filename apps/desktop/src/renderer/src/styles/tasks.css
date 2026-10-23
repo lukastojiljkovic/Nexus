@@ -831,6 +831,10 @@
   flex-wrap: wrap;
   margin-top: var(--nx-space-1);
 }
+.nx-kanban-card__tag > .tasks__chips {
+  display: flex;
+  flex-wrap: wrap;
+}
 
 /* --- Kalendar (ADR-050) -------------------------------------------------
    The grid itself reuses the CAL module's .cal__month-* classes outright (see

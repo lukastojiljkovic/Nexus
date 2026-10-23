@@ -235,9 +235,8 @@ its way.
 
 - **The drawing and the search are §13**, recorded when they were built. They
   replace ADR-099 §4 to §6.
-- **It does not decide how disputed areas are drawn.** That is Luka's call, and
-  he has been asked. Until he answers, the outline is Natural Earth's default
-  view.
+- **Disputed areas are not in §10's original scope.** Luka's answer and its
+  implementation are recorded below in §14.
 - **It signs nothing** (§2) and adds no pack.
 
 ## 11. Consequences
@@ -292,13 +291,9 @@ missing. The cost is that a label is rasterised by each machine's fonts rather
 than by the same file everywhere.
 
 **The Serbian label chain.** `@protomaps/basemaps` 5.7.2 lists 39 label
-languages, Croatian among them and neither Serbian nor Bosnian. A Serbian page
-reads `name:sr-Latn` (kept first in case a later build carries it), then
-`name:hr`, then the local `name` where the place is written in Latin, then
-`name:en`, then the local `name`. The plan had `name:bs` before the local name;
-the build has no such key. A place in another script and with no Croatian form
-therefore reads in English rather than in a script the reader may not know.
-English pages read `name:en`, then `name`.
+languages and neither Serbian nor Bosnian. The tiles' OpenMapTiles properties
+are used directly: a Serbian page reads `name:sr-Latn`, then `name:sr`, then
+the local `name`; an English page reads `name:en`, then `name`.
 
 **Search reads the regions' own tiles** (`renderer/placeIndex.ts`, in the search
 worker). A place is in every tile from its `min_zoom` down, so one zoom holds
@@ -309,8 +304,7 @@ built cover: Serbia at full detail reads zoom 10 (134 tiles), Germany zoom 10
 (680), Europe at towns detail zoom 7 (1,440), the world zoom 5 (665). The
 regions are merged most detailed first, and a place two regions both carry is
 kept once: the same kind and name within 0.01°, because each region reads it on
-its own zoom's grid. A name follows the label chain above, with a
-transliteration for a non-Latin name that has no other form.
+its own zoom's grid. A name follows the same chain as a label.
 
 **The credit** in the corner of the map is "© OpenStreetMap contributors ·
 Protomaps · land cover © ESA WorldCover", beside the ODbL line. Protomaps
@@ -322,4 +316,92 @@ cover at low zooms is Daylight's, vectorised from ESA WorldCover (CC BY 4.0).
 `@nexus/core` and the renderer's pack-file reader. `@nexus/core`'s
 `remoteStyleUrls` stays: the built style names no remote address, and
 `style.test.ts` pins that with it.
+
+## 14. Disputed areas
+
+Natural Earth's admin-0 outline is one perspective on sovereignty, and that is
+not enough for a reader whose own territory is drawn as somebody else's. The
+answer is a separate disputed layer, not a relabelling of the outline. It keeps
+the neutrality rule structural: the app draws a disputed area as disputed, names
+the parties in alphabetical order in the reader's language, and never says who
+administers it, who is right, or whose it is. Antarctica is not in this layer:
+its claims are held in abeyance by treaty rather than disputed.
+
+Kosovo is dissolved into Serbia's outline and marked disputed.
+
+**Sources.** `ne_10m_admin_0_disputed_areas.geojson` supplies the 99 disputed
+records and their notes. `ne_10m_admin_1_states_provinces.geojson` supplies the
+four whole Ukrainian oblasts selected by `iso_3166_2`. Both are Natural Earth
+1:10m files from the same public-domain repository as the outline. The build
+prints each source's SHA-256, so a `master` URL still has an identifiable input.
+
+**Inclusion and parties.** A source record is included when its `TYPE` is
+`Disputed`, `Indeterminate` or `Breakaway`, or when `NOTE_BRK` contains
+`Claimed by`. Notes are parsed for administering states, claimants, leases,
+cessions and self-administration. Natural Earth's spellings go through one
+explicit table into outline ids; an unknown name stops the build with the name
+and the feature. Parties are deduplicated in the data and sorted by the active
+locale's `Intl.Collator` when the card is drawn. `self` means the disputed area
+itself. Any exception is one entry in `DISPUTE_OVERRIDE_REASONS` in the build,
+with its reason beside it.
+
+The exceptions are: Israel's whole-state polygon is excluded because its
+disputed parts are separate features; Gaza and the West Bank name Israel and
+Palestine; Kosovo names itself and Serbia; Belize names Belize and Guatemala;
+Dragonja names Croatia and Slovenia; Vukovar and Šarengrad islands name Croatia
+and Serbia after the source's byte-order marks are removed from their names;
+the misspelt `Ilemi Triange` duplicate is merged into Ilemi Triangle; the two
+Western Sahara perspectives become one Western Sahara with Morocco and Western
+Sahara; North Borneo names Malaysia and the Philippines; Ceuta and Melilla are
+included with Morocco and Spain; the Cyprus U.N. Buffer Zone names Cyprus and
+Northern Cyprus; Vietnam is added to the Spratlys; Bird Island names Dominica
+and Venezuela; Bir Tawil is unclaimed and therefore has no parties; Artsakh is
+excluded because the republic dissolved on 2024-01-01; Hans Island is excluded
+because Canada and Denmark divided it by their treaty of 14 June 2022.
+
+**Names.** An area is named by Natural Earth's short name (`BRK_NAME`), with its
+abbreviations written out: it is the neutral one (`West of Essequibo River`),
+where the longer `NAME_EN` is at times a claimant's (`Guayana Esequiba`). For the
+same reason the outline names `CYN` Northern Cyprus, not by the self-proclaimed
+state's full name. Tokelau, a party with no outline territory, is stored as its
+name.
+
+The Donetsk and Luhansk breakaway polygons are replaced by the whole
+`UA-14` and `UA-09` oblasts, `UA-23` Zaporizhzhia and `UA-65` Kherson are
+added, and all four are named Russia and Ukraine. Crimea remains as Natural
+Earth draws it, with the same two parties. Four points cover islands too small
+for a polygon at this scale: Senkaku / Diaoyu Islands (China, Japan, Taiwan),
+Liancourt Rocks (Japan, South Korea), Scarborough Shoal (China, the Philippines,
+Taiwan), and Machias Seal Island (Canada, the United States). These are points
+rather than new map assets, so they are legible at world scale without adding a
+second source of shapes.
+
+**The files and the build.** `scripts/maps/world-outline.mjs` writes both
+`outline.json` and `disputed.json`. Each disputed feature has a stable
+kebab-case id and exactly `name`, `parties`, `note` and `within` in its
+properties. `within` is computed during the build: the territories whose own label lies
+in the area, then those that hold the area's label point or at least a tenth of
+an even 24 by 24 grid of points sampled inside it. Border vertices are not used,
+because the area (1:10m) and the outline (1:50m) trace a shared border at
+different scales, and every neighbour would list the area. The renderer never
+repeats geometry work. `disputed.json` uses the outline's Douglas–Peucker
+tolerance, is capped at 250 000 bytes, and ships inside the app like the
+outline.
+
+**The card.** A territory card lists every disputed area in or overlapping it.
+An area that is the territory itself comes first, then other overlapping areas.
+Each entry shows the area's name, the neutral line `Disputed territory` (or
+`Sporna teritorija`), and `Parties: A, B` (or `Strane u sporu: A, B`). An
+unclaimed area reads `Claimed by no state` (or `Nijedna država ne polaže pravo
+na nju`). The parties use `names.ts` and therefore follow the reader's language
+and Latin Serbian collation; `self` uses the area's own English name.
+
+**The map.** Disputed polygons take a diagonal hatch and a dashed outline above
+the world outline and every downloaded region, below all labels. The hatch and
+the small dashed circle used for disputed points are created as `ImageData`
+from a canvas when the style loads, in the existing `data` token colour; no
+bitmap asset is added. The layers take no clicks: a picker click still queries
+only `OUTLINE_LAND_LAYER`, so the territory under the pointer opens and the
+download scope is unchanged. A short `Hatched: disputed territory` /
+`Šrafirano: sporna teritorija` line sits under the map credit.
 

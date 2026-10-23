@@ -2,6 +2,7 @@ import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { MapOptions } from "maplibre-gl";
 
 import { DETAIL_MAX_ZOOM, MAP_REGION_DETAILS, type MapRegionDetail } from "../shared/ipc.js";
+import { disputedAreas } from "../shared/world/disputed.js";
 import { regionBounds, regions, type WorldGeometry } from "../shared/world/outline.js";
 import { territoryName, type Locale } from "./regions/names.js";
 
@@ -16,11 +17,11 @@ import { territoryName, type Locale } from "./regions/names.js";
  * document, so the map follows the theme the way the rest of the page does.
  *
  * **The labels are the vendor's layers with our text.** The tiles carry `name`
- * in the local script, `name:en`, and for many places `name:hr`, but no
- * Serbian name. So a label's text is our own chain (`labelText`), its font is
- * the UI's own stack, drawn from the system's fonts because the style names no
- * glyph server, and the icons, shields, POIs and house numbers are left out:
- * nothing here draws a sprite.
+ * in the local script, `name:en`, and where available the Serbian names. So a
+ * label's text is our own chain (`labelText`), its font is the UI's own stack,
+ * drawn from the system's fonts because the style names no glyph server, and
+ * the icons, shields, POIs and house numbers are left out: nothing here draws a
+ * sprite.
  *
  * **The outline is always there.** The bundled Natural Earth outline is the
  * land under every region, the borders where nothing is downloaded, the
@@ -40,6 +41,12 @@ export const BACKGROUND_LAYER = "background";
 export const OUTLINE_SOURCE = "outline";
 export const OUTLINE_LAND_LAYER = "outline-land";
 export const OUTLINE_BORDER_LAYER = "outline-borders";
+export const DISPUTED_SOURCE = "disputed";
+export const DISPUTED_HATCH_LAYER = "disputed-hatch";
+export const DISPUTED_LINE_LAYER = "disputed-border";
+export const DISPUTED_POINT_LAYER = "disputed-points";
+export const DISPUTED_HATCH_IMAGE = "disputed-hatch";
+export const DISPUTED_POINT_IMAGE = "disputed-point";
 export const COUNTRY_SOURCE = "countries";
 export const COUNTRY_LABEL_LAYER = "country-labels";
 /** The territories some installed region covers, tinted while the picker is open. */
@@ -175,19 +182,16 @@ export function mapFlavor(token: TokenOf): Flavor {
 /**
  * What a label says, by the reader's language.
  *
- * English reads `name:en`, else the local name. Serbian is written in Latin
- * here, and the tiles have no Serbian name, so it reads the closest name they
- * do have: the Croatian one (`Beograd`, `Beč`, `Moskva`), then the local name
- * where it is already Latin (the vendor sets `script` only for one that is
- * not), then English, which for a Serbian village is its Latin spelling.
+ * English reads `name:en`, else the local name. Serbian reads the Latin
+ * Serbian name, then Serbian, then the tile's local name.
  */
 export function labelText(locale: Locale): unknown[] {
   if (locale === "en") return ["coalesce", ["get", "name:en"], ["get", "name"]];
   return [
     "coalesce",
     ["get", "name:sr-Latn"],
-    ["get", "name:hr"],
-    ["case", ["has", "script"], ["coalesce", ["get", "name:en"], ["get", "name"]], ["get", "name"]],
+    ["get", "name:sr"],
+    ["get", "name"],
   ];
 }
 
@@ -268,6 +272,30 @@ export function outlineAreas(): { readonly type: "FeatureCollection"; readonly f
   return areas;
 }
 
+/** Every disputed shape, carrying only the id the style needs. */
+export function disputedAreasGeoJson(): {
+  readonly type: "FeatureCollection";
+  readonly features: readonly {
+    readonly type: "Feature";
+    readonly id: string;
+    readonly properties: { readonly id: string };
+    readonly geometry: (typeof disputedAreas)[number]["geometry"];
+  }[];
+} {
+  return {
+    type: "FeatureCollection",
+    features: disputedAreas.map((area) => ({
+      type: "Feature",
+      id: area.id,
+      properties: { id: area.id },
+      geometry: area.geometry,
+    })),
+  };
+}
+
+const DISPUTED_AREA_FILTER = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
+const DISPUTED_POINT_FILTER = ["==", ["geometry-type"], "Point"];
+
 /**
  * Every territory's name at Natural Earth's label point. `rank` is the
  * negated area of its box, so `symbol-sort-key` places a large territory's
@@ -330,6 +358,7 @@ export function regionStyle(input: RegionStyleInput): StyleSpecification {
     version: 8,
     sources: {
       [OUTLINE_SOURCE]: { type: "geojson", data: outlineAreas() as never },
+      [DISPUTED_SOURCE]: { type: "geojson", data: disputedAreasGeoJson() as never },
       [COUNTRY_SOURCE]: { type: "geojson", data: outlineLabels(locale) as never },
       ...tileSources,
     },
@@ -346,6 +375,31 @@ export function regionStyle(input: RegionStyleInput): StyleSpecification {
         },
       },
       ...details.flatMap((detail) => geometryLayers(detailSource(detail), flavor)),
+      {
+        id: DISPUTED_HATCH_LAYER,
+        type: "fill",
+        source: DISPUTED_SOURCE,
+        filter: DISPUTED_AREA_FILTER as never,
+        paint: { "fill-pattern": DISPUTED_HATCH_IMAGE, "fill-opacity": 0.9 },
+      },
+      {
+        id: DISPUTED_LINE_LAYER,
+        type: "line",
+        source: DISPUTED_SOURCE,
+        filter: DISPUTED_AREA_FILTER as never,
+        paint: {
+          "line-color": ink(token, "data"),
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.1, 8, 2],
+          "line-dasharray": [2, 1.5],
+        },
+      },
+      {
+        id: DISPUTED_POINT_LAYER,
+        type: "symbol",
+        source: DISPUTED_SOURCE,
+        filter: DISPUTED_POINT_FILTER as never,
+        layout: { "icon-image": DISPUTED_POINT_IMAGE, "icon-size": 1, "icon-allow-overlap": true },
+      },
       {
         id: PICK_INSTALLED_LAYER,
         type: "fill",

@@ -63,12 +63,14 @@ describe("what a served entry carries", () => {
   it("gives a document the narrowest policy that still renders an article", () => {
     const headers = zimResponseHeaders("text/html");
     expect(headers["content-security-policy"]).toBe(ZIM_CSP);
-    // The four directives that matter, asserted by name rather than by the whole
+    expect(headers["access-control-allow-origin"]).toBe("*");
+    // The directives that matter, asserted by name rather than by the whole
     // string: a policy that lost `script-src` would still be a policy.
     expect(ZIM_CSP).toContain("script-src 'none'");
     expect(ZIM_CSP).toContain("connect-src 'none'");
     expect(ZIM_CSP).toContain("object-src 'none'");
     expect(ZIM_CSP).toContain("img-src nx-zim: data:");
+    expect(ZIM_CSP).toContain("style-src nx-zim: 'unsafe-inline'");
     // Nothing remote, in any directive: `https:` must not appear at all.
     expect(ZIM_CSP).not.toContain("https:");
     expect(ZIM_CSP).not.toContain("http:");
@@ -80,6 +82,7 @@ describe("what a served entry carries", () => {
     expect(headers["cache-control"]).toBe("no-store");
     expect(headers["x-content-type-options"]).toBe("nosniff");
     expect(headers["content-type"]).toBe("image/png");
+    expect(headers["access-control-allow-origin"]).toBe("*");
   });
 
   it("recognises the document types a pack writes", () => {

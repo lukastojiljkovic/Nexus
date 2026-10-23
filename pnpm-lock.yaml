@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  zod: ^4.6.6
   brace-expansion@1: ^1.1.20
   brace-expansion@2: ^2.1.6
   brace-expansion@5: ^5.0.9
@@ -217,8 +218,8 @@ importers:
         specifier: ^5.0.0
         version: 5.2.0(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(sass@1.79.4))
       electron:
-        specifier: ^44.9.0
-        version: 44.9.0
+        specifier: ^44.9.1
+        version: 44.9.3
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
@@ -3102,8 +3103,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@44.9.0:
-    resolution: {integrity: sha512-boP8zA5OIoMGYe3uWP4IqB1VJNoEzdHYgcBaVYnd1DBv5TogwXkbM4yJGSfNmYCzalVQ5J3TAIbaKOY+ILTnyg==}
+  electron@44.9.3:
+    resolution: {integrity: sha512-Cv9/yMnZxNWsMlIe8T4v//NKHdUvbeyoTJoXE3BIcRxus2meeFaO9h/P3zB5d4cBXum51IgAYrT2QjpIDWKpJA==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -4977,10 +4978,10 @@ packages:
     resolution: {integrity: sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: ^4.6.6
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
@@ -7570,7 +7571,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.9.0:
+  electron@44.9.3:
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0
@@ -7661,8 +7662,8 @@ snapshots:
       '@babel/parser': 7.29.7
       eslint: 10.13.0(jiti@2.7.0)
       hermes-parser: 0.25.1
-      zod: 4.4.3
-      zod-validation-error: 4.0.2(zod@4.4.3)
+      zod: 4.6.7
+      zod-validation-error: 4.0.2(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -9564,11 +9565,11 @@ snapshots:
 
   zlibjs@0.3.1: {}
 
-  zod-validation-error@4.0.2(zod@4.4.3):
+  zod-validation-error@4.0.2(zod@4.6.7):
     dependencies:
-      zod: 4.4.3
+      zod: 4.6.7
 
-  zod@4.4.3: {}
+  zod@4.6.7: {}
 
   zustand@4.5.7(@types/react@19.3.0)(react@19.3.1):
     dependencies:

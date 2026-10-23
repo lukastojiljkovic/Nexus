@@ -2,9 +2,16 @@ import { remoteStyleUrls } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { regions as territories } from "../shared/world/outline.js";
+import { disputedAreas } from "../shared/world/disputed.js";
 import {
   BACKGROUND_LAYER,
   COUNTRY_LABEL_LAYER,
+  DISPUTED_HATCH_IMAGE,
+  DISPUTED_HATCH_LAYER,
+  DISPUTED_LINE_LAYER,
+  DISPUTED_POINT_IMAGE,
+  DISPUTED_POINT_LAYER,
+  DISPUTED_SOURCE,
   OUTLINE_LAND_LAYER,
   PICK_INSTALLED_LAYER,
   PICK_SELECTED_LAYER,
@@ -51,7 +58,14 @@ function evaluate(expression: unknown, properties: Record<string, string>): unkn
   }
 }
 
-const BELGRADE = { name: "Београд", "name:en": "Belgrade", "name:hr": "Beograd", script: "Cyrillic" };
+const BELGRADE = {
+  name: "Београд",
+  "name:sr": "Београд",
+  "name:sr-Latn": "Beograd",
+  "name:en": "Belgrade",
+  "name:hr": "Beograd",
+  script: "Cyrillic",
+};
 const VILLAGE = { name: "Ђуринци", "name:en": "Đurinci", script: "Cyrillic" };
 const MUNICH = { name: "München", "name:en": "Munich" };
 const MOSCOW = { name: "Москва", "name:en": "Moscow", script: "Cyrillic" };
@@ -62,12 +76,13 @@ describe("labelText", () => {
     expect(evaluate(labelText("en"), { name: "Topola" })).toBe("Topola");
   });
 
-  it("reads Serbian in Latin: the Croatian name first, then a Latin local name, then English", () => {
+  it("reads Serbian in Latin, then Serbian, then the local name", () => {
     expect(evaluate(labelText("sr"), BELGRADE)).toBe("Beograd");
-    expect(evaluate(labelText("sr"), VILLAGE)).toBe("Đurinci");
+    expect(evaluate(labelText("sr"), { name: "Topola", "name:sr": "Топола" })).toBe("Топола");
+    expect(evaluate(labelText("sr"), VILLAGE)).toBe("Ђуринци");
     expect(evaluate(labelText("sr"), MUNICH)).toBe("München");
-    expect(evaluate(labelText("sr"), MOSCOW)).toBe("Moscow");
-    expect(evaluate(labelText("sr"), { ...MOSCOW, "name:hr": "Moskva" })).toBe("Moskva");
+    expect(evaluate(labelText("sr"), MOSCOW)).toBe("Москва");
+    expect(evaluate(labelText("sr"), { ...MOSCOW, "name:hr": "Moskva" })).toBe("Москва");
   });
 });
 
@@ -217,6 +232,43 @@ describe("regionStyle", () => {
     expect(last("regions-full:", "line")).toBeLessThan(at(PICK_INSTALLED_LAYER));
     expect(at(PICK_SELECTED_LAYER)).toBeLessThan(first("regions-overview:", "symbol"));
     expect(last("regions-full:", "symbol")).toBeLessThan(at(COUNTRY_LABEL_LAYER));
+  });
+
+  it("draws every dispute over the outline with a hatch, a dashed border and a dashed point", () => {
+    expect(style.sources[DISPUTED_SOURCE]).toMatchObject({
+      type: "geojson",
+      data: expect.objectContaining({ type: "FeatureCollection" }),
+    });
+    const source = style.sources[DISPUTED_SOURCE];
+    expect(source && "data" in source ? source.data : null).toMatchObject({
+      features: expect.arrayContaining([expect.objectContaining({ id: "kosovo" })]),
+    });
+
+    const hatch = style.layers[at(DISPUTED_HATCH_LAYER)];
+    expect(hatch).toMatchObject({
+      type: "fill",
+      source: DISPUTED_SOURCE,
+      paint: { "fill-pattern": DISPUTED_HATCH_IMAGE },
+    });
+    expect(style.layers[at(DISPUTED_LINE_LAYER)]).toMatchObject({
+      type: "line",
+      source: DISPUTED_SOURCE,
+      paint: { "line-dasharray": expect.any(Array) },
+    });
+    expect(style.layers[at(DISPUTED_POINT_LAYER)]).toMatchObject({
+      type: "symbol",
+      source: DISPUTED_SOURCE,
+      layout: { "icon-image": DISPUTED_POINT_IMAGE },
+    });
+    expect(disputedAreas.length).toBeGreaterThan(0);
+  });
+
+  it("orders every dispute layer above the outline and below every label", () => {
+    expect(at(OUTLINE_LAND_LAYER)).toBeLessThan(at(DISPUTED_HATCH_LAYER));
+    expect(at(DISPUTED_HATCH_LAYER)).toBeLessThan(at(DISPUTED_LINE_LAYER));
+    expect(at(DISPUTED_LINE_LAYER)).toBeLessThan(at(DISPUTED_POINT_LAYER));
+    expect(at(DISPUTED_POINT_LAYER)).toBeLessThan(first("regions-overview:", "symbol"));
+    expect(at(DISPUTED_POINT_LAYER)).toBeLessThan(at(COUNTRY_LABEL_LAYER));
   });
 
   it("names no address off this machine, which is what makes the map work offline", () => {

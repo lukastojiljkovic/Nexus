@@ -1062,6 +1062,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
                       <Button
                         size="sm"
                         variant="primary"
+                        disabled={!recipe.saveable}
                         onClick={() =>
                           void window.nexus.modules.cookbook
                             .savePackRecipe({ profileId, packId, id: recipe.id })
@@ -1087,6 +1088,7 @@ function Packs({ profileId, onSaved }: { profileId: string; onSaved: (id: string
                     {recipe.servings === null
                       ? copy.packs.notStated
                       : numberFormat().format(recipe.servings)}
+                    {!recipe.saveable && ` · ${copy.packs.tooLargeToSave}`}
                   </span>
                 </ListRow>
               ))}
@@ -1353,6 +1355,7 @@ function RecipeEditor({
             <Button
               size="sm"
               variant="quiet"
+              aria-label={copy.editor.removeStep}
               onClick={() => setSteps((current) => current.filter((_entry, at) => at !== index))}
             >
               <Icon name="trash" />
@@ -1360,7 +1363,7 @@ function RecipeEditor({
           </div>
         ))}
         <Button size="sm" onClick={() => setSteps((current) => [...current, { text: "", timerMinutes: "" }])}>
-          {copy.list.add}
+          {copy.editor.addStep}
         </Button>
       </div>
       {problem === "steps" && <p className="cookbook__error">{copy.editor.errorSteps}</p>}
