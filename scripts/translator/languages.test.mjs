@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
   bcp47Tag,
   buildLanguages,
-  namesFor,
   parseFloresNames,
   parseNllbCodes,
   renderModule,
@@ -65,16 +64,6 @@ describe("FLORES names", () => {
   });
 });
 
-describe("display names", () => {
-  it("returns ICU's English and Serbian Latin names for a known tag", () => {
-    expect(namesFor("sr-Cyrl")).toEqual({ en: "Serbian (Cyrillic)", srLatn: "srpski (ćirilica)" });
-  });
-
-  it("returns undefined where ICU has no name for the tag", () => {
-    expect(namesFor("bzd-Latn")).toEqual({ en: undefined, srLatn: undefined });
-  });
-});
-
 describe("buildLanguages", () => {
   const languages = buildLanguages({
     codes: ["srp_Cyrl", "eng_Latn", "kmr_Latn", "ace_Latn", "bzd_Latn"],
@@ -88,18 +77,21 @@ describe("buildLanguages", () => {
   });
   const byCode = (code) => languages.find((language) => language.code === code);
 
-  it("fills one row per code with its codes and a name only where one is needed", () => {
+  it("fills one row per code with its codes and its FLORES name", () => {
     expect(byCode("srp_Cyrl")).toEqual({
       code: "srp_Cyrl",
       iso3: "srp",
       script: "Cyrl",
       bcp47: "sr-Cyrl",
-      fallbackName: null,
+      fallbackName: "Serbian",
     });
   });
 
-  it("uses the FLORES name for both locales only when ICU has none", () => {
-    expect(byCode("eng_Latn").fallbackName).toBeNull();
+  // The app names a language through Electron's ICU, which named 52 of the 202
+  // NLLB languages nothing at all where Node's ICU, which ran this script, named
+  // them; the table cannot tell which, so every row carries its name.
+  it("carries the FLORES name on every row, ICU's name or not", () => {
+    expect(byCode("eng_Latn").fallbackName).toBe("English");
     expect(byCode("bzd_Latn").fallbackName).toBe("Test Language");
   });
 
@@ -114,13 +106,19 @@ describe("buildLanguages", () => {
     ]);
   });
 
-  it("refuses a code that neither ICU nor FLORES can name", () => {
+  // Measured: NLLB's tokenizer has `sat_Beng`, the FLORES README `sat_Olck`.
+  it("names a code FLORES spells in another script after that language's one row", () => {
+    const santali = buildLanguages({ codes: ["sat_Beng"], flores: new Map([["sat_Olck", "Santali"]]) });
+    expect(santali[0]?.fallbackName).toBe("Santali");
+  });
+
+  it("refuses a code FLORES does not name", () => {
     expect(() =>
       buildLanguages({
-        codes: ["bzd_Latn"],
+        codes: ["eng_Latn"],
         flores: new Map(),
       }),
-    ).toThrow(/bzd_Latn/);
+    ).toThrow(/eng_Latn/);
   });
 
   it("sorts the rows by code", () => {

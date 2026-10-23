@@ -15,6 +15,11 @@
 // are listed in its `special_tokens_map.json`, which is what this reads. The
 // FLORES README is the only upstream table of English names for the 200-odd
 // codes, so it is the fallback name for a language ICU cannot name.
+//
+// WHY EVERY ROW CARRIES ONE. The app names a language through Electron's ICU,
+// whose data is cut down: it named 52 of the 202 languages nothing at all where
+// Node's ICU, which runs this script, named every one. What ICU knows is decided
+// where the app runs, so the table carries the FLORES name on every row.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,10 +33,6 @@ export const SOURCES = {
 };
 
 const NLLB_CODE = /^([a-z]{3})_([A-Z][a-z]{3})$/;
-// `fallback: "none"` makes ICU answer `undefined` for a tag it cannot name,
-// where the default would return the tag itself.
-const NAMES_EN = new Intl.DisplayNames(["en"], { type: "language", fallback: "none" });
-const NAMES_SR_LATN = new Intl.DisplayNames(["sr-Latn"], { type: "language", fallback: "none" });
 
 /** The NLLB codes of a `special_tokens_map.json`, sorted. */
 export function parseNllbCodes(specialTokens) {
@@ -68,45 +69,31 @@ export function parseFloresNames(markdown) {
   );
 }
 
-/** ICU's English and Serbian (Latin) names for a BCP 47 tag, `undefined` where ICU has none. */
-export function namesFor(tag) {
-  return { en: NAMES_EN.of(tag), srLatn: NAMES_SR_LATN.of(tag) };
-}
-
 /**
- * One row per code, sorted. `fallbackName` is set where ICU cannot name the
- * language in both locales, and where its tag is shared with another code:
- * ICU names `ak-Latn` "Akan" for both Akan and Twi, so the FLORES name is the
- * only correct one for either.
+ * One row per code, sorted, each with its FLORES English name as `fallbackName`
+ * (see the header for why every row). Where two codes share a tag it is also
+ * the only correct name: ICU names `ak-Latn` "Akan" for both Akan and Twi.
  */
 export function buildLanguages({ codes, flores }) {
-  const tags = codes.map(bcp47Tag);
   return codes
-    .map((code, index) => {
+    .map((code) => {
       const { iso3, script } = splitNllbCode(code);
-      const bcp47 = tags[index];
-      const names = namesFor(bcp47);
-      const shared = tags.indexOf(bcp47) !== tags.lastIndexOf(bcp47);
-      return {
-        code,
-        iso3,
-        script,
-        bcp47,
-        fallbackName:
-          shared || names.en === undefined || names.srLatn === undefined
-            ? floresNameFor(code, flores)
-            : null,
-      };
+      return { code, iso3, script, bcp47: bcp47Tag(code), fallbackName: floresNameFor(code, flores) };
     })
     .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
 }
 
+/**
+ * A code's FLORES name, else the name of the one FLORES row in the same language:
+ * NLLB's tokenizer spells Santali `sat_Beng` where the README has `sat_Olck`.
+ */
 function floresNameFor(code, flores) {
-  const name = flores.get(code);
-  if (name === undefined) {
-    throw new Error(`languages: ${code} has no name in ICU and none in the FLORES table`);
-  }
-  return name;
+  const exact = flores.get(code);
+  if (exact !== undefined) return exact;
+  const { iso3 } = splitNllbCode(code);
+  const same = [...flores].filter(([other]) => other.startsWith(`${iso3}_`));
+  if (same.length !== 1) throw new Error(`languages: ${code} has no name in the FLORES table`);
+  return same[0][1];
 }
 
 /** The generated TypeScript module: the typed table and its lookup. */
@@ -128,7 +115,7 @@ export function renderModule({ languages, sources, date }) {
     ...sources.map((source) => `//   ${source}`),
     `// Generated: ${date}`,
     "",
-    "/** One NLLB-200 language: its codes, and a name where ICU has none. */",
+    "/** One NLLB-200 language: its codes, and its FLORES English name. */",
     "export interface NllbLanguage {",
     "  /** The NLLB-200 (FLORES-200) code, `xxx_Ssss`. */",
     "  readonly code: string;",
@@ -138,8 +125,8 @@ export function renderModule({ languages, sources, date }) {
     "  readonly script: string;",
     "  /** BCP 47 tag, for `Intl` locale lookups. Two codes may share one (`ak-Latn`). */",
     "  readonly bcp47: string;",
-    "  /** The FLORES English name, set where ICU cannot name the language, or where its tag is shared. */",
-    "  readonly fallbackName: string | null;",
+    "  /** The FLORES English name: shown where the app's ICU has none, and where the tag is shared. */",
+    "  readonly fallbackName: string;",
     "}",
     "",
     "export const NLLB_LANGUAGES: readonly NllbLanguage[] = [",
@@ -203,11 +190,7 @@ async function main() {
     renderModule({ languages, sources: Object.values(SOURCES), date }),
   );
 
-  const count = (predicate) => languages.filter(predicate).length;
-  console.log(
-    `languages: ${String(languages.length)} NLLB languages; ` +
-      `${String(count((l) => l.fallbackName !== null))} with a FLORES fallback name -> ${values.out}`,
-  );
+  console.log(`languages: ${String(languages.length)} NLLB languages, each with its FLORES name -> ${values.out}`);
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

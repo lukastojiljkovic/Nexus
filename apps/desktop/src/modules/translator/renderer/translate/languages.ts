@@ -27,14 +27,15 @@ const PER_LANGUAGE = countBy(languageOf);
  * name, because ICU names both alike (Akan and Twi are both `ak-Latn`). A
  * language the table has in two scripts is named with its script ("Traditional
  * Chinese"); any other without it, since "German (Latin)" tells the reader
- * nothing. Where ICU has no name, the FLORES name, else the code.
+ * nothing. Where ICU has no name, which in Electron is 52 of the 202, the FLORES
+ * name the table carries for every row.
  */
 function namer(tags: readonly string[]): (row: NllbLanguage) => string {
   const names = new Intl.DisplayNames([...tags], { type: "language", fallback: "none" });
   return (row) => {
-    if ((PER_TAG.get(row.bcp47) ?? 0) > 1) return row.fallbackName ?? row.code;
+    if ((PER_TAG.get(row.bcp47) ?? 0) > 1) return row.fallbackName;
     const tag = (PER_LANGUAGE.get(languageOf(row)) ?? 0) > 1 ? row.bcp47 : languageOf(row);
-    return names.of(tag) ?? row.fallbackName ?? row.code;
+    return names.of(tag) ?? row.fallbackName;
   };
 }
 

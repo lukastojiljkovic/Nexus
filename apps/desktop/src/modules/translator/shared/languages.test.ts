@@ -29,6 +29,12 @@ describe("NLLB language table", () => {
     }
   });
 
+  // Electron's ICU names 52 of these languages nothing, so the page shows this name.
+  it("carries a name for every language, whatever ICU knows", () => {
+    expect(NLLB_LANGUAGES.filter((language) => language.fallbackName.trim() === "")).toEqual([]);
+    expect(languageByCode("sat_Beng")?.fallbackName).toBe("Santali");
+  });
+
   it("returns undefined for a code the table does not carry", () => {
     expect(languageByCode("xxx_Latn")).toBeUndefined();
   });
