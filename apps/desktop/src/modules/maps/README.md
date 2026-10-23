@@ -16,7 +16,6 @@ A map that works offline: download a territory, a continent or the world, search
 - **Channels** — [`shared/ipc.ts`](shared/ipc.ts) declares the ops below; [`main/register.ts`](main/register.ts) registers one handler per op. Channels are named `<id>:<op>`. Ops: `list`, `createPin`, `updatePin`, `removePin`, `setLocation`, `clearLocation`, and the machine's map regions: `regions`, `estimateRegion`, `downloadRegion`, `pauseRegion`, `cancelRegion`, `removeRegion`.
 - **Store** — `MapsStore` in [`packages/db/src/maps/`](../../../../../packages/db/src/maps/), migration [`085-maps.ts`](../../../../../packages/db/src/migrations/085-maps.ts).
 - **Map regions** — Cut from the Protomaps planet build by [`main/extract/`](main/extract/) and downloaded by [`main/regions/`](main/regions/) into `<userData>/maps/`; the map reads them through the `nx-map:` scheme ([`main/regions/protocol.ts`](main/regions/protocol.ts)). `main/index.ts` wires the service with `configureMapRegions` ([`main/regions/services.ts`](main/regions/services.ts)).
-- **Content pack** — The `map-serbia` map pack (`MAP_PACK_REGIONS` in [`shared/packs.ts`](shared/packs.ts)), read through the `nx-pack:` scheme by [`renderer/packFile.ts`](renderer/packFile.ts). Replaced by the map regions in 2.5 (ADR-118).
 
 ## Renderer half
 

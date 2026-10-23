@@ -129,6 +129,15 @@ const NO_REGIONS: MapRegionsView = { installed: [], job: null, newestBuild: null
  * the exact objects they carry.
  */
 type GeoJsonData = Parameters<GeoJSONSource["setData"]>[0];
+
+/**
+ * The one GeoJSON cast. It goes through `unknown` because this module's
+ * collections are readonly and `@types/geojson`'s arrays are not; MapLibre reads
+ * the data it is handed and never writes to it.
+ */
+function geoJson(data: MapPointCollection | MapLineCollection): GeoJsonData {
+  return data as unknown as GeoJsonData;
+}
 /** `never` because the paint value's own union is unnameable here — see the note above. */
 type PaintValue = never;
 /** `never` for the same reason: a filter is an expression. */
@@ -622,9 +631,11 @@ export default function MapsPage({ profileId }: ModulePageProps) {
                   {search.results.map((place) => (
                     <li key={place.id}>
                       <button type="button" className="maps__result" onClick={() => selectResult(place)}>
-                        <span className="maps__result-name">{place.name}</span>
+                        <span className="maps__result-name">
+                          {locale === "en" ? (place.nameEn ?? place.name) : place.name}
+                        </span>
                         <span className="maps__result-kind">
-                          {place.kind}
+                          {copy.search.kinds[place.kind]}
                           {place.population === null ? "" : ` · ${formatPopulation(place.population, locale)}`}
                         </span>
                       </button>
@@ -796,11 +807,11 @@ function applyPicking(map: MapLibreMap, pick: PickState): void {
  * away, so this runs again for each one, with the data the page holds now.
  */
 function addMapLayers(map: MapLibreMap, overlay: Overlay): void {
-  map.addSource(PINS_SOURCE, { type: "geojson", data: overlay.pins as GeoJsonData, promoteId: "id" });
-  map.addSource(SELECTED_SOURCE, { type: "geojson", data: overlay.selected as GeoJsonData });
-  map.addSource(LOCATION_SOURCE, { type: "geojson", data: overlay.location as GeoJsonData });
-  map.addSource(MEASURE_POINT_SOURCE, { type: "geojson", data: overlay.measurePoints as GeoJsonData });
-  map.addSource(MEASURE_LINE_SOURCE, { type: "geojson", data: overlay.measureLine as GeoJsonData });
+  map.addSource(PINS_SOURCE, { type: "geojson", data: geoJson(overlay.pins), promoteId: "id" });
+  map.addSource(SELECTED_SOURCE, { type: "geojson", data: geoJson(overlay.selected) });
+  map.addSource(LOCATION_SOURCE, { type: "geojson", data: geoJson(overlay.location) });
+  map.addSource(MEASURE_POINT_SOURCE, { type: "geojson", data: geoJson(overlay.measurePoints) });
+  map.addSource(MEASURE_LINE_SOURCE, { type: "geojson", data: geoJson(overlay.measureLine) });
   map.addLayer({
     id: MEASURE_LINE_LAYER,
     type: "line",
@@ -862,9 +873,9 @@ function addMapLayers(map: MapLibreMap, overlay: Overlay): void {
 }
 
 /** Data into one source, if the map and the source both exist yet. */
-function setData(map: MapLibreMap | null, sourceId: string, data: unknown): void {
+function setData(map: MapLibreMap | null, sourceId: string, data: MapPointCollection | MapLineCollection): void {
   const source = map?.getSource(sourceId);
-  if (source instanceof GeoJSONSource) source.setData(data as GeoJsonData);
+  if (source instanceof GeoJSONSource) source.setData(geoJson(data));
 }
 
 /** A population through `Intl`, so a Serbian reading groups with a dot: `1.197.714`. */

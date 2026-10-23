@@ -16,6 +16,8 @@
  * one (`check:address` exists because of that), and this page addresses the
  * reader directly: „Spusti tačku", not „Spustio si tačku".
  */
+import type { MapPlaceKind } from "@nexus/core";
+
 import type { RegionProblem } from "../shared/ipc.js";
 import type { Continent } from "./regions/names.js";
 
@@ -33,6 +35,26 @@ export const sr = {
     loading: "Priprema indeksa mesta…",
     none: "Pretraga obuhvata preuzete mape, a nijedna još nije preuzeta.",
     failed: "Indeks mesta nije pročitan, pa pretraga ne radi.",
+    kinds: {
+      country: "Država",
+      state: "Savezna jedinica",
+      region: "Region",
+      province: "Pokrajina",
+      district: "Distrikt",
+      county: "Okrug",
+      municipality: "Opština",
+      city: "Grad",
+      town: "Gradić",
+      village: "Selo",
+      suburb: "Predgrađe",
+      quarter: "Četvrt",
+      neighbourhood: "Kvart",
+      hamlet: "Zaselak",
+      isolated_dwelling: "Usamljeno imanje",
+      farm: "Farma",
+      locality: "Lokalitet",
+      island: "Ostrvo",
+    } satisfies Record<MapPlaceKind, string>,
   },
   picker: {
     hint: "Klikni na teritoriju da preuzmeš, ažuriraš ili ukloniš njenu mapu.",
