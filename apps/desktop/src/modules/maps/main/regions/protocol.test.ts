@@ -32,6 +32,8 @@ describe("the map region protocol", () => {
     const part = await ask(regionUrl(FILE), "bytes=2-4");
     expect(part.status).toBe(206);
     expect(part.headers.get("content-range")).toBe("bytes 2-4/10");
+    // The map reads the file with `fetch` from a page at file://, another origin.
+    expect(part.headers.get("access-control-allow-origin")).toBe("*");
     expect(await part.text()).toBe("234");
   });
 

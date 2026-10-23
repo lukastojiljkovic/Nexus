@@ -544,6 +544,7 @@ import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
 // module's environment is installed once below - which is the whole of what a kit
 // module adds to this file.
 import { registerPackProtocol } from "./packs/protocol.js";
+import { PRIVILEGED_SCHEMES } from "./schemes.js";
 import { installReaderEnvironment } from "../modules/reader/main/electron.js";
 import { volumeFreeBytes } from "./packs/install.js";
 import {
@@ -989,39 +990,9 @@ const SMOKE_ACCOUNT_LABEL = "Smoke nalog";
 const SMOKE_SECOND_LABEL = "Drugi smoke nalog";
 const SMOKE_SECOND_PASSCODE = "second-passcode-2";
 
-// SEC-EL: registers the `nx-blob:` scheme as privileged (ADR-014) — MUST run
-// at module scope, before the app's "ready" event, or Electron ignores it.
-// `standard` gives it normal URL parsing (so the attachment hash can be read
-// back off the host); `secure` + the CSP's `img-src` entry are what let a
-// future inline `<img src="nx-blob://...">` (slice 003-b) load at all.
-protocol.registerSchemesAsPrivileged([
-  { scheme: "nx-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // The private section's read protocol (PRIV v1 / ADR-057): same privileges,
-  // entirely different gate — it serves ONLY while a section is unlocked.
-  { scheme: "priv-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // ADR-100: a content pack's own files - an article's images today, a map's tiles
-  // later. The handler is `main/packs/protocol.ts`, and its gate is the installed
-  // PACK: an id no installed manifest answers for, and a path that manifest does
-  // not list, are both 404s. `standard` gives the URL normal parsing (the pack id
-  // is the host and the rest is the pack path), and `stream` is what lets a media
-  // client read it by ranges.
-  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // The arts guide's read protocol (CULTURE, ADR-091): serves an IMAGE out of an
-  // installed, signature-verified content pack, and nothing else. Same
-  // privileges for the same reason - a URL that parses, that a CSP may allow,
-  // and that a `<img>` may load - with the handler registering below.
-  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // The offline library's read protocol (ADR-098): ZIM entries, one library per
-  // host, served by `main/zim/zimElectron.ts` from a file on this machine.
-  // `standard` is what gives the URL a host and a path at all (the library id
-  // and the entry), and `stream` is what lets a large image be answered without
-  // being held whole.
-  { scheme: "nx-zim", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // A downloaded map region (ADR-118): a PMTiles file the map reads by ranges,
-  // served by `modules/maps/main/regions/protocol.ts` only when the registry
-  // names it. The same privileges as `nx-pack:`, for the same reader.
-  { scheme: MAP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-]);
+// SEC-EL: the app's schemes are privileged at module scope, before the app's
+// "ready" event, or Electron ignores them; `schemes.ts` says what each one is for.
+protocol.registerSchemesAsPrivileged([...PRIVILEGED_SCHEMES]);
 
 // Stable product name so userData resolves to a clean, branded directory
 // (%APPDATA%\Nexus) rather than the scoped package name. `productName` in

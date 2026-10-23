@@ -239,6 +239,12 @@ export function createPackProtocolHandler(
  * A file on this machine as the answer to `request`: whole (200), the one
  * range it asks for (206), or 416 for a range past its end. Shared by every
  * read protocol that serves a file a reader seeks in.
+ *
+ * **Any origin may read it.** The app's page is at `file://`, so a `fetch` or a
+ * WebGL texture it reads from here is a cross-origin request, which Chromium
+ * refuses without these two headers (and the scheme's `corsEnabled`,
+ * `schemes.ts`). What is served is a signed public pack or a map region, never
+ * profile data, so the answer names no origin.
  */
 export function fileResponse(request: Request, file: string, size: number, contentType: string): Response {
   const headers = new Headers({
@@ -246,6 +252,8 @@ export function fileResponse(request: Request, file: string, size: number, conte
     "X-Content-Type-Options": "nosniff",
     "Accept-Ranges": "bytes",
     "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Expose-Headers": "Content-Range",
   });
 
   const range = parseRangeHeader(request.headers.get("range"), size);

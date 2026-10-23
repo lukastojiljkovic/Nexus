@@ -332,11 +332,9 @@ export function SolarSystemView({
       state.flight = null;
     });
 
+    // three loads with `crossOrigin = "anonymous"`: a WebGL texture from another
+    // origin must be granted by CORS, which `nx-pack:` does (`main/schemes.ts`).
     const textureLoader = new THREE.TextureLoader();
-    // three loads with `crossOrigin = "anonymous"`, which turns an image served
-    // over the app's own protocol into a CORS request it cannot satisfy. An
-    // empty value is the same as omitting the attribute.
-    textureLoader.setCrossOrigin("");
 
     const state: ViewState = {
       renderer,
