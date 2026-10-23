@@ -14403,6 +14403,11 @@ async function fillDemoProfile(): Promise<void> {
     new Date(now).toISOString(),
   );
   seedDemoBusiness(database.raw, business.id, now);
+  // ADR-101 made the module switch device-wide; the flag rows above alone no
+  // longer put a demo's modules in the rail. Both harnesses start from a fresh
+  // sandbox, so without this every disabled-by-default module is silently
+  // absent from the screenshot sweep and the demo account.
+  showEveryModule(userDataDir(), moduleRegistry);
 }
 
 /**
@@ -14823,6 +14828,9 @@ app.whenReady().then(async () => {
         void runShots(mainWindow!, shotsOutputDir(), {
           passcode: DEMO_PASSCODE,
           userDataDir: app.getPath("userData"),
+          restoreShell: () => {
+            showEveryModule(userDataDir(), moduleRegistry);
+          },
         })
           .then((frames) => {
             const findings = frames.reduce((total, frame) => total + frame.findings.length, 0);
