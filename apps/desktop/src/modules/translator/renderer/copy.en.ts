@@ -90,7 +90,7 @@ export const en: typeof sr = {
     translateFailed: "The translation stopped.",
     noModel: {
       title: "No translation model is installed yet",
-      body: "The translator uses one of three models: “nllb-600m”, “nllb-1.3b” or “nllb-3.3b”. Install one in Settings, on the “Content packs” card, and come back to this page.",
+      body: "The translator uses one of three models: “nllb-600m”, “nllb-1300m” or “nllb-3300m”. Install one in Settings, on the “Content packs” card, and come back to this page.",
     },
   },
   notInstalled: {

@@ -2,7 +2,7 @@
  * NLLB on a REAL pack folder, skipped by default: no CI machine has one, and a
  * load takes seconds to minutes. Point it at a built pack to run it:
  *
- *     $env:NEXUS_NLLB_DIR = "$HOME\.nexus-packs\nllb-3.3b"
+ *     $env:NEXUS_NLLB_DIR = "$HOME\.nexus-packs\nllb-3300m"
  *     node ../../node_modules/vitest/vitest.mjs run src/modules/translator/main/nllb/inference.slow.test.ts
  *
  * It proves what the unit tests cannot: that the pack's files load with the

@@ -5,7 +5,7 @@
 // signed model packs, and the user picks the size. This assembles the three pack
 // folders and their metadata for `scripts/pack-sign.mjs`; it signs nothing.
 //
-//   node scripts/packs/nllb/build.mjs --pack nllb-600m,nllb-1.3b [--update-sources]
+//   node scripts/packs/nllb/build.mjs --pack nllb-600m,nllb-1300m [--update-sources]
 //   node scripts/packs/nllb/build.mjs --all
 //
 // The 600M files are downloaded at a pinned revision into `<cache>\<id>\`, and a cached

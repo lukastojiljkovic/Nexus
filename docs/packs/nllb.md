@@ -7,7 +7,7 @@ the files `@huggingface/transformers` reads to load it. The translator runs them
 ## What the builder does
 
 ```text
-node scripts/packs/nllb/build.mjs --pack nllb-600m,nllb-1.3b --update-sources
+node scripts/packs/nllb/build.mjs --pack nllb-600m,nllb-1300m --update-sources
 node scripts/packs/nllb/build.mjs --all
 ```
 
@@ -55,12 +55,12 @@ Measured by the builder's own output on 2026-10-22, on this machine:
 | Pack | Model | Files | Size | Build time |
 | --- | --- | --- | --- | --- |
 | `nllb-600m` | `facebook/nllb-200-distilled-600M` (from `Xenova/nllb-200-distilled-600M`) | 7 | 911 962 632 B | 44 387 ms, downloaded |
-| `nllb-1.3b` | `facebook/nllb-200-distilled-1.3B` (converted here) | 7 | 1 940 515 828 B | 57 556 ms, read in place |
-| `nllb-3.3b` | `facebook/nllb-200-3.3B` (converted here) | 9 | 4 466 791 113 B | 13 508 ms, read in place |
+| `nllb-1300m` | `facebook/nllb-200-distilled-1.3B` (converted here) | 7 | 1 940 515 828 B | 57 556 ms, read in place |
+| `nllb-3300m` | `facebook/nllb-200-3.3B` (converted here) | 9 | 4 466 791 113 B | 13 508 ms, read in place |
 
 The per-file sizes of the two built packs:
 
-| File | `nllb-600m` | `nllb-1.3b` | `nllb-3.3b` |
+| File | `nllb-600m` | `nllb-1300m` | `nllb-3300m` |
 | --- | ---: | ---: | ---: |
 | `config.json` | 873 B | 934 B | 924 B |
 | `generation_config.json` | 189 B | 193 B | 193 B |

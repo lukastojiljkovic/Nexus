@@ -155,12 +155,12 @@ describe("the translate page's preferences", () => {
   it("round-trips the source, the target, the model, the script and the recent languages", () => {
     persistTranslateSource("deu_Latn");
     persistTranslateTarget("srp_Cyrl");
-    persistTranslateModel("nllb-1.3b");
+    persistTranslateModel("nllb-1300m");
     persistSerbianScript("cyrillic");
     persistRecentLanguages("target", ["srp_Cyrl", "deu_Latn"]);
     expect(readStoredTranslateSource()).toBe("deu_Latn");
     expect(readStoredTranslateTarget("eng_Latn")).toBe("srp_Cyrl");
-    expect(readStoredTranslateModel()).toBe("nllb-1.3b");
+    expect(readStoredTranslateModel()).toBe("nllb-1300m");
     expect(readStoredSerbianScript()).toBe("cyrillic");
     expect(readRecentLanguages("target")).toEqual(["srp_Cyrl", "deu_Latn"]);
     expect(readRecentLanguages("source")).toEqual([]);

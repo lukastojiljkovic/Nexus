@@ -21,16 +21,18 @@ its dependency and the six packs leave the app.
 
 ## 2. Three model packs, one at a time
 
-`nllb-600m`, `nllb-1.3b` and `nllb-3.3b` are `kind: "model"` packs (ADR-091), each the model in
+`nllb-600m`, `nllb-1300m` and `nllb-3300m` are `kind: "model"` packs (ADR-091), each the model in
 ONNX quantized to `q8` with its tokenizer. The user installs any of them. With more than one
 installed, the Translate tab offers a choice and uses the one chosen, else the smallest
-installed. Measured by the builder on 2026-10-22:
+installed. The ids count parameters in millions, because a pack id is kebab-case
+(`packs/manifest.ts`) and `nllb-1.3b` is not; the interface names them 600M, 1.3B and
+3.3B. Measured by the builder on 2026-10-22:
 
 | Pack | Model | Size |
 | --- | --- | ---: |
 | `nllb-600m` | `facebook/nllb-200-distilled-600M`, Xenova's ONNX repackaged | 911 962 632 B |
-| `nllb-1.3b` | `facebook/nllb-200-distilled-1.3B`, converted here | 1 940 515 828 B |
-| `nllb-3.3b` | `facebook/nllb-200-3.3B`, converted here | 4 466 791 113 B |
+| `nllb-1300m` | `facebook/nllb-200-distilled-1.3B`, converted here | 1 940 515 828 B |
+| `nllb-3300m` | `facebook/nllb-200-3.3B`, converted here | 4 466 791 113 B |
 
 No maintained ONNX conversion of the 1.3B or the 3.3B existed, so both were converted with the
 Transformers.js conversion script (`--quantize --modes q8`). The 3.3B decoder came out as one

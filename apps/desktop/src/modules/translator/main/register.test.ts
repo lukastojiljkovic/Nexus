@@ -520,7 +520,7 @@ describe("translating with an installed NLLB model", () => {
     const valid = { packId: "nllb-600m", text: "Hello.", source: "eng_Latn", target: "srp_Cyrl" };
     for (const [payload, refusal] of [
       [{ ...valid, packId: "nllb-7b" }, /packId/],
-      [{ ...valid, packId: "nllb-3.3b" }, /not installed/],
+      [{ ...valid, packId: "nllb-3300m" }, /not installed/],
       [{ ...valid, source: "srp_Latn" }, /source/],
       [{ ...valid, target: "eng_Latn" }, /two languages/],
       [{ ...valid, text: "   " }, /blank/],

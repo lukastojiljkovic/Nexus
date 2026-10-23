@@ -15,7 +15,7 @@ A Serbian-English dictionary and travel phrases, which work offline. Translation
 
 - **Channels** — [`shared/ipc.ts`](shared/ipc.ts) declares the ops below; [`main/register.ts`](main/register.ts) registers one handler per op. Channels are named `<id>:<op>`. Ops: `status`, `search`, `phrases`, `packs`.
 - **Store** — none: the module reads its packs from disk and has no migration.
-- **Content packs** — `dictionary-sr-en` (`PACK_ID` in [`main/pack.ts`](main/pack.ts)) for the dictionary, and the NLLB models `nllb-600m`, `nllb-1.3b` and `nllb-3.3b` for translation ([`main/nllb/`](main/nllb/)).
+- **Content packs** — `dictionary-sr-en` (`PACK_ID` in [`main/pack.ts`](main/pack.ts)) for the dictionary, and the NLLB models `nllb-600m`, `nllb-1300m` and `nllb-3300m` for translation ([`main/nllb/`](main/nllb/)).
 
 ## Renderer half
 

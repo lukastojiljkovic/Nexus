@@ -29,7 +29,7 @@ import { serbianToCyrillic, serbianToLatin } from "./serbian.js";
 import { TranslationSession, type SessionView } from "./session.js";
 
 /** The three NLLB-200 models, by the name a reader knows them under. */
-const MODEL_LABEL: Record<NllbPackId, string> = { "nllb-600m": "600M", "nllb-1.3b": "1.3B", "nllb-3.3b": "3.3B" };
+const MODEL_LABEL: Record<NllbPackId, string> = { "nllb-600m": "600M", "nllb-1300m": "1.3B", "nllb-3300m": "3.3B" };
 
 /** How long the Copy button says „Copied“. */
 const COPIED_MS = 1500;

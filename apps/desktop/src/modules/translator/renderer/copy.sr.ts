@@ -90,7 +90,7 @@ export const sr = {
     translateFailed: "Prevođenje je stalo.",
     noModel: {
       title: "Model za prevod još nije instaliran",
-      body: "Prevodilac koristi jedan od tri modela: „nllb-600m“, „nllb-1.3b“ ili „nllb-3.3b“. Instaliraj jedan u Podešavanjima, na kartici „Paketi sadržaja“, pa se vrati na ovu stranicu.",
+      body: "Prevodilac koristi jedan od tri modela: „nllb-600m“, „nllb-1300m“ ili „nllb-3300m“. Instaliraj jedan u Podešavanjima, na kartici „Paketi sadržaja“, pa se vrati na ovu stranicu.",
     },
   },
   notInstalled: {

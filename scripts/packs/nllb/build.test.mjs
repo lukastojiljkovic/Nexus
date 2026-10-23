@@ -58,7 +58,7 @@ function readme(line) {
 
 describe("sources.json", () => {
   it("names the three packs in size order", () => {
-    expect(sources.packs.map((pack) => pack.id)).toEqual(["nllb-600m", "nllb-1.3b", "nllb-3.3b"]);
+    expect(sources.packs.map((pack) => pack.id)).toEqual(["nllb-600m", "nllb-1300m", "nllb-3300m"]);
   });
 
   it("lists the same paths for every pack, and nothing else", () => {
@@ -69,8 +69,8 @@ describe("sources.json", () => {
     expect(packById(sources, "nllb-600m").origin).toEqual({
       download: { repo: "Xenova/nllb-200-distilled-600M", revision: "261c31d1a5732c67cdd16d80e8d6088507c7ccea" },
     });
-    expect(packById(sources, "nllb-1.3b").origin.local).toMatch(/nllb-200-distilled-1\.3B$/);
-    expect(packById(sources, "nllb-3.3b").origin.local).toMatch(/nllb-200-3\.3B$/);
+    expect(packById(sources, "nllb-1300m").origin.local).toMatch(/nllb-200-distilled-1\.3B$/);
+    expect(packById(sources, "nllb-3300m").origin.local).toMatch(/nllb-200-3\.3B$/);
   });
 
   it("refuses a pack that is neither a download nor a local folder", () => {
@@ -97,7 +97,7 @@ describe("listFiles", () => {
       "onnx/decoder_model_quantized.onnx_data",
       "onnx/decoder_with_past_model_quantized.onnx_data",
     ]);
-    const pack = { ...packById(sources, "nllb-1.3b"), origin: { local: folder } };
+    const pack = { ...packById(sources, "nllb-1300m"), origin: { local: folder } };
     expect(listFiles(pack)).toEqual(
       [
         ...REQUIRED,
@@ -110,7 +110,7 @@ describe("listFiles", () => {
 
 describe("missingFile", () => {
   it("names the first required file a local folder does not hold, and is silent for a complete folder", () => {
-    const pack = packById(sources, "nllb-1.3b");
+    const pack = packById(sources, "nllb-1300m");
     const partial = join(scratch, "partial");
     mkdirSync(partial, { recursive: true });
     writeFileSync(join(partial, "config.json"), "{}\n");
@@ -206,7 +206,7 @@ describe("gather", () => {
 
   it("reads a local folder in place and hashes what it reads", async () => {
     const folder = localFolder("local-read");
-    const pack = { ...packById(sources, "nllb-1.3b"), origin: { local: folder }, files: undefined };
+    const pack = { ...packById(sources, "nllb-1300m"), origin: { local: folder }, files: undefined };
     const files = await gather({ sources, pack, cacheDir: join(scratch, "unused"), updateSources: false, fetchImpl: undefined });
     expect(files.map((file) => file.path)).toEqual([...REQUIRED].sort());
     const config = files.find((file) => file.path === "config.json");
@@ -216,7 +216,7 @@ describe("gather", () => {
 
   it("refuses a local file whose hash differs from the record, until --update-sources", async () => {
     const folder = localFolder("local-hash");
-    const pack = { ...packById(sources, "nllb-1.3b"), origin: { local: folder }, files: { "config.json": "0".repeat(64) } };
+    const pack = { ...packById(sources, "nllb-1300m"), origin: { local: folder }, files: { "config.json": "0".repeat(64) } };
     await expect(gather({ sources, pack, cacheDir: join(scratch, "unused"), updateSources: false })).rejects.toThrow(
       /config\.json hashes/,
     );
@@ -242,11 +242,11 @@ describe("metadataFor", () => {
       name: "Xenova/nllb-200-distilled-600M",
       url: "https://huggingface.co/Xenova/nllb-200-distilled-600M",
     });
-    expect(metadataFor(sources, packById(sources, "nllb-1.3b")).source.name).toBe("facebook/nllb-200-distilled-1.3B");
+    expect(metadataFor(sources, packById(sources, "nllb-1300m")).source.name).toBe("facebook/nllb-200-distilled-1.3B");
   });
 
   it("states the licence and its attribution, with the model card as its URL", () => {
-    const meta = metadataFor(sources, packById(sources, "nllb-1.3b"));
+    const meta = metadataFor(sources, packById(sources, "nllb-1300m"));
     expect(meta.licence).toEqual({
       spdx: "CC-BY-NC-4.0",
       attribution: "NLLB-200 by Meta AI; converted to ONNX for Nexus",
@@ -257,8 +257,8 @@ describe("metadataFor", () => {
 
 describe("parseArgs", () => {
   it("reads --pack as a list and --update-sources as a flag", () => {
-    expect(parseArgs(["--pack", "nllb-600m,nllb-1.3b", "--update-sources"])).toEqual({
-      packs: ["nllb-600m", "nllb-1.3b"],
+    expect(parseArgs(["--pack", "nllb-600m,nllb-1300m", "--update-sources"])).toEqual({
+      packs: ["nllb-600m", "nllb-1300m"],
       updateSources: true,
     });
   });

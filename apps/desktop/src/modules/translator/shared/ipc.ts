@@ -118,7 +118,7 @@ export interface TranslatorPacksView {
 }
 
 /** The translator's models, one pack per size (`docs/packs/nllb.md`); the user installs the one they want. */
-export const NLLB_PACK_IDS = ["nllb-600m", "nllb-1.3b", "nllb-3.3b"] as const;
+export const NLLB_PACK_IDS = ["nllb-600m", "nllb-1300m", "nllb-3300m"] as const;
 export type NllbPackId = (typeof NLLB_PACK_IDS)[number];
 
 /** Why a translation stopped, in the worker's own codes. */
