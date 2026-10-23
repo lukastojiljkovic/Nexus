@@ -250,7 +250,7 @@ export function translatorTools(deps: TranslatorToolDeps): readonly Tool[] {
       required: ["text", "to"],
       additionalProperties: false,
     },
-    effect: "read",
+    effect: "navigate",
     run: (rawArgs, context) =>
       guard(context, async () => {
         assertLive(context);

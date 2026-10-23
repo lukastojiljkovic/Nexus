@@ -212,6 +212,10 @@ describe("translator.phrases", () => {
 });
 
 describe("translator.translate", () => {
+  it("is a navigation, since it opens a page", () => {
+    expect(toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate").effect).toBe("navigate");
+  });
+
   it("opens the Translator page on the text, with the NLLB codes of both languages, and says it cannot read the result", async () => {
     const tool = toolNamed(toolsWith({}, ["nllb-600m"]), "translator.translate");
     const result = await tool.run({ text: "Good morning.", from: "en", to: "sr" }, context("en"));
