@@ -108,6 +108,7 @@ export const en: typeof sr = {
     grafit: "Graphite",
   },
   attribution: {
+    disputed: "Hatched: disputed territory",
     credit: "© OpenStreetMap contributors · Protomaps · land cover © ESA WorldCover",
     licence: "Data under the ODbL — https://www.openstreetmap.org/copyright",
     label: "Data source",
@@ -118,6 +119,12 @@ export const en: typeof sr = {
     regions: "The list of downloaded maps could not be loaded.",
   },
   regions: {
+    disputes: {
+      label: "Disputed areas",
+      disputed: "Disputed territory",
+      parties: "Parties: {parties}",
+      unclaimed: "Claimed by no state",
+    },
     close: "Close the card",
     scope: "What to download",
     world: "The whole world",

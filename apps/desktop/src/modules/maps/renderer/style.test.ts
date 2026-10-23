@@ -2,9 +2,16 @@ import { remoteStyleUrls } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
 import { regions as territories } from "../shared/world/outline.js";
+import { disputedAreas } from "../shared/world/disputed.js";
 import {
   BACKGROUND_LAYER,
   COUNTRY_LABEL_LAYER,
+  DISPUTED_HATCH_IMAGE,
+  DISPUTED_HATCH_LAYER,
+  DISPUTED_LINE_LAYER,
+  DISPUTED_POINT_IMAGE,
+  DISPUTED_POINT_LAYER,
+  DISPUTED_SOURCE,
   OUTLINE_LAND_LAYER,
   PICK_INSTALLED_LAYER,
   PICK_SELECTED_LAYER,
@@ -217,6 +224,43 @@ describe("regionStyle", () => {
     expect(last("regions-full:", "line")).toBeLessThan(at(PICK_INSTALLED_LAYER));
     expect(at(PICK_SELECTED_LAYER)).toBeLessThan(first("regions-overview:", "symbol"));
     expect(last("regions-full:", "symbol")).toBeLessThan(at(COUNTRY_LABEL_LAYER));
+  });
+
+  it("draws every dispute over the outline with a hatch, a dashed border and a dashed point", () => {
+    expect(style.sources[DISPUTED_SOURCE]).toMatchObject({
+      type: "geojson",
+      data: expect.objectContaining({ type: "FeatureCollection" }),
+    });
+    const source = style.sources[DISPUTED_SOURCE];
+    expect(source && "data" in source ? source.data : null).toMatchObject({
+      features: expect.arrayContaining([expect.objectContaining({ id: "kosovo" })]),
+    });
+
+    const hatch = style.layers[at(DISPUTED_HATCH_LAYER)];
+    expect(hatch).toMatchObject({
+      type: "fill",
+      source: DISPUTED_SOURCE,
+      paint: { "fill-pattern": DISPUTED_HATCH_IMAGE },
+    });
+    expect(style.layers[at(DISPUTED_LINE_LAYER)]).toMatchObject({
+      type: "line",
+      source: DISPUTED_SOURCE,
+      paint: { "line-dasharray": expect.any(Array) },
+    });
+    expect(style.layers[at(DISPUTED_POINT_LAYER)]).toMatchObject({
+      type: "symbol",
+      source: DISPUTED_SOURCE,
+      layout: { "icon-image": DISPUTED_POINT_IMAGE },
+    });
+    expect(disputedAreas.length).toBeGreaterThan(0);
+  });
+
+  it("orders every dispute layer above the outline and below every label", () => {
+    expect(at(OUTLINE_LAND_LAYER)).toBeLessThan(at(DISPUTED_HATCH_LAYER));
+    expect(at(DISPUTED_HATCH_LAYER)).toBeLessThan(at(DISPUTED_LINE_LAYER));
+    expect(at(DISPUTED_LINE_LAYER)).toBeLessThan(at(DISPUTED_POINT_LAYER));
+    expect(at(DISPUTED_POINT_LAYER)).toBeLessThan(first("regions-overview:", "symbol"));
+    expect(at(DISPUTED_POINT_LAYER)).toBeLessThan(at(COUNTRY_LABEL_LAYER));
   });
 
   it("names no address off this machine, which is what makes the map work offline", () => {

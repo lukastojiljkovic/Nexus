@@ -24,6 +24,7 @@ import {
 } from "../shared/ipc.js";
 import { regionById, type WorldBounds } from "../shared/world/outline.js";
 import { copy } from "./copy.js";
+import { addDisputedImages } from "./disputedImages.js";
 import {
   locationFeatureCollection,
   measureLineCollection,
@@ -368,8 +369,11 @@ export default function MapsPage({ profileId }: ModulePageProps) {
       touchPitch: false,
     });
     mapRef.current = map;
+    // The style names runtime drawings that a style file cannot carry.
+    map.on("styleimagemissing", () => addDisputedImages(map, tokenValue("--nx-data")));
     // Every style, the first and each one after, gets the page's layers back.
     map.on("style.load", () => {
+      addDisputedImages(map, tokenValue("--nx-data"));
       if (overlayRef.current !== null) addMapLayers(map, overlayRef.current);
       applyPicking(map, pickRef.current);
     });
@@ -746,6 +750,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
                 nothing. */}
             <p className="maps__attribution" aria-label={copy.attribution.label}>
               {copy.attribution.credit} · {copy.attribution.licence}
+              <span className="maps__legend">{copy.attribution.disputed}</span>
             </p>
             {listOpen && (
               <PinList

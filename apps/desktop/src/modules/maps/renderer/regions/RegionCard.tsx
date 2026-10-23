@@ -13,6 +13,7 @@ import type { WorldRegion } from "../../shared/world/outline.js";
 import { copy } from "../copy.js";
 import { regionName, regionScopes, territoryName } from "./names.js";
 import { formatBuild, formatBytes, otherDownload, regionCardState } from "./cardState.js";
+import { cardDisputes } from "./disputes.js";
 import "./regions.css";
 
 export interface RegionCardProps {
@@ -52,6 +53,7 @@ export function RegionCard({ territory, regions, api, onChange, onShow, onClose 
   const locale = activeLocale();
   const c = copy.regions;
   const titleId = useId();
+  const disputes = cardDisputes(territory.id, locale);
   const [choice, setChoice] = useState<Choice>({ territory: territory.id, scope: territory.id, detail: null });
   const [measure, setMeasure] = useState<Measure | null>(null);
   const [fault, setFault] = useState<RegionProblem | null>(null);
@@ -175,6 +177,18 @@ export function RegionCard({ territory, regions, api, onChange, onShow, onClose 
           <Icon name="close" size={13} />
         </Button>
       </header>
+
+      {disputes.length > 0 && (
+        <section className="maps-region__disputes" aria-label={c.disputes.label}>
+          {disputes.map((entry) => (
+            <div key={entry.id} className="maps-region__dispute">
+              <h3 className="maps-region__dispute-name">{entry.name}</h3>
+              <p className="maps-region__line">{entry.status}</p>
+              <p className="maps-region__line">{entry.parties}</p>
+            </div>
+          ))}
+        </section>
+      )}
 
       <Segmented label={c.scope} options={scopeOptions} value={scope} onSelect={selectScope} />
 
