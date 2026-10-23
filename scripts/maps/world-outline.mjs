@@ -18,10 +18,13 @@
 // Douglas–Peucker, written here so the build needs no dependency.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { writeCacheFile } from "../packs/lib/cacheWrite.mjs";
+import { readIfPresent } from "../packs/lib/readIfPresent.mjs";
 
 export const SOURCE_URL =
   "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson";
@@ -189,13 +192,14 @@ function countVertices(outline) {
 }
 
 async function readSource() {
-  if (!existsSync(SOURCE_FILE)) {
-    const response = await fetch(SOURCE_URL);
-    if (!response.ok) throw new Error(`world-outline: ${SOURCE_URL} answered ${String(response.status)}.`);
-    mkdirSync(CACHE_DIR, { recursive: true });
-    writeFileSync(SOURCE_FILE, Buffer.from(await response.arrayBuffer()));
-  }
-  return readFileSync(SOURCE_FILE);
+  const cached = readIfPresent(SOURCE_FILE);
+  if (cached !== null) return cached;
+  const response = await fetch(SOURCE_URL);
+  if (!response.ok) throw new Error(`world-outline: ${SOURCE_URL} answered ${String(response.status)}.`);
+  const source = Buffer.from(await response.arrayBuffer());
+  mkdirSync(CACHE_DIR, { recursive: true });
+  writeCacheFile(SOURCE_FILE, source);
+  return source;
 }
 
 async function main() {

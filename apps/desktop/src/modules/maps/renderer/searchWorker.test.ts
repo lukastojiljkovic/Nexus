@@ -81,7 +81,7 @@ describe("the place search worker", () => {
 
     send({ type: "regions", regions: [BROKEN, CACAK] });
     await vi.waitFor(() => expect(posted).toContainEqual({ type: "ready", count: 1 }));
-    expect(logged).toHaveBeenCalledWith(expect.stringContaining(BROKEN.url), expect.any(Error));
+    expect(logged).toHaveBeenCalledWith(expect.any(String), BROKEN.url, expect.any(Error));
 
     send({ type: "regions", regions: [BROKEN] });
     await vi.waitFor(() => expect(posted).toContainEqual({ type: "failed" }));

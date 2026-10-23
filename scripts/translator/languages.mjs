@@ -21,11 +21,14 @@
 // Node's ICU, which runs this script, named every one. What ICU knows is decided
 // where the app runs, so the table carries the FLORES name on every row.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+
+import { writeCacheFile } from "../packs/lib/cacheWrite.mjs";
+import { readIfPresent } from "../packs/lib/readIfPresent.mjs";
 
 export const SOURCES = {
   nllb: "https://huggingface.co/Xenova/nllb-200-distilled-600M/resolve/main/special_tokens_map.json",
@@ -161,12 +164,13 @@ export function renderModule({ languages, sources, date }) {
 
 async function cachedText(folder, name, url) {
   const path = join(folder, name);
-  if (existsSync(path)) return readFileSync(path, "utf8");
+  const cached = readIfPresent(path, "utf8");
+  if (cached !== null) return cached;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`languages: ${url} answered ${String(response.status)}`);
   const text = await response.text();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, text);
+  writeCacheFile(path, text);
   return text;
 }
 

@@ -48,10 +48,18 @@ function rowsOf(html) {
   );
 }
 
-/** A cell's published text: tags out, entities decoded, whitespace collapsed. */
+/**
+ * A cell's published text: tags out, entities decoded, whitespace collapsed. The
+ * tag strip runs to a fixed point, in this body, for the reason
+ * `packs/recipes/convert.mjs` gives: one pass can leave a tag standing.
+ */
 function cellText(html) {
-  return html
-    .replace(/<[^>]+>/g, "")
+  let text = html;
+  for (let previous = null; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, "");
+  }
+  return text
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
     .trim();

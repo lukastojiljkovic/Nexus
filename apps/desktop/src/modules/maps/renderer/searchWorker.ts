@@ -140,8 +140,9 @@ async function load(regions: RegionsMessage["regions"]): Promise<void> {
       // A failed read is not kept, so the next list that names this region reads it again.
       cache.delete(region.url);
       // Console only: the page draws its own sentence, and a worker's exception
-      // reaches nobody (it is not on the page's stack).
-      console.error(`Nexus: the map region "${region.url}" could not be read:`, error);
+      // reaches nobody (it is not on the page's stack). The URL is an argument, not
+      // part of the first one, which the console reads as a format string.
+      console.error("Nexus: a map region could not be read:", region.url, error);
     }
   }
   // A newer list has started: its answer replaces this one, and the questions stay queued for it.
