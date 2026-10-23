@@ -4,7 +4,6 @@ import { Button, Card, LoadingState } from "@nexus/ui";
 import type { NonogramPuzzle } from "@nexus/core";
 import type { NonogramPictureView, NonogramStateView } from "../shared/ipc.js";
 import { activeLocale } from "../../../renderer/src/moduleKit/moduleSurface.js";
-import { fill } from "../../../renderer/src/strings.js";
 import { copy } from "./copy.js";
 import type { EngineStage } from "./engine.js";
 import { useEngine } from "./engineClient.js";
@@ -443,7 +442,7 @@ function NonogramGame({
           <p className="pz__solved" role="status">
             {picture === null
               ? copy.nonogram.solved
-              : fill(copy.nonogram.solvedPicture, { title: picture.title[locale] })}
+              : copy.nonogram.solvedPicture.replace("{title}", () => picture.title[locale])}
           </p>
           {picture !== null && (
             <p className="nx-hint">{`${copy.nonogram.credit} ${picture.author} · game-icons.net · CC BY 3.0`}</p>
