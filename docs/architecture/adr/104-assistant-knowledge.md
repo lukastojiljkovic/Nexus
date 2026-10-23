@@ -276,6 +276,34 @@ articles/<name>.md
   entry; the first heading and then the file name are the fallbacks, so an
   article still has a title if nobody wrote one.
 
+**Amended 2026-10-23: the layout the packs carry.** No builder ever wrote the
+`format` / `articles` manifest above. Every content builder in `scripts/packs/`
+(car-help, make, reference, survival, survival-food, tales) writes this, and the
+seven content packs published before 2.5 carry it:
+
+```json
+{
+  "layout": 1,
+  "language": "en",
+  "notice": "safety",
+  "toc": [
+    { "id": "car", "title": "On the road", "children": [
+      { "id": "tyres", "title": "A flat tyre", "file": "articles/tyres.md",
+        "source": { "title": "NHTSA", "url": "https://www.nhtsa.gov/" } }
+    ] }
+  ]
+}
+```
+
+So the assistant skipped every one of them: the parser refused `layout` as an
+unknown field. The reader now reads this layout and the packs are unchanged. An
+entry with a `file` is an article; one with `children` is a group, nested to any
+depth, and its articles are read depth first. `source` is the builder's credit
+and the assistant does not read it. The rules above still hold: the path rule,
+`articles/` and `.md`, an unknown field refused, the pack skipped and not
+refused. The entry's `title` replaces the heading and file-name fallbacks, since
+every entry has one; an article's front matter still wins over it.
+
 ## 9. What is not here, and why
 
 - **A per-pack cache file.** The brief allows pack passages to live in a

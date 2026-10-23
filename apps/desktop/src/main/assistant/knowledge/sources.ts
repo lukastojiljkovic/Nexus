@@ -331,11 +331,13 @@ export function manualSource(pages: readonly ManualPage[]): KnowledgeSource {
 
 // --- content packs ------------------------------------------------------------
 
-/** What a `content` pack's `content.json` says. See the ADR for the format's one version. */
+/**
+ * What a `content` pack's `content.json` says: layout 1, the one every content
+ * builder in `scripts/packs/` writes (ADR-104 §8, as amended on 2026-10-23).
+ */
 interface ContentArticle {
   readonly path: string;
-  readonly title?: string;
-  readonly keywords?: readonly string[];
+  readonly title: string;
 }
 
 interface ContentManifest {
@@ -344,9 +346,10 @@ interface ContentManifest {
 }
 
 const CONTENT_MANIFEST_FILE = "content.json";
-const CONTENT_FORMAT = 1;
-const CONTENT_KEYS: readonly string[] = ["format", "notice", "articles"];
-const ARTICLE_KEYS: readonly string[] = ["path", "title", "keywords"];
+const CONTENT_LAYOUT = 1;
+const CONTENT_KEYS: readonly string[] = ["layout", "language", "notice", "toc"];
+/** A table-of-contents entry: a group with `children`, an article with a `file`, and the `source` either may credit. */
+const ENTRY_KEYS: readonly string[] = ["id", "title", "file", "source", "children"];
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
@@ -354,10 +357,42 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * The articles of a table of contents, in its order, groups walked depth first;
+ * `null` when an entry is not one layout 1 defines.
+ */
+function tocArticles(entries: unknown): ContentArticle[] | null {
+  if (!Array.isArray(entries)) return null;
+  const articles: ContentArticle[] = [];
+  for (const raw of entries) {
+    const entry = asRecord(raw);
+    if (entry === null) return null;
+    for (const key of Object.keys(entry)) {
+      if (!ENTRY_KEYS.includes(key)) return null;
+    }
+    const { title, file, children } = entry;
+    if (typeof entry["id"] !== "string" || typeof title !== "string") return null;
+    if (file !== undefined) {
+      // The path rule is `packs/paths.ts`'s, reused rather than restated: a
+      // content manifest names files the same way the pack manifest does, and two
+      // readers that disagreed about what a path may be would be a way in.
+      if (typeof file !== "string" || !isSafePackPath(file)) return null;
+      if (!file.startsWith("articles/") || !file.endsWith(".md")) return null;
+      articles.push({ path: file, title });
+    }
+    if (children !== undefined) {
+      const nested = tocArticles(children);
+      if (nested === null) return null;
+      articles.push(...nested);
+    }
+  }
+  return articles;
+}
+
+/**
  * A content pack's manifest, or `null` when it is not one this build reads.
  *
  * Strict in exactly the way `packs/manifest.ts` is strict about `pack.json`, and
- * for the same reason: an unknown field is either a typo or a newer format's
+ * for the same reason: an unknown field is either a typo or a newer layout's
  * field, and both are read worse than refused. The difference is the
  * consequence - a pack whose content manifest cannot be read is SKIPPED rather
  * than refused, because the pack has already been installed and verified, and a
@@ -370,38 +405,11 @@ function parseContentManifest(value: unknown): ContentManifest | null {
   for (const key of Object.keys(record)) {
     if (!CONTENT_KEYS.includes(key)) return null;
   }
-  if (record["format"] !== CONTENT_FORMAT) return null;
+  if (record["layout"] !== CONTENT_LAYOUT || typeof record["language"] !== "string") return null;
   const notice = record["notice"];
   if (notice !== undefined && notice !== "safety") return null;
-
-  const rawArticles = record["articles"];
-  if (!Array.isArray(rawArticles)) return null;
-  const articles: ContentArticle[] = [];
-  for (const raw of rawArticles) {
-    const article = asRecord(raw);
-    if (article === null) return null;
-    for (const key of Object.keys(article)) {
-      if (!ARTICLE_KEYS.includes(key)) return null;
-    }
-    const path = article["path"];
-    // The path rule is `packs/paths.ts`'s, reused rather than restated: a
-    // content manifest names files the same way the pack manifest does, and two
-    // readers that disagreed about what a path may be would be a way in.
-    if (typeof path !== "string" || !isSafePackPath(path)) return null;
-    if (!path.startsWith("articles/") || !path.endsWith(".md")) return null;
-    const title = article["title"];
-    if (title !== undefined && typeof title !== "string") return null;
-    const keywords = article["keywords"];
-    if (keywords !== undefined && (!Array.isArray(keywords) || keywords.some((word) => typeof word !== "string"))) {
-      return null;
-    }
-    articles.push({
-      path,
-      ...(typeof title === "string" ? { title } : {}),
-      ...(Array.isArray(keywords) ? { keywords: keywords as readonly string[] } : {}),
-    });
-  }
-  return { notice: notice === "safety" ? "safety" : null, articles };
+  const articles = tocArticles(record["toc"]);
+  return articles === null ? null : { notice: notice === "safety" ? "safety" : null, articles };
 }
 
 /** A file's text, or `null` when it is not there or cannot be read. */
@@ -495,11 +503,8 @@ function packArticleDocument(input: {
   readonly marker: string;
 }): IndexedDocument {
   const parsed = parsePage(input.text);
-  const heading = parseMarkdownUnits(parsed.body)[0]?.headings[0];
-  const stem = (input.article.path.split("/").pop() ?? input.article.path).replace(/\.md$/i, "");
-  const title =
-    parsed.frontMatter?.scalars.get("title") ?? input.article.title ?? heading ?? stem;
-  const keywords = parsed.frontMatter?.lists.get("keywords") ?? input.article.keywords ?? [];
+  const title = parsed.frontMatter?.scalars.get("title") ?? input.article.title;
+  const keywords = parsed.frontMatter?.lists.get("keywords") ?? [];
   const document: {
     kind: "pack";
     id: string;
