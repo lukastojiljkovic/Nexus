@@ -15,6 +15,8 @@ How to use it:
 3. "Recipes" start a prepared conversation (plan my day, turn a note into tasks, what should I read about this, stranded: help me through it).
 4. "Sources" sit under an answer: a click opens the app page the answer came from, and an address from the web opens in your own browser.
 
+How the model runs: the "How the model runs" card in "Models" shows which model is in memory, and "Unload now" frees that memory at once. For this profile, the same card sets the context size in tokens (still capped by what the model was trained on), the temperature, top-p, top-k and repeat penalty, each left empty for the model's own value ("Model defaults" empties them, and "Save" keeps the change). It also sets the minutes after which an idle model leaves memory (15 at first; 0 keeps it until you unload it), and "Summarize long conversations automatically", on at first: when a conversation outgrows what the model reads at once, its earlier messages are summarized before the answer, and the thread marks where. "Summarize earlier messages", beside the message box, does the same on request.
+
 The assistant knows your notes, tasks, events, attachment text, the app's own manual and the installed content packs. Private notes are excluded. When an answer draws on a safety pack, the safety notice and the number 112 sit under it.
 
 The reference libraries you downloaded are read as well: for a question the assistant searches the titles in every library on this computer and takes the opening section of the few articles whose titles match, then cites them.
