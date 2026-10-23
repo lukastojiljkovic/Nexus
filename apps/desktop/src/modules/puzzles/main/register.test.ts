@@ -14,6 +14,7 @@ import type {
   BrojStateView,
   MahjongStateView,
   NonogramStateView,
+  PuzzlesPacksView,
   PuzzlesView,
   SudokuStateView,
 } from "../shared/ipc.js";
@@ -65,6 +66,7 @@ function harness(): Harness {
     notify: () => undefined,
     schedule: () => () => undefined,
     now: () => clock,
+    packs: { userData: () => dir, publicKeyPem: "not-a-key" },
   };
   const host = new ModuleHost(platform);
   register(host);
@@ -145,7 +147,14 @@ describe("the puzzles handler surface", () => {
       "puzzles:clearSave",
       "puzzles:finish",
       "puzzles:setCheckWhileTyping",
+      "puzzles:packs",
     ]);
+  });
+
+  it("answers the packs read with no pictures when no nonogram pack is installed", async () => {
+    const { host } = harness();
+    const view = await call<PuzzlesPacksView>(host, "puzzles:packs", {});
+    expect(view).toEqual({ pictures: null });
   });
 
   it("answers a read with the three sections, empty for a profile that has played nothing", async () => {

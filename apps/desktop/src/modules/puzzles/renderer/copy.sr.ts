@@ -113,6 +113,12 @@ export const sr = {
     markCrossed: "precrtano",
     filled: "Tačno popunjeno",
     solved: "Rešeno — slika je tačna.",
+    solvedPicture: "Rešeno — {title}.",
+    credit: "Slika:",
+    missingPicture:
+      "Ove slike više nema u paketu „nonograms-pictures“, pa tabla ne može da se prikaže. Pokreni novu igru.",
+    packMissing:
+      "Slike dolaze iz paketa „nonograms-pictures“ — instaliraj ga u Podešavanjima, na kartici „Paketi sadržaja“.",
   },
   mahjong: {
     layout: "Raspored",

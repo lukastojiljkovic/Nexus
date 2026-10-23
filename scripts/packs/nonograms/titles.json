@@ -1,0 +1,478 @@
+{
+  "lorc/cat": {
+    "en": "Cat",
+    "sr": "Mačka"
+  },
+  "lorc/snake": {
+    "en": "Snake",
+    "sr": "Zmija"
+  },
+  "lorc/frog": {
+    "en": "Frog",
+    "sr": "Žaba"
+  },
+  "lorc/bee": {
+    "en": "Bee",
+    "sr": "Pčela"
+  },
+  "delapouite/duck": {
+    "en": "Duck",
+    "sr": "Patka"
+  },
+  "skoll/pig": {
+    "en": "Pig",
+    "sr": "Svinja"
+  },
+  "caro-asercion/deer": {
+    "en": "Deer",
+    "sr": "Jelen"
+  },
+  "delapouite/camel": {
+    "en": "Camel",
+    "sr": "Kamila"
+  },
+  "delapouite/elephant": {
+    "en": "Elephant",
+    "sr": "Slon"
+  },
+  "delapouite/mouse": {
+    "en": "Mouse",
+    "sr": "Miš"
+  },
+  "delapouite/castle": {
+    "en": "Castle",
+    "sr": "Dvorac"
+  },
+  "delapouite/house": {
+    "en": "House",
+    "sr": "Kuća"
+  },
+  "delapouite/church": {
+    "en": "Church",
+    "sr": "Crkva"
+  },
+  "delapouite/lighthouse": {
+    "en": "Lighthouse",
+    "sr": "Svetionik"
+  },
+  "delapouite/sailboat": {
+    "en": "Sailboat",
+    "sr": "Jedrilica"
+  },
+  "lorc/rocket": {
+    "en": "Rocket",
+    "sr": "Raketa"
+  },
+  "lorc/mushroom": {
+    "en": "Mushroom",
+    "sr": "Pečurka"
+  },
+  "delapouite/cactus": {
+    "en": "Cactus",
+    "sr": "Kaktus"
+  },
+  "lorc/anvil": {
+    "en": "Anvil",
+    "sr": "Nakovanj"
+  },
+  "lorc/candle-flame": {
+    "en": "Candle",
+    "sr": "Sveća"
+  },
+  "lorc/cog": {
+    "en": "Cog",
+    "sr": "Zupčanik"
+  },
+  "lorc/cauldron": {
+    "en": "Cauldron",
+    "sr": "Kotao"
+  },
+  "lorc/compass": {
+    "en": "Compass",
+    "sr": "Kompas"
+  },
+  "lorc/hourglass": {
+    "en": "Hourglass",
+    "sr": "Peščani sat"
+  },
+  "lorc/teapot": {
+    "en": "Teapot",
+    "sr": "Čajnik"
+  },
+  "lorc/lantern": {
+    "en": "Lantern",
+    "sr": "Fenjer"
+  },
+  "sbed/shield": {
+    "en": "Shield",
+    "sr": "Štit"
+  },
+  "sbed/key": {
+    "en": "Key",
+    "sr": "Ključ"
+  },
+  "lorc/pawn": {
+    "en": "Pawn",
+    "sr": "Pešak"
+  },
+  "lorc/umbrella": {
+    "en": "Umbrella",
+    "sr": "Kišobran"
+  },
+  "lorc/turtle-shell": {
+    "en": "Turtle",
+    "sr": "Kornjača"
+  },
+  "delapouite/unicorn": {
+    "en": "Unicorn",
+    "sr": "Jednorog"
+  },
+  "lorc/swan": {
+    "en": "Swan",
+    "sr": "Labud"
+  },
+  "delapouite/koala": {
+    "en": "Koala",
+    "sr": "Koala"
+  },
+  "lorc/snail": {
+    "en": "Snail",
+    "sr": "Puž"
+  },
+  "delapouite/drum": {
+    "en": "Drum",
+    "sr": "Bubanj"
+  },
+  "lorc/wave-strike": {
+    "en": "Wave",
+    "sr": "Talas"
+  },
+  "delapouite/pumpkin": {
+    "en": "Pumpkin",
+    "sr": "Bundeva"
+  },
+  "delapouite/bat": {
+    "en": "Bat",
+    "sr": "Šišmiš"
+  },
+  "delapouite/dice-eight-faces-eight": {
+    "en": "Die",
+    "sr": "Kockica"
+  },
+  "john-redman/scissors": {
+    "en": "Scissors",
+    "sr": "Makaze"
+  },
+  "carl-olsen/flame": {
+    "en": "Flame",
+    "sr": "Plamen"
+  },
+  "sbed/fire": {
+    "en": "Fire",
+    "sr": "Vatra"
+  },
+  "lorc/cannon-ball": {
+    "en": "Cannonball",
+    "sr": "Topovska kugla"
+  },
+  "delapouite/ship-bow": {
+    "en": "Ship's bow",
+    "sr": "Pramac broda"
+  },
+  "lorc/potion-ball": {
+    "en": "Potion",
+    "sr": "Eliksir"
+  },
+  "delapouite/robot-helmet": {
+    "en": "Robot",
+    "sr": "Robot"
+  },
+  "delapouite/pirate-captain": {
+    "en": "Pirate captain",
+    "sr": "Gusar"
+  },
+  "delapouite/vampire-dracula": {
+    "en": "Vampire",
+    "sr": "Vampir"
+  },
+  "delapouite/tree-beehive": {
+    "en": "Beehive in a tree",
+    "sr": "Košnica na drvetu"
+  },
+  "delapouite/star-altar": {
+    "en": "Altar",
+    "sr": "Oltar"
+  },
+  "lorc/sword-clash": {
+    "en": "Crossed swords",
+    "sr": "Ukršteni mačevi"
+  },
+  "lorc/skull-bolt": {
+    "en": "Skull",
+    "sr": "Lobanja"
+  },
+  "lorc/crystal-ball": {
+    "en": "Crystal ball",
+    "sr": "Kristalna kugla"
+  },
+  "lorc/wolf-head": {
+    "en": "Wolf",
+    "sr": "Vuk"
+  },
+  "darkzaitzev/ninja-head": {
+    "en": "Ninja",
+    "sr": "Nindža"
+  },
+  "delapouite/heart-shield": {
+    "en": "Shield with a heart",
+    "sr": "Štit sa srcem"
+  },
+  "delapouite/chest": {
+    "en": "Treasure chest",
+    "sr": "Sanduk"
+  },
+  "delapouite/tower-bridge": {
+    "en": "Tower Bridge",
+    "sr": "Tauerski most"
+  },
+  "delapouite/moon-orbit": {
+    "en": "Moon",
+    "sr": "Mesec"
+  },
+  "delapouite/sun-cloud": {
+    "en": "Sun and cloud",
+    "sr": "Sunce i oblak"
+  },
+  "delapouite/egg-eye": {
+    "en": "Egg with an eye",
+    "sr": "Jaje sa okom"
+  },
+  "delapouite/hand-ok": {
+    "en": "Hand",
+    "sr": "Ruka"
+  },
+  "delapouite/door-watcher": {
+    "en": "Door",
+    "sr": "Vrata"
+  },
+  "lorc/boot-prints": {
+    "en": "Boot prints",
+    "sr": "Otisci čizama"
+  },
+  "delapouite/bow-tie": {
+    "en": "Bow tie",
+    "sr": "Leptir mašna"
+  },
+  "delapouite/bottle-cap": {
+    "en": "Bottle cap",
+    "sr": "Čep"
+  },
+  "delapouite/bus-doors": {
+    "en": "Bus doors",
+    "sr": "Vrata autobusa"
+  },
+  "delapouite/car-battery": {
+    "en": "Car battery",
+    "sr": "Akumulator"
+  },
+  "lorc/cake-slice": {
+    "en": "Slice of cake",
+    "sr": "Parče torte"
+  },
+  "delapouite/pizza-slice": {
+    "en": "Slice of pizza",
+    "sr": "Parče pice"
+  },
+  "delapouite/fork-knife-spoon": {
+    "en": "Cutlery",
+    "sr": "Pribor za jelo"
+  },
+  "delapouite/guitar-head": {
+    "en": "Guitar head",
+    "sr": "Glava gitare"
+  },
+  "delapouite/piano-keys": {
+    "en": "Piano keys",
+    "sr": "Klavijatura"
+  },
+  "delapouite/trumpet-flag": {
+    "en": "Trumpet with a banner",
+    "sr": "Truba sa zastavom"
+  },
+  "delapouite/knight-banner": {
+    "en": "Knight's banner",
+    "sr": "Viteški barjak"
+  },
+  "lorc/monkey": {
+    "en": "Monkey",
+    "sr": "Majmun"
+  },
+  "delapouite/panda": {
+    "en": "Panda",
+    "sr": "Panda"
+  },
+  "delapouite/goose": {
+    "en": "Goose",
+    "sr": "Guska"
+  },
+  "delapouite/rabbit-head": {
+    "en": "Rabbit",
+    "sr": "Zec"
+  },
+  "delapouite/bear-head": {
+    "en": "Bear",
+    "sr": "Medved"
+  },
+  "delapouite/eagle-head": {
+    "en": "Eagle",
+    "sr": "Orao"
+  },
+  "delapouite/griffin-shield": {
+    "en": "Shield with a griffin",
+    "sr": "Štit sa grifonom"
+  },
+  "delapouite/alien-bug": {
+    "en": "Alien bug",
+    "sr": "Vanzemaljska buba"
+  },
+  "carl-olsen/spider-alt": {
+    "en": "Spider",
+    "sr": "Pauk"
+  },
+  "lorc/shark-jaws": {
+    "en": "Shark jaws",
+    "sr": "Ralje ajkule"
+  },
+  "lorc/beetle-shell": {
+    "en": "Beetle",
+    "sr": "Buba"
+  },
+  "delapouite/plane-pilot": {
+    "en": "Pilot",
+    "sr": "Pilot"
+  },
+  "delapouite/gun-rose": {
+    "en": "Gun with a rose",
+    "sr": "Pištolj sa ružom"
+  },
+  "lorc/bird-twitter": {
+    "en": "Bird",
+    "sr": "Ptica"
+  },
+  "lorc/cloud-ring": {
+    "en": "Cloud",
+    "sr": "Oblak"
+  },
+  "skoll/chess-bishop": {
+    "en": "Bishop",
+    "sr": "Lovac"
+  },
+  "delapouite/book-pile": {
+    "en": "Pile of books",
+    "sr": "Gomila knjiga"
+  },
+  "delapouite/boat-propeller": {
+    "en": "Boat propeller",
+    "sr": "Brodska elisa"
+  },
+  "delapouite/scroll-quill": {
+    "en": "Scroll and quill",
+    "sr": "Svitak i pero"
+  },
+  "lorc/snowflake-1": {
+    "en": "Snowflake",
+    "sr": "Pahulja"
+  },
+  "lorc/wizard-staff": {
+    "en": "Wizard's staff",
+    "sr": "Čarobni štap"
+  },
+  "lorc/ghost-ally": {
+    "en": "Ghost",
+    "sr": "Duh"
+  },
+  "delapouite/dragon-orb": {
+    "en": "Dragon",
+    "sr": "Zmaj"
+  },
+  "lorc/axe-in-stump": {
+    "en": "Axe in a stump",
+    "sr": "Sekira u panju"
+  },
+  "delapouite/barn": {
+    "en": "Barn",
+    "sr": "Štala"
+  },
+  "delapouite/hut": {
+    "en": "Hut",
+    "sr": "Koliba"
+  },
+  "lorc/queen-crown": {
+    "en": "Queen's crown",
+    "sr": "Kraljičina kruna"
+  },
+  "delapouite/mountain-road": {
+    "en": "Mountain road",
+    "sr": "Planinski put"
+  },
+  "lorc/crab": {
+    "en": "Crab",
+    "sr": "Rak"
+  },
+  "lorc/octopus": {
+    "en": "Octopus",
+    "sr": "Hobotnica"
+  },
+  "lorc/lion": {
+    "en": "Lion",
+    "sr": "Lav"
+  },
+  "caro-asercion/fox": {
+    "en": "Fox",
+    "sr": "Lisica"
+  },
+  "lorc/crown": {
+    "en": "Crown",
+    "sr": "Kruna"
+  },
+  "lorc/rose": {
+    "en": "Rose",
+    "sr": "Ruža"
+  },
+  "lorc/bridge": {
+    "en": "Bridge",
+    "sr": "Most"
+  },
+  "delapouite/horse-head": {
+    "en": "Horse",
+    "sr": "Konj"
+  },
+  "delapouite/sheep": {
+    "en": "Sheep",
+    "sr": "Ovca"
+  },
+  "delapouite/chicken": {
+    "en": "Chicken",
+    "sr": "Kokoška"
+  },
+  "delapouite/samurai-helmet": {
+    "en": "Samurai helmet",
+    "sr": "Samurajski šlem"
+  },
+  "delapouite/gate": {
+    "en": "Gate",
+    "sr": "Kapija"
+  },
+  "lorc/scorpion-tail": {
+    "en": "Scorpion tail",
+    "sr": "Žaoka škorpije"
+  },
+  "lorc/eye-shield": {
+    "en": "Shield with an eye",
+    "sr": "Štit sa okom"
+  },
+  "delapouite/foot-plaster": {
+    "en": "Bandaged foot",
+    "sr": "Povijeno stopalo"
+  }
+}

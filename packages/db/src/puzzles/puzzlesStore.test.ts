@@ -212,6 +212,38 @@ describe("the puzzles store", () => {
     ).toThrow(/is not a mahjong tile/);
   });
 
+  it("keeps a nonogram's picture through a save and a list, and reads a save without one as before", () => {
+    const save = (state: Record<string, unknown>) => ({
+      puzzle: "nonogram" as const,
+      variant: "10x10",
+      seed: 3,
+      elapsedSeconds: 5,
+      state: { width: 10, height: 10, marks: new Array<number>(100).fill(0), ...state },
+    });
+    store.saveProgress(save({ picture: "10-carl-olsen-flame" }), NOW);
+    expect(store.listSaves()[0]?.state).toEqual({
+      width: 10,
+      height: 10,
+      marks: new Array<number>(100).fill(0),
+      picture: "10-carl-olsen-flame",
+    });
+    store.saveProgress(save({}), LATER);
+    expect(store.listSaves()[0]?.state).not.toHaveProperty("picture");
+  });
+
+  it("refuses a nonogram picture that is not a pack id, before anything is written", () => {
+    const state = { width: 10, height: 10, marks: new Array<number>(100).fill(0) };
+    for (const picture of ["10-Carl-Olsen", "4-flame", "10-", 7]) {
+      expect(() =>
+        store.saveProgress(
+          { puzzle: "nonogram", variant: "10x10", seed: 3, elapsedSeconds: 5, state: { ...state, picture } },
+          NOW,
+        ),
+      ).toThrow(/"state.picture"/);
+    }
+    expect(store.listSaves()).toEqual([]);
+  });
+
   it("folds finished games into the record by hand, and drops the save with them", () => {
     store.saveProgress(sudokuSave(), NOW);
     // Game one: solved in 90 seconds. played 1, solved 1, best 90.

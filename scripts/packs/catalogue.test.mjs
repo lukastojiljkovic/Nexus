@@ -10,7 +10,8 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { assetName, buildCatalogue, packBaseUrl, packIdsIn } from "./catalogue.mjs";
+import { packAssetName } from "../../apps/desktop/src/main/packs/assets.ts";
+import { assetName, buildCatalogue, fromFormat1, mergeEntries, packBaseUrl, packIdsIn } from "./catalogue.mjs";
 
 const BASE = "https://github.com/lukastojiljkovic/nexus-packs/releases/download/catalogue/";
 const PER_PACK = "https://github.com/lukastojiljkovic/nexus-packs/releases/download/{id}-{version}/";
@@ -74,10 +75,29 @@ describe("assetName", () => {
     expect(name.length).toBeLessThanOrEqual(197);
     expect(name.endsWith("dead000000000000")).toBe(true);
   });
+
+  it("is the rule the app derives every format-2 address with", () => {
+    // The app never sees this file; it rebuilds each asset's name from the
+    // signed manifest. One case the two spellings disagree on is one pack
+    // whose downloads all 404.
+    const long = Array.from({ length: 20 }, (_, i) => `abcdefghij${String(i)}`).join("/");
+    const cases = [
+      ["survival", "pack.json"],
+      ["survival", "pack.json.sig"],
+      ["reference-sr", "content/first-aid/a b#1?.md"],
+      ["x", "a b#c?d%e:f"],
+      ["p", long],
+      ["nonograms-pictures", "nonograms.json"],
+    ];
+    for (const [id, path] of cases) {
+      const sha = createHash("sha256").update(path).digest("hex");
+      expect(packAssetName(id, path, sha)).toBe(assetName(id, path, sha));
+    }
+  });
 });
 
 describe("buildCatalogue", () => {
-  it("writes a document whose sizes are the sum of its files, manifest and signature included", async () => {
+  it("writes a format-2 entry: the pair pinned, the size and count of every file", async () => {
     const root = mkdtempSync(join(tmpdir(), "catalogue-"));
     const out = join(root, "out");
     const packs = join(root, "packs");
@@ -97,23 +117,54 @@ describe("buildCatalogue", () => {
     expect(assets).toHaveLength(4);
     const entry = entries[0];
     expect(entry.id).toBe("alpha");
-    expect(entry.files.map((file) => file.path)).toEqual([
-      "pack.json",
-      "pack.json.sig",
-      "content.json",
-      "images/a.png",
-    ]);
-    expect(entry.size).toBe(entry.files.reduce((sum, file) => sum + file.size, 0));
-    // The two files a pack cannot be installed without are pinned like content.
-    for (const file of entry.files) {
-      expect(file.url.startsWith(BASE)).toBe(true);
-      expect(file.sha256).toMatch(/^[0-9a-f]{64}$/);
-      expect(existsSync(join(out, "assets", file.url.slice(BASE.length)))).toBe(true);
+    expect(entry.fileCount).toBe(4);
+    expect(entry.minAppVersion).toBe("1.5.0");
+    expect(entry.assets).toBe(BASE);
+    expect(entry.files).toBeUndefined();
+    const dir = join(packs, "alpha");
+    const onDisk = ["pack.json", "pack.json.sig", "content.json", "images/a.png"].map(
+      (path) => readFileSync(join(dir, ...path.split("/"))).byteLength,
+    );
+    expect(entry.size).toBe(onDisk.reduce((sum, size) => sum + size, 0));
+    // The pair the entry pins is the pair on the disk, staged under the name the
+    // app will ask for.
+    for (const [key, name] of [
+      ["manifest", "pack.json"],
+      ["signature", "pack.json.sig"],
+    ]) {
+      const bytes = readFileSync(join(dir, name));
+      expect(entry[key]).toEqual({
+        size: bytes.byteLength,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      });
+      expect(existsSync(join(out, "assets", assetName("alpha", name, entry[key].sha256)))).toBe(true);
     }
+    for (const row of assets) expect(existsSync(join(out, "assets", row.asset))).toBe(true);
 
     const written = JSON.parse(readFileSync(join(out, "catalogue.json"), "utf8"));
-    expect(written.format).toBe(1);
-    expect(written.packs).toHaveLength(1);
+    expect(written.format).toBe(2);
+    expect(written.packs).toEqual(entries);
+  });
+
+  it("keeps the entries of a merged catalogue it does not rebuild, and replaces the ones it does", async () => {
+    const root = mkdtempSync(join(tmpdir(), "catalogue-"));
+    const packs = join(root, "packs");
+    mkdirSync(packs, { recursive: true });
+    makePack(packs, "beta", [["content.json", "{}"]]);
+    const kept = { id: "alpha", version: "1" };
+    const stale = { id: "beta", version: "0" };
+
+    const { entries } = await buildCatalogue({
+      packIds: ["beta"],
+      packsDir: packs,
+      outDir: join(root, "out"),
+      baseUrl: BASE,
+      merge: { format: 2, packs: [stale, kept] },
+    });
+    expect(entries.map((entry) => [entry.id, entry.version])).toEqual([
+      ["alpha", "1"],
+      ["beta", "2026.10.11"],
+    ]);
   });
 
   it("refuses a manifest whose recorded size is not what is on the disk", async () => {
@@ -202,8 +253,109 @@ describe("buildCatalogue with a template", () => {
       outDir: join(root, "out"),
       baseUrl: PER_PACK,
     });
-    for (const file of entries[0].files) {
-      expect(file.url.startsWith(`${PER_PACK.split("{id}")[0]}alpha-2026.10.11/`)).toBe(true);
-    }
+    expect(entries[0].assets).toBe(`${PER_PACK.split("{id}")[0]}alpha-2026.10.11/`);
+  });
+});
+
+describe("mergeEntries", () => {
+  it("lists each pack once, the fresh entry winning, sorted by id", () => {
+    expect(
+      mergeEntries(
+        [
+          { id: "b", version: "1" },
+          { id: "a", version: "1" },
+        ],
+        [{ id: "b", version: "2" }],
+      ),
+    ).toEqual([
+      { id: "a", version: "1" },
+      { id: "b", version: "2" },
+    ]);
+  });
+});
+
+describe("fromFormat1", () => {
+  const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const RELEASE = "https://github.com/lukastojiljkovic/nexus-packs/releases/download/survival-2026.10.10/";
+  const manifestBytes = Buffer.from(
+    JSON.stringify({
+      format: 1,
+      id: "survival",
+      version: "2026.10.10",
+      kind: "content",
+      title: { sr: "Opstanak", en: "Survival" },
+      description: { sr: "Opis.", en: "About." },
+      licence: { spdx: "CC0-1.0", attribution: "Nobody", url: "https://example.org/l" },
+      source: { name: "Test", url: "https://example.org" },
+      minAppVersion: "2.0.0",
+      files: [],
+    }),
+  );
+  const signatureBytes = Buffer.from("sig");
+
+  /** The format-1 entry the live catalogue holds for the pack above, `edit` applied to its file rows. */
+  function v1(edit = (file) => file) {
+    const row = (path, bytes) => ({
+      path,
+      url: `${RELEASE}${assetName("survival", path, sha(bytes))}`,
+      size: bytes.byteLength,
+      sha256: sha(bytes),
+    });
+    const files = [
+      row("pack.json", manifestBytes),
+      row("pack.json.sig", signatureBytes),
+      row("content/a b.md", Buffer.from("text")),
+    ].map(edit);
+    return {
+      format: 1,
+      packs: [
+        {
+          id: "survival",
+          version: "2026.10.10",
+          kind: "content",
+          title: { sr: "Opstanak", en: "Survival" },
+          description: { sr: "Opis.", en: "About." },
+          size: files.reduce((sum, file) => sum + file.size, 0),
+          licence: { spdx: "CC0-1.0", attribution: "Nobody", url: "https://example.org/l" },
+          source: { name: "Test", url: "https://example.org" },
+          notice: "safety",
+          files,
+        },
+      ],
+    };
+  }
+
+  const serve = (bytes) => async () => new Uint8Array(bytes);
+
+  it("writes the entry a 2.5 app reads, its floor taken from the pinned manifest", async () => {
+    const [entry] = await fromFormat1(v1(), serve(manifestBytes));
+    expect(entry).toEqual({
+      id: "survival",
+      version: "2026.10.10",
+      kind: "content",
+      title: { sr: "Opstanak", en: "Survival" },
+      description: { sr: "Opis.", en: "About." },
+      size: manifestBytes.byteLength + signatureBytes.byteLength + 4,
+      fileCount: 3,
+      licence: { spdx: "CC0-1.0", attribution: "Nobody", url: "https://example.org/l" },
+      source: { name: "Test", url: "https://example.org" },
+      minAppVersion: "2.0.0",
+      assets: RELEASE,
+      manifest: { size: manifestBytes.byteLength, sha256: sha(manifestBytes) },
+      signature: { size: signatureBytes.byteLength, sha256: sha(signatureBytes) },
+    });
+  });
+
+  it("refuses a published file whose URL is not the asset rule's name", async () => {
+    const moved = v1((file) => (file.path === "content/a b.md" ? { ...file, url: `${RELEASE}a.md` } : file));
+    await expect(fromFormat1(moved, serve(manifestBytes))).rejects.toThrow(/publishes content\/a b\.md at/);
+  });
+
+  it("refuses a fetched manifest that is not the one format 1 pins", async () => {
+    await expect(fromFormat1(v1(), serve(Buffer.from("{}")))).rejects.toThrow(/not the one format 1 pins/);
+  });
+
+  it("refuses anything but a format-1 document", async () => {
+    await expect(fromFormat1({ format: 2, packs: [] }, serve(manifestBytes))).rejects.toThrow(/format-1/);
   });
 });
