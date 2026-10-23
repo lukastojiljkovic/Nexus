@@ -1,29 +1,23 @@
 /**
- * The offline place index: the shape of `places.json` inside a map pack, and
- * the ranking that turns a typed query into an ordered list of places.
+ * The offline place index: a place as the map's search holds it, and the
+ * ranking that turns a typed query into an ordered list of places.
  *
  * **Why the index is ours and not a geocoder.** The research run found no
  * maintained, permissively licensed, self-contained geocoder that fits in a
- * desktop pack (Photon is Apache-2.0 but is a Java service over a 1.5 GB
+ * desktop app (Photon is Apache-2.0 but is a Java service over a 1.5 GB
  * database; Nominatim is GPL-3.0 and must not be linked into this app). What a
- * map needs here is much smaller than a full geocoder: the named places of one
- * region, in both Serbian scripts, with the two facts that decide which of them
- * a person meant - what kind of place it is, and how big it is. The pack's
- * builder extracts exactly that from the same OpenStreetMap extract the tiles
- * are cut from, so the index and the map can never disagree about where a town
- * is.
+ * map needs here is much smaller than a full geocoder: the named places of the
+ * downloaded regions, with the two facts that decide which of them a person
+ * meant - what kind of place it is, and how big it is. The app reads them from
+ * the `places` layer of the regions' own tiles
+ * (`apps/desktop/src/modules/maps/renderer/placeIndex.ts`), so the index and the
+ * map can never disagree about where a town is.
  *
  * **Two scripts, one place.** Serbian is written in both, and a person types
  * whichever they think in: `Краљево` and `Kraljevo` are one row. Both are
  * stored, both are searched, and the ranking folds diacritics away on both
  * sides (`foldSearchText`, the app's own fold) so `kraljevo`, `KRALJEVO` and
  * `Краљево` all land on it. The Latin form is what the map draws.
- *
- * **The zoom ladder is a policy, not a measurement.** Nothing in the data says
- * at which zoom a village's name should appear; that is an editorial decision,
- * and it is stated as a table below so it can be argued with. Its thresholds
- * are round numbers on purpose - a rule that reads `20000` is a rule somebody
- * can hold in their head while deciding whether a label appears too early.
  */
 
 import { foldSearchText } from "../search/searchText.js";
@@ -87,9 +81,9 @@ export const MAP_PLACE_KIND_RANK: Readonly<Record<MapPlaceKind, number>> = {
   locality: 17,
 };
 
-/** One named place, as `places.json` carries it. */
+/** One named place, as the search holds it. */
 export interface MapPlace {
-  /** The OpenStreetMap node id it was read from, so a row can be traced back to its source. */
+  /** The id its tile feature carries, or a negative one the index gives a place without one: unique within one index. */
   readonly id: number;
   /** What the map draws: the Serbian Latin form when the data has one, the OSM name otherwise. */
   readonly name: string;
@@ -102,116 +96,6 @@ export interface MapPlace {
   readonly lon: number;
   /** The `population` tag as a number, or `null` when the node states none. */
   readonly population: number | null;
-}
-
-/** The file's own version, checked rather than assumed: a newer one is refused by name. */
-export const MAP_PLACES_VERSION = 1;
-
-/** The most places one file may carry. A pack of a region is far below this; the bound is for a hostile file. */
-export const MAX_MAP_PLACES = 500_000;
-
-/** The longest a name may be. OSM's longest settled names are well under this. */
-export const MAX_PLACE_NAME_LENGTH = 120;
-
-/** A whole `places.json`, as the builder writes it. */
-export interface MapPlacesFile {
-  readonly version: number;
-  /** The pack's region id, so a file that does not belong to this pack is visible as such. */
-  readonly region: string;
-  readonly places: readonly MapPlace[];
-}
-
-/**
- * Reads one `places.json` completely, or throws naming the field that is wrong.
- *
- * Total and throwing, like every other reader of a file this app did not write:
- * the pack is signed, but the signature says who built it, not that the file
- * parses, and a half-read index would put an `undefined` into a search result a
- * person then clicks.
- */
-export function parsePlacesFile(value: unknown): MapPlacesFile {
-  const record = asRecord(value, "places.json");
-  if (record.version !== MAP_PLACES_VERSION) {
-    throw new Error(
-      `places.json was written by another version (found ${String(record.version)}, expected ${MAP_PLACES_VERSION}).`,
-    );
-  }
-  const region = record.region;
-  if (typeof region !== "string" || region.length === 0 || region.length > 64) {
-    throw new Error('places.json: "region" must be a non-empty string of at most 64 characters.');
-  }
-  const rows = record.places;
-  if (!Array.isArray(rows)) throw new Error('places.json: "places" must be an array.');
-  if (rows.length > MAX_MAP_PLACES) {
-    throw new Error(`places.json: at most ${MAX_MAP_PLACES} places may be carried.`);
-  }
-  const places = rows.map(readPlace);
-  return { version: MAP_PLACES_VERSION, region, places };
-}
-
-/** One row, field by field. */
-function readPlace(row: unknown, index?: number): MapPlace {
-  const at = index === undefined ? "" : `places[${String(index)}]`;
-  const record = asRecord(row, at === "" ? "places[]" : at);
-  const id = record.id;
-  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
-    throw new Error(`places.json: "${at}.id" must be a positive integer.`);
-  }
-  const kind = record.kind;
-  if (typeof kind !== "string" || !(MAP_PLACE_KINDS as readonly string[]).includes(kind)) {
-    throw new Error(`places.json: "${at}.kind" is not a place kind this build knows.`);
-  }
-  return {
-    id,
-    name: asName(record.name, `${at}.name`),
-    nameCyr: asNullableName(record.nameCyr, `${at}.nameCyr`),
-    nameEn: asNullableName(record.nameEn, `${at}.nameEn`),
-    kind: kind as MapPlaceKind,
-    lat: asCoordinate(record.lat, `${at}.lat`, 90),
-    lon: asCoordinate(record.lon, `${at}.lon`, 180),
-    population: asPopulation(record.population, `${at}.population`),
-  };
-}
-
-function asRecord(value: unknown, field: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`places.json: "${field}" must be an object.`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function asName(value: unknown, field: string): string {
-  if (typeof value !== "string") throw new Error(`places.json: "${field}" must be a string.`);
-  const name = value.trim();
-  if (name.length === 0 || name.length > MAX_PLACE_NAME_LENGTH) {
-    throw new Error(
-      `places.json: "${field}" must be 1..${MAX_PLACE_NAME_LENGTH} characters.`,
-    );
-  }
-  return name;
-}
-
-function asNullableName(value: unknown, field: string): string | null {
-  if (value === null || value === undefined) return null;
-  return asName(value, field);
-}
-
-function asCoordinate(value: unknown, field: string, limit: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`places.json: "${field}" must be a finite number.`);
-  }
-  if (value < -limit || value > limit) {
-    throw new Error(`places.json: "${field}" must be between -${String(limit)} and ${String(limit)}.`);
-  }
-  return value;
-}
-
-function asPopulation(value: unknown, field: string): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`places.json: "${field}" must be a non-negative whole number.`);
-  }
-  return value;
 }
 
 /**
@@ -320,13 +204,3 @@ export function rankPlaces(
   });
   return hits.slice(0, limit);
 }
-
-/**
- * NOTE ON WHAT THIS FILE DOES NOT DECIDE: the zoom at which a place's label
- * appears. That ladder decides what the LABEL FILE carries (a `minZoom` property,
- * which the style's per-rung layers filter on), and the label file is written by
- * the pack's builder — `scripts/packs/map-serbia/places.mjs`. Keeping a second
- * copy of the ladder here would be a second answer to the same question, and the
- * app has no use for it: it draws the labels the pack shipped, not ones it
- * computed.
- */
