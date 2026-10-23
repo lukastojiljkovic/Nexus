@@ -4,6 +4,98 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-10-23
+
+The translator reads 202 languages, the map is whatever part of the world you
+download, and every planned content pack is out. The assistant's model runs as
+you set it and keeps a long conversation going, and the solar system can be
+explored body by body.
+
+### Added
+
+- **A translator for 202 languages.** The Translate tab translates as you type
+  between any two of the languages NLLB-200 (Meta AI) reads, on your computer
+  and with no internet. The model comes as a signed pack in three sizes: 600M
+  (0.91 GB), 1.3B (1.94 GB) and 3.3B (4.47 GB); the larger ones translate
+  better and more slowly, and with more than one installed a switch chooses.
+  The source language is detected until you pick one, a language is found by
+  its name in either interface language, its English name or its code, and
+  Serbian can be shown in Latin or Cyrillic. The assistant opens the page with
+  a text and a pair of languages. The models are CC BY-NC 4.0, named in their
+  packs.
+- **Maps of the world.** The Maps page opens on a world outline. A click on a
+  territory opens its card: whether it is downloaded, the exact size at each
+  detail (overview, towns and roads, or full detail) worked out before anything
+  downloads, and download, update and delete. The card moves up to the
+  territory's continent or the whole world. A region is cut, as it downloads,
+  from the Protomaps daily build of OpenStreetMap; a download pauses, resumes
+  and cancels, several regions draw together, and the search reads the places
+  of every region downloaded. It needs the Downloads network mode. The largest
+  countries at full detail (France, Australia, Brazil, China, the United
+  States, Canada and Russia), Europe at full detail and the world at towns and
+  roads are too large to plan and are refused with that reason; each of them
+  downloads at less detail, and the whole world at full detail is the build
+  file itself.
+- **Every planned content pack.** New in the catalogue: the planet textures for
+  the solar system, the Stockfish 19 chess engine, GNU LibreDWG for DWG
+  drawings, the scanner's OCR data for English and Serbian in both scripts, food
+  preserving and cooking without power, the USDA canning recipes, the nonogram
+  pictures and the three translator models.
+- **Nonogram pictures.** With the nonograms-pictures pack, a nonogram of 10, 15
+  or 20 cells a side is one of 230 pictures from game-icons.net (CC BY 3.0),
+  each proven to have a single solution. A solved board names its picture and
+  credits its author.
+- **The solar system, body by body.** Dragging turns the view, a right-drag or
+  Shift-drag moves it, and the wheel zooms toward the pointer. A click on a
+  body or its name flies to it, follows it as time runs and opens its card: its
+  distance from the Sun and from the Earth now, how long light from the Earth
+  takes to reach it, the nearest body and the distances to the rest, and its
+  facts from NASA's planetary fact sheets, generated from the published tables
+  rather than typed. "Whole system" brings the camera back.
+- **The assistant's runtime.** The "How the model runs" card shows which model
+  is in memory and unloads it on request. Per profile, it sets the context
+  size, the temperature, top-p, top-k and repeat penalty, each either yours or
+  the model's own, and the minutes after which an idle model leaves memory (15
+  unless you change it).
+- **Summarizing a long conversation.** When a conversation outgrows what the
+  model reads at once, its earlier messages are summarized before the answer,
+  and the thread marks where; "Summarize earlier messages" does it on request.
+  Every message is still kept and shown. The switch is per profile and on
+  unless you turn it off. A restored conversation is summarized again when it
+  next needs to be.
+
+### Changed
+
+- **Pack catalogue format 2.** 2.5 reads a new signed catalogue whose entries
+  pin each pack's signed manifest instead of listing every file, so the list
+  no longer grows with a pack's file count. Each pack is published in a release
+  of its own. The format-1 catalogue stays as it was, for 2.1 and older.
+- **Astronomy's header.** The clock sits in the page's header, and the four
+  views and the active view's own switch share one toolbar.
+- **The map's credit** names OpenStreetMap, Protomaps and ESA WorldCover.
+
+### Fixed
+
+- **Voice input and output.** The voice worker's process loaded a module that
+  defines its message loop without starting it, so every dictation and every
+  spoken answer waited forever. The process now starts the loop.
+- **The assistant reads the content packs.** Its knowledge index expected a
+  table of contents no pack builder writes, so the seven published content
+  packs (car help, make by hand, the English and Serbian references, survival,
+  and the English and Serbian tales) were never indexed. They are now.
+- **The assistant's page opens at once.** It waited for the hardware probe
+  before drawing anything, and its status row loaded the embedding model only
+  to name it. The page now draws the chat while the probe runs, and the row
+  reads the model's name from the disk.
+- **English quotes in the English copy** of astronomy, the cookbook, the
+  library, puzzles, timers and the translator, which used the Serbian „…“.
+
+### Removed
+
+- **The Bergamot translator** and its six `translate-*` packs, which NLLB
+  replaces. 2.5 neither lists nor reads them; the format-1 catalogue keeps them
+  for 2.1.
+
 ## [2.1.1] - 2026-10-21
 
 Nexus moves to Electron 44.9.0 and the current releases of the libraries it
