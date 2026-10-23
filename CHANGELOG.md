@@ -42,7 +42,8 @@ explored body by body.
   names the parties in alphabetical order in the reader's language, without
   saying who administers it or who is right. The layer comes from Natural
   Earth's 1:10m disputed areas, with explicit decisions for records whose notes
-  are empty, outdated, or too narrow.
+  are empty, outdated, or too narrow. Kosovo is drawn as part of Serbia and
+  marked disputed.
 - **Every planned content pack.** New in the catalogue: the planet textures for
   the solar system, the Stockfish 19 chess engine, GNU LibreDWG for DWG
   drawings, the scanner's OCR data for English and Serbian in both scripts, food
@@ -93,6 +94,14 @@ explored body by body.
 - **Map regions and planet textures load.** The page read a region's file with
   `fetch` and a planet's image into WebGL, both from another origin than its
   own, and the two schemes refused any such read. They now allow it.
+- **A downloaded Reference article opens.** The packaged page frames nx-zim:
+  from its file origin, but the scheme and handler did not allow that
+  cross-origin read and the renderer policy did not admit the frame. All three
+  now do.
+- **Cookbook opens recipe packs.** The recipes builder wrote a source's serving
+  phrase as a string and wrote human licence names where the reader accepts an
+  integer and an SPDX id. The builder now writes the schema the reader stores,
+  and the reader normalises the already-published pack's two legacy spellings.
 - **The Tuner opens.** Signals' Tuner tab failed the same way over a hertz
   unit; frequencies are now printed with "Hz" after them.
 - **The map's search says "No place matches" only when nothing does.** It said

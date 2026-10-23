@@ -306,7 +306,7 @@ settings gallery draw before any of its chunks load:
 | Culture (`culture`) | culture | Museums, theatre, concerts and cinema — a programme, an arts guide and music. |
 | Car (`car`) | life | A service book: vehicles, services, intervals, fuel and faults. No advice of its own. |
 | Pantry (`pantry`) | life | What is in the house, what runs out, and what expires. |
-| Cookbook (`cookbook`) | life | Your recipes and the world's cuisines from packs — ingredients, steps and nutrition. |
+| Cookbook (`cookbook`) | life | Your recipes and the world's cuisines from packs — ingredients, steps and nutrition. The recipes-world builder and reader share integer servings and SPDX licence identifiers. |
 | Emergency card (`emergency`) | life | The facts a stranger or a medic can read when you cannot speak. |
 | Recorder (`recorder`) | knowledge | A voice and camera diary: record sound or video and play it back when you need it. |
 | Calculator (`calculator`) | make | One-line calculation: variables, units, history and a scientific keypad. |
@@ -318,9 +318,9 @@ settings gallery draw before any of its chunks load:
 | Chess (`chess`) | play | A board game — against the engine or another person, with clocks, saved games and PGN. |
 | Board games (`boards`) | play | Six board games — against the computer or on one machine. |
 | Puzzles (`puzzles`) | play | Sudoku, nonograms (pictures from the `nonograms-pictures` pack when it is installed), mahjong and Numbers — every game is saved and picks up where it stopped. |
-| Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet. |
+| Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet; a downloaded article opens from the packaged renderer through the cross-origin-limited nx-zim scheme. |
 | Reader (`reader`) | knowledge | Books from content packs — read, search and print them. |
-| Maps (`maps`) | knowledge | A world outline to download a country, a continent or the world from, at the detail chosen ([ADR-118](architecture/adr/118-maps-cut-from-the-planet-build.md)); then search places, drop pins and measure a distance offline; disputed areas are hatched and their parties are named neutrally on a territory card. |
+| Maps (`maps`) | knowledge | A world outline to download a country, a continent or the world from, at the detail chosen ([ADR-118](architecture/adr/118-maps-cut-from-the-planet-build.md)); then search places, drop pins and measure a distance offline; disputed areas are hatched and their parties are named neutrally on a territory card; Kosovo is drawn as part of Serbia and marked disputed. |
 | Translator (`translator`) | knowledge | Translation between NLLB-200's 202 languages on the device ([ADR-119](architecture/adr/119-translator-on-nllb.md)), and a Serbian–English dictionary with travel phrases — all of it offline. |
 | Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note, in English and Serbian with the `tessdata-fast` pack. |
 | Drawings (`drawings`) | make | Open an AutoCAD drawing: layers, measurements and print to PDF. DXF right away, DWG with a pack. |
