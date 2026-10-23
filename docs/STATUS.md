@@ -310,19 +310,19 @@ settings gallery draw before any of its chunks load:
 | Emergency card (`emergency`) | life | The facts a stranger or a medic can read when you cannot speak. |
 | Recorder (`recorder`) | knowledge | A voice and camera diary: record sound or video and play it back when you need it. |
 | Calculator (`calculator`) | make | One-line calculation: variables, units, history and a scientific keypad. |
-| Astronomy (`astronomy`) | knowledge | The solar system in 3D, day and night on Earth, tonight's sky, and the Sun and Moon for a chosen place. |
+| Astronomy (`astronomy`) | knowledge | The solar system in 3D, turned, moved and zoomed, with a card per body (its distances now and NASA's facts); day and night on Earth, tonight's sky, and the Sun and Moon for a chosen place. |
 | Signals (`signals`) | make | Morse, an ASCII table, a tuner and a sound meter — the microphone opens only when one is started. |
 | Mini apps (`miniapps`) | make | Nine small tools in one place: a metronome, dice, counters, a scoreboard, typing, dates, a world clock, a screen light and a QR reader. |
 | Arcade (`arcade`) | play | Five quick games for a break: Minesweeper, Blocks, Snake, Bricks and 2048 — all of it offline. |
 | Cards (`cards`) | play | Nine card games — six solitaires and three against the computer. |
 | Chess (`chess`) | play | A board game — against the engine or another person, with clocks, saved games and PGN. |
 | Board games (`boards`) | play | Six board games — against the computer or on one machine. |
-| Puzzles (`puzzles`) | play | Sudoku, nonograms, mahjong and Numbers — every game is saved and picks up where it stopped. |
+| Puzzles (`puzzles`) | play | Sudoku, nonograms (pictures from the `nonograms-pictures` pack when it is installed), mahjong and Numbers — every game is saved and picks up where it stopped. |
 | Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet. |
 | Reader (`reader`) | knowledge | Books from content packs — read, search and print them. |
-| Maps (`maps`) | knowledge | Search places, drop pins and measure a distance on an offline map. The map data arrives as a pack; the Serbia map pack is not built yet. |
-| Translator (`translator`) | knowledge | A Serbian–English dictionary and travel phrases — they work offline. |
-| Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note. Its OCR language packs are not built yet. |
+| Maps (`maps`) | knowledge | A world outline to download a country, a continent or the world from, at the detail chosen ([ADR-118](architecture/adr/118-maps-cut-from-the-planet-build.md)); then search places, drop pins and measure a distance offline. |
+| Translator (`translator`) | knowledge | Translation between NLLB-200's 202 languages on the device ([ADR-119](architecture/adr/119-translator-on-nllb.md)), and a Serbian–English dictionary with travel phrases — all of it offline. |
+| Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note, in English and Serbian with the `tessdata-fast` pack. |
 | Drawings (`drawings`) | make | Open an AutoCAD drawing: layers, measurements and print to PDF. DXF right away, DWG with a pack. |
 | Workshop (`workshop`) | make | View STL models, G-code toolpaths and Gerber boards — with nothing else installed. |
 | The Lab (`lab`) | make | Serial, battery, tone and light — what the laptop can do beyond its job. |
