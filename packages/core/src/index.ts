@@ -3273,8 +3273,18 @@ export {
   buildSystemPrompt,
   hasSafetyNotice,
   renderKnowledgeBlock,
+  renderSummaryBlock,
 } from "./assistant/prompts.js";
 export type { SystemPromptOptions } from "./assistant/prompts.js";
+export {
+  COMPACT_HISTORY_SHARE,
+  KEEP_RECENT_TURNS,
+  SUMMARY_MAX_TOKENS,
+  compactionCut,
+  shouldCompact,
+  summarizeConversation,
+} from "./assistant/compact.js";
+export type { SummarizeInput } from "./assistant/compact.js";
 export {
   contentWords,
   detectAnswerLanguage,

@@ -5,6 +5,7 @@ import type {
   HardwareProfile,
   ModelEntry,
   ModelTier,
+  ResidentModels,
   ToolCall,
 } from "@nexus/core";
 import { defineModuleContract, type ModuleApiOf } from "../../../shared/moduleApi.js";
@@ -72,10 +73,22 @@ export interface AssistantMessageView {
   readonly createdAt: string;
 }
 
+/**
+ * What a compacted thread's first `through` messages said. The model reads this
+ * in their place; the page still draws every message, and marks where the
+ * summary ends.
+ */
+export interface AssistantSummaryView {
+  readonly text: string;
+  readonly through: number;
+}
+
 /** One thread with its messages. */
 export interface AssistantThreadView {
   readonly conversation: AssistantConversationView;
   readonly messages: readonly AssistantMessageView[];
+  /** `null` until the thread is first compacted. */
+  readonly summary: AssistantSummaryView | null;
 }
 
 /** The device's network mode, restated for the wire: no file under `shared/` may reach main's copy of it. */
@@ -148,17 +161,34 @@ export interface AssistantView {
   readonly knowledge: AssistantKnowledgeView;
 }
 
-/** One of the three machine picks, with what this profile has of it. */
+/** One of the three machine picks. Whether it is installed is the setup view's to say; the page joins the two. */
 export interface AssistantRecommendationView {
   readonly tier: ModelTier;
   readonly model: ModelEntry;
   /** Why this one, in the user's language - the runtime's own sentence. */
   readonly reason: AssistantText;
-  readonly installed: boolean;
 }
 
 /**
- * One installed model, and the tiers it is the current pick for.
+ * What the hardware probe found, and the three picks made from it.
+ *
+ * Its own read, apart from the setup view, because the probe loads the native
+ * runtime in the model worker: a cold start measured 17.3 s on the maintainer's
+ * laptop (the `node-llama-cpp` import), a warm one 1.0 to 1.5 s (the import, then
+ * the Vulkan backend). Nothing else the page draws needs it, so the page draws
+ * first and fills this in when it answers. It is read once per session: the
+ * runtime caches the reading, and the picks follow from it and the bundled
+ * catalogue alone.
+ */
+export interface AssistantProbeView {
+  readonly hardware: HardwareProfile;
+  /** Empty when nothing fits; `unavailable` then carries the runtime's sentence. */
+  readonly recommendations: readonly AssistantRecommendationView[];
+  readonly unavailable: AssistantText | null;
+}
+
+/**
+ * One installed model. The tiers it serves are the probe's picks, joined on the page.
  *
  * There is no "installed at" field, and the reason is a fact about the contract
  * rather than an omission: `ModelHost.installed()` answers `ModelEntry[]`, which
@@ -167,8 +197,6 @@ export interface AssistantRecommendationView {
  */
 export interface AssistantInstalledView {
   readonly model: ModelEntry;
-  /** Which of the three tiers this model serves on THIS machine, in tier order. */
-  readonly servesTiers: readonly ModelTier[];
   /**
    * True on the one model this profile answers with by hand.
    *
@@ -179,12 +207,37 @@ export interface AssistantInstalledView {
   readonly chosen: boolean;
 }
 
-/** Everything the setup and models screens read. */
+/**
+ * How this profile's chat model is loaded and sampled. Each `null` is the
+ * model's own value; `idleUnloadMinutes` of `0` keeps it in memory until it is
+ * unloaded by hand. `autoCompact` lets a turn summarize a thread that outgrew
+ * the window before it answers. The store's `AssistantRuntimeOptions`,
+ * restated for the page.
+ */
+export interface AssistantRuntimeOptionsView {
+  readonly contextTokens: number | null;
+  readonly temperature: number | null;
+  readonly topP: number | null;
+  readonly topK: number | null;
+  readonly repeatPenalty: number | null;
+  readonly idleUnloadMinutes: number;
+  readonly autoCompact: boolean;
+}
+
+export interface AssistantRuntimeView {
+  readonly options: AssistantRuntimeOptionsView;
+  /** The bounds main holds each number to, so the page's inputs offer exactly those. */
+  readonly limits: {
+    readonly [K in Exclude<keyof AssistantRuntimeOptionsView, "autoCompact">]: {
+      readonly min: number;
+      readonly max: number;
+      readonly integer: boolean;
+    };
+  };
+}
+
+/** Everything the setup and models screens read from the disk and the profile: no probe, so it answers at once. */
 export interface AssistantSetupView {
-  readonly hardware: HardwareProfile;
-  /** Empty when nothing fits; `unavailable` then carries the runtime's sentence. */
-  readonly recommendations: readonly AssistantRecommendationView[];
-  readonly unavailable: AssistantText | null;
   readonly installed: readonly AssistantInstalledView[];
   /** The last Hugging Face search's results, or `null` when none was run this session. */
   readonly search: readonly ModelEntry[] | null;
@@ -196,15 +249,20 @@ export interface AssistantSetupView {
   /** Whether this launch may download at all: only the `downloads` network mode may (ADR-092). */
   readonly downloadsAllowed: boolean;
   readonly networkMode: AssistantNetworkMode;
+  readonly runtime: AssistantRuntimeView;
+  /** The models in memory right now, by id. */
+  readonly resident: ResidentModels;
 }
 
 /**
  * What one turn emits, for the page.
  *
- * The contract's own `AgentEvent`s, plus the one this module adds: a tool asking
- * the user before it acts. `effect` is never `read` - a read never asks - and the
- * page's dialog draws `summary`, the tool's own one-line sentence in the user's
- * language.
+ * The contract's own `AgentEvent`s, plus the two this module adds. A tool asking
+ * the user before it acts: `effect` is never `read` - a read never asks - and
+ * the page's dialog draws `summary`, the tool's own one-line sentence in the
+ * user's language. And a compaction, which a turn may run before it answers
+ * and `compact` runs on its own: `running` while the model writes the summary,
+ * then `done`, or `failed` when the thread was left as it was.
  */
 export type AssistantTurnEventView =
   | AgentEvent
@@ -214,7 +272,8 @@ export type AssistantTurnEventView =
       readonly tool: string;
       readonly summary: string;
       readonly effect: "write" | "navigate" | "network";
-    };
+    }
+  | { readonly type: "compaction"; readonly status: "running" | "done" | "failed" };
 
 /** One buffered event, with the sequence number a cursor counts. */
 export interface AssistantTurnEventEntry {
@@ -294,6 +353,11 @@ interface SetTierPayload {
   tier: ModelTier;
 }
 
+interface SetRuntimePayload {
+  profileId: string;
+  runtime: AssistantRuntimeOptionsView;
+}
+
 interface SetChatModelPayload {
   profileId: string;
   /** The installed chat model to answer with, or `null` to let the default tier decide again. */
@@ -365,10 +429,13 @@ type AssistantOps = {
   removeConversation: { request: ConversationPayload; response: AssistantView };
   open: { request: ConversationPayload; response: AssistantThreadView };
   send: { request: SendPayload; response: AssistantTurnStartView };
+  /** Summarizes a thread's head as a turn of its own, which the page polls and may stop. */
+  compact: { request: ConversationPayload; response: AssistantTurnStartView };
   poll: { request: PollPayload; response: AssistantPollView };
   stop: { request: StopPayload; response: null };
   answerConfirm: { request: AnswerConfirmPayload; response: null };
   setup: { request: ProfilePayload; response: AssistantSetupView };
+  probe: { request: ProfilePayload; response: AssistantProbeView };
   searchModels: { request: SearchModelsPayload; response: AssistantSetupView };
   importModel: { request: ProfilePayload; response: AssistantSetupView };
   downloadModel: { request: ModelIdPayload; response: AssistantSetupView };
@@ -377,6 +444,8 @@ type AssistantOps = {
   removeModel: { request: ModelIdPayload; response: AssistantSetupView };
   setDefaultTier: { request: SetTierPayload; response: AssistantSetupView };
   setChatModel: { request: SetChatModelPayload; response: AssistantSetupView };
+  setRuntime: { request: SetRuntimePayload; response: AssistantSetupView };
+  unloadModels: { request: ProfilePayload; response: AssistantSetupView };
   setWebSearch: { request: SetWebSearchPayload; response: AssistantSettingsView };
   reindexKnowledge: { request: ProfilePayload; response: AssistantKnowledgeView };
   voice: { request: ProfilePayload; response: AssistantVoiceView };
@@ -399,10 +468,12 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "removeConversation",
   "open",
   "send",
+  "compact",
   "poll",
   "stop",
   "answerConfirm",
   "setup",
+  "probe",
   "searchModels",
   "importModel",
   "downloadModel",
@@ -411,6 +482,8 @@ export const contract = defineModuleContract<"assistant", AssistantOps>("assista
   "removeModel",
   "setDefaultTier",
   "setChatModel",
+  "setRuntime",
+  "unloadModels",
   "setWebSearch",
   "reindexKnowledge",
   "voice",

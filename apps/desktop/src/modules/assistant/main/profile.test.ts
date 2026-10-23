@@ -81,6 +81,8 @@ function services(wiki: WikiSource | null): AssistantServices {
       remove: unused,
       loadChat: unused,
       loadEmbedder: unused,
+      resident: unused,
+      keepLoadedFor: unused,
     }),
     createVoiceHost: (): VoiceHost => {
       throw new Error("this test reads the knowledge base and nothing else");

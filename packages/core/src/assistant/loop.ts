@@ -106,7 +106,7 @@ import {
   transliterateToCyrillic,
   transliterateToLatin,
 } from "./language.js";
-import { buildSystemPrompt, replyLanguageLine } from "./prompts.js";
+import { buildSystemPrompt, renderSummaryBlock, replyLanguageLine } from "./prompts.js";
 import { createRefusalMemory } from "./refusals.js";
 import { validateToolArguments } from "./schema.js";
 import { parseToolCalls } from "./toolCalls.js";
@@ -258,7 +258,7 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
     // their cost before it can say whether a request fits.
     const fixedTokens = offered.reduce((sum, spec) => sum + toolSpecTokens(spec), 0);
     const offeredCharacters = offered.reduce((sum, spec) => sum + toolSpecCharacters(spec), 0);
-    const system = buildSystemPrompt({
+    const prompt = buildSystemPrompt({
       reply,
       // What the Rules block says about grounding is a fact about this turn:
       // retrieval already ran, so the loop knows whether there is a block.
@@ -268,6 +268,8 @@ export function createAgentTurn(options: AgentLoopOptions = {}): RunAgentTurn {
       today: input.today,
       ...(input.location === undefined ? {} : { location: input.location }),
     });
+    const system =
+      input.summary === undefined ? prompt : `${prompt}\n\n${renderSummaryBlock(input.summary, boundary)}`;
     // The loop owns the system prompt, so a system message that arrived in the
     // history would be a second, invisible instruction set beside it.
     // A tool result in that history is data like any other, and is fenced here

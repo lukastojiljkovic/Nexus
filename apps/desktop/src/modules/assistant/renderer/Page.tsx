@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ASSISTANT_WORKFLOWS, type Citation } from "@nexus/core";
 import {
   Button,
@@ -6,6 +6,7 @@ import {
   Chip,
   ConfirmDialog,
   Dialog,
+  Disclosure,
   EmptyState,
   Icon,
   ListRow,
@@ -14,6 +15,7 @@ import {
   Select,
   TextArea,
   TextField,
+  type AsyncState,
 } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { activeLocale, declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
@@ -21,10 +23,13 @@ import { SafetyNotice } from "../../../renderer/src/safetyNotice.js";
 import { manifest } from "../shared/manifest.js";
 import type {
   AssistantKnowledgeView,
+  AssistantProbeView,
   AssistantSetupView,
   AssistantSettingsView,
+  AssistantSummaryView,
   AssistantThreadView,
   AssistantTurnEventView,
+  AssistantTurnStartView,
   AssistantView,
 } from "../shared/ipc.js";
 import {
@@ -39,10 +44,12 @@ import { isNearBottom, locationTiming } from "./dockRules.js";
 import { openAppLocation, openWebAddress } from "./location.js";
 import { ModelPanel } from "./ModelPanel.js";
 import {
+  canCompact,
   citationTarget,
   firstLine,
   groupThread,
   numberedCitations,
+  summaryBoundary,
   toolLabel,
   toolLineView,
   turnErrorSentence,
@@ -50,7 +57,7 @@ import {
   type ThreadToolLine,
 } from "./thread.js";
 import { placeOf, turnLocations } from "./turnLocations.js";
-import { effectCopy, loadPhase, webStatus } from "./surfaceStates.js";
+import { effectCopy, hasAnsweringModel, loadPhase, webStatus } from "./surfaceStates.js";
 import "./assistant.css";
 
 /**
@@ -112,6 +119,8 @@ interface LiveTurn {
    * `toolLineView` reads, written mutably here because the events fill it in.
    */
   readonly tools: { id: string; name: string; ok: boolean | null; text: string }[];
+  /** The last compaction event of this turn, or `null` while none has come. */
+  compaction: "running" | "done" | "failed" | null;
 }
 
 export default function AssistantPage({ profileId }: ModulePageProps) {
@@ -137,6 +146,7 @@ export function AssistantSurface({
 }) {
   const [view, setView] = useState<AssistantView | null>(null);
   const [setup, setSetup] = useState<AssistantSetupView | null>(null);
+  const [probe, setProbe] = useState<AsyncState<AssistantProbeView>>({ status: "loading" });
   const [thread, setThread] = useState<AssistantThreadView | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** True when the first load failed; the page then says so and offers a retry, rather than a skeleton. */
@@ -198,12 +208,29 @@ export function AssistantSurface({
     }
   }, [profileId]);
 
-  /** Loads both reads again, from the first load and from the retry the failure offers. */
+  /**
+   * The hardware probe and the picks, read beside the page rather than before it:
+   * the probe loads the native runtime in the model worker, which takes seconds on
+   * a cold start, and only the models pane draws what it found. A failure is that
+   * pane's to say; the rest of the page works without it.
+   */
+  const refreshProbe = useCallback(async () => {
+    setProbe({ status: "loading" });
+    try {
+      setProbe({ status: "ready", data: await window.nexus.modules.assistant.probe({ profileId }) });
+    } catch (failure) {
+      setProbe({ status: "failed" });
+      console.error("Nexus: the assistant could not read this computer's hardware:", failure);
+    }
+  }, [profileId]);
+
+  /** Loads every read again, from the first load and from the retry the failure offers. */
   const reload = useCallback(() => {
     setLoadFailed(false);
     void refresh();
     void refreshSetup();
-  }, [refresh, refreshSetup]);
+    void refreshProbe();
+  }, [refresh, refreshSetup, refreshProbe]);
 
   useEffect(() => {
     reload();
@@ -257,49 +284,85 @@ export function AssistantSurface({
     };
   }, [stop]);
 
-  const send = useCallback(
-    async (text: string, workflowId: string | null) => {
-      const trimmed = text.trim();
-      if (trimmed === "" || liveRef.current !== null || sendingRef.current || thread === null) return;
+  /**
+   * Starts one turn - a `send` or a `compact` - and hands the page to the poll below.
+   * Both kinds of turn are watched by the same loop, so a compaction is one more turn
+   * and not a second loop. `onStarted` runs once main has accepted the turn, so the
+   * draft is cleared only when a message was really sent.
+   */
+  const startTurn = useCallback(
+    async (
+      conversationId: string,
+      start: () => Promise<AssistantTurnStartView>,
+      failureText: string,
+      onStarted?: () => void,
+    ) => {
       sendingRef.current = true;
       abandonStart.current = false;
       setStarting(true);
       setLost(false);
       try {
-        const started = await window.nexus.modules.assistant.send({
-          profileId,
-          conversationId: thread.conversation.id,
-          text: trimmed,
-          workflowId,
-          // The page beside the dock, so "this" and "here" mean what the user is
-          // looking at; the full page names no place (`prompts.ts`).
-          location: docked ? beside : null,
-        });
+        const started = await start();
         if (abandonStart.current) {
           await stopTurn(started.turnId);
-          await openConversation(thread.conversation.id);
+          await openConversation(conversationId);
           return;
         }
         cursor.current = 0;
         turnEvents.current = [];
-        const next: LiveTurn = { turnId: started.turnId, text: "", tools: [] };
+        const next: LiveTurn = { turnId: started.turnId, text: "", tools: [], compaction: null };
         liveRef.current = next;
         setLive(next);
-        setDraft("");
         setError(null);
+        onStarted?.();
         // The user's own message is written before the model is asked anything,
         // so the thread gains it here rather than waiting for the answer.
-        await openConversation(thread.conversation.id);
+        await openConversation(conversationId);
       } catch (failure) {
-        setError(copy.errors.send);
+        setError(failureText);
         console.error("Nexus: the assistant turn could not be started:", failure);
       } finally {
         sendingRef.current = false;
         setStarting(false);
       }
     },
-    [beside, docked, openConversation, profileId, stopTurn, thread],
+    [openConversation, profileId, stopTurn],
   );
+
+  const send = useCallback(
+    async (text: string, workflowId: string | null) => {
+      const trimmed = text.trim();
+      if (trimmed === "" || liveRef.current !== null || sendingRef.current || thread === null) return;
+      const conversationId = thread.conversation.id;
+      await startTurn(
+        conversationId,
+        () =>
+          window.nexus.modules.assistant.send({
+            profileId,
+            conversationId,
+            text: trimmed,
+            workflowId,
+            // The page beside the dock, so "this" and "here" mean what the user is
+            // looking at; the full page names no place (`prompts.ts`).
+            location: docked ? beside : null,
+          }),
+        copy.errors.send,
+        () => setDraft(""),
+      );
+    },
+    [beside, docked, profileId, startTurn, thread],
+  );
+
+  /** Summarizes the thread's head as a turn of its own: the same poll, the same Stop. */
+  const compact = useCallback(async () => {
+    if (thread === null || liveRef.current !== null || sendingRef.current) return;
+    const conversationId = thread.conversation.id;
+    await startTurn(
+      conversationId,
+      () => window.nexus.modules.assistant.compact({ profileId, conversationId }),
+      copy.errors.compact,
+    );
+  }, [profileId, startTurn, thread]);
 
   /**
    * The poll: about every hundred milliseconds while a turn runs, which is the
@@ -379,6 +442,13 @@ export function AssistantSurface({
               // Every code, not only `aborted`: a turn cut off by the step limit
               // or a full context says so rather than just stopping.
               setError(turnErrorSentence(event.code));
+            } else if (event.type === "compaction") {
+              // `running` is drawn in the live region; `done` draws nothing, because
+              // the saved thread arrives with it and draws the divider. `failed` leaves
+              // the thread as it was, and says so.
+              current.compaction = event.status;
+              if (event.status === "failed") setError(copy.errors.compactFailed);
+              setLive({ ...current });
             }
           }
           if (polled.done) {
@@ -478,9 +548,8 @@ export function AssistantSurface({
   // A model is ready when one can answer: the tier's own pick, or the model the
   // user chose by hand - which serves no tier at all, and is exactly the case
   // this page has to be able to open a conversation for.
-  const modelReady =
-    setup !== null &&
-    setup.installed.some((entry) => entry.chosen || entry.servesTiers.length > 0);
+  const probed = probe.status === "ready" ? probe.data : null;
+  const modelReady = setup !== null && hasAnsweringModel(setup.installed, probed);
   const conversation = thread?.conversation ?? null;
   /** The question the dialog draws: the oldest one a parked tool is waiting on. */
   const confirm = headConfirm(confirms);
@@ -635,7 +704,7 @@ export function AssistantSurface({
 
           <div className="asst__main">
             {modelsOpen || !modelReady ? (
-              <ModelPanel profileId={profileId} setup={setup} onSetup={setSetup} />
+              <ModelPanel profileId={profileId} setup={setup} probe={probe} onSetup={setSetup} />
             ) : conversation === null ? (
               <EmptyState
                 title={copy.thread.emptyTitle}
@@ -646,6 +715,8 @@ export function AssistantSurface({
               <>
                 <Thread
                   items={groupThread(thread?.messages ?? [])}
+                  summary={thread?.summary ?? null}
+                  boundary={summaryBoundary(thread?.messages ?? [], thread?.summary ?? null)}
                   live={live}
                   starting={starting}
                 />
@@ -686,6 +757,11 @@ export function AssistantSurface({
                     >
                       {copy.composer.send}
                     </Button>
+                    {thread !== null && canCompact(thread.messages, thread.summary) && (
+                      <Button size="sm" disabled={live !== null || starting} onClick={() => void compact()}>
+                        {copy.composer.summarize}
+                      </Button>
+                    )}
                     {(live !== null || starting) && (
                       <Button size="sm" onClick={() => void stop()}>
                         {copy.composer.stop}
@@ -755,10 +831,15 @@ export function AssistantSurface({
  */
 function Thread({
   items,
+  summary,
+  boundary,
   live,
   starting,
 }: {
   readonly items: readonly ThreadItem[];
+  readonly summary: AssistantSummaryView | null;
+  /** The id of the first message the summary does not stand for, or `null`. */
+  readonly boundary: string | null;
   readonly live: LiveTurn | null;
   readonly starting: boolean;
 }) {
@@ -786,32 +867,59 @@ function Thread({
       }}
     >
       <div className="asst__thread">
-        {items.map((item) =>
-          item.kind === "tools" ? (
-            <ToolLines key={item.id} lines={item.lines} />
-          ) : (
-            <div
-              key={item.id}
-              className={item.role === "user" ? "asst__msg asst__msg-user" : "asst__msg"}
-            >
-              <p className="asst__text">{item.text}</p>
-              {item.role === "assistant" && item.citations.length > 0 && (
-                <Citations citations={item.citations} />
-              )}
-              {item.role === "assistant" && item.safety && <SafetyNotice />}
-            </div>
-          ),
-        )}
+        {items.map((item) => (
+          <Fragment key={item.id}>
+            {summary !== null && item.kind === "message" && item.id === boundary && (
+              <SummaryDivider summary={summary} />
+            )}
+            {item.kind === "tools" ? (
+              <ToolLines lines={item.lines} />
+            ) : (
+              <div className={item.role === "user" ? "asst__msg asst__msg-user" : "asst__msg"}>
+                <p className="asst__text">{item.text}</p>
+                {item.role === "assistant" && item.citations.length > 0 && (
+                  <Citations citations={item.citations} />
+                )}
+                {item.role === "assistant" && item.safety && <SafetyNotice />}
+              </div>
+            )}
+          </Fragment>
+        ))}
 
         {/* The one region a screen reader is told about as the answer arrives. */}
         <div className="asst__msg" aria-live="polite">
           {live === null && starting && <p className="asst__text nx-hint">{copy.thread.loadingModel}</p>}
           {live !== null && live.tools.length > 0 && <ToolLines lines={live.tools} />}
-          {live !== null && (
-            <p className="asst__text">{live.text === "" ? copy.thread.thinking : live.text}</p>
-          )}
+          {live !== null && <p className="asst__text">{liveLine(live)}</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What the live region says while a turn has no text yet: the earlier messages
+ * being summarized, or the model thinking. The answer's own text replaces both.
+ */
+function liveLine(live: LiveTurn): string {
+  if (live.text !== "") return live.text;
+  return live.compaction === "running" ? copy.thread.summarizing : copy.thread.thinking;
+}
+
+/**
+ * The line where a summary ends: the messages above it are summarized for the
+ * assistant, and the summary's own text is one click away, closed by default.
+ */
+function SummaryDivider({ summary }: { readonly summary: AssistantSummaryView }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="asst__summary">
+      <div className="asst__divider">
+        <span className="nx-hint">{copy.thread.summaryDivider}</span>
+      </div>
+      <Disclosure label={copy.thread.summaryLabel} open={open} onToggle={setOpen}>
+        <p className="asst__text">{summary.text}</p>
+      </Disclosure>
     </div>
   );
 }

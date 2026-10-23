@@ -2,7 +2,7 @@ import type { ChatModel, ModelEntry } from "@nexus/core";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DownloadService } from "../../download/service.js";
 import { bundledCatalogue, type CatalogueEntry } from "./catalogue.js";
@@ -29,6 +29,16 @@ afterEach(() => {
  * chooser cannot offer, because the registry — not the catalogue — is what the
  * host reads for the installed list, a load and a removal.
  */
+/** The sampling block a parsed `load-chat` carried, or `undefined`. */
+function samplingOf(request: unknown): unknown {
+  return (request as { readonly sampling?: unknown } | undefined)?.sampling;
+}
+
+/** Lets the fake worker's queued answers arrive. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+}
+
 function installFixture(id: string, overrides: Partial<CatalogueEntry> = {}): ModelEntry {
   const entry: CatalogueEntry = {
     id,
@@ -334,6 +344,113 @@ describe("the model host on a fake worker", () => {
       thoughtTokens: 512,
       sampling: { temperature: 0.7, topP: 0.9, topK: 40, repeatPenalty: 1.1 },
     });
+  });
+
+  it("lays the profile's overrides over the entry's policy, and reloads when they change", async () => {
+    installFixture("qwen3.5-2b-q4-k-m", {
+      contextCap: 16384,
+      sampling: { temperature: 0.7, topP: 0.9 },
+    });
+    const { host, workers } = makeHost();
+    const signal = new AbortController().signal;
+    const overrides = { contextTokens: 4096, temperature: 0.2, topK: 20 };
+    await host.loadChat("qwen3.5-2b-q4-k-m", signal, overrides);
+    expect(workers[0]?.parsed[1]).toMatchObject({ kind: "load-chat", contextCap: 4096 });
+    expect(samplingOf(workers[0]?.parsed[1])).toEqual({ temperature: 0.2, topP: 0.9, topK: 20 });
+    // The same overrides are the same model; a changed one is a different model to run.
+    await host.loadChat("qwen3.5-2b-q4-k-m", signal, { ...overrides });
+    await host.loadChat("qwen3.5-2b-q4-k-m", signal, { ...overrides, temperature: 0.3 });
+    expect(workers[0]?.requests).toEqual(["hardware", "load-chat", "load-chat"]);
+    // No overrides is the entry's own policy again, with nothing of the last ones left.
+    await host.loadChat("qwen3.5-2b-q4-k-m", signal);
+    expect(workers[0]?.parsed[3]).toMatchObject({ contextCap: 16384 });
+    expect(samplingOf(workers[0]?.parsed[3])).toEqual({ temperature: 0.7, topP: 0.9 });
+  });
+
+  it("names the models it holds, and holds none after unloadAll", async () => {
+    installFixture("qwen3.5-2b-q4-k-m");
+    installFixture("qwen3-embedding-0.6b-q8-0", { capabilities: ["embedding"], file: "Qwen3-Embedding-0.6B-Q8_0.gguf" });
+    const { host } = makeHost();
+    expect(host.resident()).toEqual({ chat: null, embedder: null });
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    await host.loadEmbedder("qwen3-embedding-0.6b-q8-0", new AbortController().signal);
+    expect(host.resident()).toEqual({ chat: "qwen3.5-2b-q4-k-m", embedder: "qwen3-embedding-0.6b-q8-0" });
+    await host.unloadAll();
+    expect(host.resident()).toEqual({ chat: null, embedder: null });
+  });
+
+  it("unloads once nothing has been asked for the idle time, and never with zero", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      installFixture("qwen3.5-2b-q4-k-m");
+      const { host, workers } = makeHost();
+      host.keepLoadedFor(15);
+      await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(15 * 60_000 - 1);
+      expect(workers[0]?.requests).toEqual(["hardware", "load-chat"]);
+      await vi.advanceTimersByTimeAsync(1);
+      await settle();
+      expect(workers[0]?.requests).toEqual(["hardware", "load-chat", "unload"]);
+      expect(host.resident().chat).toBeNull();
+
+      host.keepLoadedFor(0);
+      await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
+      expect(host.resident().chat).toBe("qwen3.5-2b-q4-k-m");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reads a model again for a handle that outlived an unload", async () => {
+    // The idle unload and the page's own "unload" give memory back under a
+    // handle someone still holds: a turn waiting on a confirmation, the
+    // profile's cached embedder. The handle stays good; its next use reloads.
+    installFixture("qwen3.5-2b-q4-k-m", { sampling: { temperature: 0.7 } });
+    installFixture("qwen3-embedding-0.6b-q8-0", { capabilities: ["embedding"], file: "Qwen3-Embedding-0.6B-Q8_0.gguf" });
+    const { host, workers } = makeHost();
+    const model = await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal, { temperature: 0.2 });
+    const embedder = await host.loadEmbedder("qwen3-embedding-0.6b-q8-0", new AbortController().signal);
+    await host.unloadAll();
+    const result = await model.complete(
+      { messages: [{ role: "user", content: "zdravo" }], tools: [] },
+      new AbortController().signal,
+      () => undefined,
+    );
+    expect(result.text).toBe("Zdravo");
+    await embedder.embed(["one"], new AbortController().signal);
+    expect(workers[0]?.requests).toEqual([
+      "hardware",
+      "load-chat",
+      "load-embedder",
+      "unload",
+      "load-chat",
+      "complete",
+      "load-embedder",
+      "embed",
+    ]);
+    // The same model, with the same overrides, is what was read again.
+    expect(samplingOf(workers[0]?.parsed[4])).toEqual({ temperature: 0.2 });
+    expect(host.resident()).toEqual({ chat: "qwen3.5-2b-q4-k-m", embedder: "qwen3-embedding-0.6b-q8-0" });
+  });
+
+  it("does not unload a model while a request to it is still pending", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      installFixture("qwen3.5-2b-q4-k-m");
+      const control = { hold: false };
+      const { host, workers } = makeHost({}, { control });
+      host.keepLoadedFor(1);
+      const model = await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+      // A long answer: the worker has not replied, so the host is not idle.
+      control.hold = true;
+      void model.complete({ messages: [{ role: "user", content: "zdravo" }], tools: [] }, new AbortController().signal, () => undefined);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(workers[0]?.requests).toEqual(["hardware", "load-chat", "complete"]);
+      expect(host.resident().chat).toBe("qwen3.5-2b-q4-k-m");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not give a resident model back because the turn that asked for it was stopped", async () => {

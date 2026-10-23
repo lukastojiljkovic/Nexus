@@ -1439,10 +1439,13 @@ export type {
 // three tables; `imex/restoreStore.test.ts` names them in the exemption list.
 export {
   ASSISTANT_EXPORT_VERSION,
+  ASSISTANT_RUNTIME_LIMITS,
   ASSISTANT_TIERS,
   AssistantNotFoundError,
   AssistantValidationError,
   ConversationStore,
+  DEFAULT_ASSISTANT_RUNTIME,
+  MAX_CONVERSATION_SUMMARY_CHARS,
   MAX_CONVERSATION_TITLE_LENGTH,
   MAX_CONVERSATIONS,
   MAX_MESSAGE_CHARS,
@@ -1459,6 +1462,8 @@ export type {
   AssistantMessage,
   AssistantMessageInput,
   AssistantRole,
+  AssistantRuntimeNumber,
+  AssistantRuntimeOptions,
   AssistantSettings,
   ExportedAssistantConversation,
   ExportedAssistantMessage,

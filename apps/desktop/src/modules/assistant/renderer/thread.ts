@@ -1,5 +1,5 @@
-import type { AgentErrorCode, AppLocation, Citation } from "@nexus/core";
-import type { AssistantMessageView } from "../shared/ipc.js";
+import { KEEP_RECENT_TURNS, type AgentErrorCode, type AppLocation, type Citation } from "@nexus/core";
+import type { AssistantMessageView, AssistantSummaryView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 
 /**
@@ -163,6 +163,33 @@ export function groupThread(messages: readonly AssistantMessageView[]): ThreadIt
   }
   flush();
   return items;
+}
+
+/**
+ * Whether the open thread can be summarized by hand: more user messages after
+ * the summary's cut than the loop keeps whole. `compact` refuses the same
+ * thread with the same count, so the page offers the action only where it
+ * would succeed.
+ */
+export function canCompact(
+  messages: readonly AssistantMessageView[],
+  summary: AssistantSummaryView | null,
+): boolean {
+  const userTurns = messages.slice(summary?.through ?? 0).filter((message) => message.role === "user");
+  return userTurns.length > KEEP_RECENT_TURNS;
+}
+
+/**
+ * The id of the first message the summary does not stand for: the message at
+ * index `through`. The page draws its divider just before that message's item.
+ * `null` when there is no summary, or when the cut lies past the last message.
+ */
+export function summaryBoundary(
+  messages: readonly AssistantMessageView[],
+  summary: AssistantSummaryView | null,
+): string | null {
+  if (summary === null) return null;
+  return messages[summary.through]?.id ?? null;
 }
 
 /** How far one tool line got: no result yet, a result, or a result that says nothing happened. */

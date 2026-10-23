@@ -69,19 +69,41 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-function service(options: { readonly embedder?: () => Promise<ReturnType<typeof fixedEmbedder> | null> } = {}) {
+function service(
+  options: {
+    readonly embedder?: () => Promise<ReturnType<typeof fixedEmbedder> | null>;
+    readonly embedderId?: () => Promise<string | null>;
+  } = {},
+) {
+  const embedder = options.embedder ?? (() => Promise.resolve(null));
   return createKnowledgeService({
     profileId,
     db: db.raw,
     userData: dir,
     packPublicKeyPem: null,
     manualPages: MANUAL,
-    embedder: options.embedder ?? (() => Promise.resolve(null)),
+    embedder,
+    embedderId: options.embedderId ?? (async () => (await embedder())?.modelId ?? null),
     autoIndex: false,
   });
 }
 
 describe("createKnowledgeService", () => {
+  it("names the embedding model in its status without loading it", async () => {
+    // The status row is read every time the assistant page opens; loading a
+    // model to print its name made opening the page wait for the model.
+    let loads = 0;
+    const svc = service({
+      embedder: () => {
+        loads += 1;
+        return Promise.resolve(null);
+      },
+      embedderId: () => Promise.resolve("bge-small"),
+    });
+    expect((await svc.status()).embedderId).toBe("bge-small");
+    expect(loads).toBe(0);
+  });
+
   it("indexes the sources and reports what it indexed", async () => {
     insertNote(db, { id: "n1", profileId, title: "Kupovina", plaintext: "Mleko, hleb i jaja." });
     insertTask(db, { id: "t1", profileId, title: "Racun", description: "Struja za oktobar" });
@@ -276,6 +298,7 @@ describe("createKnowledgeService", () => {
       packPublicKeyPem: null,
       manualPages: MANUAL,
       embedder: () => Promise.resolve(null),
+      embedderId: () => Promise.resolve(null),
       autoIndex: false,
       isSessionLive: () => false,
     });
@@ -305,6 +328,7 @@ describe("createKnowledgeService", () => {
       packPublicKeyPem: null,
       manualPages: MANUAL,
       embedder: () => Promise.resolve(null),
+      embedderId: () => Promise.resolve(null),
     });
 
     // No `sync` call anywhere: the pass is background work the module starts. It

@@ -59,6 +59,13 @@ export const MAX_CONVERSATIONS = 500;
 /** The most messages one conversation holds. A local model's context is a few thousand tokens; this is far past the point a thread stops being replayed. */
 export const MAX_MESSAGES_PER_CONVERSATION = 2000;
 
+/**
+ * A conversation's summary, in characters. The summary is written by the model
+ * under a token limit (`compact.ts` in `@nexus/core`); this is the store's own
+ * bound on whatever reaches it, at a quarter of a message's.
+ */
+export const MAX_CONVERSATION_SUMMARY_CHARS = 8000;
+
 /** One message's text, in characters. A pasted document is the case the bound is for. */
 export const MAX_MESSAGE_CHARS = 32_000;
 
@@ -111,6 +118,10 @@ export interface AssistantConversation {
   modelId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** What the first `summaryThrough` messages said, for the model; `null` before a compaction. */
+  summary: string | null;
+  /** How many leading messages `summary` stands for; `0` when there is none. */
+  summaryThrough: number;
 }
 
 /** One message of a thread, with its JSON columns already read. */
@@ -162,6 +173,54 @@ export interface AssistantSettings {
   readonly chatModelId: string | null;
 }
 
+/**
+ * How this profile's chat model is loaded and sampled (migration 98). Every
+ * `null` is "the model's own": the load keeps the catalogue's context cap, and
+ * the sampler keeps the entry's and the library's defaults. Device data, as
+ * `chatModelId` is: the archive does not carry it.
+ */
+export interface AssistantRuntimeOptions {
+  /** The context the model is loaded with, in tokens; still capped by what it was trained on. */
+  readonly contextTokens: number | null;
+  readonly temperature: number | null;
+  readonly topP: number | null;
+  readonly topK: number | null;
+  readonly repeatPenalty: number | null;
+  /** Minutes with nothing asked before the model leaves memory; `0` is never. */
+  readonly idleUnloadMinutes: number;
+  /** Whether a turn that would not fit the window summarizes the thread's start first (migration 99). */
+  readonly autoCompact: boolean;
+}
+
+/** The runtime options that are numbers, each with its bounds. */
+export type AssistantRuntimeNumber = Exclude<keyof AssistantRuntimeOptions, "autoCompact">;
+
+/**
+ * The bounds a runtime option is held to. The sampling ranges are the ones the
+ * engine's wire accepts (`protocol.ts`); the context runs from the smallest
+ * window a tool-calling turn fits in to the largest any catalogued model is
+ * trained on, and the idle unload to a day.
+ */
+export const ASSISTANT_RUNTIME_LIMITS = {
+  contextTokens: { min: 2048, max: 131_072, integer: true },
+  temperature: { min: 0, max: 4, integer: false },
+  topP: { min: 0, max: 1, integer: false },
+  topK: { min: 0, max: 1000, integer: true },
+  repeatPenalty: { min: 1, max: 4, integer: false },
+  idleUnloadMinutes: { min: 0, max: 1440, integer: true },
+} as const;
+
+/** What a profile with no row answers: the model's own everything, and fifteen idle minutes. */
+export const DEFAULT_ASSISTANT_RUNTIME: AssistantRuntimeOptions = {
+  contextTokens: null,
+  temperature: null,
+  topP: null,
+  topK: null,
+  repeatPenalty: null,
+  idleUnloadMinutes: 15,
+  autoCompact: true,
+};
+
 /** One conversation as an archive carries it: its rows, without this database's keys. */
 export interface ExportedAssistantMessage {
   readonly role: AssistantRole;
@@ -201,6 +260,8 @@ interface ConversationRow {
   model_id: string | null;
   created_at: string;
   updated_at: string;
+  summary: string | null;
+  summary_through: number;
 }
 
 interface MessageRow {
@@ -226,6 +287,8 @@ function conversationFromRow(row: ConversationRow): AssistantConversation {
     modelId: row.model_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    summary: row.summary,
+    summaryThrough: row.summary_through,
   };
 }
 
@@ -376,6 +439,47 @@ function asModelId(value: unknown, field: string): string | null {
   return asOptionalText(value, field, MAX_ID_LENGTH);
 }
 
+/** One runtime option inside its bounds; `null` only where "the model's own" is a value. */
+function asRuntimeValue(
+  value: unknown,
+  field: AssistantRuntimeNumber,
+  nullable: boolean,
+): number | null {
+  if (value === null && nullable) return null;
+  const { min, max, integer } = ASSISTANT_RUNTIME_LIMITS[field];
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    (integer && !Number.isInteger(value)) ||
+    value < min ||
+    value > max
+  ) {
+    throw new AssistantValidationError(
+      `Assistant data: "${field}" must be ${integer ? "a whole number" : "a number"} from ${min} to ${max}${nullable ? ", or null" : ""}.`,
+    );
+  }
+  return value;
+}
+
+function asRuntimeOptions(value: AssistantRuntimeOptions): AssistantRuntimeOptions {
+  return {
+    contextTokens: asRuntimeValue(value.contextTokens, "contextTokens", true),
+    temperature: asRuntimeValue(value.temperature, "temperature", true),
+    topP: asRuntimeValue(value.topP, "topP", true),
+    topK: asRuntimeValue(value.topK, "topK", true),
+    repeatPenalty: asRuntimeValue(value.repeatPenalty, "repeatPenalty", true),
+    idleUnloadMinutes: asRuntimeValue(value.idleUnloadMinutes, "idleUnloadMinutes", false) as number,
+    autoCompact: asFlag(value.autoCompact, "autoCompact"),
+  };
+}
+
+function asFlag(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new AssistantValidationError(`Assistant data: "${field}" must be true or false.`);
+  }
+  return value;
+}
+
 /** A tool result's outcome: `true`, `false`, or `undefined` where none is recorded. */
 function asToolOutcome(value: unknown, field: string): boolean | undefined {
   if (value === undefined || value === null) return undefined;
@@ -519,7 +623,7 @@ export class ConversationStore {
   listConversations(): AssistantConversation[] {
     const rows = this.db
       .prepare(
-        `SELECT id, profile_id, title, model_id, created_at, updated_at
+        `SELECT id, profile_id, title, model_id, created_at, updated_at, summary, summary_through
            FROM assistant_conversations
           WHERE profile_id = ?
           ORDER BY updated_at DESC, id DESC`,
@@ -531,7 +635,7 @@ export class ConversationStore {
   conversation(id: string): AssistantConversation | null {
     const row = this.db
       .prepare(
-        `SELECT id, profile_id, title, model_id, created_at, updated_at
+        `SELECT id, profile_id, title, model_id, created_at, updated_at, summary, summary_through
            FROM assistant_conversations
           WHERE id = ? AND profile_id = ?`,
       )
@@ -583,6 +687,37 @@ export class ConversationStore {
    * means exactly that - the rows go, and `ON DELETE CASCADE` takes the messages
    * with them.
    */
+  /**
+   * Writes what the thread's first `through` messages said, in place of any
+   * earlier summary. A compaction only ever covers more of the thread, so a
+   * `through` below the last one is refused; the thread's place in the list is
+   * left alone, because a summary is not something the user wrote.
+   */
+  setSummary(id: string, summary: string, through: number): AssistantConversation {
+    const conversation = this.requireConversation(id);
+    const text = summary.trim();
+    if (text.length === 0 || text.length > MAX_CONVERSATION_SUMMARY_CHARS) {
+      throw new AssistantValidationError(
+        `Assistant data: "summary" must be 1 to ${MAX_CONVERSATION_SUMMARY_CHARS} characters.`,
+      );
+    }
+    const { n } = this.db
+      .prepare("SELECT count(*) AS n FROM assistant_messages WHERE conversation_id = ? AND profile_id = ?")
+      .get(id, this.profileId) as { n: number };
+    if (!Number.isInteger(through) || through < Math.max(1, conversation.summaryThrough) || through > n) {
+      throw new AssistantValidationError(
+        `Assistant data: "through" must be a whole number from ${Math.max(1, conversation.summaryThrough)} to ${n}.`,
+      );
+    }
+    this.db
+      .prepare(
+        `UPDATE assistant_conversations SET summary = ?, summary_through = ?
+          WHERE id = ? AND profile_id = ?`,
+      )
+      .run(text, through, id, this.profileId);
+    return this.requireConversation(id);
+  }
+
   removeConversation(id: string): void {
     const result = this.db
       .prepare("DELETE FROM assistant_conversations WHERE id = ? AND profile_id = ?")
@@ -754,6 +889,73 @@ export class ConversationStore {
     return this.settings();
   }
 
+  /** How the chat model is loaded and sampled; a profile with no row answers the defaults. */
+  runtimeOptions(): AssistantRuntimeOptions {
+    const row = this.db
+      .prepare(
+        `SELECT context_tokens, temperature, top_p, top_k, repeat_penalty, idle_unload_minutes,
+                auto_compact
+           FROM assistant_settings WHERE profile_id = ?`,
+      )
+      .get(this.profileId) as
+      | {
+          context_tokens: number | null;
+          temperature: number | null;
+          top_p: number | null;
+          top_k: number | null;
+          repeat_penalty: number | null;
+          idle_unload_minutes: number;
+          auto_compact: number;
+        }
+      | undefined;
+    if (row === undefined) return DEFAULT_ASSISTANT_RUNTIME;
+    return asRuntimeOptions({
+      contextTokens: row.context_tokens,
+      temperature: row.temperature,
+      topP: row.top_p,
+      topK: row.top_k,
+      repeatPenalty: row.repeat_penalty,
+      idleUnloadMinutes: row.idle_unload_minutes,
+      autoCompact: row.auto_compact === 1,
+    });
+  }
+
+  /**
+   * Writes all six options at once, so a reset is writing `null` back; the tier
+   * and the chosen model on the same row are left as they are.
+   */
+  setRuntimeOptions(options: AssistantRuntimeOptions, now: string): AssistantRuntimeOptions {
+    const stamp = this.validInstant(now);
+    const value = asRuntimeOptions(options);
+    this.db
+      .prepare(
+        `INSERT INTO assistant_settings (profile_id, default_tier, chat_model_id, updated_at,
+                                         context_tokens, temperature, top_p, top_k, repeat_penalty,
+                                         idle_unload_minutes, auto_compact)
+         VALUES (?, 'balance', NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (profile_id) DO UPDATE SET context_tokens = excluded.context_tokens,
+                                                temperature = excluded.temperature,
+                                                top_p = excluded.top_p,
+                                                top_k = excluded.top_k,
+                                                repeat_penalty = excluded.repeat_penalty,
+                                                idle_unload_minutes = excluded.idle_unload_minutes,
+                                                auto_compact = excluded.auto_compact,
+                                                updated_at = excluded.updated_at`,
+      )
+      .run(
+        this.profileId,
+        stamp,
+        value.contextTokens,
+        value.temperature,
+        value.topP,
+        value.topK,
+        value.repeatPenalty,
+        value.idleUnloadMinutes,
+        value.autoCompact ? 1 : 0,
+      );
+    return value;
+  }
+
   // --- The archive -----------------------------------------------------------
 
   /**
@@ -797,7 +999,8 @@ export class ConversationStore {
    * whole write is one transaction, so a section that fails halfway leaves
    * nothing of itself behind. The chosen model is not restored with the tier -
    * the archive does not carry it, so the row arrives with the column NULL and
-   * the profile answers from its tier again.
+   * the profile answers from its tier again. The runtime options are device
+   * data on the same row, so they arrive as the defaults.
    *
    * Ids are re-minted rather than restored: a conversation's id is this
    * database's own key, and an archive carries what the person wrote.
