@@ -27,16 +27,17 @@ is shown whenever the picture is.
 
 ## What it contains
 
-**119 puzzles**, from the 119 pictures this build has titles for and that
-pass both checks below. Counts by grid side, from the last run:
+**230 puzzles**, from the 119 pictures this build has titles for, each at every
+grid side where it passes both checks below. Counts by grid side, from the last run
+(2026-10-23):
 
 | Grid | Puzzles |
 | --- | --- |
 | 10 × 10 | 105 |
-| 15 × 15 | 8 |
-| 20 × 20 | 6 |
+| 15 × 15 | 65 |
+| 20 × 20 | 60 |
 
-**Measured size: 79 828 bytes in 3 files** — `nonograms.json` 59 784 bytes,
+**Measured size: 165 291 bytes in 3 files** — `nonograms.json` 145 247 bytes,
 `LICENSE-CC-BY-3.0.txt` 19 467 bytes, `ATTRIBUTION.txt` 577 bytes. The metadata
 file `nonograms-pictures.meta.json` sits beside the folder and is not counted.
 
@@ -73,9 +74,11 @@ the Serbian one in Latin script; an icon without an entry there is not selected.
      columns. A grid it cannot finish is dropped: either its clues allow more than
      one picture, or finding the one they allow takes guessing.
 4. **Selection.** Per size, authors take turns in folder order, so one prolific
-     folder cannot fill a size; a picture whose name stem is already used, at any
-     size, is skipped (`castle` and `castle-tower` do not both ship). The cap is 120
-     per size, and it was not reached: the titles are the limit.
+     folder cannot fill a size; a picture whose name stem is already used in that
+     size is skipped (`castle` and `castle-tower` do not both ship at one size). A
+     picture ships at every size it passes, because a player keeps to one size: when
+     each picture went only to the first size it passed, 15 × 15 and 20 × 20 had 8
+     and 6. The cap is 120 per size, and it was not reached: the titles are the limit.
 
 ### Why these fill bounds
 

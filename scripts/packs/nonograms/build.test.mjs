@@ -136,12 +136,21 @@ describe("selectPuzzles", () => {
     });
   });
 
-  it("ships one picture per name stem, so castle and castle-tower never both appear", async () => {
+  it("ships one picture per name stem in a size, so castle and castle-tower never both appear", async () => {
     const candidates = [
       await candidate("lorc", "castle", fixture("square.svg")),
       await candidate("delapouite", "castle-tower", fixture("square.svg")),
     ];
     expect(selectPuzzles(candidates, 5).map((puzzle) => puzzle.title.en)).toEqual(["Title castle-tower"]);
+  });
+
+  it("ships a picture at every size it passes, so a larger size is not left the smaller one's remainder", async () => {
+    const candidates = [await candidate("lorc", "castle", fixture("square.svg"), [10, 15, 20])];
+    expect(selectPuzzles(candidates, 5).map((puzzle) => puzzle.id)).toEqual([
+      "10-lorc-castle",
+      "15-lorc-castle",
+      "20-lorc-castle",
+    ]);
   });
 
   it("caps each size, taking the authors in turn", async () => {

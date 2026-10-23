@@ -36,8 +36,8 @@ export const NONOGRAM_PICTURES_FORMAT = 1;
 export const NONOGRAM_PICTURES_FILE_NAME = "nonograms.json";
 
 /**
- * Before it is read. Generous on purpose: the measured file is about 60 KB for
- * 119 pictures, so this is some thirty times what the pack holds today, and it is
+ * Before it is read. Generous on purpose: the measured file is 145 247 bytes for
+ * 230 puzzles, so this is some fourteen times what the pack holds today, and it is
  * still a bound on what an installed file may cost to read.
  */
 export const MAX_NONOGRAM_PICTURES_BYTES = 2 * 1024 * 1024;

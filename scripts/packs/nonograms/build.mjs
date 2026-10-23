@@ -210,16 +210,18 @@ const stemOf = (name) => name.split("-")[0];
 /**
  * The pack's puzzles. Per size, at most `cap` pictures: authors take turns in folder
  * order, so one prolific folder cannot fill a size, and within a folder the names are
- * taken in order. A picture whose stem is already used at any size is skipped, so
- * `castle` and `castle-tower` never both ship.
+ * taken in order. A picture whose stem is already used in that size is skipped, so
+ * `castle` and `castle-tower` never both ship at one size. A picture ships at every
+ * size it passes: a player keeps to one size, and when each picture went only to the
+ * first size it passed, the 15 and 20 grids were left 8 and 6 of 119.
  *
  * `candidates` are `{ icon, title, evaluations }`, one per icon with a title,
  * where `evaluations` maps a size to its `evaluate` result.
  */
 export function selectPuzzles(candidates, cap = PER_SIZE_CAP) {
-  const used = new Set();
   const puzzles = [];
   for (const size of SIZES) {
+    const used = new Set();
     const byFolder = new Map();
     for (const candidate of candidates) {
       const evaluation = candidate.evaluations.get(size);
