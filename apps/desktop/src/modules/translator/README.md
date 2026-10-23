@@ -1,6 +1,6 @@
 # translator
 
-A Serbian-English dictionary and travel phrases, which work offline. Translation runs on an installed NLLB model, in the main process.
+A Serbian-English dictionary and travel phrases, which work offline. Translation runs on an installed NLLB model, in a utility process of its own.
 
 ## Manifest
 
@@ -42,7 +42,7 @@ output can be shown in Latin.
 
 ## Records
 
-- **ADRs** — [ADR-090](../../../../../docs/architecture/adr/090-module-kit.md), [ADR-091](../../../../../docs/architecture/adr/091-content-packs.md), [ADR-093](../../../../../docs/architecture/adr/093-navigation-groups.md)
+- **ADRs** — [ADR-090](../../../../../docs/architecture/adr/090-module-kit.md), [ADR-091](../../../../../docs/architecture/adr/091-content-packs.md), [ADR-093](../../../../../docs/architecture/adr/093-navigation-groups.md), [ADR-119](../../../../../docs/architecture/adr/119-translator-on-nllb.md)
 - **PRD** — none: the PRD registry has no row for this module.
 - **Manual** — [en](../../../../../apps/desktop/src/main/assistant/manual/en/translator.md), [sr](../../../../../apps/desktop/src/main/assistant/manual/sr/translator.md)
 
