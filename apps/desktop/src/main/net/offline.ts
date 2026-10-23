@@ -82,6 +82,9 @@ const LOCAL_SCHEMES: readonly string[] = [
   // possible source, which is what lets a pack's HTML be rendered with every
   // other origin blocked by its own CSP.
   "nx-zim:",
+  // A downloaded map region (ADR-118), read by ranges from a file on this
+  // machine by `modules/maps/main/regions/protocol.ts`.
+  "nx-map:",
 ];
 
 /**
@@ -472,6 +475,20 @@ export const DOWNLOAD_HOSTS: readonly string[] = [
   // fails with the service's `"url"` refusal, which names the host it refused.
   "huggingface.co",
   "us.aws.cdn.hf.co",
+  // --- Protomaps, for the map's regions (ADR-118) -------------------------
+  //
+  // Two hosts, checked with real requests on 2026-10-22:
+  //
+  //   - `build-metadata.protomaps.dev`  `builds.json`, the list of the daily
+  //     planet builds (62 of them), each with its size and MD5
+  //   - `build.protomaps.com`  the builds themselves, one PMTiles file each; it
+  //     answered a `Range` request with 206, an exact `Content-Range` and an
+  //     `ETag`, with no redirect, which is all a region's cut asks of it
+  //
+  // A region is cut out of a build with range requests (`modules/maps/main/`),
+  // so these two are the only hosts a map download ever reaches.
+  "build-metadata.protomaps.dev",
+  "build.protomaps.com",
 ];
 
 /** The bare-host-name shape both lists are allowed to contain: labels, dots, no wildcard, no port, no scheme. */

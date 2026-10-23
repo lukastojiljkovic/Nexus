@@ -218,6 +218,16 @@ export const ALLOWLIST = new Map([
     ["node-http"],
   ],
   [
+    // A plan against the real planet build (ADR-118), opt-in the way
+    // `live.test.ts` is: it skips unless `NEXUS_PLANET_URL` names a build, and
+    // nothing in it ships. It reads the build with the global `fetch` because it
+    // runs in plain Node, outside the app's sessions. The app's own reads go
+    // through `regions/http.ts` and the download service's port, which this
+    // gate still covers.
+    "apps/desktop/src/modules/maps/main/extract/plan.slow.test.ts",
+    ["fetch"],
+  ],
+  [
     // The external-link rule's Electron half (ADR-103). Its one flagged
     // construct is `shell.openExternal`, which the `load-remote` rule reads as
     // "a remote URL handed to a loader" — and it is, deliberately: the loader is
@@ -227,21 +237,6 @@ export const ALLOWLIST = new Map([
     // ever grows a call of its own.
     "apps/desktop/src/main/external.ts",
     ["load-remote"],
-  ],
-  [
-    // A LOCAL SCHEME, and one file of one module. `nx-pack://<packId>/<path>`
-    // is answered in this process by `protocol.handle`, which opens a file
-    // under `<userData>/packs/<id>/` and serves a byte range of it - that is
-    // how the map pack's tiles, style and glyphs reach the renderer, and it is
-    // the same mechanism MapLibre's own loader uses a few lines away (in
-    // `node_modules`, which this gate does not read). The URL cannot leave the
-    // machine: there is no host in it, and the handler has no branch that
-    // resolves anything outside the pack folder. The exemption names ONE file
-    // and ONE rule id, so the rest of the module - and every other module -
-    // stays forbidden from reaching for the global, which is the substitution
-    // that would put a real request behind a URL that reads like a local one.
-    "apps/desktop/src/modules/maps/renderer/packFile.ts",
-    ["fetch"],
   ],
   [
     // The translation worker's `fetch`, declared on its own worker-scope type.

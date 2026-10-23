@@ -2,9 +2,9 @@
 id: content-packs
 title: Paketi sadržaja
 location: { module: settings, settings: data }
-keywords: [paket, sadržaj, vikipedija, mapa, potpis, instaliranje]
+keywords: [paket, sadržaj, vikipedija, model, potpis, instaliranje]
 ---
-Paket sadržaja je fascikla javnog sadržaja — na primer cela Vikipedija za čitanje bez interneta, mapa ili skup podataka — koju Nexus prihvata samo ako je potpisana ključem Nexusa. Sadržaj ostaje na ovom uređaju, u fascikli pored šifrovane baze, i ne ulazi u rezervnu kopiju profila.
+Paket sadržaja je fascikla javnog sadržaja — na primer cela Vikipedija za čitanje bez interneta, model ili skup podataka — koju Nexus prihvata samo ako je potpisana ključem Nexusa. Sadržaj ostaje na ovom uređaju, u fascikli pored šifrovane baze, i ne ulazi u rezervnu kopiju profila.
 
 Preuzimanje iz kataloga:
 

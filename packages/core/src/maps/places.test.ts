@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   foldPlaces,
-  parsePlacesFile,
   rankPlaces,
   type MapPlace,
 } from "./places.js";
 
 /**
- * The place index: the file's reader, and the ranking.
+ * The place index: the ranking.
  *
  * The rows below are REAL OpenStreetMap records, read 2026-10-10 through the
  * Overpass API with `node[place][name](bbox)` over six Serbian towns, and each
@@ -254,89 +253,3 @@ describe("the place ranking", () => {
     expect(names("a", 1)).toHaveLength(1);
   });
 });
-
-describe("places.json", () => {
-  it("reads a whole file and answers the rows", () => {
-    const file = parsePlacesFile({
-      version: 1,
-      region: "serbia",
-      places: [
-        {
-          id: 60571493,
-          name: "Beograd",
-          nameCyr: "Београд",
-          nameEn: "Belgrade",
-          kind: "city",
-          lat: 44.8178131,
-          lon: 20.4568974,
-          population: 1197714,
-        },
-      ],
-    });
-    expect(file.region).toBe("serbia");
-    expect(file.places).toEqual([BEOGRAD]);
-  });
-
-  it("takes a place with no Cyrillic form, no English form and no population", () => {
-    const file = parsePlacesFile({
-      version: 1,
-      region: "serbia",
-      places: [
-        {
-          id: 1,
-          name: "Subotica",
-          nameCyr: null,
-          nameEn: null,
-          kind: "city",
-          lat: 46.1,
-          lon: 19.667,
-          population: null,
-        },
-      ],
-    });
-    expect(file.places[0]).toEqual({
-      id: 1,
-      name: "Subotica",
-      nameCyr: null,
-      nameEn: null,
-      kind: "city",
-      lat: 46.1,
-      lon: 19.667,
-      population: null,
-    });
-  });
-
-  it("refuses a file this build cannot read, naming what is wrong", () => {
-    const good = { version: 1, region: "serbia", places: [] };
-    expect(() => parsePlacesFile({ ...good, version: 2 })).toThrow(/another version/);
-    expect(() => parsePlacesFile({ ...good, region: "" })).toThrow(/"region"/);
-    expect(() => parsePlacesFile({ ...good, places: {} })).toThrow(/"places" must be an array/);
-    expect(() => parsePlacesFile([])).toThrow(/must be an object/);
-
-    const row = {
-      id: 1,
-      name: "Beograd",
-      nameCyr: null,
-      nameEn: null,
-      kind: "city",
-      lat: 44.8,
-      lon: 20.4,
-      population: null,
-    };
-    const withRow = (change: Record<string, unknown>): unknown => ({
-      ...good,
-      places: [{ ...row, ...change }],
-    });
-    expect(() => parsePlacesFile(withRow({ id: 0 }))).toThrow(/positive integer/);
-    expect(() => parsePlacesFile(withRow({ id: 1.5 }))).toThrow(/positive integer/);
-    expect(() => parsePlacesFile(withRow({ kind: "castle" }))).toThrow(/not a place kind/);
-    expect(() => parsePlacesFile(withRow({ name: "" }))).toThrow(/1\.\.120 characters/);
-    expect(() => parsePlacesFile(withRow({ nameCyr: "x".repeat(121) }))).toThrow(/1\.\.120/);
-    expect(() => parsePlacesFile(withRow({ lat: 91 }))).toThrow(/-90 and 90/);
-    expect(() => parsePlacesFile(withRow({ lon: -181 }))).toThrow(/-180 and 180/);
-    expect(() => parsePlacesFile(withRow({ lat: "44.8" }))).toThrow(/finite number/);
-    expect(() => parsePlacesFile(withRow({ population: -1 }))).toThrow(/non-negative/);
-    expect(() => parsePlacesFile(withRow({ population: 12.5 }))).toThrow(/whole number/);
-  });
-});
-

@@ -161,6 +161,23 @@
   border-radius: var(--nx-radius-sm);
 }
 
+/* The region card's slot: the frame's left edge, top to bottom, so the card
+   scrolls inside the map rather than past it. The slot itself lets clicks
+   through to the map; only the card takes them. */
+.maps__card {
+  position: absolute;
+  z-index: var(--nx-layer-panel);
+  inset-block: var(--nx-space-2);
+  inset-inline-start: var(--nx-space-2);
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.maps__card > * {
+  pointer-events: auto;
+}
+
 /* The scale bar: a line with two end ticks, drawn rather than written, because
    the number alone does not say how far it is on screen. */
 .maps__scale {
@@ -189,7 +206,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The ODbL credit. IN THE CORNER OF THE MAP, AT ALL TIMES, and never faded:
+/* The data credit (OpenStreetMap under the ODbL, Protomaps, and ESA WorldCover
+   for the land cover). IN THE CORNER OF THE MAP, AT ALL TIMES, and never faded:
    the Attribution Guidelines ask for the credit where somebody looking at the
    map can see it, and this app's answer to "which corner" is the one the scale
    bar does not use. It is capped at `60%` so it wraps into two lines rather than

@@ -118,7 +118,9 @@ hosts the content you choose to fetch is served from, matched exactly over
 
 - `opds.library.kiwix.org`, `lb.download.kiwix.org` and `mirror.download.kiwix.org`
   — the Kiwix catalogue and its files;
-- `huggingface.co` and `us.aws.cdn.hf.co` — model search and the model files.
+- `huggingface.co` and `us.aws.cdn.hf.co` — model search and the model files;
+- `build-metadata.protomaps.dev` and `build.protomaps.com` — the list of map builds,
+  and the byte ranges of one build a map region is cut from.
 
 Nothing is fetched until you ask for it. The assistant's web search is a
 separate switch on top of a connected mode, off until you turn it on, and it

@@ -46,14 +46,15 @@ function rendererHardening(): Plugin {
     // ADR-100 a content pack's own images, and `connect-src` for the same
     // scheme because a map reads its tiles through `fetch`, not through an
     // `<img>` - see `main/packs/protocol.ts`. CULTURE's arts guide
-    // (ADR-091) reads its images through the same scheme.
+    // (ADR-091) reads its images through the same scheme, and a downloaded
+    // map region (ADR-118) is read through `fetch` from `nx-map:`.
     "img-src 'self' data: nx-blob: priv-blob: nx-pack:",
     // ADR-014's read protocol again, for the RECORDER: `<audio>`/`<video>` fall
     // back to `default-src 'self'`, which does not admit `nx-blob:`, so a
     // recording would play in dev and be blocked in the build the user runs.
     "media-src 'self' nx-blob:",
     "font-src 'self' data:",
-    "connect-src 'self' nx-pack:",
+    "connect-src 'self' nx-pack: nx-map:",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
@@ -268,7 +269,7 @@ export default defineConfig({
           "font-src 'self' data:",
           // The HMR socket, and nothing else. Not `ws:` — that would admit any
           // host on the network.
-          "connect-src 'self' ws://localhost:* ws://127.0.0.1:* nx-pack:",
+          "connect-src 'self' ws://localhost:* ws://127.0.0.1:* nx-pack: nx-map:",
           "object-src 'none'",
           "base-uri 'none'",
           "form-action 'none'",
