@@ -60,7 +60,7 @@ export const en: typeof sr = {
     emptyBody:
       "Everything you read and watch lives here. Add a first title - a book, a film or a series - and write its progress and thoughts down as you go.",
     noneTitle: "Nothing matches",
-    noneBody: "No title matches the search and the filters. Clear the search or set the filters back to „every“.",
+    noneBody: "No title matches the search and the filters. Clear the search or set the filters back to “every”.",
     startedOn: "Started",
     finishedOn: "Finished",
   },
@@ -148,7 +148,7 @@ export const en: typeof sr = {
     namePlaceholder: "e.g. Summer reading",
     descriptionLabel: "Description",
     create: "Create a collection",
-    empty: "No collections yet. Make the first one - „Holiday reading“, say - and add titles to it from the list.",
+    empty: "No collections yet. Make the first one — “Holiday reading”, say — and add titles to it from the list.",
     open: "Show its titles",
     close: "Hide its titles",
     rename: "Rename",

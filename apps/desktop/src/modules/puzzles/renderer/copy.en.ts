@@ -111,9 +111,9 @@ export const en: typeof sr = {
     solvedPicture: "Solved — {title}.",
     credit: "Picture:",
     missingPicture:
-      "This picture is no longer in the „nonograms-pictures“ pack, so the board cannot be drawn. Start a new game.",
+      "This picture is no longer in the “nonograms-pictures” pack, so the board cannot be drawn. Start a new game.",
     packMissing:
-      "The pictures come from the „nonograms-pictures“ pack — install it in Settings, on the „Content packs“ card.",
+      "The pictures come from the “nonograms-pictures” pack — install it in Settings, on the “Content packs” card.",
   },
   mahjong: {
     layout: "Layout",

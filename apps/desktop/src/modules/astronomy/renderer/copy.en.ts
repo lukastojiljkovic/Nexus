@@ -38,10 +38,10 @@ export const en: typeof sr = {
   },
   textures: {
     credits: "Textures:",
-    failed: "The „planet-textures“ pack could not be read, so the bodies stay without photographs.",
+    failed: "The “planet-textures” pack could not be read, so the bodies stay without photographs.",
     retry: "Try again",
     missing:
-      "The planet photographs come from the „planet-textures“ pack — install it in Settings, on the „Content packs“ card.",
+      "The planet photographs come from the “planet-textures” pack — install it in Settings, on the “Content packs” card.",
   },
   stars: {
     normal: "Normal",

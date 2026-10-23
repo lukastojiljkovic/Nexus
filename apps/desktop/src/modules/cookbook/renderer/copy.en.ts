@@ -16,7 +16,7 @@ export const en: typeof sr = {
   list: {
     title: "Recipes",
     search: "Search",
-    searchHint: "A title, a tag or an ingredient — ask „what can I make with…“.",
+    searchHint: "A title, a tag or an ingredient — ask “what can I make with…”.",
     emptyTitle: "No recipes yet",
     emptyBody: "Add the first recipe, or look at the world's cuisines in packs.",
     noResults: "No recipe matches the search.",
@@ -159,7 +159,7 @@ export const en: typeof sr = {
   packs: {
     title: "The world's cuisines",
     empty: "No pack carrying recipes is installed.",
-    emptyBody: "Content packs are added in Settings, in the „Content packs“ card.",
+    emptyBody: "Content packs are added in Settings, in the “Content packs” card.",
     pack: "Pack",
     query: "Search the pack",
     save: "Save to my cookbook",

@@ -52,7 +52,7 @@ export const en: typeof sr = {
     save: "Save",
     cancel: "Cancel",
     emptyTitle: "No presets yet",
-    emptyBody: "Save a countdown under a name — „Coffee“, say — and start it with one click.",
+    emptyBody: "Save a countdown under a name — “Coffee”, say — and start it with one click.",
   },
   errors: {
     load: "The timers could not be loaded.",
