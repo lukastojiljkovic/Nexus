@@ -1,9 +1,29 @@
+import { eld } from "eld/small";
 import { franc } from "franc";
 
-import { NLLB_LANGUAGES, type NllbLanguage } from "../../shared/languages.js";
+import type { Locale } from "../../../../renderer/src/strings.js";
+import { languageByCode, languageFromTag, NLLB_LANGUAGES, type NllbLanguage } from "../../shared/languages.js";
 
-/** Less text than this is too little for franc to decide on, and the page makes no guess at all. */
+/** Less text than this is too little to decide on, and the page makes no guess at all. */
 export const DETECT_MIN_LENGTH = 10;
+
+/** The eld codes whose row is not the first one with that language subtag, each with the reason. */
+const ELD_TO_CODE: Readonly<Record<string, string>> = {
+  // eld's Kurdish is Central Kurdish, in Arabic script; the table's `ku` is Kurmanji, in Latin.
+  ku: "ckb_Arab",
+  // Norwegian: the table names Bokmål, as `nb`.
+  no: "nob_Latn",
+  // Tagalog: the table files it as Filipino, `fil`.
+  tl: "tgl_Latn",
+};
+
+/**
+ * Serbian, Croatian and Bosnian in Latin are one language to a detector at a
+ * sentence's length: eld reads Serbian in Latin as Croatian, and franc spreads
+ * it over several. In the Serbian app any of the three is read as Serbian, which
+ * the page writes in Cyrillic for NLLB.
+ */
+const SERBIAN_FAMILY = new Set(["srp", "hrv", "bos"]);
 
 /** The franc codes whose ISO 639-3 code differs from the NLLB row's, each with the reason it differs. */
 const FRANC_TO_ISO3: Readonly<Record<string, string>> = {
@@ -31,6 +51,12 @@ function lettersIn(text: string, script: string): number {
   return text.match(new RegExp(`\\p{Script=${script}}`, "gu"))?.length ?? 0;
 }
 
+/** The row an eld code (ISO 639-1) answers with. */
+export function languageForEldCode(code: string): NllbLanguage | null {
+  const exact = ELD_TO_CODE[code];
+  return (exact === undefined ? languageFromTag(code) : languageByCode(exact)) ?? null;
+}
+
 /**
  * The row a franc code answers with. Where the ISO 639-3 code has several rows,
  * the one whose script the text is written in wins; Chinese is always the
@@ -45,10 +71,24 @@ export function languageForFrancCode(code: string, text: string): NllbLanguage |
 }
 
 /**
- * The table row the text is most likely written in, or `null` when the text is
- * too short or franc cannot name its language.
+ * **eld first, franc where eld is unsure.** eld's n-grams name the 60 languages
+ * it carries even in a short sentence, where franc's trigrams read English as
+ * Romanian and Serbian as Hausa; franc covers the rest of the table, which eld
+ * does not know.
  */
-export function detectLanguage(text: string): NllbLanguage | null {
-  const code = franc(text, { only: FRANC_ONLY, minLength: DETECT_MIN_LENGTH });
+function guess(text: string): NllbLanguage | null {
+  const result = eld.detect(text);
+  if (result.isReliable()) return languageForEldCode(result.language);
+  const code = franc(text, { only: FRANC_ONLY });
   return code === "und" ? null : languageForFrancCode(code, text);
+}
+
+/**
+ * The table row the text is most likely written in, or `null` when the text is
+ * too short or no detector can name its language.
+ */
+export function detectLanguage(text: string, locale: Locale): NllbLanguage | null {
+  if (text.length < DETECT_MIN_LENGTH) return null;
+  const row = guess(text);
+  return locale === "sr" && row !== null && SERBIAN_FAMILY.has(row.iso3) ? (languageByCode("srp_Cyrl") ?? null) : row;
 }

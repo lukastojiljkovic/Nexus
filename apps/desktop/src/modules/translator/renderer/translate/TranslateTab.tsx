@@ -117,7 +117,7 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
   const model = installed?.find((id) => id === modelChoice) ?? installed?.[0] ?? null;
 
   // The source is the detected language while the picker says Detect.
-  const detected = useMemo(() => (source === "auto" ? detectLanguage(text) : null), [source, text]);
+  const detected = useMemo(() => (source === "auto" ? detectLanguage(text, locale) : null), [source, text, locale]);
   const sourceRow = source === "auto" ? detected : (languageByCode(source) ?? null);
   const targetRow = languageByCode(target) ?? null;
   const sourceCode = sourceRow?.code ?? null;
