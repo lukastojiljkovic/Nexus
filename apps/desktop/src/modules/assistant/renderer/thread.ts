@@ -1,5 +1,5 @@
 import { KEEP_RECENT_TURNS, type AgentErrorCode, type AppLocation, type Citation } from "@nexus/core";
-import type { AssistantMessageView, AssistantSummaryView } from "../shared/ipc.js";
+import type { AssistantMessageView, AssistantSummaryView, AssistantTurnEventView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 
 /**
@@ -260,6 +260,16 @@ export function toolLabel(name: string | null): string {
  */
 export function turnErrorSentence(code: AgentErrorCode): string {
   return copy.thread.errors[code];
+}
+
+/**
+ * The sentence a finished turn leaves under the thread: its last error, or
+ * `null` when it ended well. The page sets it once the thread has been read
+ * again, because that read clears the page's error.
+ */
+export function turnEndError(events: readonly AssistantTurnEventView[]): string | null {
+  const failure = events.findLast((event) => event.type === "error");
+  return failure === undefined ? null : turnErrorSentence(failure.code);
 }
 
 /** Where clicking a citation takes the user. */

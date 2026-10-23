@@ -102,6 +102,10 @@ explored body by body.
   started a download and never read again, so it stayed at 0 MB and a finished
   model appeared only once the page was opened again. It now follows the
   download each second until it ends.
+- **A turn that ends early says why.** A turn cut short by a full context or
+  the step limit, or answered around a failed tool, drew its sentence and then
+  lost it when the page read the conversation again, so the thread simply
+  stopped. The sentence now stays.
 - **The assistant's page opens at once.** It waited for the hardware probe
   before drawing anything, and its status row loaded the embedding model only
   to name it. The page now draws the chat while the probe runs, and the row

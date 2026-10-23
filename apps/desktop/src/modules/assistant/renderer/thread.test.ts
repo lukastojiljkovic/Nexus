@@ -14,6 +14,7 @@ import {
   numberedCitations,
   summaryBoundary,
   toolLineView,
+  turnEndError,
   turnErrorSentence,
   type ThreadToolLine,
 } from "./thread.js";
@@ -340,6 +341,29 @@ describe("what a failed turn says", () => {
     }
     // The user's own Stop keeps the sentence the page has always drawn for it.
     expect(turnErrorSentence("aborted")).toBe("Stopped.");
+  });
+
+  // The defect: the page set the sentence as the event arrived and then read the
+  // thread again at the turn's end, which cleared it, so a turn cut short by a
+  // full context ended with no answer and no word of why.
+  it("is what a finished turn leaves under the thread: its last error, or nothing", () => {
+    applyLocale("en");
+    expect(turnEndError([{ type: "token", text: "Hi" }, { type: "done", stopReason: "end" }])).toBeNull();
+    expect(
+      turnEndError([
+        { type: "compaction", status: "running" },
+        { type: "compaction", status: "done" },
+        { type: "error", code: "context-full" },
+        { type: "done", stopReason: "end" },
+      ]),
+    ).toBe(en.thread.errors["context-full"]);
+    expect(
+      turnEndError([
+        { type: "error", code: "tool-failed" },
+        { type: "error", code: "step-limit" },
+        { type: "done", stopReason: "length" },
+      ]),
+    ).toBe(en.thread.errors["step-limit"]);
   });
 });
 

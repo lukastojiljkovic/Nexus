@@ -52,6 +52,7 @@ import {
   summaryBoundary,
   toolLabel,
   toolLineView,
+  turnEndError,
   turnErrorSentence,
   type ThreadItem,
   type ThreadToolLine,
@@ -468,6 +469,8 @@ export function AssistantSurface({
             setConfirms(NO_CONFIRMS);
             if (polled.thread !== null) setThread(polled.thread);
             await refresh();
+            const failure = turnEndError(turnEvents.current);
+            if (failure !== null) setError(failure);
             // A docked turn that asked to change something but opened no place may
             // have written under the page beside the dock, which re-reads once.
             const events = turnEvents.current;
