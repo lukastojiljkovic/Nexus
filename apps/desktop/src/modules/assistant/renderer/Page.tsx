@@ -581,8 +581,14 @@ export function AssistantSurface({
       {copy.rail.new}
     </Button>
   );
+  // What is in memory changes under the page (a turn loads the model, the idle
+  // timer unloads it), so the pane reads it again as it opens.
+  const toggleModels = () => {
+    if (!modelsOpen) void refreshSetup();
+    setModelsOpen((open) => !open);
+  };
   const modelsButton = (
-    <Button key="models" size="sm" onClick={() => setModelsOpen((open) => !open)}>
+    <Button key="models" size="sm" onClick={toggleModels}>
       {modelsOpen ? copy.setup.close : copy.rail.models}
     </Button>
   );
