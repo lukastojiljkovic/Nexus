@@ -129,3 +129,4 @@ directory is the decision log behind it.
 | 115 | Not used: no decision was recorded under this number | — | — |
 | [116](116-the-grammar-a-tool-call-decodes-under.md) | The grammar a tool call decodes under: optional properties that may be null, days as a format, and a refusal the model can act on (uses ADR-095, ADR-112) | Accepted | 2026-10-15 |
 | [117](117-assistant-acts-through-the-page.md) | The assistant acts through the page: an action a location carries, one queue per module, and tools for every area (amends ADR-114; uses ADR-106, ADR-114) | Accepted | 2026-10-15 |
+| [119](119-translator-on-nllb.md) | The translator runs NLLB-200: three model packs, a process of its own, a sentence at a time (uses ADR-091, ADR-105, ADR-117) | Accepted; replaces the Bergamot sentence translator, which no ADR recorded | 2026-10-23 |
