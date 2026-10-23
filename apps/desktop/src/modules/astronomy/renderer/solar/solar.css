@@ -31,6 +31,26 @@
   display: block;
   width: 100%;
   height: 100%;
+  cursor: grab;
+}
+
+/* The pointer is over a body a click would select. Declared before the drag
+   state so that, while a button is held, "grabbing" wins over it. */
+.solar__canvas--over-body {
+  cursor: pointer;
+}
+
+.solar__canvas--dragging {
+  cursor: grabbing;
+}
+
+/* The way back to the whole system. The label layer ignores the pointer, so
+   the button opts back in; it paints after the layer, so no z-index. */
+.solar__overview {
+  position: absolute;
+  left: var(--nx-space-3);
+  bottom: var(--nx-space-3);
+  pointer-events: auto;
 }
 
 .solar__labels {

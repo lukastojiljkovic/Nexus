@@ -109,18 +109,33 @@ describe("flyToPath", () => {
 });
 
 describe("followPose", () => {
-  it("keeps the standoff and applies the target's movement", () => {
+  const standoff = (value: CameraPose): number =>
+    Math.hypot(
+      value.position[0] - value.target[0],
+      value.position[1] - value.target[1],
+      value.position[2] - value.target[2],
+    );
+
+  it("keeps the standoff and applies the body's displacement", () => {
     const pose: CameraPose = { position: [0, 10, 100], target: ORIGIN };
-    const moved: Vector3 = [3, 0, -4];
-    const followed = followPose(pose, moved);
+    const followed = followPose(pose, ORIGIN, [3, 0, -4]);
     expect(followed.target).toEqual([3, 0, -4]);
     expect(followed.position).toEqual([3, 10, 96]);
-    const standoff = (value: CameraPose): number =>
-      Math.hypot(
-        value.position[0] - value.target[0],
-        value.position[1] - value.target[1],
-        value.position[2] - value.target[2],
-      );
     expect(standoff(followed)).toBeCloseTo(standoff(pose), 12);
+  });
+
+  it("keeps a user's offset from the body, so a pan survives time running", () => {
+    const panned: CameraPose = { position: [-1, 10, 100], target: [1, 0, 0] };
+    const followed = followPose(panned, ORIGIN, [3, 0, -4]);
+    expect(followed.target).toEqual([4, 0, -4]);
+    expect(followed.position).toEqual([2, 10, 96]);
+    expect(followed.position[0] - followed.target[0]).toBeCloseTo(-2, 12);
+    expect(followed.position[1] - followed.target[1]).toBeCloseTo(10, 12);
+    expect(followed.position[2] - followed.target[2]).toBeCloseTo(100, 12);
+  });
+
+  it("is the identity when the body did not move", () => {
+    const pose: CameraPose = { position: [0, 10, 100], target: [1, 0, 0] };
+    expect(followPose(pose, [2, 0, 0], [2, 0, 0])).toEqual(pose);
   });
 });

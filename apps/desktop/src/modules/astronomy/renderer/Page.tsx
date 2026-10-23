@@ -14,15 +14,14 @@ import {
   Notice,
   PageHeader,
   TextField,
+  Toolbar,
   type AsyncState,
 } from "@nexus/ui";
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import {
   dateTimeFormat,
   declaredText,
-  numberFormat,
 } from "../../../renderer/src/moduleKit/moduleSurface.js";
-import { fill } from "../../../renderer/src/strings.js";
 import type { AstronomyPacksView } from "../shared/ipc.js";
 import { manifest } from "../shared/manifest.js";
 import {
@@ -44,7 +43,7 @@ import {
   type AstronomyPrefs,
 } from "./prefs.js";
 import { readTexturePacks } from "./packs.js";
-import { bodyLabel } from "./solar/bodies.js";
+import { BodyCardPanel } from "./BodyCardPanel.js";
 import { textureCredits } from "./solar/credit.js";
 import { orbitPaths } from "./solar/orbits.js";
 import { type SolarScale } from "./solar/scale.js";
@@ -109,6 +108,7 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
   const [scale, setScale] = useState<SolarScale>("readable");
   const [selected, setSelected] = useState<BodyId | null>(null);
   const [nightMode, setNightMode] = useState(false);
+  const [clockProblem, setClockProblem] = useState(false);
 
   /** The machine's zone: read once, because the default place and the panel's clock note both come from it. */
   const zone = useMemo(() => computerZone(), []);
@@ -181,29 +181,21 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
         title={declaredText(manifest.copy?.name)}
         subtitle={copy.page.subtitle}
         sigil="planet"
+        actions={<ClockBar clock={clock} onChange={setClock} onProblem={setClockProblem} />}
       />
-      <ClockBar clock={clock} onChange={setClock} />
-      {/* The app's own segmented recipe: buttons whose state is `aria-pressed`,
-          so what is announced and what is painted cannot drift. */}
-      <div
-        className="astronomy__tabs"
-        role="group"
-        aria-label={declaredText(manifest.copy?.name)}
-      >
-        {TABS.map((id) => (
-          <Button
-            key={id}
-            size="sm"
-            variant={tab === id ? "primary" : "ghost"}
-            aria-pressed={tab === id}
-            onClick={() => {
-              setTab(id);
-            }}
-          >
-            {copy.tabs[id]}
-          </Button>
-        ))}
-      </div>
+      {clockProblem && (
+        <p className="astronomy__error" role="alert">
+          {copy.clock.bad}
+        </p>
+      )}
+      <AstronomyToolbar
+        tab={tab}
+        onTab={setTab}
+        scale={scale}
+        onScale={setScale}
+        nightMode={nightMode}
+        onNightMode={setNightMode}
+      />
 
       {packs.status === "failed" && (tab === "solar" || tab === "earth") && (
         <Notice
@@ -229,7 +221,6 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
           textures={textures}
           packsRead={packs.status === "ready"}
           scale={scale}
-          onScale={setScale}
           selected={selected}
           onSelect={setSelected}
         />
@@ -251,12 +242,7 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
             <p className="nx-hint">{copy.stars.needPlace}</p>
           </Card>
         ) : (
-          <StarsSection
-            instantMs={clock.instantMs}
-            observer={observer}
-            nightMode={nightMode}
-            onNightMode={setNightMode}
-          />
+          <StarsSection instantMs={clock.instantMs} observer={observer} nightMode={nightMode} />
         ))}
       {tab === "sunmoon" && (
         <SunMoonPanel observer={observer} day={new Date(clock.instantMs)} />
@@ -266,8 +252,86 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
 }
 
 /**
+ * The page's toolbar: the four views, and beside them the active view's own
+ * switch — the scale in the solar tab, the night light in the stars tab.
+ *
+ * The switches belong to the page rather than to the view because the toolbar
+ * is one row across the four, and each switch is a segmented recipe whose state
+ * is `aria-pressed`, so what is announced and what is painted cannot drift.
+ */
+export function AstronomyToolbar({
+  tab,
+  onTab,
+  scale,
+  onScale,
+  nightMode,
+  onNightMode,
+}: {
+  readonly tab: TabId;
+  readonly onTab: (tab: TabId) => void;
+  readonly scale: SolarScale;
+  readonly onScale: (scale: SolarScale) => void;
+  readonly nightMode: boolean;
+  readonly onNightMode: (on: boolean) => void;
+}) {
+  return (
+    <Toolbar label={declaredText(manifest.copy?.name)}>
+      {TABS.map((id) => (
+        <Button
+          key={id}
+          size="sm"
+          variant={tab === id ? "primary" : "ghost"}
+          aria-pressed={tab === id}
+          onClick={() => {
+            onTab(id);
+          }}
+        >
+          {copy.tabs[id]}
+        </Button>
+      ))}
+      {tab === "solar" && (
+        <div className="astronomy__scales" role="group" aria-label={copy.solar.scaleLabel}>
+          {(["readable", "true"] as const).map((option) => (
+            <Button
+              key={option}
+              size="sm"
+              variant={scale === option ? "primary" : "ghost"}
+              aria-pressed={scale === option}
+              onClick={() => {
+                onScale(option);
+              }}
+            >
+              {option === "true" ? copy.solar.scaleTrue : copy.solar.scaleReadable}
+            </Button>
+          ))}
+        </div>
+      )}
+      {tab === "stars" && (
+        <div className="astronomy__scales" role="group" aria-label={copy.stars.nightLabel}>
+          {[false, true].map((option) => (
+            <Button
+              key={String(option)}
+              size="sm"
+              variant={nightMode === option ? "primary" : "ghost"}
+              aria-pressed={nightMode === option}
+              onClick={() => {
+                onNightMode(option);
+              }}
+            >
+              {option ? copy.stars.nightLabel : copy.stars.normal}
+            </Button>
+          ))}
+        </div>
+      )}
+    </Toolbar>
+  );
+}
+
+/**
  * The shared clock: what instant the four views are about, one click back to
- * the machine's own, and a field for pinning another.
+ * the machine's own, and a field for pinning another. It sits in the page
+ * header's actions, and its invalid-field error is the page's to draw, under
+ * the header (`onProblem`), because the header's actions row is no place for it.
  *
  * The field is a `datetime-local`, held as TEXT while it is being typed and
  * committed only when it parses (`FocusSettingsPanel`'s recipe): a controlled
@@ -278,13 +342,14 @@ export default function AstronomyPage({ profileId }: ModulePageProps) {
 function ClockBar({
   clock,
   onChange,
+  onProblem,
 }: {
   readonly clock: SkyClock;
   readonly onChange: (clock: SkyClock) => void;
+  readonly onProblem: (problem: boolean) => void;
 }) {
   const [draft, setDraft] = useState(() => datetimeLocalValue(clock.instantMs));
   const [editing, setEditing] = useState(false);
-  const [problem, setProblem] = useState(false);
 
   // While nobody is typing, the field follows the clock — which is what makes
   // the Now button visibly work and what a running clock needs.
@@ -294,58 +359,51 @@ function ClockBar({
   }, [clock.instantMs, editing]);
 
   return (
-    <Card className="astronomy__clock">
-      <div className="astronomy__clock-row">
-        <span className="astronomy__instant">
-          {dateTimeFormat({ dateStyle: "medium", timeStyle: "short" }).format(
-            new Date(clock.instantMs),
-          )}
-        </span>
-        <Button
-          size="sm"
-          variant={isFollowing(clock) ? "primary" : "ghost"}
-          aria-pressed={isFollowing(clock)}
-          onClick={() => {
-            setEditing(false);
-            setProblem(false);
-            onChange(nowClock(Date.now()));
-          }}
-        >
-          {copy.clock.now}
-        </Button>
-        <TextField
-          className="astronomy__moment"
-          label={copy.clock.label}
-          type="datetime-local"
-          value={draft}
-          onFocus={() => {
-            setEditing(true);
-          }}
-          onBlur={() => {
-            setEditing(false);
-            setProblem(false);
-          }}
-          onChange={(event) => {
-            const next = event.target.value;
-            setDraft(next);
-            if (next === "") return;
-            const atMs = parseDatetimeLocal(next);
-            if (atMs === null) {
-              setProblem(true);
-              return;
-            }
-            setProblem(false);
-            onChange(fixedClock(atMs));
-          }}
-        />
-      </div>
-      <p className="nx-hint">{copy.clock.hint}</p>
-      {problem && (
-        <p className="astronomy__error" role="alert">
-          {copy.clock.bad}
-        </p>
-      )}
-    </Card>
+    <>
+      <span className="astronomy__instant">
+        {dateTimeFormat({ dateStyle: "medium", timeStyle: "short" }).format(
+          new Date(clock.instantMs),
+        )}
+      </span>
+      <Button
+        size="sm"
+        variant={isFollowing(clock) ? "primary" : "ghost"}
+        aria-pressed={isFollowing(clock)}
+        onClick={() => {
+          setEditing(false);
+          onProblem(false);
+          onChange(nowClock(Date.now()));
+        }}
+      >
+        {copy.clock.now}
+      </Button>
+      <TextField
+        layout="inline"
+        className="astronomy__moment"
+        label={copy.clock.label}
+        type="datetime-local"
+        value={draft}
+        onFocus={() => {
+          setEditing(true);
+        }}
+        onBlur={() => {
+          setEditing(false);
+          onProblem(false);
+        }}
+        onChange={(event) => {
+          const next = event.target.value;
+          setDraft(next);
+          if (next === "") return;
+          const atMs = parseDatetimeLocal(next);
+          if (atMs === null) {
+            onProblem(true);
+            return;
+          }
+          onProblem(false);
+          onChange(fixedClock(atMs));
+        }}
+      />
+    </>
   );
 }
 
@@ -358,13 +416,12 @@ function ClockBar({
  * the choice, so the layout's own two lies (`scale.ts`) are stated where the
  * choice is made rather than in a manual.
  */
-function SolarSection({
+export function SolarSection({
   snapshot,
   orbits,
   textures,
   packsRead,
   scale,
-  onScale,
   selected,
   onSelect,
 }: {
@@ -374,54 +431,31 @@ function SolarSection({
   /** Whether the pack read has answered with a view: false while it is in flight or has failed. */
   readonly packsRead: boolean;
   readonly scale: SolarScale;
-  readonly onScale: (scale: SolarScale) => void;
   readonly selected: BodyId | null;
-  readonly onSelect: (id: BodyId) => void;
+  readonly onSelect: (id: BodyId | null) => void;
 }) {
   const credits = textureCredits(textures);
-  const chosen =
-    selected === null ? null : (snapshot.bodies.find((b) => b.id === selected) ?? null);
-  const numbers = numberFormat({ maximumFractionDigits: 3 });
 
   return (
     <>
-      <div className="astronomy__scales" role="group" aria-label={copy.solar.scaleLabel}>
-        {(["readable", "true"] as const).map((option) => (
-          <Button
-            key={option}
-            size="sm"
-            variant={scale === option ? "primary" : "ghost"}
-            aria-pressed={scale === option}
-            onClick={() => {
-              onScale(option);
-            }}
-          >
-            {option === "true" ? copy.solar.scaleTrue : copy.solar.scaleReadable}
-          </Button>
-        ))}
+      <div className="astronomy__stage">
+        <SolarSystemView
+          snapshot={snapshot}
+          orbits={orbits}
+          selected={selected}
+          onSelect={onSelect}
+          scale={scale}
+          textures={textures}
+        />
+        {selected !== null && (
+          <BodyCardPanel snapshot={snapshot} id={selected} onClose={() => onSelect(null)} />
+        )}
       </div>
-
-      <SolarSystemView
-        snapshot={snapshot}
-        orbits={orbits}
-        selected={selected}
-        onSelect={onSelect}
-        scale={scale}
-        textures={textures}
-      />
 
       <p className="nx-hint">
         {scale === "true" ? copy.solar.scaleTrueHint : copy.solar.scaleReadableHint}
       </p>
       <p className="nx-hint">{copy.solar.selectHint}</p>
-      {chosen !== null && (
-        <p className="astronomy__choice">
-          {fill(copy.solar.selected, {
-            body: bodyLabel(chosen.id),
-            distance: numbers.format(chosen.distanceFromEarthAu),
-          })}
-        </p>
-      )}
 
       {/* ADR-103's attribution, where the textures are used: the pack's own
           per-body credit lines, drawn on the surface that shows the maps. */}
@@ -441,35 +475,21 @@ function SolarSection({
   );
 }
 
-/** The sky tonight: the star chart, plus the one switch that makes it usable with dark-adapted eyes. */
+/**
+ * The sky tonight: the star chart. Its red-light switch, the one that keeps
+ * dark-adapted eyes dark, is in the toolbar.
+ */
 function StarsSection({
   instantMs,
   observer,
   nightMode,
-  onNightMode,
 }: {
   readonly instantMs: number;
   readonly observer: LatLon;
   readonly nightMode: boolean;
-  readonly onNightMode: (on: boolean) => void;
 }) {
   return (
     <>
-      <div className="astronomy__scales" role="group" aria-label={copy.stars.nightLabel}>
-        {[false, true].map((option) => (
-          <Button
-            key={String(option)}
-            size="sm"
-            variant={nightMode === option ? "primary" : "ghost"}
-            aria-pressed={nightMode === option}
-            onClick={() => {
-              onNightMode(option);
-            }}
-          >
-            {option ? copy.stars.nightLabel : copy.stars.normal}
-          </Button>
-        ))}
-      </div>
       <StarMap instantMs={instantMs} observer={observer} nightMode={nightMode} />
       <p className="nx-hint">{copy.stars.nightHint}</p>
     </>
