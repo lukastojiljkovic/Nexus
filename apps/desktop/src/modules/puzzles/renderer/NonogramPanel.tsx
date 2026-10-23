@@ -344,7 +344,9 @@ function NonogramGame({
                   lines.columns[column] ? "pz-nono__clue pz-nono__clue--done" : "pz-nono__clue"
                 }
               >
-                {clues.length === 0 ? "0" : clues.join(" ")}
+                {(clues.length === 0 ? [0] : clues).map((clue, at) => (
+                  <span key={at}>{clue}</span>
+                ))}
               </span>
             ))}
           </div>
