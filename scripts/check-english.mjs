@@ -203,10 +203,6 @@ export const SERBIAN_SOURCES = [
     reason: "a kit module's own Serbian table one folder DEEPER than `renderer/copy.sr.ts` — the star map's, whose component lives under `renderer/stars/` so the module's page can be assembled around it; the `copy.en.ts` rule 1 reads sits beside it",
   },
   {
-    match: /^apps\/desktop\/src\/modules\/translator\/renderer\/sentences\/copy\.sr\.ts$/,
-    reason: "the sentence translator's own Serbian table — a sub-surface of a kit module (ADR-090), one folder deeper than `renderer/copy.sr.ts`, with its `copy.en.ts` rule 1 reads beside it",
-  },
-  {
     match: /^apps\/desktop\/src\/main\/assistant\/manual\/sr\/[^/]+\.md$/,
     reason: "the assistant's manual written in Serbian, one file per page, with the `en/` half beside it — prose the knowledge base quotes, not a table the compiler checks. The walk reads `.ts`/`.tsx` today, so this entry records the folder's standing: it is Serbian copy by design, and if the manual is ever read as source it is exempt here rather than added later by whoever trips over it.",
   },
@@ -348,11 +344,6 @@ export const SERBIAN_LITERAL_ALLOWLIST = [
     file: "packages/core/src/imex/archivePaths.ts",
     contains: "Fascikla",
     reason: "the same, for a folder whose own name sanitizes to nothing",
-  },
-  {
-    file: "apps/desktop/src/modules/translator/renderer/sentences/split.ts",
-    contains: "čl",
-    reason: "the Serbian abbreviation `čl.` the sentence splitter RECOGNISES in the user's own text — a vocabulary read from input, never shown",
   },
 ];
 

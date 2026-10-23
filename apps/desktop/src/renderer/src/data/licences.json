@@ -46,15 +46,6 @@
       "source": "LICENSE"
     },
     {
-      "id": "npm:@browsermt/bergamot-translator@0.4.9",
-      "name": "@browsermt/bergamot-translator",
-      "version": "0.4.9",
-      "licence": "MPL-2.0",
-      "notice": "",
-      "status": "declared-only",
-      "source": "package.json (\"license\": \"MPL-2.0\") — the package ships no licence file"
-    },
-    {
       "id": "npm:@chevrotain/cst-dts-gen@11.0.3",
       "name": "@chevrotain/cst-dts-gen",
       "version": "11.0.3",
@@ -1450,6 +1441,15 @@
       "source": "LICENSE"
     },
     {
+      "id": "npm:collapse-white-space@2.1.0",
+      "name": "collapse-white-space",
+      "version": "2.1.0",
+      "licence": "MIT",
+      "notice": "(The MIT License)\n\nCopyright (c) 2015 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+      "status": "file",
+      "source": "license"
+    },
+    {
       "id": "npm:color-convert@2.0.1",
       "name": "color-convert",
       "version": "2.0.1",
@@ -2215,6 +2215,15 @@
       "source": "LICENSE"
     },
     {
+      "id": "npm:franc@6.2.0",
+      "name": "franc",
+      "version": "6.2.0",
+      "licence": "MIT",
+      "notice": "",
+      "status": "declared-only",
+      "source": "package.json (\"license\": \"MIT\") — the package ships no licence file"
+    },
+    {
       "id": "npm:fs-extra@11.3.6",
       "name": "fs-extra",
       "version": "11.3.6",
@@ -2960,6 +2969,15 @@
       "notice": "The MIT License (MIT)\n\nCopyright © 2026 Borewit\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
       "status": "file",
       "source": "LICENSE.txt"
+    },
+    {
+      "id": "npm:n-gram@2.0.2",
+      "name": "n-gram",
+      "version": "2.0.2",
+      "licence": "MIT",
+      "notice": "(The MIT License)\n\nCopyright (c) 2014 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+      "status": "file",
+      "source": "license"
     },
     {
       "id": "npm:nanoid@3.3.18",
@@ -4040,6 +4058,15 @@
       "notice": "",
       "status": "declared-only",
       "source": "package.json (\"license\": \"MIT\") — the package ships no licence file"
+    },
+    {
+      "id": "npm:trigram-utils@2.0.1",
+      "name": "trigram-utils",
+      "version": "2.0.1",
+      "licence": "MIT",
+      "notice": "(The MIT License)\n\nCopyright (c) 2014 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+      "status": "file",
+      "source": "license"
     },
     {
       "id": "npm:ts-custom-error@3.3.1",
