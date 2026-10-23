@@ -38,6 +38,29 @@
   line-height: var(--nx-font-leading-tight);
 }
 
+.maps-region__disputes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-2);
+  background: var(--nx-surface-alt);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-sm);
+}
+
+.maps-region__dispute {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+}
+
+.maps-region__dispute-name {
+  margin: 0;
+  font-size: var(--nx-font-size-body);
+  font-weight: var(--nx-font-weight-semibold);
+  line-height: var(--nx-font-leading-tight);
+}
+
 .maps-region__detail {
   display: flex;
   flex-direction: column;

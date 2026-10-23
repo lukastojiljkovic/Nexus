@@ -16,6 +16,8 @@ Kako se koristi:
 6. Alati su: „Uvećaj“, „Umanji“, „Nova tačka“, „Ovde sam“, „Ukloni moju poziciju“, „Merenje“ („Prekini merenje“, „Obriši merenje“), „Kopiraj koordinate“ i „Spisak tačaka“.
 7. „Nova tačka“ traži „Naziv“, „Belešku“ i „Boju“, a koordinate se vide kao decimalni brojevi ili kao „Stepeni, minuti, sekunde“; tačka se postavlja na centar mape. „Spisak tačaka“ drži „Izmeni“ i „Obriši“.
 
+Obris sveta označava i sporna područja šrafurom, a sporna ostrva suviše mala za poligon prikazuju se isprekidanom kružnicom. Kartica teritorije navodi svako sporno područje koje se nalazi u njoj ili se s njom preklapa i navodi strane po abecedi, bez imenovanja vlasnika.
+
 Mape su isečene iz Protomaps izdanja OpenStreetMap-a i čuvaju se kao datoteke na ovom računaru, van profila; kartica pokazuje datum podataka svake mape. Tačke čuva profil i ostaju kada se mapa ukloni. Izvor je naveden uz kartu: © OpenStreetMap contributors, Protomaps i zemljišni pokrivač © ESA WorldCover; podaci su pod licencom ODbL.
 
 Povezano: network-and-updates, wiki

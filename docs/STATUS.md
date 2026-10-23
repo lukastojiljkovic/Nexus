@@ -320,7 +320,7 @@ settings gallery draw before any of its chunks load:
 | Puzzles (`puzzles`) | play | Sudoku, nonograms (pictures from the `nonograms-pictures` pack when it is installed), mahjong and Numbers — every game is saved and picks up where it stopped. |
 | Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet. |
 | Reader (`reader`) | knowledge | Books from content packs — read, search and print them. |
-| Maps (`maps`) | knowledge | A world outline to download a country, a continent or the world from, at the detail chosen ([ADR-118](architecture/adr/118-maps-cut-from-the-planet-build.md)); then search places, drop pins and measure a distance offline. |
+| Maps (`maps`) | knowledge | A world outline to download a country, a continent or the world from, at the detail chosen ([ADR-118](architecture/adr/118-maps-cut-from-the-planet-build.md)); then search places, drop pins and measure a distance offline; disputed areas are hatched and their parties are named neutrally on a territory card. |
 | Translator (`translator`) | knowledge | Translation between NLLB-200's 202 languages on the device ([ADR-119](architecture/adr/119-translator-on-nllb.md)), and a Serbian–English dictionary with travel phrases — all of it offline. |
 | Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note, in English and Serbian with the `tessdata-fast` pack. |
 | Drawings (`drawings`) | make | Open an AutoCAD drawing: layers, measurements and print to PDF. DXF right away, DWG with a pack. |

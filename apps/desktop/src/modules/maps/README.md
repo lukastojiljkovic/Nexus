@@ -19,7 +19,7 @@ A map that works offline: download a territory, a continent or the world, search
 
 ## Renderer half
 
-- **Page** — [`renderer/Page.tsx`](renderer/Page.tsx), with [`renderer/PinDialog.tsx`](renderer/PinDialog.tsx) and [`renderer/PinList.tsx`](renderer/PinList.tsx). The style is built from the installed regions by [`renderer/style.ts`](renderer/style.ts), whose tiles [`renderer/regionTiles.ts`](renderer/regionTiles.ts) reads; the outline's card is [`renderer/regions/`](renderer/regions/). Place search is in the worker [`renderer/searchWorker.ts`](renderer/searchWorker.ts), which reads each region's places from its tiles ([`renderer/placeIndex.ts`](renderer/placeIndex.ts)).
+- **Page** — [`renderer/Page.tsx`](renderer/Page.tsx), with [`renderer/PinDialog.tsx`](renderer/PinDialog.tsx) and [`renderer/PinList.tsx`](renderer/PinList.tsx). The style is built from the installed regions by [`renderer/style.ts`](renderer/style.ts), whose tiles [`renderer/regionTiles.ts`](renderer/regionTiles.ts) reads; the outline's card is [`renderer/regions/`](renderer/regions/), and disputed areas are read from [`shared/world/disputed.ts`](shared/world/disputed.ts) and drawn by the same style. Place search is in the worker [`renderer/searchWorker.ts`](renderer/searchWorker.ts), which reads each region's places from its tiles ([`renderer/placeIndex.ts`](renderer/placeIndex.ts)).
 - **Settings** — none: the module has no settings card.
 - **Widget** — none: the module publishes no dashboard card.
 

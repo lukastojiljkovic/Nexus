@@ -36,6 +36,13 @@ explored body by body.
   roads are too large to plan and are refused with that reason; each of them
   downloads at less detail, and the whole world at full detail is the build
   file itself.
+- **The world outline marks every disputed territory.** Disputed polygons are
+  hatched and dashed over the map, and tiny disputed islands are points at world
+  scale. A territory's card names every disputed area in or overlapping it and
+  names the parties in alphabetical order in the reader's language, without
+  saying who administers it or who is right. The layer comes from Natural
+  Earth's 1:10m disputed areas, with explicit decisions for records whose notes
+  are empty, outdated, or too narrow.
 - **Every planned content pack.** New in the catalogue: the planet textures for
   the solar system, the Stockfish 19 chess engine, GNU LibreDWG for DWG
   drawings, the scanner's OCR data for English and Serbian in both scripts, food
