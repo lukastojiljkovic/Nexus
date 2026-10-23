@@ -8042,7 +8042,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       catalogueRefresh: "Osveži katalog",
       catalogueEmpty: "U katalogu trenutno nema paketa.",
       catalogueModeOff:
-        "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti da bi preuzimao pakete.",
+        "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti za preuzimanje paketa.",
       catalogueDetails: "Detalji",
       download: "Preuzmi",
       downloadPause: "Pauza",
