@@ -58,7 +58,14 @@ function evaluate(expression: unknown, properties: Record<string, string>): unkn
   }
 }
 
-const BELGRADE = { name: "Београд", "name:en": "Belgrade", "name:hr": "Beograd", script: "Cyrillic" };
+const BELGRADE = {
+  name: "Београд",
+  "name:sr": "Београд",
+  "name:sr-Latn": "Beograd",
+  "name:en": "Belgrade",
+  "name:hr": "Beograd",
+  script: "Cyrillic",
+};
 const VILLAGE = { name: "Ђуринци", "name:en": "Đurinci", script: "Cyrillic" };
 const MUNICH = { name: "München", "name:en": "Munich" };
 const MOSCOW = { name: "Москва", "name:en": "Moscow", script: "Cyrillic" };
@@ -69,12 +76,13 @@ describe("labelText", () => {
     expect(evaluate(labelText("en"), { name: "Topola" })).toBe("Topola");
   });
 
-  it("reads Serbian in Latin: the Croatian name first, then a Latin local name, then English", () => {
+  it("reads Serbian in Latin, then Serbian, then the local name", () => {
     expect(evaluate(labelText("sr"), BELGRADE)).toBe("Beograd");
-    expect(evaluate(labelText("sr"), VILLAGE)).toBe("Đurinci");
+    expect(evaluate(labelText("sr"), { name: "Topola", "name:sr": "Топола" })).toBe("Топола");
+    expect(evaluate(labelText("sr"), VILLAGE)).toBe("Ђуринци");
     expect(evaluate(labelText("sr"), MUNICH)).toBe("München");
-    expect(evaluate(labelText("sr"), MOSCOW)).toBe("Moscow");
-    expect(evaluate(labelText("sr"), { ...MOSCOW, "name:hr": "Moskva" })).toBe("Moskva");
+    expect(evaluate(labelText("sr"), MOSCOW)).toBe("Москва");
+    expect(evaluate(labelText("sr"), { ...MOSCOW, "name:hr": "Moskva" })).toBe("Москва");
   });
 });
 

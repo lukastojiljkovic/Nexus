@@ -168,7 +168,6 @@ const PARTY_IDS = Object.freeze({
   Japan: "JPN",
   Kazakhstan: "KAZ",
   Kenya: "KEN",
-  Kosovo: "KOS",
   Lebanon: "LBN",
   Madagascar: "MDG",
   Malaysia: "MYS",
@@ -221,7 +220,7 @@ const PARTY_IDS = Object.freeze({
 const PARTY_OVERRIDES = Object.freeze({
   Gaza: ["ISR", "PSX"],
   "West Bank": ["ISR", "PSX"],
-  Kosovo: ["KOS", "SRB"],
+  Kosovo: ["self", "SRB"],
   Belize: ["BLZ", "GTM"],
   "Dragonja River": ["HRV", "SVN"],
   "Vukovar Island": ["HRV", "SRB"],
@@ -634,8 +633,79 @@ function unionGeometries(geometries) {
   const unique = new Map();
   for (const polygon of polygons) unique.set(JSON.stringify(polygon), polygon);
   const kept = [...unique.values()];
-  if (kept.length === 0) throw new Error("world-outline: a merged disputed area has no polygon.");
+  if (kept.length === 0) throw new Error("world-outline: a merged geometry has no polygon.");
   return kept.length === 1 ? { type: "Polygon", coordinates: kept[0] } : { type: "MultiPolygon", coordinates: kept };
+}
+
+/**
+ * Two adjacent simple territories as one boundary. Exact opposite edges are
+ * cancelled, then the remaining directed edges are traced into rings, so the
+ * shared border is not drawn as an internal line. The two source records here
+ * have one exterior each and no holes; anything else is refused rather than
+ * silently losing a ring.
+ */
+export function dissolveAdjacentExteriors(geometries) {
+  const rings = geometries.flatMap((geometry) =>
+    polygonsOf(geometry).map((polygon) => {
+      if (polygon.length !== 1) throw new Error("world-outline: a dissolved outline territory has a hole.");
+      return tidy(polygon[0]);
+    }),
+  );
+  if (rings.some((ring) => ring === null)) throw new Error("world-outline: a dissolved outline territory has no ring.");
+
+  const edgeKey = (from, to) => {
+    const left = `${from[0]},${from[1]}`;
+    const right = `${to[0]},${to[1]}`;
+    return left < right ? `${left}|${right}` : `${right}|${left}`;
+  };
+  const groups = new Map();
+  for (const ring of rings) {
+    for (let at = 0; at < ring.length - 1; at += 1) {
+      const edge = { from: ring[at], to: ring[at + 1], used: false };
+      const key = edgeKey(edge.from, edge.to);
+      const group = groups.get(key) ?? [];
+      group.push(edge);
+      groups.set(key, group);
+    }
+  }
+  for (const group of groups.values()) {
+    const forward = group.find((edge) => `${edge.from[0]},${edge.from[1]}` < `${edge.to[0]},${edge.to[1]}`);
+    const reverse = group.find((edge) => `${edge.from[0]},${edge.from[1]}` > `${edge.to[0]},${edge.to[1]}`);
+    if (forward !== undefined && reverse !== undefined) {
+      forward.used = true;
+      reverse.used = true;
+    }
+  }
+  const edges = [...groups.values()].flat().filter((edge) => !edge.used);
+  const outgoing = new Map();
+  for (const edge of edges) {
+    const key = `${edge.from[0]},${edge.from[1]}`;
+    const list = outgoing.get(key) ?? [];
+    list.push(edge);
+    outgoing.set(key, list);
+  }
+
+  const kept = [];
+  while (edges.some((edge) => !edge.used)) {
+    const first = edges.find((edge) => !edge.used);
+    const ring = [first.from];
+    let current = first;
+    for (let step = 0; step <= edges.length; step += 1) {
+      current.used = true;
+      ring.push(current.to);
+      if (current.to[0] === first.from[0] && current.to[1] === first.from[1]) break;
+      const next = (outgoing.get(`${current.to[0]},${current.to[1]}`) ?? []).find((edge) => !edge.used);
+      if (next === undefined) throw new Error("world-outline: a dissolved outline boundary is open.");
+      current = next;
+    }
+    const closed = tidy(ring);
+    if (closed === null) throw new Error("world-outline: a dissolved outline boundary collapsed.");
+    kept.push(closed);
+  }
+  if (kept.length === 0) throw new Error("world-outline: a dissolved outline has no boundary.");
+  return kept.length === 1
+    ? { type: "Polygon", coordinates: [kept[0]] }
+    : { type: "MultiPolygon", coordinates: kept.map((ring) => [ring]) };
 }
 
 function simplifyGeometry(geometry, tolerance, decimals) {
@@ -724,9 +794,11 @@ const codeOrNull = (value) => (value === "-99" ? null : value);
  * record's ADM0_A3 as its id, and exactly the five properties the picker reads.
  */
 export function buildOutline(collection, { tolerance = SIMPLIFY_TOLERANCE, decimals = COORDINATE_DECIMALS } = {}) {
+  const kosovo = collection.features.filter((feature) => feature.properties.ADM0_A3 === "KOS");
   return {
     type: "FeatureCollection",
-    features: collection.features.map((feature) => {
+    // Kosovo is part of Serbia and is shown only as a disputed area.
+    features: collection.features.filter((feature) => feature.properties.ADM0_A3 !== "KOS").map((feature) => {
       const properties = feature.properties;
       return {
         type: "Feature",
@@ -738,7 +810,13 @@ export function buildOutline(collection, { tolerance = SIMPLIFY_TOLERANCE, decim
           continent: properties.CONTINENT,
           label: [round(properties.LABEL_X, decimals), round(properties.LABEL_Y, decimals)],
         },
-        geometry: outlineGeometry(feature.geometry, tolerance, decimals),
+        geometry: outlineGeometry(
+          properties.ADM0_A3 === "SRB" && kosovo.length > 0
+            ? dissolveAdjacentExteriors([feature.geometry, ...kosovo.map((entry) => entry.geometry)])
+            : feature.geometry,
+          tolerance,
+          decimals,
+        ),
       };
     }),
   };

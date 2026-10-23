@@ -8,6 +8,7 @@ import {
   buildDisputedAreas,
   buildOutline,
   classifyDisputedAreas,
+  dissolveAdjacentExteriors,
   disputedParties,
   simplifyRing,
 } from "./world-outline.mjs";
@@ -141,6 +142,73 @@ describe("buildOutline", () => {
       ],
     ]);
   });
+
+  it("merges Kosovo into Serbia and keeps no separate Kosovo outline feature", () => {
+    const country = (id, coordinates) => ({
+      type: "Feature",
+      properties: {
+        ADM0_A3: id,
+        ISO_A2_EH: id === "KOS" ? "XK" : "RS",
+        ISO_A3_EH: id,
+        NAME_EN: id === "KOS" ? "Kosovo" : "Serbia",
+        CONTINENT: "Europe",
+        LABEL_X: id === "KOS" ? 20.86 : 20.79,
+        LABEL_Y: id === "KOS" ? 42.59 : 44.19,
+      },
+      geometry: { type: "Polygon", coordinates },
+    });
+    const built = buildOutline({
+      features: [
+        country("SRB", [[
+          [19, 44],
+          [20, 44],
+          [21, 44],
+          [21, 46],
+          [19, 46],
+          [19, 44],
+        ]]),
+        country("KOS", [[
+          [20, 43],
+          [21, 43],
+          [21, 44],
+          [20, 44],
+          [20, 43],
+        ]]),
+      ],
+    });
+
+    expect(built.features.map((entry) => entry.id)).toEqual(["SRB"]);
+    // The shared edge is dissolved, not merely packed into a MultiPolygon:
+    // otherwise the outline's border layer still draws Kosovo away from Serbia.
+    expect(built.features[0]?.geometry.type).toBe("Polygon");
+  });
+
+  it("removes the shared edge between adjacent exteriors", () => {
+    const merged = dissolveAdjacentExteriors([
+      {
+        type: "Polygon",
+        coordinates: [[[19, 44], [20, 44], [21, 44], [21, 46], [19, 46], [19, 44]]],
+      },
+      {
+        type: "Polygon",
+        coordinates: [[[20, 43], [21, 43], [21, 44], [20, 44], [20, 43]]],
+      },
+    ]);
+
+    expect(merged).toEqual({
+      type: "Polygon",
+      coordinates: [[
+        [19, 44],
+        [20, 44],
+        [20, 43],
+        [21, 43],
+        [21, 44],
+        [21, 46],
+        [19, 46],
+        [19, 44],
+      ]],
+    });
+  });
 });
 
 
@@ -247,7 +315,7 @@ describe("disputed areas", () => {
     const built = buildDisputedAreas(disputedCensus, { features: UKRAINE_OBLASTS }, outline);
     const byName = (name) => built.features.find((area) => area.properties.name === name);
 
-    expect(byName("Kosovo")?.properties.parties).toEqual(["KOS", "SRB"]);
+    expect(byName("Kosovo")?.properties.parties).toEqual(["SRB", "self"]);
     expect(byName("Spratly Islands")?.properties.parties).toContain("VNM");
     expect(byName("Bir Tawil")?.properties).toMatchObject({ parties: [], note: "unclaimed" });
     expect(byName("Ilemi Triangle")?.geometry.type).toBe("MultiPolygon");

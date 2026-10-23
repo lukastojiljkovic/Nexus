@@ -1,5 +1,5 @@
 import { VectorTile } from "@mapbox/vector-tile";
-import { MAP_PLACE_KINDS, transliterateToLatin, type MapPlace, type MapPlaceKind } from "@nexus/core";
+import { MAP_PLACE_KINDS, type MapPlace, type MapPlaceKind } from "@nexus/core";
 import { PbfReader } from "pbf";
 import { tileIdToZxy } from "pmtiles";
 
@@ -98,9 +98,8 @@ function text(value: unknown): string | null {
 /**
  * One `places` feature as a place, or `null` when it has no name or no kind the
  * index knows. The drawn name follows the map's labels (`labelText` in
- * `style.ts`): the Serbian Latin spelling, then the Croatian one, the local
- * name where the feature is Latin, then English, and for a non-Latin name with
- * neither, its transliteration.
+ * `style.ts`): the Serbian Latin spelling, then the Serbian one, then the local
+ * name. An English reader reads `nameEn` at the point of display.
  */
 export function placeFromFeature(
   properties: Readonly<Record<string, number | string | boolean>>,
@@ -114,9 +113,8 @@ export function placeFromFeature(
   const population = properties.population;
   const name =
     text(properties["name:sr-Latn"]) ??
-    text(properties["name:hr"]) ??
-    (properties.script === undefined ? local : text(properties["name:en"])) ??
-    transliterateToLatin(local);
+    text(properties["name:sr"]) ??
+    local;
   return {
     id,
     name,

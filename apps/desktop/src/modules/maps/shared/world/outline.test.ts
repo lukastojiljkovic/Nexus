@@ -51,6 +51,12 @@ describe("the world outline", () => {
   it("groups Serbia under Europe", () => {
     expect(regionsOfContinent("Europe").map((region) => region.id)).toContain("SRB");
   });
+
+  it("draws Kosovo as part of Serbia rather than as a separate territory", () => {
+    expect(regionById("KOS")).toBeUndefined();
+    // Natural Earth's separate Kosovo polygon reaches south of Serbia's own.
+    expect(regionBounds("SRB").minLat).toBeLessThan(41.9);
+  });
 });
 
 describe("regionBounds", () => {

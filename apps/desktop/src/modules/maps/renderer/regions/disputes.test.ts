@@ -16,14 +16,14 @@ function container(id: string): string {
 }
 
 describe("cardDisputes", () => {
-  it("puts Kosovo's own dispute first, with Kosovo and Serbia in both languages", () => {
-    expect(cardDisputes("KOS", "en")[0]).toMatchObject({
+  it("puts Kosovo's dispute on Serbia's card, with Kosovo and Serbia in both languages", () => {
+    expect(cardDisputes("SRB", "en")[0]).toMatchObject({
       id: "kosovo",
       name: "Kosovo",
       status: "Disputed territory",
       parties: "Parties: Kosovo, Serbia",
     });
-    expect(cardDisputes("KOS", "sr")[0]).toMatchObject({
+    expect(cardDisputes("SRB", "sr")[0]).toMatchObject({
       id: "kosovo",
       name: "Kosovo",
       status: "Sporna teritorija",

@@ -17,11 +17,11 @@ import { territoryName, type Locale } from "./regions/names.js";
  * document, so the map follows the theme the way the rest of the page does.
  *
  * **The labels are the vendor's layers with our text.** The tiles carry `name`
- * in the local script, `name:en`, and for many places `name:hr`, but no
- * Serbian name. So a label's text is our own chain (`labelText`), its font is
- * the UI's own stack, drawn from the system's fonts because the style names no
- * glyph server, and the icons, shields, POIs and house numbers are left out:
- * nothing here draws a sprite.
+ * in the local script, `name:en`, and where available the Serbian names. So a
+ * label's text is our own chain (`labelText`), its font is the UI's own stack,
+ * drawn from the system's fonts because the style names no glyph server, and
+ * the icons, shields, POIs and house numbers are left out: nothing here draws a
+ * sprite.
  *
  * **The outline is always there.** The bundled Natural Earth outline is the
  * land under every region, the borders where nothing is downloaded, the
@@ -182,19 +182,16 @@ export function mapFlavor(token: TokenOf): Flavor {
 /**
  * What a label says, by the reader's language.
  *
- * English reads `name:en`, else the local name. Serbian is written in Latin
- * here, and the tiles have no Serbian name, so it reads the closest name they
- * do have: the Croatian one (`Beograd`, `Beč`, `Moskva`), then the local name
- * where it is already Latin (the vendor sets `script` only for one that is
- * not), then English, which for a Serbian village is its Latin spelling.
+ * English reads `name:en`, else the local name. Serbian reads the Latin
+ * Serbian name, then Serbian, then the tile's local name.
  */
 export function labelText(locale: Locale): unknown[] {
   if (locale === "en") return ["coalesce", ["get", "name:en"], ["get", "name"]];
   return [
     "coalesce",
     ["get", "name:sr-Latn"],
-    ["get", "name:hr"],
-    ["case", ["has", "script"], ["coalesce", ["get", "name:en"], ["get", "name"]], ["get", "name"]],
+    ["get", "name:sr"],
+    ["get", "name"],
   ];
 }
 

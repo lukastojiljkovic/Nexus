@@ -291,13 +291,9 @@ missing. The cost is that a label is rasterised by each machine's fonts rather
 than by the same file everywhere.
 
 **The Serbian label chain.** `@protomaps/basemaps` 5.7.2 lists 39 label
-languages, Croatian among them and neither Serbian nor Bosnian. A Serbian page
-reads `name:sr-Latn` (kept first in case a later build carries it), then
-`name:hr`, then the local `name` where the place is written in Latin, then
-`name:en`, then the local `name`. The plan had `name:bs` before the local name;
-the build has no such key. A place in another script and with no Croatian form
-therefore reads in English rather than in a script the reader may not know.
-English pages read `name:en`, then `name`.
+languages and neither Serbian nor Bosnian. The tiles' OpenMapTiles properties
+are used directly: a Serbian page reads `name:sr-Latn`, then `name:sr`, then
+the local `name`; an English page reads `name:en`, then `name`.
 
 **Search reads the regions' own tiles** (`renderer/placeIndex.ts`, in the search
 worker). A place is in every tile from its `min_zoom` down, so one zoom holds
@@ -308,8 +304,7 @@ built cover: Serbia at full detail reads zoom 10 (134 tiles), Germany zoom 10
 (680), Europe at towns detail zoom 7 (1,440), the world zoom 5 (665). The
 regions are merged most detailed first, and a place two regions both carry is
 kept once: the same kind and name within 0.01°, because each region reads it on
-its own zoom's grid. A name follows the label chain above, with a
-transliteration for a non-Latin name that has no other form.
+its own zoom's grid. A name follows the same chain as a label.
 
 **The credit** in the corner of the map is "© OpenStreetMap contributors ·
 Protomaps · land cover © ESA WorldCover", beside the ODbL line. Protomaps
@@ -332,6 +327,8 @@ the parties in alphabetical order in the reader's language, and never says who
 administers it, who is right, or whose it is. Antarctica is not in this layer:
 its claims are held in abeyance by treaty rather than disputed.
 
+Kosovo is dissolved into Serbia's outline and marked disputed.
+
 **Sources.** `ne_10m_admin_0_disputed_areas.geojson` supplies the 99 disputed
 records and their notes. `ne_10m_admin_1_states_provinces.geojson` supplies the
 four whole Ukrainian oblasts selected by `iso_3166_2`. Both are Natural Earth
@@ -350,7 +347,7 @@ with its reason beside it.
 
 The exceptions are: Israel's whole-state polygon is excluded because its
 disputed parts are separate features; Gaza and the West Bank name Israel and
-Palestine; Kosovo names Kosovo and Serbia; Belize names Belize and Guatemala;
+Palestine; Kosovo names itself and Serbia; Belize names Belize and Guatemala;
 Dragonja names Croatia and Slovenia; Vukovar and Šarengrad islands name Croatia
 and Serbia after the source's byte-order marks are removed from their names;
 the misspelt `Ilemi Triange` duplicate is merged into Ilemi Triangle; the two

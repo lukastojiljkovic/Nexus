@@ -2,7 +2,7 @@ import { PbfWriter } from "pbf";
 import { zxyToTileId } from "pmtiles";
 import { describe, expect, it } from "vitest";
 
-import { transliterateToLatin, type MapPlace } from "@nexus/core";
+import type { MapPlace } from "@nexus/core";
 import {
   INDEX_MAX_TILES,
   indexTiles,
@@ -147,8 +147,9 @@ describe("placeFromFeature", () => {
     const belgrade = placeFromFeature(
       {
         name: "Београд",
+        "name:sr": "Београд",
+        "name:sr-Latn": "Beograd",
         "name:en": "Belgrade",
-        "name:hr": "Beograd",
         script: "Cyrillic",
         kind: "locality",
         kind_detail: "city",
@@ -170,9 +171,43 @@ describe("placeFromFeature", () => {
     });
   });
 
-  it("transliterates a Cyrillic name that has no Latin spelling in the data", () => {
+  it("uses Serbian names before the local label and never substitutes Croatian", () => {
+    expect(
+      placeFromFeature(
+        {
+          name: "Приштина",
+          "name:sr": "Приштина",
+          "name:sr-Latn": "Priština",
+          "name:hr": "Priština",
+          script: "Cyrillic",
+          kind: "locality",
+          kind_detail: "city",
+        },
+        21.17,
+        42.67,
+        8,
+      )?.name,
+    ).toBe("Priština");
+    expect(
+      placeFromFeature(
+        {
+          name: "Топола",
+          "name:sr": "Топола",
+          "name:hr": "Topola",
+          script: "Cyrillic",
+          kind: "locality",
+          kind_detail: "town",
+        },
+        20.68,
+        44.25,
+        9,
+      )?.name,
+    ).toBe("Топола");
+  });
+
+  it("keeps the local name when the data has no Serbian or English spelling", () => {
     const place = placeFromFeature({ name: "Ниш", script: "Cyrillic", kind: "locality", kind_detail: "city" }, 21.9, 43.3, 1);
-    expect(place?.name).toBe(transliterateToLatin("Ниш"));
+    expect(place?.name).toBe("Ниш");
     expect(place?.nameEn).toBeNull();
   });
 
@@ -211,7 +246,7 @@ describe("placesFromTile", () => {
     expect(belgrade?.id).toBe(42);
     expect(belgrade?.lat).toBeCloseTo(44.8178131, 4);
     expect(belgrade?.lon).toBeCloseTo(20.4568974, 4);
-    expect(belgrade?.name).toBe(transliterateToLatin("Београд"));
+    expect(belgrade?.name).toBe("Београд");
   });
 
   it("drops a point that lies in the tile's buffer", () => {

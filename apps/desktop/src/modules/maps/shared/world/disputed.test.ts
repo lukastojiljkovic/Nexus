@@ -30,7 +30,7 @@ describe("the disputed layer", () => {
   it("lists an area on the territories it is in, not on every neighbour along its border", () => {
     const within = (id: string) => disputedAreas.find((area) => area.id === id)?.within;
 
-    expect(within("kosovo")).toEqual(["KOS"]);
+    expect(within("kosovo")).toEqual(["SRB"]);
     expect(within("gaza")).toEqual(["PSX"]);
     expect(within("western-sahara")).not.toContain("MRT");
     expect(within("luhansk-oblast")).toEqual(["UKR"]);
@@ -52,8 +52,9 @@ describe("the disputed layer", () => {
   });
 
   it("is a precomputed lookup, not a geometry pass", () => {
-    for (const id of ["KOS", "RUS", "SDN", "SAH"]) {
+    for (const id of ["SRB", "RUS", "SDN", "SAH"]) {
       expect(disputesWithin(id).every((area) => area.within.includes(id))).toBe(true);
     }
+    expect(disputedAreas.find((area) => area.id === "kosovo")?.parties).toEqual(["SRB", "self"]);
   });
 });
