@@ -108,7 +108,7 @@ export const en: typeof sr = {
     grafit: "Graphite",
   },
   attribution: {
-    credit: "© OpenStreetMap contributors",
+    credit: "© OpenStreetMap contributors · Protomaps · land cover © ESA WorldCover",
     licence: "Data under the ODbL — https://www.openstreetmap.org/copyright",
     label: "Data source",
   },

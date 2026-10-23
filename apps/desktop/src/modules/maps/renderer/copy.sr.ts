@@ -116,7 +116,7 @@ export const sr = {
     grafit: "Grafitna",
   },
   attribution: {
-    credit: "© OpenStreetMap contributors",
+    credit: "© OpenStreetMap contributors · Protomaps · zemljišni pokrivač © ESA WorldCover",
     licence: "Podaci pod licencom ODbL — https://www.openstreetmap.org/copyright",
     label: "Izvor podataka",
   },

@@ -233,9 +233,8 @@ its way.
 
 ## 10. What this ADR does not do
 
-- **It does not draw yet.** The style the regions are painted with, their
-  labels and the place search across regions are the same run's next steps, and
-  will be recorded here when they are built. ADR-099 §4 to §6 hold until then.
+- **The drawing and the search are §13**, recorded when they were built. They
+  replace ADR-099 §4 to §6.
 - **It does not decide how disputed areas are drawn.** That is Luka's call, and
   he has been asked. Until he answers, the outline is Natural Earth's default
   view.
@@ -264,3 +263,63 @@ its way.
 - **A mirror on this project's own storage, now.** It needs an account and a
   bill the project does not have. It stays the remedy if §3's arrangement has to
   change.
+
+## 13. How the regions are drawn and searched
+
+Recorded on 2026-10-23, when they were built.
+
+**One style, built in the renderer** (`renderer/style.ts`, pure and tested). From
+the bottom: the background, the world outline (the same Natural Earth outline
+the picker uses), each installed detail's geometry from the coarsest to the
+finest, the picker's tint and selection, each detail's labels, and the country
+names from the outline up to zoom 7. The geometry and label layers are
+`@protomaps/basemaps` 5.7.2's, coloured from the app's tokens, so a theme change
+restyles the map. Icons are dropped, because no sprite ships.
+
+**One source per installed detail.** `nx-regions://<detail>/{z}/{x}/{y}` is
+answered in the renderer by `renderer/regionTiles.ts`, from the PMTiles files of
+every region at that detail, newest build first, with the detail's own
+`maxzoom`. Where a finer detail has a tile it draws over the coarser one; where no
+region has one, the outline shows through. The address carries the files'
+names, so installing, updating or removing a region reloads the source.
+
+**Labels in the system's fonts, not a glyph bundle.** ADR-099 shipped glyph
+files in the pack, and the plan said the glyphs would be bundled. The style
+names no `glyphs`, so MapLibre draws text with the fonts the system has, and the
+style asks for the app's own UI font stack (`--nx-font-family-ui`). Every script
+the system can render is drawn, nothing is downloaded, and no glyph range can be
+missing. The cost is that a label is rasterised by each machine's fonts rather
+than by the same file everywhere.
+
+**The Serbian label chain.** `@protomaps/basemaps` 5.7.2 lists 39 label
+languages, Croatian among them and neither Serbian nor Bosnian. A Serbian page
+reads `name:sr-Latn` (kept first in case a later build carries it), then
+`name:hr`, then the local `name` where the place is written in Latin, then
+`name:en`, then the local `name`. The plan had `name:bs` before the local name;
+the build has no such key. A place in another script and with no Croatian form
+therefore reads in English rather than in a script the reader may not know.
+English pages read `name:en`, then `name`.
+
+**Search reads the regions' own tiles** (`renderer/placeIndex.ts`, in the search
+worker). A place is in every tile from its `min_zoom` down, so one zoom holds
+them all: the deepest zoom up to 10 at which the region's territories cover at
+most 2,000 tiles. Both numbers are policy: villages are in the tiles by zoom 10,
+and the tile bound caps what one download asks of the search. Measured with the
+built cover: Serbia at full detail reads zoom 10 (134 tiles), Germany zoom 10
+(680), Europe at towns detail zoom 7 (1,440), the world zoom 5 (665). The
+regions are merged most detailed first, and a place two regions both carry is
+kept once: the same kind and name within 0.01°, because each region reads it on
+its own zoom's grid. A name follows the label chain above, with a
+transliteration for a non-Latin name that has no other form.
+
+**The credit** in the corner of the map is "© OpenStreetMap contributors ·
+Protomaps · land cover © ESA WorldCover", beside the ODbL line. Protomaps
+publishes the build as an ODbL Produced Work with OpenStreetMap attribution
+required, and its own example credits Protomaps and OpenStreetMap. The land
+cover at low zooms is Daylight's, vectorised from ESA WorldCover (CC BY 4.0).
+
+**`map-serbia` and its builder are deleted**, with `places.json`'s reader in
+`@nexus/core` and the renderer's pack-file reader. `@nexus/core`'s
+`remoteStyleUrls` stays: the built style names no remote address, and
+`style.test.ts` pins that with it.
+

@@ -206,7 +206,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The ODbL credit. IN THE CORNER OF THE MAP, AT ALL TIMES, and never faded:
+/* The data credit (OpenStreetMap under the ODbL, Protomaps, and ESA WorldCover
+   for the land cover). IN THE CORNER OF THE MAP, AT ALL TIMES, and never faded:
    the Attribution Guidelines ask for the credit where somebody looking at the
    map can see it, and this app's answer to "which corner" is the one the scale
    bar does not use. It is capped at `60%` so it wraps into two lines rather than
