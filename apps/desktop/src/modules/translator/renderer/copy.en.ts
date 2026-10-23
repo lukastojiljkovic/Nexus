@@ -16,7 +16,7 @@ import { sr } from "./copy.sr.js";
  */
 export const en: typeof sr = {
   page: {
-    subtitle: "A Serbian–English dictionary and travel phrases — they work offline.",
+    subtitle: "Translation between 202 languages, a Serbian–English dictionary and travel phrases — they work offline.",
     loading: "Loading…",
   },
   search: {

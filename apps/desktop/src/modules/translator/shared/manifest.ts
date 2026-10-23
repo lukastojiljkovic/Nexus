@@ -85,8 +85,8 @@ export const manifest: ModuleManifest = {
   copy: {
     name: { sr: "Prevodilac", en: "Translator" },
     description: {
-      sr: "Rečnik srpskog i engleskog i fraze za put — rade bez mreže.",
-      en: "A Serbian–English dictionary and travel phrases — they work offline.",
+      sr: "Prevod između 202 jezika, rečnik srpskog i engleskog i fraze za put — rade bez mreže.",
+      en: "Translation between 202 languages, a Serbian–English dictionary and travel phrases — they work offline.",
     },
   },
   settings: TRANSLATOR_SETTINGS,

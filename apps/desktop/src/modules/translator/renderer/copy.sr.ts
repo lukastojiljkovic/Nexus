@@ -16,7 +16,7 @@
  */
 export const sr = {
   page: {
-    subtitle: "Rečnik srpskog i engleskog i fraze za put — rade bez mreže.",
+    subtitle: "Prevod između 202 jezika, rečnik srpskog i engleskog i fraze za put — rade bez mreže.",
     loading: "Učitavanje…",
   },
   search: {
