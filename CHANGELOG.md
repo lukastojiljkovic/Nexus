@@ -88,6 +88,9 @@ explored body by body.
   own, and the two schemes refused any such read. They now allow it.
 - **The Tuner opens.** Signals' Tuner tab failed the same way over a hertz
   unit; frequencies are now printed with "Hz" after them.
+- **The map's search says "No place matches" only when nothing does.** It said
+  so while each query was being read, and again after a pick wrote the place's
+  name into the box. A pick now closes the list.
 - **Voice input and output.** The voice worker's process loaded a module that
   defines its message loop without starting it, so every dictation and every
   spoken answer waited forever. The process now starts the loop.
