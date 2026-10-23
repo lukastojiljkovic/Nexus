@@ -30,8 +30,10 @@ between any two of NLLB-200's languages as the user types: a change starts a
 translation after a short pause, and the output fills in one sentence at a
 time while the model works. The language pickers name each language in the
 interface language and search by name, English name or NLLB code. Detection
-(`renderer/translate/detect.ts`) guesses the source with franc, and the guess
-is shown on the picker until the user chooses a language.
+(`renderer/translate/detect.ts`) guesses the source with eld where eld is
+sure and with franc for the languages eld does not carry; in the Serbian
+interface, Serbian, Croatian and Bosnian in Latin are read as Serbian. The
+guess is shown on the picker until the user chooses a language.
 
 The timing lives in `renderer/translate/session.ts`, a unit with no React in
 it: a change restarts the pause, a running job is polled until it is done, and
