@@ -8,8 +8,8 @@ describe("the privileged schemes", () => {
     expect(names).toEqual([...new Set(names)]);
   });
 
-  it("lets the page fetch a pack's files and a map region, and nothing else across origins", () => {
+  it("lets the page read pack files, map regions and the Reference frame across origins, and nothing else", () => {
     const cors = PRIVILEGED_SCHEMES.filter((entry) => entry.privileges?.corsEnabled === true).map((entry) => entry.scheme);
-    expect(cors.sort()).toEqual(["nx-map", "nx-pack"]);
+    expect(cors.sort()).toEqual(["nx-map", "nx-pack", "nx-zim"]);
   });
 });

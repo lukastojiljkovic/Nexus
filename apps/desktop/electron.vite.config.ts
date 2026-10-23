@@ -6,6 +6,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
 import { ocrAssets } from "./scripts/ocr-assets.mjs";
+import { rendererCsp } from "./src/shared/rendererCsp.js";
 
 // Workspace packages are consumed as TypeScript source, so they must be BUNDLED
 // into the main/preload output rather than externalized and require()d at
@@ -38,28 +39,7 @@ const NEXUS_WORKSPACE = Object.entries(
  * electron-vite dev server and keeps HMR, so this is build-only.
  */
 function rendererHardening(): Plugin {
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    // ADR-014 inline previews; ADR-057 private attachments (unlocked-only);
-    // ADR-100 a content pack's own images, and `connect-src` for the same
-    // scheme because a map reads its tiles through `fetch`, not through an
-    // `<img>` - see `main/packs/protocol.ts`. CULTURE's arts guide
-    // (ADR-091) reads its images through the same scheme, and a downloaded
-    // map region (ADR-118) is read through `fetch` from `nx-map:`.
-    "img-src 'self' data: nx-blob: priv-blob: nx-pack:",
-    // ADR-014's read protocol again, for the RECORDER: `<audio>`/`<video>` fall
-    // back to `default-src 'self'`, which does not admit `nx-blob:`, so a
-    // recording would play in dev and be blocked in the build the user runs.
-    "media-src 'self' nx-blob:",
-    "font-src 'self' data:",
-    "connect-src 'self' nx-pack: nx-map:",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
-    "frame-ancestors 'none'",
-  ].join("; ");
+  const csp = rendererCsp("production");
   return {
     name: "nexus-renderer-hardening",
     apply: "build",
@@ -255,26 +235,7 @@ export default defineConfig({
      */
     server: {
       headers: {
-        "Content-Security-Policy": [
-          "default-src 'self'",
-          // React Refresh injects an inline preamble; Vite serves modules from
-          // the dev origin. No 'unsafe-eval' — Vite dev is native ESM.
-          "script-src 'self' 'unsafe-inline'",
-          "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: nx-blob: priv-blob: nx-pack:",
-          // The recorder's playback, identical to production — `media-src` is
-          // one of the directives the dev policy deliberately does NOT relax.
-          "media-src 'self' nx-blob:",
-          // THE LINE THIS BLOCK EXISTS FOR.
-          "font-src 'self' data:",
-          // The HMR socket, and nothing else. Not `ws:` — that would admit any
-          // host on the network.
-          "connect-src 'self' ws://localhost:* ws://127.0.0.1:* nx-pack: nx-map:",
-          "object-src 'none'",
-          "base-uri 'none'",
-          "form-action 'none'",
-          "frame-ancestors 'none'",
-        ].join("; "),
+        "Content-Security-Policy": rendererCsp("development"),
       },
     },
     plugins: [react(), rendererHardening(), excalidrawFonts(), ocrAssets()],
