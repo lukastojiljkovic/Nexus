@@ -8,8 +8,26 @@ const ENGLISH = ["en-GB", "en"];
 describe("languageEntries", () => {
   it("names each language in the page's locale, with its English name beside it", () => {
     const german = languageEntries(SERBIAN).find((entry) => entry.row.code === "deu_Latn");
-    expect(german?.name).toBe("nemački (latinica)");
-    expect(german?.english).toBe("German (Latin)");
+    expect(german?.name).toBe("nemački");
+    expect(german?.english).toBe("German");
+  });
+
+  it("names the script only where the table has the language in two", () => {
+    const named = (code: string) => languageEntries(ENGLISH).find((entry) => entry.row.code === code)?.name;
+    expect(named("arb_Arab")).toBe("Arabic");
+    expect(named("jpn_Jpan")).toBe("Japanese");
+    expect(named("zho_Hans")).toBe("Simplified Chinese");
+    expect(named("zho_Hant")).toBe("Traditional Chinese");
+    expect(named("kas_Arab")).toBe("Kashmiri (Arabic)");
+    expect(named("kas_Deva")).toBe("Kashmiri (Devanagari)");
+  });
+
+  it("gives two languages that share a tag their own names, which ICU would merge", () => {
+    const named = (code: string) => languageEntries(SERBIAN).find((entry) => entry.row.code === code)?.name;
+    expect([named("aka_Latn"), named("twi_Latn")]).toEqual(["Akan", "Twi"]);
+    expect([named("pes_Arab"), named("prs_Arab")]).toEqual(["Western Persian", "Dari"]);
+    const names = languageEntries(ENGLISH).map((entry) => entry.name);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it("falls back to the FLORES name where ICU names nothing", () => {

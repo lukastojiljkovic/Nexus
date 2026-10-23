@@ -12,15 +12,30 @@ export interface LanguageEntry {
   readonly english: string;
 }
 
+/** How many of the table's rows share each value of `key`. */
+function countBy(key: (row: NllbLanguage) => string): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of NLLB_LANGUAGES) counts.set(key(row), (counts.get(key(row)) ?? 0) + 1);
+  return counts;
+}
+const languageOf = (row: NllbLanguage): string => row.bcp47.split("-")[0] ?? row.bcp47;
+const PER_TAG = countBy((row) => row.bcp47);
+const PER_LANGUAGE = countBy(languageOf);
+
 /**
- * A row's name in `tags`: the one `Intl` gives, else the FLORES name the table
- * carries, else the code. ICU names most of the 202 languages; the rest are the
- * ones it has no name for, and those are named from the table rather than left
- * blank.
+ * A row's name in `tags`. A tag two rows share is named from the table's FLORES
+ * name, because ICU names both alike (Akan and Twi are both `ak-Latn`). A
+ * language the table has in two scripts is named with its script ("Traditional
+ * Chinese"); any other without it, since "German (Latin)" tells the reader
+ * nothing. Where ICU has no name, the FLORES name, else the code.
  */
 function namer(tags: readonly string[]): (row: NllbLanguage) => string {
   const names = new Intl.DisplayNames([...tags], { type: "language", fallback: "none" });
-  return (row) => names.of(row.bcp47) ?? row.fallbackName ?? row.code;
+  return (row) => {
+    if ((PER_TAG.get(row.bcp47) ?? 0) > 1) return row.fallbackName ?? row.code;
+    const tag = (PER_LANGUAGE.get(languageOf(row)) ?? 0) > 1 ? row.bcp47 : languageOf(row);
+    return names.of(tag) ?? row.fallbackName ?? row.code;
+  };
 }
 
 /**
