@@ -219,6 +219,8 @@ export interface PackRecipeSummaryView {
   /** The language the pack wrote the recipe in (`sr`, `en`, …) — shown, never translated. */
   readonly language: string;
   readonly servings: number | null;
+  /** False for a legacy recipe whose method exceeds what the profile store can hold. */
+  readonly saveable: boolean;
   readonly tags: readonly string[];
   readonly ingredientCount: number;
   readonly stepCount: number;

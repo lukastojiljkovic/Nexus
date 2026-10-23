@@ -51,8 +51,8 @@ export const GUTENBERG_BOOKS = {
   },
 };
 
-export const WIKIBOOKS_LICENCE = "CC BY-SA 4.0";
-export const PUBLIC_DOMAIN_LICENCE = "Public domain";
+export const WIKIBOOKS_LICENCE = "CC-BY-SA-4.0";
+export const PUBLIC_DOMAIN_LICENCE = "public-domain";
 
 /**
  * The attribution Wikibooks asks for, quoted. The Wikimedia Terms of Use give a
@@ -288,6 +288,19 @@ const PROCEDURE_HEADING = /^(procedure|method|directions|instructions|preparatio
 const SERVINGS_LINE = /^\s*(?:sastojci|porcije|serves|yield|makes)\s*:\s*(.+)$/i;
 
 /**
+ * A yield as the dataset's integer serving count. A quantity ("1 quart"), a
+ * range or an unfamiliar phrase is omitted rather than guessed.
+ */
+function servingCount(text, stats = {}) {
+  const plain = toPlain(text, stats).replace(/\.$/, "").trim();
+  const match =
+    /^(?:(?:za\s+broj\s+osoba|serves|servings?|portions?|yield|makes)\s*:?\s*)?(\d{1,3})(?:\s*(?:osob[ae]?|porcij[ae]?|servings?|portions?))?$/iu.exec(plain);
+  if (match === null) return undefined;
+  const count = Number(match[1]);
+  return Number.isSafeInteger(count) && count >= 1 && count <= 100 ? count : undefined;
+}
+
+/**
  * The first section whose heading matches, or `undefined`.
  *
  * „Ingredients" is matched on the word rather than the whole heading, because
@@ -422,8 +435,8 @@ export const wikibooksUrl = (host, title) => `https://${host}/wiki/${title.repla
  * One Wikibooks Cookbook page into a record, or a reason it is not one.
  *
  * The record keeps the page's own title, its ingredient lines and its steps.
- * The infobox's `Yield` becomes `servings` verbatim when the page states one;
- * nothing is derived from it.
+ * The infobox's Yield becomes servings when it states an integer serving
+ * count; a quantity or range is omitted, and nothing is derived from it.
  */
 export function parseWikibooksPage({ title, wikitext, host, language, kinds, stats = {} }) {
   const sections = extractSections(wikitext);
@@ -455,20 +468,21 @@ export function parseWikibooksPage({ title, wikitext, host, language, kinds, sta
   const cuisine = infobox.get("cuisine");
   // The infobox's `Yield` is the yield; the Serbian pages write it as a line of
   // their own inside the ingredients section instead.
-  let servings = infobox.get("yield");
-  if (servings === undefined || servings === "") {
+  let servingsText = infobox.get("yield");
+  if (servingsText === undefined || servingsText === "") {
     for (const line of ingredientsSection.lines) {
       const stated = line.match(SERVINGS_LINE);
       if (stated !== null) {
-        servings = toPlain(stated[1], stats).replace(/\.$/, "");
+        servingsText = toPlain(stated[1], stats).replace(/\.$/, "");
         break;
       }
     }
   }
+  const servings = servingsText === undefined ? undefined : servingCount(servingsText, stats);
   const recipe = {
     title: title.replace(/^[^:]+:/, ""),
     language,
-    ...(servings === undefined || servings === "" ? {} : { servings }),
+    ...(servings === undefined ? {} : { servings }),
     ingredients,
     steps,
     tags: tagsFor(categories, kinds, cuisine === undefined || cuisine === "" ? [] : [cuisine]),
@@ -572,7 +586,7 @@ export function parseBeeton(text, { title, url, licence, attribution }) {
 
     // The mode: everything from `_Mode_.--` to the first `_Time_`-family line.
     let steps = [];
-    let servings;
+    let servingsText;
     if (cursor < limit && BEETON_MODE.test(lines[cursor])) {
       const stepLines = [lines[cursor].replace(BEETON_MODE, "")];
       cursor += 1;
@@ -588,10 +602,11 @@ export function parseBeeton(text, { title, url, licence, attribution }) {
     for (let at = cursor; at < limit; at += 1) {
       const sufficient = lines[at].match(/^\s*_Sufficient_\.?\s*--?\s*(.*)$/);
       if (sufficient !== null) {
-        servings = toPlain(sufficient[1]).replace(/\.$/, "");
+        servingsText = sufficient[1];
         break;
       }
     }
+    const servings = servingsText === undefined ? undefined : servingCount(servingsText);
 
     if (titleLine === "") {
       drop("no-title");
@@ -609,7 +624,7 @@ export function parseBeeton(text, { title, url, licence, attribution }) {
       id: `beeton-${marker.number}`,
       title: toPlain(titleLine).replace(/\.$/, ""),
       language: "en",
-      ...(servings === undefined || servings === "" ? {} : { servings }),
+      ...(servings === undefined ? {} : { servings }),
       ingredients,
       steps,
       tags: [],

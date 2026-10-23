@@ -130,6 +130,7 @@ describe("parseRecipesLayout", () => {
       title: "Sarma",
       language: "sr",
       servings: 6,
+      saveable: true,
       ingredients: ["1 glavica kupusa", "500 g mlevenog mesa", "2 kašike pirinča"],
       steps: ["Propržiti luk.", "Urolati i kuvati 90 minuta."],
       tags: ["zima", "svinjetina"],
@@ -174,7 +175,6 @@ describe("parseRecipesLayout", () => {
       ["a url that is not openable", bad({ source: { title: "T", url: "nexus://x", licence: "MIT", attribution: "A" } }), /http\(s\) url/],
       ["a language that is not a tag", bad({ language: "serbian" }), /language tag/],
       ["zero servings", bad({ servings: 0 }), /between 1 and 100/],
-      ["a step longer than the store holds", bad({ steps: ["x".repeat(2001)] }), /steps\[0\]/],
       ["more ingredients than the store holds", bad({ ingredients: Array.from({ length: 101 }, (_, index) => `${String(index)} g x`) }), /at most 100/],
     ] as const) {
       expect(() => parseRecipesLayout(value, "wikibooks"), what).toThrow(pattern);
@@ -186,6 +186,81 @@ describe("parseRecipesLayout", () => {
     const first = value.recipes[0];
     value.recipes.push(first);
     expect(() => parseRecipesLayout(value, "wikibooks")).toThrow(/repeats "sarma"/);
+  });
+
+  it("reads the already-published human licence names and serving phrases", () => {
+    const published = {
+      layout: 1,
+      recipes: [
+        {
+          id: "pie",
+          title: "Pie",
+          language: "en",
+          servings: "4 portions",
+          ingredients: ["1 apple"],
+          steps: ["Bake."],
+          tags: [],
+          source: {
+            title: "Pie",
+            url: "https://en.wikibooks.org/wiki/Cookbook:Pie",
+            licence: "CC BY-SA 4.0",
+            attribution: "Wikibooks contributors",
+          },
+        },
+        {
+          id: "stock",
+          title: "Stock",
+          language: "en",
+          servings: "1 quart",
+          ingredients: ["1 onion"],
+          steps: ["Simmer."],
+          tags: [],
+          source: {
+            title: "Stock",
+            url: "https://example.org/stock",
+            licence: "Public domain",
+            attribution: "Public-domain text",
+          },
+        },
+      ],
+    };
+
+    const recipes = parseRecipesLayout(published, "recipes-world");
+    expect(recipes[0]).toMatchObject({
+      servings: 4,
+      source: { licence: "CC-BY-SA-4.0" },
+    });
+    expect(recipes[1]).toMatchObject({
+      servings: null,
+      source: { licence: "public-domain" },
+    });
+  });
+
+  it("keeps a legacy recipe readable when its steps are too large for the store", () => {
+    const published = {
+      layout: 1,
+      recipes: [
+        {
+          id: "long",
+          title: "Long method",
+          language: "en",
+          ingredients: ["1 onion"],
+          steps: ["x".repeat(2001)],
+          tags: [],
+          source: {
+            title: "Long method",
+            url: "https://example.org/long",
+            licence: "public-domain",
+            attribution: "Public-domain text",
+          },
+        },
+      ],
+    };
+
+    expect(parseRecipesLayout(published, "recipes-world")[0]).toMatchObject({
+      id: "long",
+      saveable: false,
+    });
   });
 });
 

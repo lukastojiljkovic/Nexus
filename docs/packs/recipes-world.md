@@ -17,10 +17,9 @@ attribution.
   or `Kuvar:` prefix, the capitalised line above Beeton's recipe number, or
   Farmer's centred heading.
 * `language` is `en` or `sr`. Seven records are Serbian.
-* `servings` is present only where the source states a yield, and is that
-  statement verbatim: Wikibooks' `Yield` infobox field („4 portions"), the
-  Serbian pages' `sastojci: Za broj osoba: 4`, or Beeton's `_Sufficient_` line
-  („Allow 6 eggs for 3 persons"). Nothing here is computed.
+* `servings` is present only where the source states an integer number of servings;
+  the unit word (`portions`, `osoba`) is declared by the pack layout rather than
+  stored inside the number. An unclear yield, a range or a quantity is omitted.
 * `ingredients` and `steps` are the source's own lines. Wikitext links become
   their display text, bold and italic marks and templates are removed, hard
   wrapping is unwrapped, and nothing is rewritten, summarised or translated.
@@ -30,13 +29,21 @@ attribution.
   wiki decides which category means what; the builder walks that tree (201
   categories) rather than carrying a list.
 * `source` names the page (or book), its URL, its licence and its attribution.
-  For Wikibooks the attribution quotes the Wikimedia Terms of Use sentence that
-  a reuser satisfies by linking to the page, and carries the modification notice
-  CC BY-SA 4.0 section 3(a)(1)(B) requires. For the two books it names Project
-  Gutenberg as the source and records that its licence and name were stripped
-  from the text, as that licence requires.
+  The licence field is the identifier the Cookbook stores: `CC-BY-SA-4.0` for
+  the wiki pages and `public-domain` for the two books. For Wikibooks the
+  attribution quotes the Wikimedia Terms of Use sentence that a reuser satisfies
+  by linking to the page, and carries the modification notice CC BY-SA 4.0
+  section 3(a)(1)(B) requires. For the two books it names Project Gutenberg as
+  the source and records that its licence and name were stripped from the text,
+  as that licence requires.
+
+The first published build used `CC BY-SA 4.0` and `Public domain`; the Cookbook
+normalises those two known spellings so the existing signed pack stays readable.
 
 ### Measured contents of the 2026-10-10 build
+
+The record counts below predate the 2.5 schema correction; the fixed builder
+keeps the same recipes and writes integer servings and canonical licence ids.
 
 | Source | Seen | In the pack | Dropped, and why |
 | --- | ---: | ---: | --- |

@@ -43,6 +43,14 @@ afterEach(() => {
   applyLocale("sr");
 });
 
+describe("the recipe editor copy", () => {
+  it("names the step actions for what they do", () => {
+    expect(copy.editor.addStep).toBe("Dodaj korak");
+    expect(copy.editor.removeStep).toBe("Ukloni korak");
+    expect(copy.editor.addStep).not.toBe(copy.editor.newTitle);
+  });
+});
+
 describe("clampServings", () => {
   it("keeps a count the store will take: a whole number in 1..100", () => {
     expect(clampServings(4)).toBe(4);
