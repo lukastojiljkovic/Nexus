@@ -19,7 +19,7 @@
 
 import { zxyToTileId } from "pmtiles";
 
-import type { WorldGeometry } from "../../shared/world/outline.js";
+import type { WorldGeometry } from "./outline.js";
 
 export type LonLat = readonly [lon: number, lat: number];
 export type Ring = readonly LonLat[];

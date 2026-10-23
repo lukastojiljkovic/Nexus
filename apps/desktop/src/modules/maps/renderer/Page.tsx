@@ -40,15 +40,14 @@ import { PinList } from "./PinList.js";
 import { REGION_TILE_SCHEME, createRegionTiles } from "./regionTiles.js";
 import { RegionCard } from "./regions/RegionCard.js";
 import type { Locale } from "./regions/names.js";
+import { coverBounds, installedTerritories } from "./regions/scope.js";
 import type { SearchMessage, SearchResponse } from "./searchWorker.js";
 import {
   OUTLINE_LAND_LAYER,
   PICK_INSTALLED_LAYER,
   PICK_SELECTED_LAYER,
-  coverBounds,
   fontStack,
   installedFilter,
-  installedTerritories,
   regionStyle,
   selectedFilter,
 } from "./style.js";

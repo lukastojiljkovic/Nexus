@@ -2,7 +2,7 @@ import { Compression, PMTiles, zxyToTileId } from "pmtiles";
 import { describe, expect, it } from "vitest";
 
 import { HEADER_BYTES, decodeDirectory, encodeDirectory, readHeader, writeHeader } from "./archive.js";
-import { rangesOf } from "./cover.js";
+import { rangesOf } from "../../shared/world/cover.js";
 import { allTiles, bufferReader, bufferSource, buildArchive, tileBytes } from "./fixtures.js";
 import { extractInto, planExtract, PlanTooLarge, type ExtractPlan } from "./plan.js";
 

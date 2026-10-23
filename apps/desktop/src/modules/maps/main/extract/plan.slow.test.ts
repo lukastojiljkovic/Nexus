@@ -14,7 +14,7 @@ import { PMTiles } from "pmtiles";
 import { describe, expect, it } from "vitest";
 
 import { regionBounds, regionById } from "../../shared/world/outline.js";
-import { coverZoom, rangesOf, ringsOf, tileCover } from "./cover.js";
+import { coverZoom, rangesOf, ringsOf, tileCover } from "../../shared/world/cover.js";
 import { extractInto, planExtract, type ArchiveReader } from "./plan.js";
 
 const PLANET = process.env["NEXUS_PLANET_URL"];

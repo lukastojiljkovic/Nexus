@@ -29,18 +29,18 @@ tile cover. The cover becomes runs of tile ids, the runs pick the planet
 directory entries the region keeps, and those entries become byte ranges of the
 build. The result is a local PMTiles v3 file that `maplibre-gl` reads through
 the `pmtiles` library like any other. All of it is in
-`apps/desktop/src/modules/maps/main/`:
+`apps/desktop/src/modules/maps/`:
 
 | Folder | What it does |
 |---|---|
-| `extract/cover.ts` | outline → tile cover → id runs per zoom |
-| `extract/archive.ts` | the PMTiles v3 header and directories, read and written |
-| `extract/plan.ts` | directories → the new file's prefix and the reads that fill it |
-| `regions/builds.ts`, `regions/http.ts` | the build list, and range reads pinned to one build |
-| `regions/targets.ts` | what a region id names, and its id runs at a detail |
-| `regions/registry.ts` | what is installed, and the record of a download in flight |
-| `regions/downloads.ts` | measure, download, pause, resume, cancel, update, remove |
-| `regions/protocol.ts` | the `nx-map:` read scheme |
+| `shared/world/cover.ts` | outline → tile cover → id runs per zoom |
+| `main/extract/archive.ts` | the PMTiles v3 header and directories, read and written |
+| `main/extract/plan.ts` | directories → the new file's prefix and the reads that fill it |
+| `main/regions/builds.ts`, `main/regions/http.ts` | the build list, and range reads pinned to one build |
+| `main/regions/targets.ts` | what a region id names, and its id runs at a detail |
+| `main/regions/registry.ts` | what is installed, and the record of a download in flight |
+| `main/regions/downloads.ts` | measure, download, pause, resume, cancel, update, remove |
+| `main/regions/protocol.ts` | the `nx-map:` read scheme |
 
 A region is therefore what ADR-098 calls an unsigned third-party download, like
 a Kiwix file or a Hugging Face model: the app checks that the bytes are the

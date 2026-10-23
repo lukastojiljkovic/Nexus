@@ -33,7 +33,7 @@ import {
   readHeader,
   writeHeader,
 } from "./archive.js";
-import type { TileRange } from "./cover.js";
+import type { TileRange } from "../../shared/world/cover.js";
 
 /** Reads a byte range of the source archive: a file, or the planet build over HTTP. */
 export interface ArchiveReader {

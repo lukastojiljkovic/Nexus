@@ -17,7 +17,7 @@ import {
   type WorldBounds,
   type WorldRegion,
 } from "../../shared/world/outline.js";
-import { coverZoom, mergeRanges, rangesOf, ringsOf, tileCover, zoomBase, type TileRange } from "../extract/cover.js";
+import { coverZoom, mergeRanges, rangesOf, ringsOf, tileCover, zoomBase, type TileRange } from "../../shared/world/cover.js";
 
 const CONTINENT_PREFIX = "continent:";
 

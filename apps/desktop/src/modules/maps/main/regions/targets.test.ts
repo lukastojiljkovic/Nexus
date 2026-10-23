@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { DETAIL_MAX_ZOOM } from "../../shared/ipc.js";
 import { regionById, regionsOfContinent } from "../../shared/world/outline.js";
-import { zoomBase } from "../extract/cover.js";
+import { zoomBase } from "../../shared/world/cover.js";
 import { regionFileStem, regionRanges, regionTarget } from "./targets.js";
 
 describe("what a region id names", () => {
