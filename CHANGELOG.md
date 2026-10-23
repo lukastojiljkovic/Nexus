@@ -76,6 +76,9 @@ explored body by body.
 
 ### Fixed
 
+- **The Nonograms tab opens.** Its zoom readout asked the number formatter for
+  a pixel unit no formatter offers, so the tab showed "Screen failed to load"
+  from 2.0.0 on. The size is now printed with "px" after it.
 - **Voice input and output.** The voice worker's process loaded a module that
   defines its message loop without starting it, so every dictation and every
   spoken answer waited forever. The process now starts the loop.
