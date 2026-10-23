@@ -1,7 +1,4 @@
-import {
-  activeLocale,
-  numberFormat,
-} from "../../../renderer/src/moduleKit/moduleSurface.js";
+import { activeLocale, numberFormat } from "../../../renderer/src/moduleKit/moduleSurface.js";
 
 /**
  * A frequency with its unit, in the active locale (or `locale`): „82,4 Hz".
