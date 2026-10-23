@@ -53,6 +53,11 @@ allowBuilds:
 # already lands on a patched release, and an override there would pin a
 # transitive we have no business pinning.
 overrides:
+  # GHSA-mrhx-c7xc-m3w5 — validating an oversized constrained collection can
+  # exhaust memory. Build-time only, through eslint-plugin-react-hooks, whose
+  # Zod range already admits the patch. The advisory cuts the fix boundary at
+  # 4.6.6; ordinary caret resolution cannot move an already-locked 4.4.3.
+  zod: ^4.6.6
   # GHSA-3jxr-9vmj-r5cp — DoS via exponential-time brace expansion. Three
   # majors coexist in the tree (via @electron/asar, @electron/universal and
   # ejs>jake>filelist), each with its own patched release. Build-time only,
