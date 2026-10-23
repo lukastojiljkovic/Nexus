@@ -1,5 +1,6 @@
 import { isOwnOrigin } from "../../../shared/workerOrigin.js";
 import { foldPlaces, parsePlacesFile, rankPlaces, type FoldedPlace, type PlaceHit } from "@nexus/core";
+import type { MapRegionDetail } from "../shared/ipc.js";
 import { MAP_PACK_PLACES } from "../shared/packs.js";
 import { readPackJson } from "./packFile.js";
 
@@ -35,6 +36,15 @@ export interface SearchRequest {
   readonly query: string;
   readonly limit: number;
 }
+
+/** The installed regions the index is read from, sent whenever they change. */
+export interface RegionsMessage {
+  readonly type: "regions";
+  readonly regions: readonly { readonly id: string; readonly detail: MapRegionDetail; readonly url: string }[];
+}
+
+/** Everything the page sends. */
+export type SearchMessage = SearchRequest | RegionsMessage;
 
 /** One answer for the page. */
 export type SearchResponse =

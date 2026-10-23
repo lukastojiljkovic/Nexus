@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MapRegionJobView, MapRegionView, MapRegionsView } from "../../shared/ipc.js";
-import { formatBuild, formatBytes, otherDownload, regionCardState } from "./regionCard.js";
+import { formatBuild, formatBytes, otherDownload, regionCardState } from "./cardState.js";
 
 const KB = 1024;
 const MB = KB * 1024;

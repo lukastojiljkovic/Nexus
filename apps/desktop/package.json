@@ -37,6 +37,7 @@
     "@nexus/sync-transport": "workspace:*",
     "@nexus/tokens": "workspace:*",
     "@nexus/ui": "workspace:*",
+    "@protomaps/basemaps": "5.7.2",
     "@tiptap/core": "^3.32.0",
     "@tiptap/extension-collaboration": "^3.32.0",
     "@tiptap/extension-list": "^3.32.0",

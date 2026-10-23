@@ -12,7 +12,7 @@ import {
 import type { WorldRegion } from "../../shared/world/outline.js";
 import { copy } from "../copy.js";
 import { regionName, regionScopes, territoryName } from "./names.js";
-import { formatBuild, formatBytes, otherDownload, regionCardState } from "./regionCard.js";
+import { formatBuild, formatBytes, otherDownload, regionCardState } from "./cardState.js";
 import "./regions.css";
 
 export interface RegionCardProps {

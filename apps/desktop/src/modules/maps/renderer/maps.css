@@ -161,6 +161,23 @@
   border-radius: var(--nx-radius-sm);
 }
 
+/* The region card's slot: the frame's left edge, top to bottom, so the card
+   scrolls inside the map rather than past it. The slot itself lets clicks
+   through to the map; only the card takes them. */
+.maps__card {
+  position: absolute;
+  z-index: var(--nx-layer-panel);
+  inset-block: var(--nx-space-2);
+  inset-inline-start: var(--nx-space-2);
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.maps__card > * {
+  pointer-events: auto;
+}
+
 /* The scale bar: a line with two end ticks, drawn rather than written, because
    the number alone does not say how far it is on screen. */
 .maps__scale {

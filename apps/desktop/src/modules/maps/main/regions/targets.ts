@@ -9,7 +9,6 @@
  * own box allows.
  */
 
-import type { MapRegionDetail } from "../../shared/ipc.js";
 import {
   CONTINENTS,
   regionBounds,
@@ -19,9 +18,6 @@ import {
   type WorldRegion,
 } from "../../shared/world/outline.js";
 import { coverZoom, mergeRanges, rangesOf, ringsOf, tileCover, zoomBase, type TileRange } from "../extract/cover.js";
-
-/** The deepest zoom each detail keeps. 15 is the deepest the planet build has. */
-export const DETAIL_MAX_ZOOM: Readonly<Record<MapRegionDetail, number>> = { overview: 8, towns: 12, full: 15 };
 
 const CONTINENT_PREFIX = "continent:";
 

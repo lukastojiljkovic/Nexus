@@ -86,6 +86,9 @@ export const MAP_REGION_DETAILS = ["overview", "towns", "full"] as const;
 
 export type MapRegionDetail = (typeof MAP_REGION_DETAILS)[number];
 
+/** The deepest zoom each detail keeps. 15 is the deepest the planet build has. */
+export const DETAIL_MAX_ZOOM: Readonly<Record<MapRegionDetail, number>> = { overview: 8, towns: 12, full: 15 };
+
 /** Why a region could not be measured or downloaded. Machine codes; the page words each. */
 export type RegionProblem =
   /** This launch is not running in "downloads". */

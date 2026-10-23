@@ -32,12 +32,13 @@ import { join } from "node:path";
 
 import type { DownloadHttp } from "../../../../main/download/service.js";
 import { modeAllowsDownloads, type NetworkMode } from "../../../../main/net/offline.js";
-import type {
-  MapRegionDetail,
-  MapRegionEstimate,
-  MapRegionJobView,
-  MapRegionsView,
-  RegionProblem,
+import {
+  DETAIL_MAX_ZOOM,
+  type MapRegionDetail,
+  type MapRegionEstimate,
+  type MapRegionJobView,
+  type MapRegionsView,
+  type RegionProblem,
 } from "../../shared/ipc.js";
 import { HEADER_BYTES, readHeader } from "../extract/archive.js";
 import { FETCH_MAX_BYTES, PlanTooLarge, planExtract, type ExtractFetch, type ExtractPlan } from "../extract/plan.js";
@@ -56,7 +57,7 @@ import {
   writeJob,
   writeRegions,
 } from "./registry.js";
-import { DETAIL_MAX_ZOOM, regionRanges, regionTarget, regionTargetBounds } from "./targets.js";
+import { regionRanges, regionTarget, regionTargetBounds } from "./targets.js";
 
 /**
  * The most directory entries a plan may keep, because the plan holds every one

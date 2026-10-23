@@ -21,16 +21,9 @@ import type { Continent } from "./regions/names.js";
 
 export const sr = {
   page: {
-    subtitle: "Karta Srbije koja radi bez interneta — pretraga mesta, tačke i merenje razdaljine.",
+    subtitle:
+      "Mapa koja radi bez interneta — preuzmi teritoriju, kontinent ili ceo svet, pa traži mesta, spuštaj tačke i meri razdaljine.",
     loading: "Učitavanje mape…",
-  },
-  pack: {
-    title: "Karta još nije instalirana",
-    body: "Instaliraj paket „map-serbia“ na kartici „Paketi sadržaja“ u Podešavanjima, pa se vrati na ovu stranicu.",
-    styleTitle: "Stil karte nije pročitan",
-    styleBody: "Datoteka stila u paketu ne može da se pročita. Instaliraj paket ponovo iz fascikle.",
-    networkBody: "Stil u paketu traži adresu sa interneta, pa mapa nije prikazana. Paket je izmenjen i ne treba mu verovati.",
-    placesBody: "Indeks mesta iz paketa nije pročitan, pa pretraga i nazivi mesta ne rade.",
   },
   search: {
     label: "Pretraga mesta",
@@ -38,6 +31,12 @@ export const sr = {
     empty: "Nema mesta koja odgovaraju.",
     results: "Rezultati pretrage",
     loading: "Priprema indeksa mesta…",
+    none: "Pretraga obuhvata preuzete mape, a nijedna još nije preuzeta.",
+    failed: "Indeks mesta nije pročitan, pa pretraga ne radi.",
+  },
+  picker: {
+    hint: "Klikni na teritoriju da preuzmeš, ažuriraš ili ukloniš njenu mapu.",
+    empty: "Nijedna mapa još nije preuzeta. Klikni na teritoriju da je preuzmeš.",
   },
   tools: {
     zoomIn: "Uvećaj",
@@ -53,6 +52,7 @@ export const sr = {
     copyFailed: "Kopiranje nije uspelo.",
     pins: "Spisak tačaka",
     scale: "Razmernik",
+    regions: "Preuzimanje mapa",
   },
   pins: {
     title: "Tačke",
@@ -101,6 +101,7 @@ export const sr = {
   errors: {
     load: "Tačke nisu učitane.",
     mutate: "Izmena nije sačuvana.",
+    regions: "Spisak preuzetih mapa nije učitan.",
   },
   regions: {
     close: "Zatvori karticu",

@@ -7,21 +7,14 @@ import type { sr } from "./copy.sr.js";
  * the translation.
  *
  * The place names on the map are not copy and are not here: they come from the
- * pack's own index, which carries each place in both scripts plus the `name:en`
- * the OpenStreetMap node states.
+ * downloaded regions' tiles, which carry each place's local name and the
+ * `name:en` OpenStreetMap states.
  */
 export const en: typeof sr = {
   page: {
-    subtitle: "A map of Serbia that works offline — search places, drop pins and measure a distance.",
+    subtitle:
+      "A map that works offline — download a territory, a continent or the whole world, then search places, drop pins and measure distances.",
     loading: "Loading the map…",
-  },
-  pack: {
-    title: "The map pack is not installed yet",
-    body: "Install the “map-serbia” pack on the “Content packs” card in Settings, then come back to this page.",
-    styleTitle: "The map's style could not be read",
-    styleBody: "The style file inside the pack cannot be read. Install the pack again from its folder.",
-    networkBody: "The style inside the pack asks for an address on the internet, so the map was not drawn. The pack has been changed and should not be trusted.",
-    placesBody: "The pack's place index could not be read, so search and place labels do not work.",
   },
   search: {
     label: "Search places",
@@ -32,6 +25,12 @@ export const en: typeof sr = {
     empty: "No place matches.",
     results: "Search results",
     loading: "Preparing the place index…",
+    none: "Search covers the downloaded maps, and none is downloaded yet.",
+    failed: "The place index could not be read, so search does not work.",
+  },
+  picker: {
+    hint: "Click a territory to download, update or remove its map.",
+    empty: "No map is downloaded yet. Click a territory to download it.",
   },
   tools: {
     zoomIn: "Zoom in",
@@ -47,6 +46,7 @@ export const en: typeof sr = {
     copyFailed: "The copy failed.",
     pins: "Pin list",
     scale: "Scale",
+    regions: "Download maps",
   },
   pins: {
     title: "Pins",
@@ -95,6 +95,7 @@ export const en: typeof sr = {
   errors: {
     load: "The pins could not be loaded.",
     mutate: "The change was not saved.",
+    regions: "The list of downloaded maps could not be loaded.",
   },
   regions: {
     close: "Close the card",

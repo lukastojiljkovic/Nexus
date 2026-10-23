@@ -487,6 +487,15 @@
       "source": "LICENSE"
     },
     {
+      "id": "npm:@protomaps/basemaps@5.7.2",
+      "name": "@protomaps/basemaps",
+      "version": "5.7.2",
+      "licence": "BSD-3-Clause",
+      "notice": "",
+      "status": "declared-only",
+      "source": "package.json (\"license\": \"BSD-3-Clause\") — the package ships no licence file"
+    },
+    {
       "id": "npm:@radix-ui/primitive@1.0.0",
       "name": "@radix-ui/primitive",
       "version": "1.0.0",

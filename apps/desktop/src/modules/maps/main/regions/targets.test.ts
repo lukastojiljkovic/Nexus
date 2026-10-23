@@ -1,9 +1,10 @@
 import { zxyToTileId } from "pmtiles";
 import { describe, expect, it } from "vitest";
 
+import { DETAIL_MAX_ZOOM } from "../../shared/ipc.js";
 import { regionById, regionsOfContinent } from "../../shared/world/outline.js";
 import { zoomBase } from "../extract/cover.js";
-import { DETAIL_MAX_ZOOM, regionFileStem, regionRanges, regionTarget } from "./targets.js";
+import { regionFileStem, regionRanges, regionTarget } from "./targets.js";
 
 describe("what a region id names", () => {
   it("is a territory of the outline, a continent of it, or the world", () => {
