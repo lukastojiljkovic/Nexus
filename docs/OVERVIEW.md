@@ -110,17 +110,24 @@ grouped the way the sidebar groups them.
 - **Reference** — Wikipedia, dictionaries and manuals you read without the internet,
   from the content packs you have installed.
 - **Reader** — books from content packs: read, search and print them.
-- **Maps** — the map module: search places, drop pins and measure distances. Map data
-  arrives as a pack; the Serbia map pack is not built yet.
-- **Translator** — a Serbian–English dictionary and travel phrases that work offline.
+- **Maps** — the world as an outline you click: download a country, a continent or the
+  whole world at the detail you choose, then search places, drop pins and measure
+  distances without the internet. The map is cut from the Protomaps build of
+  OpenStreetMap when you download it.
+- **Translator** — translation between 202 languages as you type, by a model that runs
+  on your computer (Meta's NLLB-200, in three sizes), and a Serbian–English dictionary
+  with travel phrases. All of it works offline.
 - **Recorder** — a voice and camera diary: record sound or video and play it back.
-- **Astronomy** — the solar system in 3D, day and night on Earth, tonight's sky, and
-  the Sun and Moon for a chosen place.
+- **Astronomy** — the solar system in 3D, which you turn, move and zoom, with a card
+  for each body: how far it is now, and its facts from NASA. Also day and night on
+  Earth, tonight's sky, and the Sun and Moon for a chosen place.
 - **Assistant** — a local model that knows the app and your own data, and works in
   every module: it adds and changes tasks, notes, events, money, training and the
   rest, and asks before each change. It answers from your notes, the installed
   packs and the app's own manual, and names its sources. It can sit beside any
-  page (Ctrl+J), and it runs on your computer, with no internet.
+  page (Ctrl+J), and it runs on your computer, with no internet. You choose how much
+  of a conversation it reads at once and how it picks its words, unload it when you
+  want the memory back, and a long conversation is summarized so it can go on.
 
 ### Life
 
@@ -184,8 +191,8 @@ grouped the way the sidebar groups them.
 - **Cards** — nine card games: six solitaires and three against the computer.
 - **Chess** — against the engine or another person, with clocks, saved games and PGN.
 - **Board games** — six games against the computer or on one machine.
-- **Puzzles** — Sudoku, nonograms, mahjong and Numbers. Every game is saved and picks
-  up where it stopped.
+- **Puzzles** — Sudoku, nonograms, mahjong and Numbers. With its pack installed, a
+  nonogram is a picture with a name. Every game is saved and picks up where it stopped.
 
 ### Shell
 
@@ -217,8 +224,7 @@ Nexus is still being finished, in this order:
   dialogs and undo. Still to come: keys that work alike on every page, backups that
   carry the newest records (library loans and goals, culture tickets), and the
   last things the assistant cannot do yet, such as moving or deleting a file.
-- **More of the libraries and readers.** More reference libraries as packs, an
-  offline map for the regions you choose, OCR language packs for the scanner, and
+- **More of the libraries and readers.** More reference libraries as packs, and
   printing packs to PDF so the material can be kept on paper.
 - **A finished packs repository.** Every pack public, documented, with its licence and
   attribution.

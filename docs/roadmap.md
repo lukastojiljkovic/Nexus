@@ -15,7 +15,7 @@ release.** Commits, migrations, modules and gates live in [STATUS.md](STATUS.md)
 ## Where we are
 
 Nexus is an offline desktop application, in daily use, and released: the current
-release is **2.1.1**, tagged `v2.1.1`. Every release is unsigned for now
+release is **2.5.0**, tagged `v2.5.0`. Every release is unsigned for now
 ([DEV-008](deviations.md)).
 
 Two decisions set the sequence:
@@ -56,6 +56,18 @@ Two decisions set the sequence:
   module through the app's own tools. It asks before it changes anything,
   treats library text as data and never as instructions, and searches the
   web only when the user turns that on.
+- **Every planned pack** — the preserving recipes, the planet textures, the
+  chess engine, the DWG converter, the scanner's OCR data, the nonogram
+  pictures and the translator's models, each published in a release of its
+  own, under a catalogue that pins each pack's signed manifest rather than
+  listing every file.
+- **Maps for any region** — a country, a continent or the whole world, cut
+  from the Protomaps build at the detail the user chooses, with search over
+  the places downloaded.
+- **A translator for every language a local model reads** — NLLB-200 on the
+  user's computer, between 202 languages, in place of six fixed directions.
+- **The assistant's runtime in the user's hands** — the context size, the
+  sampling, unloading the model and summarizing a long conversation.
 
 ---
 
@@ -80,10 +92,7 @@ each locale loaded on demand, is the design that item asks for.
 
 ### 3. Libraries, packs and readers
 
-- the packs not built yet: the preserving recipes, the planet textures, the
-  chess engine, the DWG converter and the scanner's OCR language data;
-- an offline map, per region, with offline search;
-- printing packs to PDF, so the material can be kept on paper as well.
+Printing packs to PDF, so the material can be kept on paper as well.
 
 ### 4. The packs repository, as a finished public artifact
 
