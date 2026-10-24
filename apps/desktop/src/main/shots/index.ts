@@ -520,6 +520,53 @@ const SCENE_PLAN: readonly ShotScene[] = [
     cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
+    // A Gallery with an installed art pack loads hundreds of protocol-backed
+    // images. Capture after the first screenful has decoded, not while the
+    // browser still shows its alt text.
+    id: "page-gallery-art",
+    module: "gallery",
+    prepare: `(async () => {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        const images = Array.from(document.querySelectorAll(".gallery__tile img")).slice(0, 12);
+        if (images.length > 0 && images.every((image) => image.complete)) {
+          const broken = images.filter((image) => image.naturalWidth === 0).length;
+          return broken === 0 ? "gallery thumbnails loaded" :
+            "Gallery thumbnails broken=" + broken;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return "none: Gallery images did not load";
+    })()`,
+    fanout: null,
+  },
+  {
+    // The full-image viewer is the primary interaction on every Gallery tile.
+    id: "page-gallery-viewer",
+    module: "gallery",
+    prepare: `(async () => {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        const tile = document.querySelector(".gallery__tile");
+        const image = tile?.querySelector("img");
+        if (tile !== null && image?.complete && image.naturalWidth > 0) {
+          tile.click();
+          for (let waited = 0; waited < 3000; waited += 50) {
+            if (document.querySelector(".nx-dialog__panel .gallery__viewer") !== null) {
+              return "gallery viewer open";
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          return "none: the Gallery viewer did not open";
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return "none: no Gallery tile became ready";
+    })()`,
+    fanout: null,
+    cleanup: DISPATCH_KEY("Escape"),
+  },
+  {
     id: "fitness",
     module: "fitness",
     // NOT the default `.nx-segmented__option`: „Mapa tela" puts twenty muscle

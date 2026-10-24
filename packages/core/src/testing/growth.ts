@@ -14,11 +14,12 @@
  * grew 2.2 times across a fourfold step on a desktop grew 8.5 times there,
  * which leaves a fourfold step no room between one pass (4) and a re-read (16).
  *
- * One untimed run warms the JIT. Then the two sizes run three times each,
- * alternating so that a busy stretch of the machine falls on both, and the
- * fastest of each is kept: a collector pause or a neighbouring suite only ever
- * adds time. The small run is floored at `FLOOR_MS`, because a ratio over a
- * run too short to time is noise.
+ * One untimed run warms the JIT. The small input is then probed to work out how
+ * many repetitions make a sample long enough for the timer, capped so the full
+ * input cannot turn the suite into a benchmark. Each size runs those repetitions
+ * three times, alternating so that a busy stretch of the machine falls on both,
+ * and the fastest total of each is kept: a collector pause or a neighbouring
+ * suite only ever adds time.
  */
 export function growthToFull<T>(
   build: (size: number) => T,
@@ -28,22 +29,29 @@ export function growthToFull<T>(
   const small = build(Math.floor(size / 16));
   const full = build(size);
   run(small);
+  run(full);
+  const probeMs = timed(run, small);
+  const repetitions = Math.max(
+    1,
+    Math.min(MAX_REPETITIONS, Math.ceil(TARGET_SAMPLE_MS / Math.max(probeMs, 0.1))),
+  );
   let smallMs = Number.POSITIVE_INFINITY;
   let fullMs = Number.POSITIVE_INFINITY;
   for (let round = 0; round < 3; round += 1) {
-    smallMs = Math.min(smallMs, timed(run, small));
-    fullMs = Math.min(fullMs, timed(run, full));
+    smallMs = Math.min(smallMs, timed(run, small, repetitions));
+    fullMs = Math.min(fullMs, timed(run, full, repetitions));
   }
-  return fullMs / Math.max(smallMs, FLOOR_MS);
+  return fullMs / Math.max(smallMs, 0.1);
 }
 
 /** Four times the growth of one pass, a quarter of the growth of a re-read. */
 export const LINEAR_GROWTH = 64;
 
-const FLOOR_MS = 2;
+const TARGET_SAMPLE_MS = 10;
+const MAX_REPETITIONS = 32;
 
-function timed<T>(run: (input: T) => unknown, input: T): number {
+function timed<T>(run: (input: T) => unknown, input: T, repetitions = 1): number {
   const started = performance.now();
-  run(input);
+  for (let round = 0; round < repetitions; round += 1) run(input);
   return performance.now() - started;
 }
