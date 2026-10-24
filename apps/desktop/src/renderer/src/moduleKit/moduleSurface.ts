@@ -20,7 +20,7 @@
  */
 export { settingsEntryId } from "../moduleSettings.js";
 export { labelClass } from "../settingsSearch.js";
-export { activeLocale } from "../strings.js";
+export { activeLocale, type Locale } from "../strings.js";
 // The house's one door to `Intl` (a memoised factory per locale and options), so
 // a module that writes a size, a date or a number follows the language being
 // read without spelling a tag of its own.

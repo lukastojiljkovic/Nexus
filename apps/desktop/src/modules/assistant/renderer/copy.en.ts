@@ -46,6 +46,9 @@ export const en: typeof sr = {
       "The assistant knows your notes, tasks, events and the app's own manual, and answers with no internet. Pick a conversation, or type a question below.",
     thinking: "Thinking…",
     loadingModel: "Loading the model…",
+    summarizing: "Summarizing the earlier messages…",
+    summaryDivider: "The messages above were summarized for the assistant.",
+    summaryLabel: "Summary",
     /**
      * What is said when a turn ended without an answer, by the code the loop
      * sent. The key is the code itself, so a new code with no sentence fails the
@@ -293,6 +296,7 @@ export const en: typeof sr = {
     hint: "Enter sends, Shift+Enter begins a new line.",
     send: "Send",
     stop: "Stop",
+    summarize: "Summarize earlier messages",
   },
   workflows: {
     title: "Recipes",
@@ -325,6 +329,8 @@ export const en: typeof sr = {
     noGpu: "No graphics card — the model runs on the processor.",
     picksTitle: "The picks for this machine",
     unavailable: "The model list is not available right now.",
+    probing: "Reading this computer's hardware and picking the models that fit it…",
+    probeFailed: "This computer's hardware could not be read, so there are no picks for now.",
     installed: "Installed",
     serves: "Serves",
     useForAnswers: "Use for answers",
@@ -360,6 +366,51 @@ export const en: typeof sr = {
     tierBalance: "Balance",
     tierSpeed: "Speed",
   },
+  runtime: {
+    title: "How the model runs",
+    inMemory: "In memory",
+    chat: "Answering model",
+    nothingLoaded: "No model is in memory.",
+    unload: "Unload now",
+    range: "Range",
+    modelDefault: "Model default",
+    fields: {
+      contextTokens: {
+        label: "Context size (tokens)",
+        hint: "How much of the conversation the model reads at once. A larger size uses more memory.",
+      },
+      temperature: {
+        label: "Temperature",
+        hint: "Higher is more varied, lower is more predictable.",
+      },
+      topP: {
+        label: "Top-p",
+        hint: "The model picks only among the likeliest words, until their probabilities add up to this share.",
+      },
+      topK: {
+        label: "Top-k",
+        hint: "The model picks only among this many of the likeliest words.",
+      },
+      repeatPenalty: {
+        label: "Repeat penalty",
+        hint: "Discourages the model from repeating itself.",
+      },
+      idleUnloadMinutes: {
+        label: "Unload after (minutes)",
+        hint: "0 keeps the model in memory until you unload it by hand.",
+      },
+    },
+    autoCompact: "Summarize long conversations automatically",
+    autoCompactHint:
+      "When a conversation grows longer than the model can read at once, its earlier messages are summarized first.",
+    save: "Save",
+    defaults: "Model defaults",
+    problem: {
+      notANumber: "Enter a number.",
+      notWhole: "Enter a whole number.",
+      outOfRange: "The value is outside the range.",
+    },
+  },
   knowledge: {
     indexed: "Passages indexed",
     pending: "Sources pending",
@@ -382,6 +433,8 @@ export const en: typeof sr = {
     action: "That change was not saved.",
     send: "The message was not sent.",
     lostStream: "The answer could not be read. Your message was saved, and the answer may be in the conversation.",
+    compact: "The conversation was not summarized.",
+    compactFailed: "The earlier messages could not be summarized, so the conversation is unchanged.",
     retry: "Try again",
   },
 };

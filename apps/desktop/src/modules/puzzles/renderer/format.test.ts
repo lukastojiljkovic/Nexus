@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { elapsedSecondsOf, formatClock, formatCount } from "./format.js";
+import { elapsedSecondsOf, formatClock, formatCount, formatPixels } from "./format.js";
 
 /**
  * The module's own formatting, with the expected string written out.
@@ -19,6 +19,18 @@ describe("formatCount", () => {
     expect(formatCount(45, "sr")).toBe("45");
     expect(formatCount(45, "en")).toBe("45");
     expect(formatCount(0, "sr")).toBe("0");
+  });
+});
+
+describe("formatPixels", () => {
+  it("prints a nonogram's cell size with its unit in both locales", () => {
+    expect(formatPixels(22, "en")).toBe("22 px");
+    expect(formatPixels(22, "sr")).toBe("22 px");
+  });
+
+  it("groups the digits of a large size the way each locale does", () => {
+    expect(formatPixels(1234, "sr")).toBe("1.234 px");
+    expect(formatPixels(1234, "en")).toBe("1,234 px");
   });
 });
 

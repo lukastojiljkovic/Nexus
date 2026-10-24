@@ -110,12 +110,12 @@ directory is the decision log behind it.
 | [096](096-assistant-model-runtime.md) | The assistant's model runtime: llama.cpp in a utility process, the curated catalogue, and how a model is chosen | Accepted; §4 superseded in part by ADR-113 | 2026-10-10 |
 | [097](097-assistant-web-search.md) | Opt-in web search for the assistant: a consent beside the network mode, and the second sanctioned egress path | Accepted; amends ADR-092 §2 for one path | 2026-10-10 |
 | [098](098-zim-offline-library.md) | An offline library, through our own ZIM reader (module `wiki`, migration 086) | Accepted; amends ADR-092 | 2026-10-10 |
-| [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093) | 2026-10-10 |
+| [099](099-offline-map.md) | The offline map: a pack, a region, and no network | Accepted (depends on ADR-090, ADR-091, ADR-093); amended by ADR-118 | 2026-10-10 |
 | [100](100-reader-module.md) | The Reader module: content packs, read and printed | Accepted | 2026-10-10 |
 | [101](101-shell-visibility.md) | Hiding and ordering modules: ONE setting for the whole app | Accepted | 2026-10-10 |
 | [102](102-portable-build.md) | A portable build: Nexus on a stick, and the data on the stick too | Accepted; amends ADR-089 | 2026-10-10 |
-| [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3 | 2026-10-10 |
-| [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted | 2026-10-10 |
+| [103](103-pack-catalogue-and-credits.md) | The pack catalogue, the download screen and the credits | Accepted; amends ADR-091 §2 (format 1 gains an optional `notice`), uses ADR-092 §3; amended 2026-10-22 (§11, catalogue format 2) | 2026-10-10 |
+| [104](104-assistant-knowledge.md) | The assistant's knowledge base (local RAG) | Accepted; §8 amended 2026-10-23 (the content layout the packs carry) | 2026-10-10 |
 | [105](105-voice.md) | The assistant's voice: Whisper in a worker, and the Serbian voice that does not exist | Accepted | 2026-10-10 |
 | [106](106-assistant-module.md) | The assistant module: the kit's first stateful, networked, streaming surface | Accepted; §8 amended by ADR-114 | 2026-10-10 |
 | [107](107-external-links.md) | One door for external links: two named variants, and the kit's `ExternalLink` | Accepted; uses ADR-103 §7, amends ADR-103 for the document variant | 2026-10-10 |
@@ -129,3 +129,6 @@ directory is the decision log behind it.
 | 115 | Not used: no decision was recorded under this number | — | — |
 | [116](116-the-grammar-a-tool-call-decodes-under.md) | The grammar a tool call decodes under: optional properties that may be null, days as a format, and a refusal the model can act on (uses ADR-095, ADR-112) | Accepted | 2026-10-15 |
 | [117](117-assistant-acts-through-the-page.md) | The assistant acts through the page: an action a location carries, one queue per module, and tools for every area (amends ADR-114; uses ADR-106, ADR-114) | Accepted | 2026-10-15 |
+| [118](118-maps-cut-from-the-planet-build.md) | Maps cut from the planet build: any territory, a continent or the world, at three details (uses ADR-090, ADR-098) | Accepted; amends ADR-099 and ADR-092 | 2026-10-23 |
+| [119](119-translator-on-nllb.md) | The translator runs NLLB-200: three model packs, a process of its own, a sentence at a time (uses ADR-091, ADR-105, ADR-117) | Accepted; replaces the Bergamot sentence translator, which no ADR recorded | 2026-10-23 |
+| [120](120-optional-account-passcode.md) | Optional account passcode and the no-vault fallback | Accepted; amends ADR-018 | 2026-10-24 |

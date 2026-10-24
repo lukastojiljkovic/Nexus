@@ -49,7 +49,7 @@ their own tags.
 
 | # | Module | Prefix | Scope | Priority |
 | --- | --- | --- | --- | --- |
-| 01 | [Onboarding & Personalization](01-onboarding.md) | ONB | Visual questionnaire → feature-flag mapping; re-runnable; business variant (elaborated in `docs/notes/razrade.md`) | M |
+| 01 | [Onboarding](01-onboarding.md) | ONB | Removed in Nexus 3.0; new profiles open in the shell with every module visible | — |
 | 02 | [Dashboard & Widgets](02-dashboard.md) | DASH | Configurable widgets: obligations, urgencies, summaries, countdowns, quick actions, recents | M |
 | 03 | [Tasks & Todo](03-tasks.md) | TASK | Daily→yearly + custom lists; subtasks, priorities, tags, repeat, dependencies; list/kanban/calendar views | M |
 | 04 | [Calendar & Reminders](04-calendar.md) | CAL | Events, birthdays, exams; document-expiry reminders (ID cards, passport, vehicle registration…) | M |

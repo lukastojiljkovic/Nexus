@@ -8,6 +8,7 @@ import {
   TURTLE_SLOTS,
   checkBrojExpression,
   createBrojPuzzle,
+  isNonogramPictureId,
   mahjongGroupOf,
   sudokuSolution,
 } from "@nexus/core";
@@ -125,12 +126,18 @@ export interface SudokuState {
   hintsUsed: number;
 }
 
-/** A nonogram as it is played: the board's size and one mark per cell. */
+/**
+ * A nonogram as it is played: the board's size and one mark per cell, and the
+ * pack picture it was dealt from when there was one. The picture is kept by id
+ * because a pack update can reorder its pictures, so the seed alone no longer
+ * names the board.
+ */
 export interface NonogramState {
   width: number;
   height: number;
   /** `0` untouched, `1` filled, `2` crossed — the three states a player marks, and the only three the column may hold. */
   marks: number[];
+  picture?: string;
 }
 
 /** A mahjong solitaire board as it stands: the faces, what is left of them, and how many times they have been dealt out again. */
@@ -773,7 +780,14 @@ function readNonogramState(value: unknown): NonogramState {
       `"state.marks" must hold ${width * height} cells for a ${width}x${height} puzzle, got ${marks.length}.`,
     );
   }
-  return { width, height, marks };
+  const state: NonogramState = { width, height, marks };
+  if (record.picture !== undefined) {
+    if (!isNonogramPictureId(record.picture)) {
+      throw new PuzzlesValidationError(`"state.picture" must be a nonogram picture id.`);
+    }
+    state.picture = record.picture;
+  }
+  return state;
 }
 
 function readMahjongState(value: unknown): MahjongState {

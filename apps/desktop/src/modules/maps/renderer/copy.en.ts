@@ -7,21 +7,14 @@ import type { sr } from "./copy.sr.js";
  * the translation.
  *
  * The place names on the map are not copy and are not here: they come from the
- * pack's own index, which carries each place in both scripts plus the `name:en`
- * the OpenStreetMap node states.
+ * downloaded regions' tiles, which carry each place's local name and the
+ * `name:en` OpenStreetMap states.
  */
 export const en: typeof sr = {
   page: {
-    subtitle: "A map of Serbia that works offline — search places, drop pins and measure a distance.",
+    subtitle:
+      "A map that works offline — download a territory, a continent or the whole world, then search places, drop pins and measure distances.",
     loading: "Loading the map…",
-  },
-  pack: {
-    title: "The map pack is not installed yet",
-    body: "Install the “map-serbia” pack on the “Content packs” card in Settings, then come back to this page.",
-    styleTitle: "The map's style could not be read",
-    styleBody: "The style file inside the pack cannot be read. Install the pack again from its folder.",
-    networkBody: "The style inside the pack asks for an address on the internet, so the map was not drawn. The pack has been changed and should not be trusted.",
-    placesBody: "The pack's place index could not be read, so search and place labels do not work.",
   },
   search: {
     label: "Search places",
@@ -32,6 +25,32 @@ export const en: typeof sr = {
     empty: "No place matches.",
     results: "Search results",
     loading: "Preparing the place index…",
+    none: "Search covers the downloaded maps, and none is downloaded yet.",
+    failed: "The place index could not be read, so search does not work.",
+    kinds: {
+      country: "Country",
+      state: "State",
+      region: "Region",
+      province: "Province",
+      district: "District",
+      county: "County",
+      municipality: "Municipality",
+      city: "City",
+      town: "Town",
+      village: "Village",
+      suburb: "Suburb",
+      quarter: "Quarter",
+      neighbourhood: "Neighbourhood",
+      hamlet: "Hamlet",
+      isolated_dwelling: "Isolated dwelling",
+      farm: "Farm",
+      locality: "Locality",
+      island: "Island",
+    },
+  },
+  picker: {
+    hint: "Click a territory to download, update or remove its map.",
+    empty: "No map is downloaded yet. Click a territory to download it.",
   },
   tools: {
     zoomIn: "Zoom in",
@@ -47,6 +66,7 @@ export const en: typeof sr = {
     copyFailed: "The copy failed.",
     pins: "Pin list",
     scale: "Scale",
+    regions: "Download maps",
   },
   pins: {
     title: "Pins",
@@ -88,12 +108,78 @@ export const en: typeof sr = {
     grafit: "Graphite",
   },
   attribution: {
-    credit: "© OpenStreetMap contributors",
+    disputed: "Hatched: disputed territory",
+    credit: "© OpenStreetMap contributors · Protomaps · land cover © ESA WorldCover",
     licence: "Data under the ODbL — https://www.openstreetmap.org/copyright",
     label: "Data source",
   },
   errors: {
     load: "The pins could not be loaded.",
     mutate: "The change was not saved.",
+    regions: "The list of downloaded maps could not be loaded.",
+  },
+  regions: {
+    disputes: {
+      label: "Disputed areas",
+      disputed: "Disputed territory",
+      parties: "Parties: {parties}",
+      unclaimed: "Claimed by no state",
+    },
+    close: "Close the card",
+    scope: "What to download",
+    world: "The whole world",
+    continents: {
+      Africa: "Africa",
+      Antarctica: "Antarctica",
+      Asia: "Asia",
+      Europe: "Europe",
+      "North America": "North America",
+      Oceania: "Oceania",
+      "Seven seas (open ocean)": "The open sea",
+      "South America": "South America",
+    },
+    detail: "Detail",
+    details: {
+      overview: "Overview",
+      towns: "Towns and roads",
+      full: "Full detail",
+    },
+    detailHints: {
+      overview: "Cities and main roads. The smallest file.",
+      towns: "Cities, villages and most roads.",
+      full: "Streets and buildings. The largest file.",
+    },
+    notInstalled: "This map is not downloaded.",
+    installed: "Downloaded: {detail}, {size}, data from {date}.",
+    update: "Newer data is available, from {date}.",
+    preparing: "Preparing the download…",
+    downloading: "Downloading: {received} of {total}.",
+    paused: "Paused: {received} of {total}.",
+    failed: "The download stopped.",
+    otherBusy: "Another map is downloading: {name}.",
+    measuring: "Measuring…",
+    download: "Download ({size})",
+    updateAction: "Update ({size})",
+    replace: "Replace ({size})",
+    show: "Show on the map",
+    remove: "Remove",
+    pause: "Pause",
+    resume: "Resume",
+    cancel: "Cancel the download",
+    removeTitle: "Remove the map?",
+    removeBody: "The map of “{name}” ({size}) is deleted from the disk. It can be downloaded again.",
+    problems: {
+      mode: "Downloading works only in the Downloads network mode. Change the mode in Settings.",
+      url: "This address is not allowed in this launch.",
+      network: "The map server cannot be reached. Check the connection and try again.",
+      "build-changed": "The data on the server changed during the download. Start it again.",
+      hash: "The downloaded file failed its check and was deleted.",
+      "no-build": "The server offers no map this version of Nexus can draw.",
+      "too-large": "The region is too large at this detail. Choose less detail or a smaller region.",
+      "no-space": "There is not enough space on the disk for this map.",
+      io: "The map could not be written to the disk.",
+      busy: "Another map is already downloading.",
+      region: "This region is not on the map's list.",
+    },
   },
 };

@@ -64,11 +64,11 @@ const CACHE_INDEX = join(CACHE, "index.json");
 /**
  * The application version a pack needs.
  *
- * The Reader, its safety notice and the pack installer all arrive in the release
- * after the current one (`apps/desktop/package.json` says 1.5.0), so a pack that
- * asked for 1.5.0 would install into a build that cannot read it. The maintainer
- * sets the final number when signing; 1.6.0 is the smallest number that can be
- * right and is the one ADR-091's own manifest example uses.
+ * The Reader, its safety notice and the pack installer came after 1.5.0, the app's
+ * version when this builder was written (they shipped in 2.0.0), so a pack that
+ * asked for 1.5.0 would install into a build that cannot read it. 1.6.0 is the
+ * smallest number that rules 1.5.0 out, and the one ADR-091's own manifest
+ * example uses.
  */
 const MIN_APP_VERSION = "1.6.0";
 

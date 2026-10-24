@@ -460,12 +460,13 @@ import {
 } from "./accounts.js";
 import {
   AuthError,
-  changePasscode,
   createAccount,
   isKeystoreAvailable,
+  openWithoutPasscode,
   readDeviceSecret,
   readStatus,
   regenerateRecoveryCode,
+  setAccountPasscode,
   unlockWithPasscode,
   unlockWithRecovery,
   verifyPasscode,
@@ -544,6 +545,7 @@ import { createPacksIpc, type PacksIpc } from "./packs/packsIpc.js";
 // module's environment is installed once below - which is the whole of what a kit
 // module adds to this file.
 import { registerPackProtocol } from "./packs/protocol.js";
+import { PRIVILEGED_SCHEMES } from "./schemes.js";
 import { installReaderEnvironment } from "../modules/reader/main/electron.js";
 import { volumeFreeBytes } from "./packs/install.js";
 import {
@@ -572,6 +574,8 @@ import { createModuleHost } from "./moduleHost.js";
 // store, blob-reference union, packs root). Its arts guide reads images through
 // the shell's `nx-pack:` protocol (ADR-100), like every other pack reader.
 import { configureCultureServices } from "../modules/culture/main/services.js";
+import { configureMapRegions } from "../modules/maps/main/regions/services.js";
+import { MAP_SCHEME, createMapProtocolHandler } from "../modules/maps/main/regions/protocol.js";
 import { createDictionaryReader } from "../modules/translator/main/dictionary.js";
 import { installedPacksRoot } from "../modules/translator/main/packDir.js";
 import { packsRoot } from "./packs/registry.js";
@@ -880,7 +884,7 @@ import {
   type WindowState,
   type WindowViewCommand,
 } from "../shared/ipc.js";
-import { businessProfileFlags, createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
+import { createModuleRegistry, LOCKED_MODULE_IDS } from "../shared/modules.js";
 import {
   normalizeShellVisibility,
   visibleModuleSet,
@@ -888,7 +892,6 @@ import {
 } from "../shared/moduleVisibility.js";
 import {
   asModuleVisibility,
-  applyShellModuleChanges,
   createShellVisibilityMigration,
   resolveShellVisibility,
   setShellModuleVisible,
@@ -987,35 +990,9 @@ const SMOKE_ACCOUNT_LABEL = "Smoke nalog";
 const SMOKE_SECOND_LABEL = "Drugi smoke nalog";
 const SMOKE_SECOND_PASSCODE = "second-passcode-2";
 
-// SEC-EL: registers the `nx-blob:` scheme as privileged (ADR-014) — MUST run
-// at module scope, before the app's "ready" event, or Electron ignores it.
-// `standard` gives it normal URL parsing (so the attachment hash can be read
-// back off the host); `secure` + the CSP's `img-src` entry are what let a
-// future inline `<img src="nx-blob://...">` (slice 003-b) load at all.
-protocol.registerSchemesAsPrivileged([
-  { scheme: "nx-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // The private section's read protocol (PRIV v1 / ADR-057): same privileges,
-  // entirely different gate — it serves ONLY while a section is unlocked.
-  { scheme: "priv-blob", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // ADR-100: a content pack's own files - an article's images today, a map's tiles
-  // later. The handler is `main/packs/protocol.ts`, and its gate is the installed
-  // PACK: an id no installed manifest answers for, and a path that manifest does
-  // not list, are both 404s. `standard` gives the URL normal parsing (the pack id
-  // is the host and the rest is the pack path), and `stream` is what lets a media
-  // client read it by ranges.
-  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // The arts guide's read protocol (CULTURE, ADR-091): serves an IMAGE out of an
-  // installed, signature-verified content pack, and nothing else. Same
-  // privileges for the same reason - a URL that parses, that a CSP may allow,
-  // and that a `<img>` may load - with the handler registering below.
-  { scheme: "nx-pack", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  // The offline library's read protocol (ADR-098): ZIM entries, one library per
-  // host, served by `main/zim/zimElectron.ts` from a file on this machine.
-  // `standard` is what gives the URL a host and a path at all (the library id
-  // and the entry), and `stream` is what lets a large image be answered without
-  // being held whole.
-  { scheme: "nx-zim", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-]);
+// SEC-EL: the app's schemes are privileged at module scope, before the app's
+// "ready" event, or Electron ignores them; `schemes.ts` says what each one is for.
+protocol.registerSchemesAsPrivileged([...PRIVILEGED_SCHEMES]);
 
 // Stable product name so userData resolves to a clean, branded directory
 // (%APPDATA%\Nexus) rather than the scoped package name. `productName` in
@@ -1688,6 +1665,22 @@ configureCultureServices({
   releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
 });
 
+// MAPS' region downloads (ADR-118), on the download service's terms: the same
+// session, the same host rule read with the mode this launch may act on, and
+// the same free-space probe. A function, because the session exists only after
+// `ready` and the service is built on a page's first call, long after it.
+configureMapRegions(() => {
+  const mode = (): ReturnType<typeof activeNetworkMode> =>
+    activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir()));
+  return {
+    userData: userDataDir(),
+    mode,
+    isAllowedUrl: (url) => isSessionRequestAllowed(mode(), url),
+    http: createDownloadHttp(requireUpdateSession()),
+    freeSpaceBytes,
+  };
+});
+
 /**
  * What the COOKBOOK module is handed once, at startup: where the installed
  * content packs are, the release key their manifests are verified against, and
@@ -2190,9 +2183,9 @@ function renameProfile(database: NexusDatabase, id: string, name: string): void 
 }
 
 /**
- * First-run seeding: create exactly one personal profile if the table is empty.
- * The name is intentionally blank — profile naming belongs to onboarding (ONB)
- * later, so we do not invent a personal name here.
+ * First-run seeding: create exactly one named personal profile if the table is
+ * empty, and normalize blank names carried over from the retired onboarding
+ * sentinel in older releases.
  *
  * The Inbox comes with it (TASK-004 / ADR-029): it is the list `TaskStore.create`
  * defaults to, so a profile without one is a profile no task can be added to.
@@ -2200,46 +2193,49 @@ function renameProfile(database: NexusDatabase, id: string, name: string): void 
  * same row for every profile created after it.
  */
 function seedFirstRunProfile(database: NexusDatabase): void {
+  const fallback = {
+    personal: shellStrings().defaultPersonalProfileName,
+    business: shellStrings().defaultBusinessProfileName,
+  };
   const { count } = database.raw
     .prepare("SELECT count(*) AS count FROM profiles")
     .get() as { count: number };
-  if (count > 0) return;
-  const id = uuidv7();
   const now = new Date().toISOString();
-  database.raw
-    .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
-    .run(id, "personal", "", now);
-  new TaskListStore(database.raw, id).ensureInbox(now);
+  if (count === 0) {
+    const id = uuidv7();
+    database.raw
+      .prepare("INSERT INTO profiles (id, kind, name, created_at) VALUES (?, ?, ?, ?)")
+      .run(id, "personal", fallback.personal, now);
+    new TaskListStore(database.raw, id).ensureInbox(now);
+    return;
+  }
+  const blank = database.raw
+    .prepare("SELECT id, kind FROM profiles WHERE trim(name) = ''")
+    .all() as { id: string; kind: ProfileKind }[];
+  const rename = database.raw.prepare("UPDATE profiles SET name = ? WHERE id = ?");
+  for (const profile of blank) {
+    rename.run(profile.kind === "business" ? fallback.business : fallback.personal, profile.id);
+  }
 }
 
 /**
- * `profiles:create` (ADR-058): the store mints the row, then main seeds what
- * the profile STARTS WITH — its Inbox (the `seedFirstRunProfile` precedent:
- * `TaskStore` refuses to place a task without one) and, for a business
- * profile, `businessProfileFlags` (`shared/modules.ts`). The seed order is deliberate: the Inbox
- * first, because a profile without one is broken while a profile without flag
- * rows merely runs on defaults.
+ * `profiles:create` (ADR-058): the store mints the row, then main seeds its
+ * Inbox. Module visibility is device-wide in v3 and is never changed merely by
+ * creating a profile, so every new profile still sees every registered module.
  */
 async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Profile> {
   const database = requireDb();
   const now = new Date().toISOString();
-  const created = new ProfileStore(database.raw).create(kind, name, now);
+  const fallbackName =
+    kind === "business"
+      ? shellStrings().defaultBusinessProfileName
+      : shellStrings().defaultPersonalProfileName;
+  const created = new ProfileStore(database.raw).create(
+    kind,
+    name.trim() === "" ? fallbackName : name,
+    now,
+  );
   new TaskListStore(database.raw, created.id).ensureInbox(now);
-  if (kind === "business") {
-    // ADR-101: the preset's module half is a DEVICE write now. There is one
-    // arrangement for the whole app, so "a business profile does not show
-    // Učenje" cannot be a row of its own any more — the alternative was a
-    // preset that writes rows nothing reads, which is a decision this build
-    // would then be pretending to honour. The preset's other half (an Inbox, a
-    // board, a look) is untouched and stays per profile.
-    applyShellModuleChanges(
-      userDataDir(),
-      moduleRegistry,
-      Object.fromEntries(
-        businessProfileFlags(moduleRegistry).map(({ moduleId, enabled }) => [moduleId, enabled]),
-      ),
-    );
-  }
   return created;
 }
 
@@ -2261,9 +2257,8 @@ async function handleProfilesCreate(kind: ProfileKind, name: string): Promise<Pr
  * renderer to widen: it writes into a NEW profile of the account it is already
  * inside, reads nothing, and cannot name what gets written.
  *
- * The seed is asynchronous and takes a moment; it runs at the end of first-run
- * onboarding, where the user has just pressed a button and is expecting a
- * pause, and never on a timer or at startup. (It awaits the blob store because
+ * The seed is asynchronous and takes a moment; it runs only after an explicit
+ * user request and never on a timer or at startup. (It awaits the blob store because
  * the profile's files are written into it — `seedDemoProfile`'s own doc.)
  *
  * It does NOT set the profile's private section up, and that asymmetry with
@@ -2406,6 +2401,10 @@ function asPasscode(value: unknown, field: string): string {
     );
   }
   return value;
+}
+
+function asOptionalPasscode(value: unknown, field: string): string | null {
+  return value === null ? null : asPasscode(value, field);
 }
 
 /** The formatted Recovery Kit code is 39 characters (32 + 7 dashes); 64 is generous headroom for stray whitespace, before `normalizeRecoveryCode` rejects anything that still isn't a valid code. */
@@ -6544,6 +6543,8 @@ function readAccountStatusSafely(dir: string): Omit<AuthStatus, "accounts" | "se
       state: "locked",
       lockedForMs: 0,
       keystoreAvailable: isKeystoreAvailable(),
+      deviceProtection: isKeystoreAvailable() ? "system-vault" : "owner-only-file",
+      requiresPasscode: true,
       requiresRecovery: false,
     };
   }
@@ -6563,16 +6564,22 @@ function readAccountStatusSafely(dir: string): Omit<AuthStatus, "accounts" | "se
  */
 function computeAuthStatus(): AuthStatus {
   const userData = userDataDir();
-  const accounts: AccountSummary[] = readRegistry(userData).accounts.map((entry) => ({
-    ...entry,
-    requiresRecovery: readAccountStatusSafely(accountDir(userData, entry.id)).requiresRecovery,
-  }));
+  const accounts: AccountSummary[] = readRegistry(userData).accounts.map((entry) => {
+    const status = readAccountStatusSafely(accountDir(userData, entry.id));
+    return {
+      ...entry,
+      requiresPasscode: status.requiresPasscode,
+      requiresRecovery: status.requiresRecovery,
+    };
+  });
 
   if (activeAccountId === null) {
     return {
       state: "uninitialized",
       lockedForMs: 0,
       keystoreAvailable: isKeystoreAvailable(),
+      deviceProtection: isKeystoreAvailable() ? "system-vault" : "owner-only-file",
+      requiresPasscode: true,
       requiresRecovery: false,
       accounts,
       selectedAccountId: null,
@@ -6977,7 +6984,7 @@ function authResultFromError(error: unknown, dir: string): AuthResult {
  */
 async function createLocalAccount(
   label: string,
-  passcode: string,
+  passcode: string | null,
   absorbLegacy: boolean,
 ): Promise<AuthResult> {
   const userData = userDataDir();
@@ -7004,7 +7011,7 @@ async function createLocalAccount(
 }
 
 /** First run: refused outright once any account exists, so it can never close a database somebody is using. `auth:create-additional` is the channel that may. */
-async function handleAuthCreate(label: string, passcode: string): Promise<AuthResult> {
+async function handleAuthCreate(label: string, passcode: string | null): Promise<AuthResult> {
   if (readRegistry(userDataDir()).accounts.length > 0) {
     return { ok: false, reason: "alreadyInitialized" };
   }
@@ -7012,7 +7019,7 @@ async function handleAuthCreate(label: string, passcode: string): Promise<AuthRe
 }
 
 /** Adds an account from the picker and switches to it. Locks first — exactly what switching does, and for the same reason: two unlocked accounts would mean two open databases and two sets of keys in memory. */
-async function handleAuthCreateAdditional(label: string, passcode: string): Promise<AuthResult> {
+async function handleAuthCreateAdditional(label: string, passcode: string | null): Promise<AuthResult> {
   performLock();
   return createLocalAccount(label, passcode, false);
 }
@@ -7240,6 +7247,21 @@ async function handleAuthUnlock(passcode: string): Promise<AuthResult> {
   }
 }
 
+async function handleAuthOpenWithoutPasscode(): Promise<AuthResult> {
+  try {
+    const { dataKeyHex } = await openWithoutPasscode(activeAccountDir());
+    if (db === null) {
+      openEncrypted(dataKeyHex);
+      await adoptUnlockedKey(dataKeyHex);
+      startUnlockedServices();
+    }
+    flushSecurityNotices();
+    return { ok: true };
+  } catch (error) {
+    return authResultFromError(error, activeAccountDir());
+  }
+}
+
 async function handleAuthRecover(recoveryCode: string, newPasscode: string): Promise<AuthResult> {
   try {
     const { dataKeyHex, clearedThrottle } = await unlockWithRecovery(
@@ -7275,9 +7297,18 @@ async function handleAuthRecover(recoveryCode: string, newPasscode: string): Pro
   }
 }
 
-async function handleAuthChangePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult> {
+async function handleAuthChangePasscode(
+  currentPasscode: string | null,
+  nextPasscode: string | null,
+): Promise<AuthResult> {
   try {
-    const clearedThrottle = await changePasscode(activeAccountDir(), currentPasscode, nextPasscode);
+    const dataKeyHex = requireUnlockedDataKeyHex();
+    const clearedThrottle = await setAccountPasscode(
+      activeAccountDir(),
+      currentPasscode,
+      nextPasscode,
+      dataKeyHex,
+    );
     // NTF-007, both facts: the change itself, and — before it — any
     // wrong-attempt burst this very call's success just wiped off the guard.
     // The burst first, because that is the order they happened in.
@@ -7987,7 +8018,7 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const label = asAccountLabel(body.label, "label");
-    const passcode = asPasscode(body.passcode, "passcode");
+    const passcode = asOptionalPasscode(body.passcode, "passcode");
     return handleAuthCreate(label, passcode);
   });
 
@@ -7995,7 +8026,7 @@ function registerIpc(): void {
     assertTrustedSender(event);
     const body = asRecord(payload);
     const label = asAccountLabel(body.label, "label");
-    const passcode = asPasscode(body.passcode, "passcode");
+    const passcode = asOptionalPasscode(body.passcode, "passcode");
     // Both of these lock the current session on their way through
     // (`performLock`), which is an app lock as far as the private section is
     // concerned — so its pending close captures are sealed first, exactly as
@@ -8032,6 +8063,11 @@ function registerIpc(): void {
     return handleAuthUnlock(passcode);
   });
 
+  ipcMain.handle(IpcChannel.authOpenWithoutPasscode, (event): Promise<AuthResult> => {
+    assertTrustedSender(event);
+    return handleAuthOpenWithoutPasscode();
+  });
+
   ipcMain.handle(IpcChannel.authRecover, (event, payload): Promise<AuthResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
@@ -8043,8 +8079,8 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannel.authChangePasscode, (event, payload): Promise<AuthResult> => {
     assertTrustedSender(event);
     const body = asRecord(payload);
-    const currentPasscode = asPasscode(body.currentPasscode, "currentPasscode");
-    const nextPasscode = asPasscode(body.nextPasscode, "nextPasscode");
+    const currentPasscode = asOptionalPasscode(body.currentPasscode, "currentPasscode");
+    const nextPasscode = asOptionalPasscode(body.nextPasscode, "nextPasscode");
     return handleAuthChangePasscode(currentPasscode, nextPasscode);
   });
 
@@ -13500,7 +13536,18 @@ async function runSmokeMigrationRehearsal(): Promise<void> {
 
   const keychainFile = join(activeAccountDir(), "keychain.json");
   const parsed: unknown = JSON.parse(readFileSync(keychainFile, "utf8"));
-  const foreignGuard = { ...(parsed as Record<string, unknown>), guard: randomBytes(64).toString("base64") };
+  const record = parsed as Record<string, unknown>;
+  const guard = record["guard"];
+  const foreign = randomBytes(64).toString("base64");
+  const foreignGuard = {
+    ...record,
+    guard:
+      typeof guard === "string"
+        ? foreign
+        : typeof guard === "object" && guard !== null
+          ? { ...(guard as Record<string, unknown>), value: foreign }
+          : foreign,
+  };
   writeFileSync(keychainFile, JSON.stringify(foreignGuard, null, 2));
 
   const migratedStatus = computeAuthStatus();
@@ -13991,7 +14038,7 @@ async function runSmokeDocPreviewRehearsal(): Promise<void> {
   noteStore(profile.id).softDelete(note.id, new Date().toISOString());
 }
 
-/** What the page walk names a profile the questionnaire never named — the shell only exists for a named one. */
+/** What the page walk names a legacy profile whose stored name is still blank. */
 const SMOKE_PROFILE_NAME = "Smoke";
 
 /** One tool the walk opened, by the name its rail row shows. */
@@ -14025,11 +14072,10 @@ interface SmokePageVisit {
  * per page, and that each page MOUNTS against a real database without the
  * boundary catching anything, which nothing proved before.
  *
- * The rehearsals above leave the renderer on the questionnaire — the smoke
- * account's profile was never named, and the shell does not exist for an
- * unnamed one — and with two modules switched off by default. So this names the
- * profile, switches every module on, reloads, and walks. It runs last because
- * it changes all three; the smoke directory is thrown away when the run ends.
+ * The rehearsals above may include profiles migrated from older releases whose
+ * stored name is still blank. This normalizes those names, switches every
+ * module on, reloads, and walks. It runs last because it changes device state;
+ * the smoke directory is thrown away when the run ends.
  */
 async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
   const database = requireDb();
@@ -14091,7 +14137,7 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
          () => window.__nexusReady === true || window.__nexusError === true, 10000);
        if (!ready || window.__nexusError === true) return "the renderer did not become ready";
        if (!(await until(() => document.querySelector(".app__sidebar") !== null, 10000))) {
-         return "the shell did not render — the questionnaire is still in front of it";
+         return "the shell did not render after the smoke account opened";
        }
        const pane = document.querySelector(".app__main");
        if (pane === null) return "the shell has no main pane";
@@ -14226,6 +14272,105 @@ async function runSmokePageWalk(win: BrowserWindow): Promise<void> {
       );
     }
   }
+
+  // Two writes no screenshot can prove end to end: an image through main's
+  // native decoder and encrypted blob store, and a cookbook draft through the
+  // same IPC the editor uses. Both are read back after a renderer restart, then
+  // removed, so this is persistence rather than a one-call echo.
+  const probeProfile = profiles[0];
+  if (probeProfile === undefined) throw new Error("gallery probe: no profile to write to");
+  const galleryPng =
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWPYouH2H4QZYAwASrgIhe0ap8UAAAAASUVORK5CYII=";
+  const probe = await win.webContents.executeJavaScript(
+    `(async () => {
+       const profileId = ${JSON.stringify(probeProfile.id)};
+       const bytes = Uint8Array.from(atob(${JSON.stringify(galleryPng)}), (char) => char.charCodeAt(0));
+       let view = await window.nexus.modules.gallery.importImage({
+         profileId,
+         fileName: "smoke-gallery.png",
+         title: "Smoke gallery",
+         notes: "",
+         tags: ["smoke"],
+         bytes,
+       });
+       const image = view.personal.find((item) => item.title === "Smoke gallery");
+       if (!image || image.width !== 2 || image.height !== 2) {
+         return "gallery import did not return the decoded 2×2 image";
+       }
+       const created = await window.nexus.modules.cookbook.create({
+         profileId,
+         recipe: {
+           title: 'Smoke "quoted", recipe',
+           description: "",
+           cuisine: "",
+           course: "main",
+           servings: 2,
+           prepMinutes: null,
+           cookMinutes: null,
+           ingredients: [{
+             rawText: "2 velike paprike",
+             quantity: 2,
+             quantityMax: null,
+             unit: null,
+             name: "paprika",
+             preparation: null,
+             group: null,
+             foodRef: null,
+             gramsPerUnit: null,
+           }],
+           steps: [],
+            tags: ["family", "summer, 2026"],
+           rating: null,
+           notes: "",
+           favourite: false,
+         },
+       });
+       return { galleryId: image.id, recipeId: created.recipeId };
+     })()`,
+  );
+  if (typeof probe === "string") throw new Error(`page walk: ${probe}`);
+  const { galleryId, recipeId } = probe as { galleryId: string; recipeId: string };
+
+  const reloaded = new Promise<void>((resolve) => {
+    win.webContents.once("did-finish-load", () => resolve());
+  });
+  win.webContents.reload();
+  await reloaded;
+  const readyAgain: unknown = await win.webContents.executeJavaScript(
+    `new Promise((resolve) => {
+       if (window.__nexusReady === true) return resolve(true);
+       window.addEventListener("nexus-ready", () => resolve(true), { once: true });
+       setTimeout(() => resolve(window.__nexusReady === true), 10000);
+     })`,
+  );
+  if (readyAgain !== true) throw new Error("galleries probe: renderer did not become ready after restart");
+
+  const persisted = await win.webContents.executeJavaScript(
+    `(async () => {
+       const profileId = ${JSON.stringify(probeProfile.id)};
+       const gallery = await window.nexus.modules.gallery.list({ profileId });
+       const recipe = await window.nexus.modules.cookbook.get({
+         profileId,
+         id: ${JSON.stringify(recipeId)},
+       });
+       const image = gallery.personal.find((item) => item.id === ${JSON.stringify(galleryId)});
+       const ok = image !== undefined &&
+         recipe.title === 'Smoke "quoted", recipe' &&
+         recipe.steps.length === 0 &&
+         recipe.prepMinutes === null &&
+         recipe.cookMinutes === null;
+       await window.nexus.modules.gallery.remove({
+         profileId,
+         id: ${JSON.stringify(galleryId)},
+       });
+       await window.nexus.modules.cookbook.remove({
+         profileId,
+         id: ${JSON.stringify(recipeId)},
+       });
+       return ok ? "ok" : "gallery or cookbook did not survive the restart";
+     })()`,
+  );
+  if (persisted !== "ok") throw new Error(`page walk: ${String(persisted)}`);
 }
 
 async function runSmoke(win: BrowserWindow): Promise<void> {
@@ -14410,6 +14555,11 @@ async function fillDemoProfile(): Promise<void> {
     new Date(now).toISOString(),
   );
   seedDemoBusiness(database.raw, business.id, now);
+  // ADR-101 made the module switch device-wide; the flag rows above alone no
+  // longer put a demo's modules in the rail. Both harnesses start from a fresh
+  // sandbox, so without this every disabled-by-default module is silently
+  // absent from the screenshot sweep and the demo account.
+  showEveryModule(userDataDir(), moduleRegistry);
 }
 
 /**
@@ -14669,6 +14819,8 @@ app.whenReady().then(async () => {
   // Building the service here also means every `wiki:` handler already has one
   // (they reach it through `zimHost()`).
   installZimProtocol(zimService());
+  // A downloaded map region (ADR-118): only a file the region registry names.
+  protocol.handle(MAP_SCHEME, createMapProtocolHandler({ userData: userDataDir() }));
 
   try {
     // ADR-044, and strictly before anything answers the renderer: bring the
@@ -14828,6 +14980,9 @@ app.whenReady().then(async () => {
         void runShots(mainWindow!, shotsOutputDir(), {
           passcode: DEMO_PASSCODE,
           userDataDir: app.getPath("userData"),
+          restoreShell: () => {
+            showEveryModule(userDataDir(), moduleRegistry);
+          },
         })
           .then((frames) => {
             const findings = frames.reduce((total, frame) => total + frame.findings.length, 0);

@@ -49,6 +49,7 @@ describe("the request allowlist", () => {
       "nx-blob://a1b2c3",
       "priv-blob://a1b2c3",
       "nx-pack://prva-pomoc/uvod.md",
+      "nx-map://region/srb.20261022.full.pmtiles",
       "devtools://devtools/bundled/inspector.html",
       "data:image/png;base64,iVBORw0KGgo=",
       "blob:file:///9b1deb4d",

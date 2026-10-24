@@ -1,0 +1,151 @@
+{
+  "format": 1,
+  "notes": [
+    "The three NLLB-200 translation models the translator can run, offline, from a signed",
+    "model pack. Every pack holds the same files (`paths`): the tokenizer and configuration,",
+    "and the two quantized ONNX graphs. `origin` says where the bytes come from: a Hugging",
+    "Face repository at a pinned revision (`download`), or a folder converted on this machine",
+    "(`local`), whose external-data files next to the weights are added by build.mjs.",
+    "",
+    "The licence EVIDENCE is the line of the model's README front matter that states it, and",
+    "the URL that page is read from; build.mjs refuses a pack whose page does not say it.",
+    "",
+    "`files` is written by build.mjs from what it actually read (--update-sources), because a",
+    "hash nobody can compute by hand is a hash nobody keeps correct. Everything else in an",
+    "entry is hand-written, and the tool does not touch it."
+  ],
+  "host": "https://huggingface.co",
+  "packs": [
+    {
+      "id": "nllb-600m",
+      "version": "2026.10.0",
+      "model": "facebook/nllb-200-distilled-600M",
+      "origin": {
+        "download": {
+          "repo": "Xenova/nllb-200-distilled-600M",
+          "revision": "261c31d1a5732c67cdd16d80e8d6088507c7ccea"
+        }
+      },
+      "paths": [
+        "config.json",
+        "generation_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "onnx/encoder_model_quantized.onnx",
+        "onnx/decoder_model_merged_quantized.onnx"
+      ],
+      "title": {
+        "sr": "Prevodilac — mali model (600M)",
+        "en": "Translator — small model (600M)"
+      },
+      "description": {
+        "sr": "Prevodi između {n} jezika, bez interneta.",
+        "en": "Translates between {n} languages, offline."
+      },
+      "licence": {
+        "spdx": "CC-BY-NC-4.0",
+        "attribution": "NLLB-200 by Meta AI; ONNX by Xenova",
+        "evidence": {
+          "url": "https://huggingface.co/facebook/nllb-200-distilled-600M/raw/main/README.md",
+          "line": "license: \"cc-by-nc-4.0\""
+        }
+      },
+      "files": {
+        "config.json": "52f035acb54ac80e5ef7fe78d6967f8ddf8e8799f078d1a92a2c8168d8ff4a20",
+        "generation_config.json": "1ce846259ae04c572ae1863e358534bbc376ff3d3f100b1494feda6200b51de8",
+        "onnx/decoder_model_merged_quantized.onnx": "dd66608c2a4194e78f95548fa0e64f24302303698c5b09fa8e1f9e16ec00676b",
+        "onnx/encoder_model_quantized.onnx": "5cde664eacba07a62f198857ec6c06e09572b1ebb77c8137f1fa99ac604a3a28",
+        "special_tokens_map.json": "992bd4ed610d644d6823081937bcc91bb8878dd556cea4ae5327f2480361330e",
+        "tokenizer.json": "8ac789ad7dabea44d41537822d48c516ba358374c51813e2cba78c006e150c94",
+        "tokenizer_config.json": "ddf411c9f790d081e72de76bb8e8b714d74e160e61bc10c9bd8f56022dcd7fd7"
+      }
+    },
+    {
+      "id": "nllb-1300m",
+      "version": "2026.10.0",
+      "model": "facebook/nllb-200-distilled-1.3B",
+      "origin": {
+        "local": "C:/Users/admin/.nexus-build/nllb/facebook/nllb-200-distilled-1.3B"
+      },
+      "paths": [
+        "config.json",
+        "generation_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "onnx/encoder_model_quantized.onnx",
+        "onnx/decoder_model_merged_quantized.onnx"
+      ],
+      "title": {
+        "sr": "Prevodilac — srednji model (1,3B)",
+        "en": "Translator — medium model (1.3B)"
+      },
+      "description": {
+        "sr": "Prevodi između {n} jezika, bez interneta.",
+        "en": "Translates between {n} languages, offline."
+      },
+      "licence": {
+        "spdx": "CC-BY-NC-4.0",
+        "attribution": "NLLB-200 by Meta AI; converted to ONNX for Nexus",
+        "evidence": {
+          "url": "https://huggingface.co/facebook/nllb-200-distilled-1.3B/raw/main/README.md",
+          "line": "license: \"cc-by-nc-4.0\""
+        }
+      },
+      "files": {
+        "config.json": "045f2882d018284ee2bfc4a2562af6e3532232e710c8d2cf3ed8c26fdc5fb91e",
+        "generation_config.json": "b6ae1a6b04f7ce7cddda10ecc4ac5ee299b3d2a4c50a9e3cd5085c229e8ea067",
+        "onnx/decoder_model_merged_quantized.onnx": "f0a1d51a719c8822bc2a8660b9fc21d629cb16a60c925b00ad975832ce4b8029",
+        "onnx/encoder_model_quantized.onnx": "2478e34b25c0ca733b5195e19eec454c58bf7ee79da0c1d15ec82a77c8a8bece",
+        "special_tokens_map.json": "27d4e8cb8b9a7c0f8234273dfefa64568f859c796f058037b4228948b84cd5fc",
+        "tokenizer.json": "b3be18cc91c94d4a1d83731ace4dac0b90a7db024edecdeb9fe7d19ec01ce901",
+        "tokenizer_config.json": "78f074bb0808578ea85ec87d35300180a988df88d23e9d9d3c93661e1a0f9415"
+      }
+    },
+    {
+      "id": "nllb-3300m",
+      "version": "2026.10.0",
+      "model": "facebook/nllb-200-3.3B",
+      "origin": {
+        "local": "C:/Users/admin/.nexus-build/nllb/facebook/nllb-200-3.3B"
+      },
+      "paths": [
+        "config.json",
+        "generation_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "onnx/encoder_model_quantized.onnx",
+        "onnx/decoder_model_merged_quantized.onnx"
+      ],
+      "title": {
+        "sr": "Prevodilac — veliki model (3,3B)",
+        "en": "Translator — large model (3.3B)"
+      },
+      "description": {
+        "sr": "Prevodi između {n} jezika, bez interneta.",
+        "en": "Translates between {n} languages, offline."
+      },
+      "licence": {
+        "spdx": "CC-BY-NC-4.0",
+        "attribution": "NLLB-200 by Meta AI; converted to ONNX for Nexus",
+        "evidence": {
+          "url": "https://huggingface.co/facebook/nllb-200-3.3B/raw/main/README.md",
+          "line": "license: \"cc-by-nc-4.0\""
+        }
+      },
+      "files": {
+        "config.json": "fd229528b0b9a8f9bc6841cdfc33940d177d0b37a7caaee18e0d50cd6c64b8c4",
+        "generation_config.json": "b6ae1a6b04f7ce7cddda10ecc4ac5ee299b3d2a4c50a9e3cd5085c229e8ea067",
+        "onnx/decoder_model_merged_quantized.onnx": "6fcf930b32434027bc1bdbb4386722958abb60f2830d4217080d4aee2f396ee6",
+        "onnx/decoder_model_merged_quantized.onnx_data": "9d9b8412bdc487ca5ff2207105688f4c8a574ec3641c114162ffa63377532fe0",
+        "onnx/decoder_model_merged_quantized.onnx_data_1": "4a899e209af65113289c62f0e6f9859cbc0757e7b76671ea43a4468ff5f85de7",
+        "onnx/encoder_model_quantized.onnx": "9d711ff0fcb9aeb290c5fd1eea92404dca0bb1af549fc0c3da65f22efc9c2243",
+        "special_tokens_map.json": "27d4e8cb8b9a7c0f8234273dfefa64568f859c796f058037b4228948b84cd5fc",
+        "tokenizer.json": "b3be18cc91c94d4a1d83731ace4dac0b90a7db024edecdeb9fe7d19ec01ce901",
+        "tokenizer_config.json": "78f074bb0808578ea85ec87d35300180a988df88d23e9d9d3c93661e1a0f9415"
+      }
+    }
+  ]
+}

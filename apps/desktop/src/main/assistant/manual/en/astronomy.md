@@ -8,10 +8,10 @@ Astronomy shows the solar system in 3D, day and night on Earth, tonight's sky, a
 
 How to use it:
 
-1. The four views are switched with the buttons at the top of the page: "Solar system", "Day and night", "Tonight's sky" and "Sun and Moon".
-2. The shared clock sits above them. The view follows the present moment; the "Moment shown" field sets a chosen date and time, and the "Now" button brings the view back to the present.
-3. The place is chosen in the "Place" card: a city from the table, or coordinates. With no place chosen, the city of this computer's zone is used. The same place applies to the sky chart, the day-and-night map and the Sun-and-Moon card, and it is kept in Settings, on the "Astronomy" card.
-4. In "Solar system", a click on a body or on its name selects it; the scale switch chooses "True" (real distances and sizes, so the Earth is smaller than a pixel) or "Readable" (distances compressed, bodies enlarged, the order and the direction exact).
+1. The four views are switched with the buttons in the toolbar under the page's title: "Solar system", "Day and night", "Tonight's sky" and "Sun and Moon". The active view's own switch sits beside them.
+2. The shared clock is in the page's header. The view follows the present moment; the "Moment shown" field sets a chosen date and time, and the "Now" button brings the view back to the present.
+3. The place is chosen in the "Place" card, shown in the three views other than the solar system: a city from the table, or coordinates. With no place chosen, the city of this computer's zone is used. The same place applies to the sky chart, the day-and-night map and the Sun-and-Moon card, and it is kept in Settings, on the "Astronomy" card.
+4. In "Solar system", drag to turn the view, right-drag or Shift-drag to move it, and scroll to zoom toward the pointer. A click on a body or on its name flies to it, keeps it in view as time runs, and opens its card: its distance from the Sun and from the Earth now, how long light from the Earth takes to reach it, the nearest body and the distances to the others, and its facts from NASA's planetary fact sheets (diameter, mass, gravity, day, rotation, orbit, temperature, moons, rings). "Whole system" brings the camera back to all of it. The scale switch chooses "True" (real distances and sizes, so the Earth is smaller than a pixel) or "Readable" (distances compressed, bodies enlarged, the order and the direction exact).
 5. "Tonight's sky" has a "Red light" switch for eyes adapted to the dark.
 
 The planet photographs come from the "planet-textures" pack; without it the bodies are drawn in a plain colour. That pack is installed in Settings, on the "Content packs" card.

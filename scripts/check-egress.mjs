@@ -218,6 +218,16 @@ export const ALLOWLIST = new Map([
     ["node-http"],
   ],
   [
+    // A plan against the real planet build (ADR-118), opt-in the way
+    // `live.test.ts` is: it skips unless `NEXUS_PLANET_URL` names a build, and
+    // nothing in it ships. It reads the build with the global `fetch` because it
+    // runs in plain Node, outside the app's sessions. The app's own reads go
+    // through `regions/http.ts` and the download service's port, which this
+    // gate still covers.
+    "apps/desktop/src/modules/maps/main/extract/plan.slow.test.ts",
+    ["fetch"],
+  ],
+  [
     // The external-link rule's Electron half (ADR-103). Its one flagged
     // construct is `shell.openExternal`, which the `load-remote` rule reads as
     // "a remote URL handed to a loader" — and it is, deliberately: the loader is
@@ -227,34 +237,6 @@ export const ALLOWLIST = new Map([
     // ever grows a call of its own.
     "apps/desktop/src/main/external.ts",
     ["load-remote"],
-  ],
-  [
-    // A LOCAL SCHEME, and one file of one module. `nx-pack://<packId>/<path>`
-    // is answered in this process by `protocol.handle`, which opens a file
-    // under `<userData>/packs/<id>/` and serves a byte range of it - that is
-    // how the map pack's tiles, style and glyphs reach the renderer, and it is
-    // the same mechanism MapLibre's own loader uses a few lines away (in
-    // `node_modules`, which this gate does not read). The URL cannot leave the
-    // machine: there is no host in it, and the handler has no branch that
-    // resolves anything outside the pack folder. The exemption names ONE file
-    // and ONE rule id, so the rest of the module - and every other module -
-    // stays forbidden from reaching for the global, which is the substitution
-    // that would put a real request behind a URL that reads like a local one.
-    "apps/desktop/src/modules/maps/renderer/packFile.ts",
-    ["fetch"],
-  ],
-  [
-    // The translation worker's `fetch`, declared on its own worker-scope type.
-    // The rule fires on the declaration, which is the shape it must not ignore —
-    // and the two things that URL is ever given are both served from THIS
-    // process: the wasm asset the build emitted, and
-    // `nx-pack://<packId>/<file>` model files, which `protocol.handle` answers
-    // out of a signed, hash-verified pack folder (ADR-091). There is no host in
-    // the module and no way for one to arrive: the URLs come from
-    // `models.ts`, which builds them from a pack id and three constants.
-    // Exempted from `fetch` alone, so reaching for anything else still fails.
-    "apps/desktop/src/modules/translator/renderer/sentences/bergamot.worker.ts",
-    ["fetch"],
   ],
   [
     // THE SECOND SANCTIONED EGRESS PATH (ADR-097), and the only place in the

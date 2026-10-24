@@ -9,7 +9,6 @@ import {
   pinColourExpression,
   pinsFeatureCollection,
   selectedPinCollection,
-  styleCamera,
 } from "./mapData.js";
 import { MAPS_PIN_COLORS, type MapsPinView } from "../shared/ipc.js";
 
@@ -145,22 +144,5 @@ describe("the pin colours", () => {
     // swatch rather than on MapLibre's default black. Two elements for the
     // operator and its input, two per arm, one fallback.
     expect(expression).toHaveLength(2 + MAPS_PIN_COLORS.length * 2 + 1);
-  });
-});
-
-describe("the pack's own camera", () => {
-  it("reads the two standard style fields", () => {
-    expect(styleCamera({ center: [20.5, 44.8], zoom: 7 })).toEqual({
-      center: { lon: 20.5, lat: 44.8 },
-      zoom: 7,
-    });
-  });
-
-  it("answers nothing for a style that states none, rather than inventing a viewpoint", () => {
-    expect(styleCamera(null)).toBeNull();
-    expect(styleCamera({})).toBeNull();
-    expect(styleCamera({ center: [20.5], zoom: 7 })).toBeNull();
-    expect(styleCamera({ center: [20.5, "44.8"], zoom: 7 })).toBeNull();
-    expect(styleCamera({ center: [20.5, 44.8], zoom: Number.NaN })).toBeNull();
   });
 });

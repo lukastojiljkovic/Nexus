@@ -60,6 +60,16 @@ const SIGNATURE_FILE = "pack.json.sig";
  */
 export const PACK_CATALOGUE_SIGNATURE_CONTEXT = "nexus-pack-catalogue-v1\n";
 
+/**
+ * A pack id the app accepts: kebab-case, at most 64 characters. `KEBAB_ID` and
+ * `PACK_LIMITS.idLength` are the app's side (`packs/manifest.ts`, `limits.ts`),
+ * and the test holds the pattern to it. The signer refusing what the app refuses
+ * is the point: `nllb-1.3b` was signed and published, and the 2.5 build refused
+ * the whole catalogue naming it (2026-10-23, before 2.5 was released).
+ */
+export const PACK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PACK_ID_MAX_LENGTH = 64;
+
 /** The only format this tool writes. A future format is a deliberate edit here. */
 const FORMAT = 1;
 
@@ -178,6 +188,9 @@ export function checkMeta(meta) {
   }
   if (meta.format !== FORMAT) {
     throw new Error(`pack-sign: "format" must be ${String(FORMAT)}.`);
+  }
+  if (typeof meta.id !== "string" || meta.id.length > PACK_ID_MAX_LENGTH || !PACK_ID.test(meta.id)) {
+    throw new Error(`pack-sign: "id" must be kebab-case (a-z, 0-9 and single hyphens), at most ${String(PACK_ID_MAX_LENGTH)} characters.`);
   }
   if (Object.hasOwn(meta, "notice") && !NOTICES.includes(meta.notice)) {
     throw new Error(`pack-sign: "notice" must be one of ${NOTICES.join(", ")}.`);

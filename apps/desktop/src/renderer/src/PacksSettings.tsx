@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Disclosure, Notice } from "@nexus/ui";
 
@@ -15,6 +15,7 @@ import { openExternalLink } from "./links.js";
 import { formatPackSize, groupCatalogueByKind, packText, sortPacksByTitle } from "./packsView.js";
 import { SafetyNotice } from "./safetyNotice.js";
 import { activeLocale, fill, strings } from "./strings.js";
+import { transferView, type PackTransferView } from "./packsProgress.js";
 
 /**
  * ADR-091's „Paketi sadržaja" card, and the only surface a content pack has.
@@ -38,7 +39,7 @@ import { activeLocale, fill, strings } from "./strings.js";
  * whatever call happened to run, for `UpdateAbout`'s reason: a second window, a
  * failed install and a removal all land on the same answer.
  */
-export function PacksSettings() {
+export function PacksSettings({ onOpenGallery }: { readonly onOpenGallery?: () => void } = {}) {
   const s = strings.settings.contentPacks;
   const locale = activeLocale();
   const [packs, setPacks] = useState<InstalledPackView[] | null>(null);
@@ -64,6 +65,11 @@ export function PacksSettings() {
   const [openEntry, setOpenEntry] = useState<string | null>(null);
   const [job, setJob] = useState<{ readonly id: string; readonly paused: boolean } | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<PackDownloadProgress | null>(null);
+  const [transfer, setTransfer] = useState<PackTransferView | null>(null);
+  const jobRef = useRef(job);
+  useEffect(() => {
+    jobRef.current = job;
+  }, [job]);
 
   useEffect(() => {
     let live = true;
@@ -90,6 +96,14 @@ export function PacksSettings() {
     });
     const offDownload = window.nexus.onPacksDownloadProgress((row) => {
       setDownloadProgress(row);
+      setTransfer((previous) =>
+        transferView(
+          row,
+          previous?.sample ?? null,
+          Date.now(),
+          jobRef.current?.paused ?? false,
+        ),
+      );
     });
     return () => {
       live = false;
@@ -135,6 +149,7 @@ export function PacksSettings() {
     setProblem(null);
     setFailed(false);
     setDownloadProgress(null);
+    setTransfer(null);
     setJob({ id, paused: false });
     try {
       const result = await window.nexus.packsDownload(id);
@@ -158,6 +173,7 @@ export function PacksSettings() {
   async function pauseDownload(id: string): Promise<void> {
     try {
       await window.nexus.packsDownloadPause(id);
+      setJob({ id, paused: true });
     } catch {
       crashed();
     }
@@ -188,6 +204,7 @@ export function PacksSettings() {
   async function cancelDownload(id: string): Promise<void> {
     setJob(null);
     setDownloadProgress(null);
+    setTransfer(null);
     try {
       await window.nexus.packsDownloadCancel(id);
     } catch {
@@ -283,6 +300,12 @@ export function PacksSettings() {
   return (
     <>
       <p className="nx-hint nx-hint--prose">{s.intro}</p>
+      {onOpenGallery !== undefined &&
+        packs?.some((pack) => pack.kind === "dataset" && pack.id === "art-open-access") && (
+          <div className="packs__actions">
+            <Button onClick={onOpenGallery}>{s.openGallery}</Button>
+          </div>
+        )}
       <div className="packs__actions">
         <Button variant="primary" disabled={busy} onClick={() => void choose()}>
           {s.install}
@@ -433,19 +456,50 @@ export function PacksSettings() {
                             {s.downloadCancel}
                           </Button>
                           {downloadProgress !== null && downloadProgress.id === entry.id && (
-                            <span className="packs__row-meta">
-                              {fill(
-                                downloadProgress.phase === "install"
-                                  ? s.downloadProgressInstall
-                                  : s.downloadProgressDownload,
-                                { file: downloadProgress.file },
-                              )}{" "}
-                              ·{" "}
-                              {fill(s.progressCount, {
-                                done: downloadProgress.filesDone,
-                                total: downloadProgress.filesTotal,
-                              })}
-                            </span>
+                            <div className="packs__transfer">
+                              <div
+                                className="packs__progress"
+                                role="progressbar"
+                                aria-label={packText(entry.title, locale)}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={Math.round(transfer?.percent ?? 0)}
+                              >
+                                <span
+                                  className="packs__progress-fill"
+                                  style={{ width: `${transfer?.percent ?? 0}%` }}
+                                />
+                              </div>
+                              <span className="packs__row-meta">
+                                {fill(
+                                  downloadProgress.phase === "install"
+                                    ? s.downloadProgressInstall
+                                    : s.downloadProgressDownload,
+                                  { file: downloadProgress.file },
+                                )}{" "}
+                                ·{" "}
+                                {fill(s.progressCount, {
+                                  done: downloadProgress.filesDone,
+                                  total: downloadProgress.filesTotal,
+                                })}
+                              </span>
+                              <span className="packs__row-meta">
+                                {formatPackSize(downloadProgress.bytesDone)} /{" "}
+                                {formatPackSize(downloadProgress.bytesTotal)}
+                                {transfer !== null && (
+                                  <>
+                                    {" · "}
+                                    {formatElapsed(transfer.elapsedMs)}
+                                    {!job.paused && transfer.speedBytesPerSecond !== null && (
+                                      <>
+                                        {" · "}
+                                        {formatPackSize(transfer.speedBytesPerSecond)}/s
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                            </div>
                           )}
                         </>
                       ) : (
@@ -491,4 +545,11 @@ export function PacksSettings() {
       )}
     </>
   );
+}
+
+function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }

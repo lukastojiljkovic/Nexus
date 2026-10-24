@@ -6,6 +6,7 @@ import { nearestTarget, type TunerReading } from "./analysis.js";
 import { createAnalyzer, type Analyzer } from "./analyzer.js";
 import { copy } from "./copy.js";
 import { NumberField } from "./fields.js";
+import { formatHertz } from "./format.js";
 import { microphoneFailure, startMicrophone, type MicrophoneSession } from "./microphone.js";
 import { parseA4Input } from "./prefs.js";
 import type { TabProps } from "./tabs.js";
@@ -57,16 +58,6 @@ function presetLabel(id: string): string {
     default:
       return copy.tuner.presetNames.chromatic;
   }
-}
-
-/** A frequency with its unit, in the active locale: „82,4 Hz". */
-function hertz(value: number): string {
-  return numberFormat({
-    style: "unit",
-    unit: "hertz",
-    unitDisplay: "short",
-    maximumFractionDigits: 1,
-  }).format(value);
 }
 
 export function TunerTab({ prefs, onChange }: TabProps) {
@@ -240,12 +231,12 @@ export function TunerTab({ prefs, onChange }: TabProps) {
           },
           {
             label: copy.tuner.frequencyLabel,
-            value: reading?.frequencyHz == null ? "—" : hertz(reading.frequencyHz),
+            value: reading?.frequencyHz == null ? "—" : formatHertz(reading.frequencyHz),
           },
           {
             label: copy.tuner.targetLabel,
             value: nearest?.target.label ?? "—",
-            ...(nearest === null ? {} : { unit: hertz(nearest.target.frequencyHz) }),
+            ...(nearest === null ? {} : { unit: formatHertz(nearest.target.frequencyHz) }),
           },
           {
             label: copy.tuner.clarityLabel,
@@ -268,7 +259,7 @@ export function TunerTab({ prefs, onChange }: TabProps) {
             }
           >
             <span className="signals__legend-sign">{target.label}</span>
-            <span className="signals__num">{hertz(target.frequencyHz)}</span>
+            <span className="signals__num">{formatHertz(target.frequencyHz)}</span>
           </li>
         ))}
       </ul>

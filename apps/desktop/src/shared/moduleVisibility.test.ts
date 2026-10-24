@@ -60,13 +60,14 @@ function visibility(overrides: Partial<ShellVisibility> = {}): ShellVisibility {
 }
 
 describe("visibleModuleIds", () => {
-  it("answers the manifests' own defaults when nothing is recorded", () => {
+  it("shows every registered module when nothing is recorded", () => {
     expect(visibleModuleIds(registry(), DEFAULT_SHELL_VISIBILITY)).toEqual([
       "dashboard",
       "settings",
       "tasks",
       "habits",
       "finance",
+      "priv",
     ]);
   });
 
@@ -82,6 +83,7 @@ describe("visibleModuleIds", () => {
       "settings",
       "habits",
       "finance",
+      "priv",
     ]);
   });
 
@@ -96,6 +98,7 @@ describe("visibleModuleIds", () => {
       "settings",
       "habits",
       "finance",
+      "priv",
     ]);
   });
 
@@ -111,9 +114,9 @@ describe("isModuleVisible", () => {
   const tasks = reg.get("tasks") as ModuleManifest;
   const priv = reg.get("priv") as ModuleManifest;
 
-  it("reads the manifest's default when neither list names the module", () => {
+  it("shows every module when neither list names it", () => {
     expect(isModuleVisible(tasks, DEFAULT_SHELL_VISIBILITY)).toBe(true);
-    expect(isModuleVisible(priv, DEFAULT_SHELL_VISIBILITY)).toBe(false);
+    expect(isModuleVisible(priv, DEFAULT_SHELL_VISIBILITY)).toBe(true);
   });
 
   it("reads hidden as hidden even when the manifest ships the module on", () => {
@@ -133,7 +136,7 @@ describe("isModuleVisible", () => {
 });
 
 describe("parseShellVisibility", () => {
-  const value = visibility({ hidden: ["tasks"], shown: ["priv"], groupOrder: ["life", "plan"] });
+  const value = visibility({ hidden: ["tasks"], groupOrder: ["life", "plan"] });
 
   it("round-trips a value through JSON unchanged", () => {
     expect(parseShellVisibility(JSON.parse(JSON.stringify(value)))).toEqual(value);
@@ -141,7 +144,7 @@ describe("parseShellVisibility", () => {
 
   it("refuses a version that is not this build's, whichever way it is spelled", () => {
     expect(parseShellVisibility({ ...value, version: 0 })).toBeNull();
-    expect(parseShellVisibility({ ...value, version: 2 })).toBeNull();
+    expect(parseShellVisibility({ ...value, version: 3 })).toBeNull();
     expect(parseShellVisibility({ ...value, version: "1" })).toBeNull();
     expect(parseShellVisibility({ ...value, version: undefined })).toBeNull();
   });
@@ -187,12 +190,13 @@ describe("normalizeShellVisibility", () => {
     expect(normalized.shown).toEqual([]);
   });
 
-  it("drops an entry that only restates the manifest", () => {
+  it("keeps an explicit hidden decision and drops redundant shown entries", () => {
     const normalized = normalizeShellVisibility(
       visibility({ hidden: ["priv"], shown: ["tasks"] }),
       reg,
     );
-    expect(normalized).toEqual(DEFAULT_SHELL_VISIBILITY);
+    expect(normalized.hidden).toEqual(["priv"]);
+    expect(normalized.shown).toEqual([]);
   });
 
   it("keeps the entries that are a decision, including over a module that is gone", () => {
@@ -201,7 +205,7 @@ describe("normalizeShellVisibility", () => {
       reg,
     );
     expect(normalized.hidden).toEqual(["tasks", "gone"]);
-    expect(normalized.shown).toEqual(["priv", "away"]);
+    expect(normalized.shown).toEqual([]);
   });
 
   it("leaves a module that left the build in the list, so the day it returns it comes back hidden", () => {
@@ -226,17 +230,17 @@ describe("setModuleVisible", () => {
     );
   });
 
-  it("writes a default-off module's ON as a shown entry and nothing else", () => {
+  it("writes a second explicit hide only once", () => {
     expect(setModuleVisible(DEFAULT_SHELL_VISIBILITY, priv, true, reg)).toEqual(
-      visibility({ shown: ["priv"] }),
+      DEFAULT_SHELL_VISIBILITY,
     );
   });
 
   it("is its own inverse: switching back restates the manifest and empties the file", () => {
     const off = setModuleVisible(DEFAULT_SHELL_VISIBILITY, tasks, false, reg);
     expect(setModuleVisible(off, tasks, true, reg)).toEqual(DEFAULT_SHELL_VISIBILITY);
-    const on = setModuleVisible(DEFAULT_SHELL_VISIBILITY, priv, true, reg);
-    expect(setModuleVisible(on, priv, false, reg)).toEqual(DEFAULT_SHELL_VISIBILITY);
+    const offAgain = setModuleVisible(DEFAULT_SHELL_VISIBILITY, priv, false, reg);
+    expect(setModuleVisible(offAgain, priv, true, reg)).toEqual(DEFAULT_SHELL_VISIBILITY);
   });
 
   it("refuses to hide a locked module", () => {
@@ -255,13 +259,10 @@ describe("setModuleVisible", () => {
 });
 
 describe("seedVisibleModules", () => {
-  it("decides every module of the build, in both directions", () => {
-    // The union of what the profiles had on, which is what the migration
-    // writes: TASKS off everywhere is recorded hidden, PRIV on somewhere joins
-    // `shown` because its manifest ships it off.
+  it("shows every module of the build", () => {
     expect(
       seedVisibleModules(registry(), new Set(["dashboard", "settings", "finance", "priv"])),
-    ).toEqual(visibility({ hidden: ["tasks", "habits"], shown: ["priv"] }));
+    ).toEqual(DEFAULT_SHELL_VISIBILITY);
   });
 
   it("is the manifests' own arrangement when the union is the defaults", () => {
@@ -278,12 +279,12 @@ describe("seedVisibleModules", () => {
 
   it("ignores ids this build does not have", () => {
     expect(seedVisibleModules(registry(), new Set(["gone", "dashboard", "settings"]))).toEqual(
-      visibility({ hidden: ["tasks", "habits", "finance"] }),
+      DEFAULT_SHELL_VISIBILITY,
     );
   });
 
-  it("never hides a locked module, whatever the union says", () => {
-    expect(seedVisibleModules(registry(), new Set()).hidden).toEqual(["tasks", "habits", "finance"]);
+  it("never hides a module, whatever the old union says", () => {
+    expect(seedVisibleModules(registry(), new Set()).hidden).toEqual([]);
   });
 });
 

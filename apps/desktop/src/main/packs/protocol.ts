@@ -231,33 +231,50 @@ export function createPackProtocolHandler(
       return new Response(null, { status: 404 });
     }
 
-    const headers = new Headers({
-      "Content-Type": packContentType(path),
-      "X-Content-Type-Options": "nosniff",
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "no-store",
-    });
-
-    const range = parseRangeHeader(request.headers.get("range"), size);
-    if (range === "unsatisfiable") {
-      headers.set("Content-Range", `bytes */${String(size)}`);
-      return new Response(null, { status: 416, headers });
-    }
-    if (range === null) {
-      headers.set("Content-Length", String(size));
-      return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
-        status: 200,
-        headers,
-      });
-    }
-
-    headers.set("Content-Length", String(range.end - range.start + 1));
-    headers.set("Content-Range", `bytes ${String(range.start)}-${String(range.end)}/${String(size)}`);
-    return new Response(
-      Readable.toWeb(createReadStream(file, { start: range.start, end: range.end })) as ReadableStream,
-      { status: 206, headers },
-    );
+    return fileResponse(request, file, size, packContentType(path));
   };
+}
+
+/**
+ * A file on this machine as the answer to `request`: whole (200), the one
+ * range it asks for (206), or 416 for a range past its end. Shared by every
+ * read protocol that serves a file a reader seeks in.
+ *
+ * **Any origin may read it.** The app's page is at `file://`, so a `fetch` or a
+ * WebGL texture it reads from here is a cross-origin request, which Chromium
+ * refuses without these two headers (and the scheme's `corsEnabled`,
+ * `schemes.ts`). What is served is a signed public pack or a map region, never
+ * profile data, so the answer names no origin.
+ */
+export function fileResponse(request: Request, file: string, size: number, contentType: string): Response {
+  const headers = new Headers({
+    "Content-Type": contentType,
+    "X-Content-Type-Options": "nosniff",
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Expose-Headers": "Content-Range",
+  });
+
+  const range = parseRangeHeader(request.headers.get("range"), size);
+  if (range === "unsatisfiable") {
+    headers.set("Content-Range", `bytes */${String(size)}`);
+    return new Response(null, { status: 416, headers });
+  }
+  if (range === null) {
+    headers.set("Content-Length", String(size));
+    return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
+      status: 200,
+      headers,
+    });
+  }
+
+  headers.set("Content-Length", String(range.end - range.start + 1));
+  headers.set("Content-Range", `bytes ${String(range.start)}-${String(range.end)}/${String(size)}`);
+  return new Response(
+    Readable.toWeb(createReadStream(file, { start: range.start, end: range.end })) as ReadableStream,
+    { status: 206, headers },
+  );
 }
 
 /**

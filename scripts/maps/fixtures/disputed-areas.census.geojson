@@ -1,0 +1,351 @@
+{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"NAME_EN":"Kashmir","BRK_NAME":"Jammu and Kashmir","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by Pakistan","LABEL_X":77.286367,"LABEL_Y":34.056196},
+"geometry":{"type":"Polygon","coordinates":[[[77.236367,34.006196],[77.336367,34.006196],[77.336367,34.106196],[77.236367,34.106196],[77.236367,34.006196]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Aksai Chin","BRK_NAME":"Aksai Chin","TYPE":"Disputed","NOTE_BRK":"Admin. by China; Claimed by India","LABEL_X":79.172747,"LABEL_Y":35.061522},
+"geometry":{"type":"Polygon","coordinates":[[[79.122747,35.011522],[79.222747,35.011522],[79.222747,35.111521999999994],[79.122747,35.111521999999994],[79.122747,35.011522]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Israel","BRK_NAME":"Israel","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":34.844695,"LABEL_Y":30.920628},
+"geometry":{"type":"Polygon","coordinates":[[[34.794695000000004,30.870628],[34.894695,30.870628],[34.894695,30.970628],[34.794695000000004,30.970628],[34.794695000000004,30.870628]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Gaza Strip","BRK_NAME":"Gaza","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":34.281082,"LABEL_Y":31.305615},
+"geometry":{"type":"Polygon","coordinates":[[[34.231082,31.255615],[34.331081999999995,31.255615],[34.331081999999995,31.355615],[34.231082,31.355615],[34.231082,31.255615]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"West Bank","BRK_NAME":"West Bank","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":35.283558,"LABEL_Y":32.225357},
+"geometry":{"type":"Polygon","coordinates":[[[35.233558,32.175357000000005],[35.333558,32.175357000000005],[35.333558,32.275357],[35.233558,32.275357],[35.233558,32.175357000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Ilemi Triangle","BRK_NAME":"Ilemi Triangle","TYPE":"Disputed","NOTE_BRK":"Admin. by Kenya; Claimed by South Sudan","LABEL_X":35.180232,"LABEL_Y":4.788407},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[35.130232,4.7384070000000005],[35.230231999999994,4.7384070000000005],[35.230231999999994,4.838407],[35.130232,4.838407],[35.130232,4.7384070000000005]]
+],[[[35.280232,4.888407000000001],[35.38023199999999,4.888407000000001],[35.38023199999999,4.9884070000000005],[35.280232,4.9884070000000005],[35.280232,4.888407000000001]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Arunachal Pradesh","BRK_NAME":"Arunachal Pradesh","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by China","LABEL_X":94.366069,"LABEL_Y":28.248603},
+"geometry":{"type":"Polygon","coordinates":[[[94.316069,28.198603],[94.416069,28.198603],[94.416069,28.298603],[94.316069,28.298603],[94.316069,28.198603]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Golan Heights","BRK_NAME":"Golan Heights","TYPE":"Indeterminate","NOTE_BRK":"Admin. By Israel; Claimed by Syria","LABEL_X":35.734303,"LABEL_Y":32.992228},
+"geometry":{"type":"Polygon","coordinates":[[[35.684303,32.942228],[35.784302999999994,32.942228],[35.784302999999994,33.042227999999994],[35.684303,33.042227999999994],[35.684303,32.942228]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"United Nations Disengagement Observer Force","BRK_NAME":"UNDOF Zone","TYPE":"Overlay","NOTE_BRK":"UN Patrolled Zone in Syria","LABEL_X":35.864592,"LABEL_Y":33.145384},
+"geometry":{"type":"Polygon","coordinates":[[[35.814592000000005,33.095384],[35.914592,33.095384],[35.914592,33.195384],[35.814592000000005,33.195384],[35.814592000000005,33.095384]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Somaliland","BRK_NAME":"Somaliland","TYPE":"Disputed","NOTE_BRK":"Self admin.; Claimed by Somalia","LABEL_X":46.731595,"LABEL_Y":9.443889},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[46.681595,9.393889],[46.781594999999996,9.393889],[46.781594999999996,9.493889000000001],[46.681595,9.493889000000001],[46.681595,9.393889]]
+],[[[46.831595,9.543889],[46.931594999999994,9.543889],[46.931594999999994,9.643889000000001],[46.831595,9.643889000000001],[46.831595,9.543889]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Lawa Headwaters","BRK_NAME":"Lawa Headwaters","TYPE":"Disputed","NOTE_BRK":"Admin. by France; Claimed by Suriname","LABEL_X":-54.171127,"LABEL_Y":2.568854},
+"geometry":{"type":"Polygon","coordinates":[[[-54.221126999999996,2.518854],[-54.121127,2.518854],[-54.121127,2.618854],[-54.221126999999996,2.618854],[-54.221126999999996,2.518854]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Tigri Area","BRK_NAME":"Courantyne Headwaters","TYPE":"Disputed","NOTE_BRK":"Admin. by Guyana; Claimed by Suriname","LABEL_X":-57.437036,"LABEL_Y":2.320037},
+"geometry":{"type":"Polygon","coordinates":[[[-57.487035999999996,2.2700370000000003],[-57.387036,2.2700370000000003],[-57.387036,2.370037],[-57.487035999999996,2.370037],[-57.487035999999996,2.2700370000000003]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Korean Demilitarized Zone","BRK_NAME":"Korean Demilitarized Zone (south)","TYPE":"Overlay","NOTE_BRK":"Since 1953 a 2 km buffer south of the military demarcation line, patrolled by South Korea","LABEL_X":127.517738,"LABEL_Y":38.274654},
+"geometry":{"type":"Polygon","coordinates":[[[127.467738,38.224654],[127.56773799999999,38.224654],[127.56773799999999,38.324653999999995],[127.467738,38.324653999999995],[127.467738,38.224654]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Korean Demilitarized Zone","BRK_NAME":"Korean Demilitarized Zone (north)","TYPE":"Overlay","NOTE_BRK":"Since 1953 a 2 km buffer north of the military demarcation line, patrolled by North Korea","LABEL_X":127.464589,"LABEL_Y":38.324857},
+"geometry":{"type":"Polygon","coordinates":[[[127.414589,38.274857000000004],[127.514589,38.274857000000004],[127.514589,38.374857],[127.414589,38.374857],[127.414589,38.274857000000004]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Western Sahara","BRK_NAME":"W. Sahara","TYPE":"Disputed","NOTE_BRK":"Admin. by Morocco; Claimed by Western Sahara","LABEL_X":-13.677858,"LABEL_Y":25.239498},
+"geometry":{"type":"Polygon","coordinates":[[[-13.727858000000001,25.189498],[-13.627858,25.189498],[-13.627858,25.289498000000002],[-13.727858000000001,25.289498000000002],[-13.727858000000001,25.189498]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Western Sahara","BRK_NAME":"W. Sahara","TYPE":"Indeterminate","NOTE_BRK":"Self admin.; Claimed by Morocco","LABEL_X":-12.630304,"LABEL_Y":23.967592},
+"geometry":{"type":"Polygon","coordinates":[[[-12.680304000000001,23.917592],[-12.580304,23.917592],[-12.580304,24.017592],[-12.680304000000001,24.017592],[-12.680304000000001,23.917592]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Abkhazia","BRK_NAME":"Abkhazia","TYPE":"Breakaway","NOTE_BRK":"Self admin.; Claimed by Georgia","LABEL_X":41.279112,"LABEL_Y":43.05785},
+"geometry":{"type":"Polygon","coordinates":[[[41.229112,43.007850000000005],[41.329111999999995,43.007850000000005],[41.329111999999995,43.10785],[41.229112,43.10785],[41.229112,43.007850000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"South Ossetia","BRK_NAME":"South Ossetia","TYPE":"Breakaway","NOTE_BRK":"Self admin.; Claimed by Georgia","LABEL_X":44.130783,"LABEL_Y":42.390774},
+"geometry":{"type":"Polygon","coordinates":[[[44.080783000000004,42.340774],[44.180783,42.340774],[44.180783,42.440774],[44.080783000000004,42.440774],[44.080783000000004,42.340774]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Kosovo","BRK_NAME":"Kosovo","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":20.860719,"LABEL_Y":42.593587},
+"geometry":{"type":"Polygon","coordinates":[[[20.810719,42.543587],[20.910719,42.543587],[20.910719,42.643587],[20.810719,42.643587],[20.810719,42.543587]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Ceuta","BRK_NAME":"Ceuta","TYPE":"Geo subunit","NOTE_BRK":null,"LABEL_X":-5.348259,"LABEL_Y":35.887415},
+"geometry":{"type":"Polygon","coordinates":[[[-5.3982589999999995,35.837415],[-5.298259,35.837415],[-5.298259,35.937414999999994],[-5.3982589999999995,35.937414999999994],[-5.3982589999999995,35.837415]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Guayana Esequiba","BRK_NAME":"West of Essequibo River","TYPE":"Disputed","NOTE_BRK":"Admin. by Guyana; Claimed by Venezuela","LABEL_X":-58.942643,"LABEL_Y":5.124317},
+"geometry":{"type":"Polygon","coordinates":[[[-58.992642999999994,5.074317],[-58.892643,5.074317],[-58.892643,5.174316999999999],[-58.992642999999994,5.174316999999999],[-58.992642999999994,5.074317]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Nagorno-Karabakh","BRK_NAME":"Artsakh","TYPE":"Breakaway","NOTE_BRK":"Self admin.; Claimed by Azer.","LABEL_X":46.690788,"LABEL_Y":39.889851},
+"geometry":{"type":"Polygon","coordinates":[[[46.640788,39.839851],[46.740787999999995,39.839851],[46.740787999999995,39.939851],[46.640788,39.939851],[46.640788,39.839851]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Dragonja","BRK_NAME":"Dragonja River","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":13.611023,"LABEL_Y":45.47075},
+"geometry":{"type":"Polygon","coordinates":[[[13.561022999999999,45.420750000000005],[13.661023,45.420750000000005],[13.661023,45.52075],[13.561022999999999,45.52075],[13.561022999999999,45.420750000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Trans-Karakoram Tract","BRK_NAME":"Shaksam Valley","TYPE":"Disputed","NOTE_BRK":"Admin. by China; Ceded to China by Pakistan; Claimed by India","LABEL_X":76.294273,"LABEL_Y":36.068574},
+"geometry":{"type":"Polygon","coordinates":[[[76.244273,36.018574],[76.344273,36.018574],[76.344273,36.118573999999995],[76.244273,36.118573999999995],[76.244273,36.018574]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Gilgit-Baltistan","BRK_NAME":"Gilgit-Baltistan","TYPE":"Disputed","NOTE_BRK":"Admin. by Pakistan; Claimed by India","LABEL_X":74.854045,"LABEL_Y":35.9976},
+"geometry":{"type":"Polygon","coordinates":[[[74.804045,35.9476],[74.904045,35.9476],[74.904045,36.047599999999996],[74.804045,36.047599999999996],[74.804045,35.9476]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Melilla","BRK_NAME":"Melilla","TYPE":"Geo subunit","NOTE_BRK":null,"LABEL_X":-2.946759,"LABEL_Y":35.294723},
+"geometry":{"type":"Polygon","coordinates":[[[-2.996759,35.244723],[-2.8967590000000003,35.244723],[-2.8967590000000003,35.344722999999995],[-2.996759,35.344722999999995],[-2.996759,35.244723]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Guantanamo Bay Naval Base","BRK_NAME":"Guantanamo Bay USNB","TYPE":"Lease","NOTE_BRK":"Leased to U.S.A. by Cuba; Claimed by Cuba","LABEL_X":-75.117277,"LABEL_Y":19.918398},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-75.167277,19.868398],[-75.067277,19.868398],[-75.067277,19.968398],[-75.167277,19.968398],[-75.167277,19.868398]]
+],[[[-75.01727699999999,20.018397999999998],[-74.917277,20.018397999999998],[-74.917277,20.118398],[-75.01727699999999,20.118398],[-75.01727699999999,20.018397999999998]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Om Parvat","BRK_NAME":"Near Om Parvat","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by Nepal","LABEL_X":80.945546,"LABEL_Y":30.212872},
+"geometry":{"type":"Polygon","coordinates":[[[80.895546,30.162872],[80.99554599999999,30.162872],[80.99554599999999,30.262872],[80.895546,30.262872],[80.895546,30.162872]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Brazilian Island","BRK_NAME":"Brazilian Island","TYPE":"Indeterminate","NOTE_BRK":"Claimed by Brazil and Uruguay","LABEL_X":-57.623042,"LABEL_Y":-30.187555},
+"geometry":{"type":"Polygon","coordinates":[[[-57.673041999999995,-30.237555],[-57.573042,-30.237555],[-57.573042,-30.137555],[-57.673041999999995,-30.137555],[-57.673041999999995,-30.237555]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Olivenza","BRK_NAME":"Olivenza","TYPE":"Disputed","NOTE_BRK":"Admin. by Spain; Claimed by Portugal","LABEL_X":-7.130647,"LABEL_Y":38.678907},
+"geometry":{"type":"Polygon","coordinates":[[[-7.180647,38.628907000000005],[-7.080647,38.628907000000005],[-7.080647,38.728907],[-7.180647,38.728907],[-7.180647,38.628907000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Transnistria","BRK_NAME":"Transnistria","TYPE":"Breakaway","NOTE_BRK":"Self admin.; Claimed by Moldova","LABEL_X":29.252183,"LABEL_Y":47.290691},
+"geometry":{"type":"Polygon","coordinates":[[[29.202182999999998,47.240691000000005],[29.302183,47.240691000000005],[29.302183,47.340691],[29.202182999999998,47.340691],[29.202182999999998,47.240691000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Luhansk People's Republic","BRK_NAME":"Luhansk People's Republic","TYPE":"Breakaway","NOTE_BRK":"Self admin.; Claimed by Ukraine","LABEL_X":39.285978,"LABEL_Y":48.259867},
+"geometry":{"type":"Polygon","coordinates":[[[39.235978,48.209867],[39.335978,48.209867],[39.335978,48.309867],[39.235978,48.309867],[39.235978,48.209867]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Donetsk People's Republic","BRK_NAME":"Donetsk People's Republic","TYPE":"Breakaway","NOTE_BRK":"Self admin.; Claimed by Ukraine","LABEL_X":38.141993,"LABEL_Y":47.979975},
+"geometry":{"type":"Polygon","coordinates":[[[38.091993,47.929975000000006],[38.191993,47.929975000000006],[38.191993,48.029975],[38.091993,48.029975],[38.091993,47.929975000000006]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Gibraltar","BRK_NAME":"Gibraltar","TYPE":"Disputed","NOTE_BRK":"Admin. By U.K.; Claimed by Spain","LABEL_X":-5.3467,"LABEL_Y":36.129426},
+"geometry":{"type":"Polygon","coordinates":[[[-5.3967,36.079426000000005],[-5.2967,36.079426000000005],[-5.2967,36.179426],[-5.3967,36.179426],[-5.3967,36.079426000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Abyei","BRK_NAME":"Abyei","TYPE":"Disputed","NOTE_BRK":"Admin. by Sudan; Claimed by South Sudan","LABEL_X":28.414264,"LABEL_Y":9.744144},
+"geometry":{"type":"Polygon","coordinates":[[[28.364264,9.694144],[28.464264,9.694144],[28.464264,9.794144000000001],[28.364264,9.794144000000001],[28.364264,9.694144]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Demchok","BRK_NAME":"Demchok","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by China","LABEL_X":79.350584,"LABEL_Y":32.834109},
+"geometry":{"type":"Polygon","coordinates":[[[79.300584,32.784109],[79.400584,32.784109],[79.400584,32.884108999999995],[79.300584,32.884108999999995],[79.300584,32.784109]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Samdu Valleys","BRK_NAME":"Samdu Valleys","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by China","LABEL_X":78.563368,"LABEL_Y":32.079598},
+"geometry":{"type":"Polygon","coordinates":[[[78.513368,32.029598],[78.613368,32.029598],[78.613368,32.129597999999994],[78.513368,32.129597999999994],[78.513368,32.029598]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Tirpani Valleys","BRK_NAME":"Tirpani Valleys","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by China","LABEL_X":79.108016,"LABEL_Y":31.24983},
+"geometry":{"type":"Polygon","coordinates":[[[79.05801600000001,31.19983],[79.158016,31.19983],[79.158016,31.29983],[79.05801600000001,31.29983],[79.05801600000001,31.19983]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Bara Hotii Valleys","BRK_NAME":"Bara Hotii Valleys","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by China","LABEL_X":80.123118,"LABEL_Y":30.718364},
+"geometry":{"type":"Polygon","coordinates":[[[80.07311800000001,30.668364],[80.173118,30.668364],[80.173118,30.768364000000002],[80.07311800000001,30.768364000000002],[80.07311800000001,30.668364]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Turkish Republic of Northern Cyprus","BRK_NAME":"N. Cyprus","TYPE":"Disputed","NOTE_BRK":"Self admin.; Claimed by Cyprus","LABEL_X":33.692434,"LABEL_Y":35.216071},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[33.642434,35.166071],[33.742433999999996,35.166071],[33.742433999999996,35.266071],[33.642434,35.266071],[33.642434,35.166071]]
+],[[[33.792434,35.316071],[33.892433999999994,35.316071],[33.892433999999994,35.416070999999995],[33.792434,35.416070999999995],[33.792434,35.316071]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"United Nations Buffer Zone in Cyprus","BRK_NAME":"Cyprus U.N. Buffer Zone","TYPE":"Indeterminate","NOTE_BRK":null,"LABEL_X":33.288134,"LABEL_Y":35.140713},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[33.238134,35.090713],[33.338134,35.090713],[33.338134,35.190712999999995],[33.238134,35.190712999999995],[33.238134,35.090713]]
+],[[[33.388134,35.240713],[33.488133999999995,35.240713],[33.488133999999995,35.340712999999994],[33.388134,35.340712999999994],[33.388134,35.240713]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Siachen Glacier","BRK_NAME":"Siachen Glacier","TYPE":"Indeterminate","NOTE_BRK":"Claimed by Pakistan and India","LABEL_X":77.129553,"LABEL_Y":35.340606},
+"geometry":{"type":"Polygon","coordinates":[[[77.079553,35.290606000000004],[77.179553,35.290606000000004],[77.179553,35.390606],[77.079553,35.390606],[77.079553,35.290606000000004]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Baikonur","BRK_NAME":"Baykonur","TYPE":"Lease","NOTE_BRK":"Leased to Russia by Kazakhstan","LABEL_X":63.383897,"LABEL_Y":45.978332},
+"geometry":{"type":"Polygon","coordinates":[[[63.333897,45.928332000000005],[63.433896999999995,45.928332000000005],[63.433896999999995,46.028332],[63.333897,46.028332],[63.333897,45.928332000000005]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Belize","BRK_NAME":"Belize","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":-88.598948,"LABEL_Y":16.5722},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-88.64894799999999,16.522199999999998],[-88.548948,16.522199999999998],[-88.548948,16.6222],[-88.64894799999999,16.6222],[-88.64894799999999,16.522199999999998]]
+],[[[-88.49894799999998,16.672199999999997],[-88.39894799999999,16.672199999999997],[-88.39894799999999,16.772199999999998],[-88.49894799999998,16.772199999999998],[-88.49894799999998,16.672199999999997]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Southern Patagonian Ice Field","BRK_NAME":"Southern Patagonian Ice Field","TYPE":"Indeterminate","NOTE_BRK":"Claimed by Chile and Argentina; under survey","LABEL_X":-73.31378,"LABEL_Y":-49.511034},
+"geometry":{"type":"Polygon","coordinates":[[[-73.36377999999999,-49.561034],[-73.26378,-49.561034],[-73.26378,-49.461034000000005],[-73.36377999999999,-49.461034000000005],[-73.36377999999999,-49.561034]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Bhutan (northwest valleys)","BRK_NAME":"Bhutan (northwest valleys)","TYPE":"Disputed","NOTE_BRK":"Admin. by Bhutan; Claimed by China","LABEL_X":90.191212,"LABEL_Y":28.251658},
+"geometry":{"type":"Polygon","coordinates":[[[90.141212,28.201658],[90.24121199999999,28.201658],[90.24121199999999,28.301658],[90.141212,28.301658],[90.141212,28.201658]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Chumbi Valley","BRK_NAME":"Bhutan (Chumbi salient)","TYPE":"Disputed","NOTE_BRK":"Admin. by Bhutan; Claimed by China","LABEL_X":89.075654,"LABEL_Y":27.564391},
+"geometry":{"type":"Polygon","coordinates":[[[89.025654,27.514391],[89.125654,27.514391],[89.125654,27.614391],[89.025654,27.614391],[89.025654,27.514391]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Crimean Peninsula","BRK_NAME":"Crimea","TYPE":"Disputed","NOTE_BRK":"Admin. by Russia; Claimed by Ukraine","LABEL_X":34.204665,"LABEL_Y":45.298991},
+"geometry":{"type":"Polygon","coordinates":[[[34.154665,45.248991000000004],[34.254664999999996,45.248991000000004],[34.254664999999996,45.348991],[34.154665,45.348991],[34.154665,45.248991000000004]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Shebaa farms","BRK_NAME":"Shebaa Farms","TYPE":"Disputed","NOTE_BRK":"Admin. By Israel; Claimed by Lebanon","LABEL_X":35.680613,"LABEL_Y":33.293322},
+"geometry":{"type":"Polygon","coordinates":[[[35.630613000000004,33.243322000000006],[35.730613,33.243322000000006],[35.730613,33.343322],[35.630613000000004,33.343322],[35.630613000000004,33.243322000000006]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Ilemi Triangle","BRK_NAME":"Ilemi Triange","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":35.680592,"LABEL_Y":4.607691},
+"geometry":{"type":"Polygon","coordinates":[[[35.630592,4.557691],[35.730591999999994,4.557691],[35.730591999999994,4.657691],[35.630592,4.657691],[35.630592,4.557691]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Corner of Artigas","BRK_NAME":"Corner of Artigas","TYPE":"Disputed","NOTE_BRK":"Admin. by Brazil; Claimed by Uruguay","LABEL_X":-55.947906,"LABEL_Y":-31.013936},
+"geometry":{"type":"Polygon","coordinates":[[[-55.997906,-31.063936],[-55.897906000000006,-31.063936],[-55.897906000000006,-30.963936],[-55.997906,-30.963936],[-55.997906,-31.063936]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Bir Tawil","BRK_NAME":"Bir Tawil","TYPE":"Indeterminate","NOTE_BRK":"Between Egypt and Sudan","LABEL_X":33.673428,"LABEL_Y":21.860442},
+"geometry":{"type":"Polygon","coordinates":[[[33.623428000000004,21.810442],[33.723428,21.810442],[33.723428,21.910442],[33.623428000000004,21.910442],[33.623428000000004,21.810442]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Hala'ib Triangle","BRK_NAME":"Halayib Triangle","TYPE":"Disputed","NOTE_BRK":"Admin. by Egypt; Claimed by Sudan","LABEL_X":35.487078,"LABEL_Y":22.445613},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[35.437078,22.395613],[35.537077999999994,22.395613],[35.537077999999994,22.495613000000002],[35.437078,22.495613000000002],[35.437078,22.395613]]
+],[[[35.587078,22.545613],[35.68707799999999,22.545613],[35.68707799999999,22.645613],[35.587078,22.645613],[35.587078,22.545613]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Vukovar Island","BRK_NAME":"﻿Vukovar Island","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":19.030797,"LABEL_Y":45.347797},
+"geometry":{"type":"Polygon","coordinates":[[[18.980797,45.297797],[19.080797,45.297797],[19.080797,45.397797],[18.980797,45.397797],[18.980797,45.297797]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Šarengrad Island","BRK_NAME":"﻿Šarengrad Island","TYPE":"Disputed","NOTE_BRK":null,"LABEL_X":19.247613,"LABEL_Y":45.259442},
+"geometry":{"type":"Polygon","coordinates":[[[19.197613,45.209442],[19.297613000000002,45.209442],[19.297613000000002,45.309442],[19.197613,45.309442],[19.197613,45.209442]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"East Jerusalem","BRK_NAME":"East Jerusalem","TYPE":"Disputed","NOTE_BRK":"Admin. By Israel; Claimed by Palestine","LABEL_X":35.2359,"LABEL_Y":31.820328},
+"geometry":{"type":"Polygon","coordinates":[[[35.185900000000004,31.770328],[35.2859,31.770328],[35.2859,31.870328],[35.185900000000004,31.870328],[35.185900000000004,31.770328]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Latrun fort","BRK_NAME":"No Man's Land (Fort Latrun)","TYPE":"Disputed","NOTE_BRK":"Admin. By Israel; Claimed by Palestine","LABEL_X":34.981674,"LABEL_Y":31.853503},
+"geometry":{"type":"Polygon","coordinates":[[[34.931674,31.803503],[35.031673999999995,31.803503],[35.031673999999995,31.903503],[34.931674,31.903503],[34.931674,31.803503]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Azad Kashmir","BRK_NAME":"Azad Kashmir","TYPE":"Disputed","NOTE_BRK":"Admin. by Pakistan; Claimed by India","LABEL_X":73.792156,"LABEL_Y":33.848664},
+"geometry":{"type":"Polygon","coordinates":[[[73.74215600000001,33.798664],[73.842156,33.798664],[73.842156,33.898664],[73.74215600000001,33.898664],[73.74215600000001,33.798664]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"No Man's Land (Jerusalem)","BRK_NAME":"No Man's Land (Jerusalem)","TYPE":"Disputed","NOTE_BRK":"Admin. By Israel; Claimed by Palestine","LABEL_X":35.233905,"LABEL_Y":31.753062},
+"geometry":{"type":"Polygon","coordinates":[[[35.183905,31.703062],[35.283905,31.703062],[35.283905,31.803062],[35.183905,31.803062],[35.183905,31.703062]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Mount Scopus","BRK_NAME":"Mount Scopus","TYPE":"Disputed","NOTE_BRK":"Admin. By Israel; Claimed by Palestine","LABEL_X":35.245447,"LABEL_Y":31.79555},
+"geometry":{"type":"Polygon","coordinates":[[[35.195447,31.745549999999998],[35.295446999999996,31.745549999999998],[35.295446999999996,31.84555],[35.195447,31.84555],[35.195447,31.745549999999998]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Junagadh State","BRK_NAME":"Junagadh and Manavadar","TYPE":"Disputed","NOTE_BRK":"Admin. by India; Claimed by Pakistan","LABEL_X":70.494988,"LABEL_Y":21.033081},
+"geometry":{"type":"Polygon","coordinates":[[[70.44498800000001,20.983081],[70.544988,20.983081],[70.544988,21.083081],[70.44498800000001,21.083081],[70.44498800000001,20.983081]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"North Borneo","BRK_NAME":"North Borneo","TYPE":"Breakaway","NOTE_BRK":null,"LABEL_X":117.744073,"LABEL_Y":5.255349},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[117.694073,5.205349],[117.794073,5.205349],[117.794073,5.305349],[117.694073,5.305349],[117.694073,5.205349]]
+],[[[117.84407300000001,5.355349],[117.944073,5.355349],[117.944073,5.455349],[117.84407300000001,5.455349],[117.84407300000001,5.355349]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Taiwan","BRK_NAME":"Taiwan","TYPE":"Disputed","NOTE_BRK":"Self admin.; Claimed by China","LABEL_X":120.868204,"LABEL_Y":23.652408},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[120.81820400000001,23.602408],[120.918204,23.602408],[120.918204,23.702408000000002],[120.81820400000001,23.702408000000002],[120.81820400000001,23.602408]]
+],[[[120.96820400000001,23.752408],[121.06820400000001,23.752408],[121.06820400000001,23.852408],[120.96820400000001,23.852408],[120.96820400000001,23.752408]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Sanafir Island","BRK_NAME":"Tiran and Sanafir Is.","TYPE":"Disputed","NOTE_BRK":"Admin. by Egypt; Claimed by Saudi Arabia","LABEL_X":34.551927,"LABEL_Y":27.944352},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[34.501927,27.894351999999998],[34.601926999999996,27.894351999999998],[34.601926999999996,27.994352],[34.501927,27.994352],[34.501927,27.894351999999998]]
+],[[[34.651927,28.044351999999996],[34.751926999999995,28.044351999999996],[34.751926999999995,28.144351999999998],[34.651927,28.144351999999998],[34.651927,28.044351999999996]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Juan de Nova Island","BRK_NAME":"Juan De Nova I.","TYPE":"Geo subunit","NOTE_BRK":"Admin. by France; Claimed by Madagascar","LABEL_X":42.743829,"LABEL_Y":-17.065343},
+"geometry":{"type":"Polygon","coordinates":[[[42.693829,-17.115343],[42.793828999999995,-17.115343],[42.793828999999995,-17.015342999999998],[42.693829,-17.015342999999998],[42.693829,-17.115343]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Mayotte","BRK_NAME":"Mayotte","TYPE":"Disputed","NOTE_BRK":"Admin. by France; Claimed by Comoros","LABEL_X":45.151319,"LABEL_Y":-12.774755},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[45.101319000000004,-12.824755000000001],[45.201319,-12.824755000000001],[45.201319,-12.724755],[45.101319000000004,-12.724755],[45.101319000000004,-12.824755000000001]]
+],[[[45.251319,-12.674755000000001],[45.351319,-12.674755000000001],[45.351319,-12.574755],[45.251319,-12.574755],[45.251319,-12.674755000000001]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Diego Garcia Navy Airport","BRK_NAME":"Diego Garcia NSF","TYPE":"Overlay","NOTE_BRK":"Leased to U.S.A by U.K.; Claimed by Mauritius and Seychelles","LABEL_X":72.398825,"LABEL_Y":-7.297663},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[72.348825,-7.347663],[72.448825,-7.347663],[72.448825,-7.247663],[72.348825,-7.247663],[72.348825,-7.347663]]
+],[[[72.49882500000001,-7.1976629999999995],[72.598825,-7.1976629999999995],[72.598825,-7.097663],[72.49882500000001,-7.097663],[72.49882500000001,-7.1976629999999995]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Kuril Islands","BRK_NAME":"Kuril Is.","TYPE":"Disputed","NOTE_BRK":"Admin. by Russia; Claimed by Japan","LABEL_X":44.686469,"LABEL_Y":58.249357},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[44.636469000000005,58.199357000000006],[44.736469,58.199357000000006],[44.736469,58.299357],[44.636469000000005,58.299357],[44.636469000000005,58.199357000000006]]
+],[[[44.786469000000004,58.349357000000005],[44.886469,58.349357000000005],[44.886469,58.449357],[44.786469000000004,58.449357],[44.786469000000004,58.349357000000005]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"British Indian Ocean Territory","BRK_NAME":"Br. Indian Ocean Ter.","TYPE":"Disputed","NOTE_BRK":"Admin. by U.K.; Claimed by Mauritius and Seychelles","LABEL_X":71.348349,"LABEL_Y":-6.190826},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[71.298349,-6.240826],[71.398349,-6.240826],[71.398349,-6.140826000000001],[71.298349,-6.140826000000001],[71.298349,-6.240826]]
+],[[[71.44834900000001,-6.090826],[71.548349,-6.090826],[71.548349,-5.990826],[71.44834900000001,-5.990826],[71.44834900000001,-6.090826]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"South Sandwich Islands","BRK_NAME":"S. Sandwich Is.","TYPE":"Geo subunit","NOTE_BRK":"Admin. by U.K.; Claimed by Argentina","LABEL_X":-26.338432,"LABEL_Y":-58.426048},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-26.388432,-58.476048],[-26.288432,-58.476048],[-26.288432,-58.376048000000004],[-26.388432,-58.376048000000004],[-26.388432,-58.476048]]
+],[[[-26.238432000000003,-58.326048],[-26.138432,-58.326048],[-26.138432,-58.226048000000006],[-26.238432000000003,-58.226048000000006],[-26.238432000000003,-58.326048]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"South Georgia","BRK_NAME":"S. Georgia","TYPE":"Geo subunit","NOTE_BRK":"Admin. by U.K.; Claimed by Argentina","LABEL_X":-36.60667,"LABEL_Y":-54.391667},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-36.65667,-54.441666999999995],[-36.556670000000004,-54.441666999999995],[-36.556670000000004,-54.341667],[-36.65667,-54.341667],[-36.65667,-54.441666999999995]]
+],[[[-36.50667,-54.291667],[-36.406670000000005,-54.291667],[-36.406670000000005,-54.191667],[-36.50667,-54.191667],[-36.50667,-54.291667]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Falkland Islands","BRK_NAME":"Falkland Is.","TYPE":"Disputed","NOTE_BRK":"Admin. by U.K.; Claimed by Argentina","LABEL_X":-58.738602,"LABEL_Y":-51.608913},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-58.788602,-51.658913],[-58.688602,-51.658913],[-58.688602,-51.558913000000004],[-58.788602,-51.558913000000004],[-58.788602,-51.658913]]
+],[[[-58.638602,-51.508913],[-58.538602000000004,-51.508913],[-58.538602000000004,-51.408913000000005],[-58.638602,-51.408913000000005],[-58.638602,-51.508913]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Paracel Islands","BRK_NAME":"Paracel Is.","TYPE":"Geo unit","NOTE_BRK":"Admin. by China; Claimed by Vietnam and Taiwan","LABEL_X":111.201368,"LABEL_Y":15.783461},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[111.151368,15.733461],[111.251368,15.733461],[111.251368,15.833461000000002],[111.151368,15.833461000000002],[111.151368,15.733461]]
+],[[[111.30136800000001,15.883461],[111.401368,15.883461],[111.401368,15.983461000000002],[111.30136800000001,15.983461000000002],[111.30136800000001,15.883461]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Europa Island","BRK_NAME":"Europa Island","TYPE":"Geo subunit","NOTE_BRK":"Admin. by France; Claimed by Madagascar","LABEL_X":40.344447,"LABEL_Y":-22.335347},
+"geometry":{"type":"Polygon","coordinates":[[[40.294447000000005,-22.385347],[40.394447,-22.385347],[40.394447,-22.285346999999998],[40.294447000000005,-22.285346999999998],[40.294447000000005,-22.385347]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Swains Island","BRK_NAME":"Swains Island","TYPE":"Disputed","NOTE_BRK":"Admin. by American Samoa for U.S.A.; Claimed by Tokelau","LABEL_X":-171.079888,"LABEL_Y":-11.058187},
+"geometry":{"type":"Polygon","coordinates":[[[-171.12988800000002,-11.108187000000001],[-171.029888,-11.108187000000001],[-171.029888,-11.008187],[-171.12988800000002,-11.008187],[-171.12988800000002,-11.108187000000001]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Wake Island","BRK_NAME":"Spratly Is.","TYPE":"Indeterminate","NOTE_BRK":"Claimed by China, Taiwan, Malaysia, the Philippines, and Brunei","LABEL_X":115.81956,"LABEL_Y":10.72954},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[115.76956,10.67954],[115.86955999999999,10.67954],[115.86955999999999,10.77954],[115.76956,10.77954],[115.76956,10.67954]]
+],[[[115.91956,10.82954],[116.01956,10.82954],[116.01956,10.929540000000001],[115.91956,10.929540000000001],[115.91956,10.82954]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Isla Aves","BRK_NAME":"Bird Island","TYPE":"Disputed","NOTE_BRK":"Admin. by Venezuela; Claimed by multiple","LABEL_X":-63.638077,"LABEL_Y":15.698715},
+"geometry":{"type":"Polygon","coordinates":[[[-63.688077,15.648715],[-63.588077000000006,15.648715],[-63.588077000000006,15.748715],[-63.688077,15.748715],[-63.688077,15.648715]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Wake Island","BRK_NAME":"Wake Atoll","TYPE":"Geo unit","NOTE_BRK":"Admin. by U.S.A.; Claimed by Marshall Islands","LABEL_X":166.644535,"LABEL_Y":19.285663},
+"geometry":{"type":"Polygon","coordinates":[[[166.59453499999998,19.235663],[166.694535,19.235663],[166.694535,19.335663],[166.59453499999998,19.335663],[166.59453499999998,19.235663]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Northern Limit Line","BRK_NAME":"Korean islands under UN jurisdiction","TYPE":"Overlay","NOTE_BRK":"Since 1953 islands south of maritime Northern Limit Line, patrolled by South Korea including Yeonpyeong, Baengnyeong, and Daecheong Is.","LABEL_X":125.692213,"LABEL_Y":37.667368},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[125.642213,37.617368000000006],[125.74221299999999,37.617368000000006],[125.74221299999999,37.717368],[125.642213,37.717368],[125.642213,37.617368000000006]]
+],[[[125.792213,37.767368000000005],[125.892213,37.767368000000005],[125.892213,37.867368],[125.792213,37.867368],[125.792213,37.767368000000005]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Rockall","BRK_NAME":"Rockall I.","TYPE":"Disputed","NOTE_BRK":"Admin by U.K.; Claimed by Ireland, Denmark, and Iceland","LABEL_X":-13.689544,"LABEL_Y":57.597032},
+"geometry":{"type":"Polygon","coordinates":[[[-13.739544,57.547032],[-13.639543999999999,57.547032],[-13.639543999999999,57.647031999999996],[-13.739544,57.647031999999996],[-13.739544,57.547032]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Navassa Island","BRK_NAME":"Navassa I.","TYPE":"Geo unit","NOTE_BRK":"Admin. by U.S.A.; Claimed by Haiti","LABEL_X":-75.012107,"LABEL_Y":18.40587},
+"geometry":{"type":"Polygon","coordinates":[[[-75.062107,18.35587],[-74.962107,18.35587],[-74.962107,18.45587],[-75.062107,18.45587],[-75.062107,18.35587]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Bassas da India","BRK_NAME":"Bassas da India","TYPE":"Geo subunit","NOTE_BRK":"Admin. by France; Claimed by Madagascar","LABEL_X":39.695105,"LABEL_Y":-21.497628},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[39.645105,-21.547628],[39.745104999999995,-21.547628],[39.745104999999995,-21.447627999999998],[39.645105,-21.447627999999998],[39.645105,-21.547628]]
+],[[[39.795105,-21.397628],[39.895104999999994,-21.397628],[39.895104999999994,-21.297628],[39.795105,-21.297628],[39.795105,-21.397628]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Tromelin Island","BRK_NAME":"Tromelin I.","TYPE":"Geo subunit","NOTE_BRK":"Admin. by France; Claimed by Mauritius and the Seychelles","LABEL_X":54.518685,"LABEL_Y":-15.889521},
+"geometry":{"type":"Polygon","coordinates":[[[54.468685,-15.939521000000001],[54.568684999999995,-15.939521000000001],[54.568684999999995,-15.839521],[54.468685,-15.839521],[54.468685,-15.939521000000001]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Glorioso Islands","BRK_NAME":"Glorioso Is.","TYPE":"Geo subunit","NOTE_BRK":"Admin. by France; Claimed by Madagascar","LABEL_X":47.297831,"LABEL_Y":-11.562049},
+"geometry":{"type":"Polygon","coordinates":[[[47.247831000000005,-11.612049],[47.347831,-11.612049],[47.347831,-11.512049],[47.247831000000005,-11.512049],[47.247831000000005,-11.612049]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Senkaku Islands","BRK_NAME":"Pinnacle Is.","TYPE":"Disputed","NOTE_BRK":"Admin. by Japan; Claimed by China and Taiwan","LABEL_X":123.527155,"LABEL_Y":25.766863},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[123.477155,25.716863],[123.57715499999999,25.716863],[123.57715499999999,25.816863],[123.477155,25.816863],[123.477155,25.716863]]
+],[[[123.627155,25.866863],[123.727155,25.866863],[123.727155,25.966863],[123.627155,25.966863],[123.627155,25.866863]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Abu Musa","BRK_NAME":"Abu Musa I.","TYPE":"Disputed","NOTE_BRK":"Admin. by Iran; Claimed by UAE","LABEL_X":55.033695,"LABEL_Y":25.874059},
+"geometry":{"type":"Polygon","coordinates":[[[54.983695000000004,25.824059],[55.083695,25.824059],[55.083695,25.924059],[54.983695000000004,25.924059],[54.983695000000004,25.824059]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Bajo Nuevo Bank","BRK_NAME":"Bajo Nuevo Bank (Petrel Is.)","TYPE":"Indeterminate","NOTE_BRK":"Claimed by Colombia, Jamaica, Nicaragua and the United States","LABEL_X":-79.845836,"LABEL_Y":15.791588},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-79.895836,15.741588],[-79.79583600000001,15.741588],[-79.79583600000001,15.841588000000002],[-79.895836,15.841588000000002],[-79.895836,15.741588]]
+],[[[-79.745836,15.891588],[-79.645836,15.891588],[-79.645836,15.991588000000002],[-79.745836,15.991588000000002],[-79.745836,15.891588]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Serranilla Bank","BRK_NAME":"Serranilla Bank","TYPE":"Indeterminate","NOTE_BRK":"Claimed by Colombia, Honduras, Nicaragua, and the United States","LABEL_X":-78.638239,"LABEL_Y":15.864308},
+"geometry":{"type":"Polygon","coordinates":[[[-78.688239,15.814307999999999],[-78.588239,15.814307999999999],[-78.588239,15.914308],[-78.688239,15.914308],[-78.688239,15.814307999999999]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Sapodilla Cayes","BRK_NAME":"Sapodilla Cayes","TYPE":"Disputed","NOTE_BRK":"Admin. by Belize; Claimed by Honduras and Guatemala","LABEL_X":-88.256588,"LABEL_Y":16.106038},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-88.30658799999999,16.056038],[-88.206588,16.056038],[-88.206588,16.156038000000002],[-88.30658799999999,16.156038000000002],[-88.30658799999999,16.056038]]
+],[[[-88.15658799999999,16.206038],[-88.05658799999999,16.206038],[-88.05658799999999,16.306038],[-88.15658799999999,16.306038],[-88.15658799999999,16.206038]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Hans Island","BRK_NAME":"Hans Island","TYPE":"Disputed","NOTE_BRK":"Admin. by Denmark; Claimed by Canada","LABEL_X":-66.339189,"LABEL_Y":80.826269},
+"geometry":{"type":"Polygon","coordinates":[[[-66.389189,80.776269],[-66.28918900000001,80.776269],[-66.28918900000001,80.876269],[-66.389189,80.876269],[-66.389189,80.776269]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Liancourt Rocks","BRK_NAME":"Dokdo","TYPE":"Geo subunit","NOTE_BRK":"Admin. by South Korea; Claimed by Japan","LABEL_X":131.861362,"LABEL_Y":37.242796},
+"geometry":{"type":"Polygon","coordinates":[[[131.811362,37.192796],[131.91136200000003,37.192796],[131.91136200000003,37.292795999999996],[131.811362,37.292795999999996],[131.811362,37.192796]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Mbane Island","BRK_NAME":"Mbane Island","TYPE":"Disputed","NOTE_BRK":"Admin by Gabon; Claimed by Equatorial Guinea","LABEL_X":9.379812,"LABEL_Y":0.808621},
+"geometry":{"type":"Polygon","coordinates":[[[9.329811999999999,0.758621],[9.429812,0.758621],[9.429812,0.8586210000000001],[9.329811999999999,0.8586210000000001],[9.329811999999999,0.758621]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Peñón de Vélez de la Gomera","BRK_NAME":"Peñón de Vélez de la Gomera","TYPE":"Disputed","NOTE_BRK":"Admin. by Spain; Claimed by Morocco","LABEL_X":-4.299293,"LABEL_Y":35.172155},
+"geometry":{"type":"Polygon","coordinates":[[[-4.349292999999999,35.122155],[-4.249293,35.122155],[-4.249293,35.222154999999994],[-4.349292999999999,35.222154999999994],[-4.349292999999999,35.122155]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Peñón de Alhucemas","BRK_NAME":"Penon de Alhucemas","TYPE":"Disputed","NOTE_BRK":"Admin. by Spain; Claimed by Morocco","LABEL_X":-3.902511,"LABEL_Y":35.2153},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-3.952511,35.1653],[-3.8525110000000002,35.1653],[-3.8525110000000002,35.265299999999996],[-3.952511,35.265299999999996],[-3.952511,35.1653]]
+],[[[-3.802511,35.3153],[-3.7025110000000003,35.3153],[-3.7025110000000003,35.415299999999995],[-3.802511,35.415299999999995],[-3.802511,35.3153]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Chafarinas Islands","BRK_NAME":"Islas Chafarinas","TYPE":"Disputed","NOTE_BRK":"Admin. by Spain; Claimed by Morocco","LABEL_X":-2.431428,"LABEL_Y":35.182449},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[-2.4814279999999997,35.132449],[-2.381428,35.132449],[-2.381428,35.232448999999995],[-2.4814279999999997,35.232448999999995],[-2.4814279999999997,35.132449]]
+],[[[-2.331428,35.282449],[-2.231428,35.282449],[-2.231428,35.382448999999994],[-2.331428,35.382448999999994],[-2.331428,35.282449]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Perejil Island","BRK_NAME":"Isla del Perejil","TYPE":"Disputed","NOTE_BRK":"Admin. by Spain; Claimed by Morocco","LABEL_X":-5.418658,"LABEL_Y":35.913174},
+"geometry":{"type":"Polygon","coordinates":[[[-5.468658,35.863174],[-5.368658,35.863174],[-5.368658,35.963173999999995],[-5.468658,35.963173999999995],[-5.468658,35.863174]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Matthew Island and Hunter Island","BRK_NAME":"Matthew and Hunter Is.","TYPE":"Disputed","NOTE_BRK":"Admin. by New Caledonia for France; Claimed by Vanuatu","LABEL_X":172.05683,"LABEL_Y":-22.397411},
+"geometry":{"type":"MultiPolygon","coordinates":[[[[172.00682999999998,-22.447411000000002],[172.10683,-22.447411000000002],[172.10683,-22.347411],[172.00682999999998,-22.347411],[172.00682999999998,-22.447411000000002]]
+],[[[172.15682999999999,-22.297411000000004],[172.25683,-22.297411000000004],[172.25683,-22.197411000000002],[172.15682999999999,-22.197411000000002],[172.15682999999999,-22.297411000000004]]
+]]
+}},
+{"type":"Feature","properties":{"NAME_EN":"Scarborough Shoal","BRK_NAME":"Scarborough Reef","TYPE":"Indeterminate","NOTE_BRK":null,"LABEL_X":117.753812,"LABEL_Y":15.152039},
+"geometry":{"type":"Polygon","coordinates":[[[117.703812,15.102039],[117.803812,15.102039],[117.803812,15.202039000000001],[117.703812,15.202039000000001],[117.703812,15.102039]]
+]}},
+{"type":"Feature","properties":{"NAME_EN":"Doumeira Islands","BRK_NAME":"Doumera Island","TYPE":"Disputed","NOTE_BRK":"Admin. By Eritrea; Claimed by Djibouti","LABEL_X":43.146234,"LABEL_Y":12.715369},
+"geometry":{"type":"Polygon","coordinates":[[[43.096234,12.665369],[43.196234,12.665369],[43.196234,12.765369000000002],[43.096234,12.765369000000002],[43.096234,12.665369]]
+]}}]}

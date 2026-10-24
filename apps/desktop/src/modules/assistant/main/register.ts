@@ -1,19 +1,25 @@
 import { randomUUID } from "node:crypto";
 import {
   DEFAULT_MAX_STEPS,
+  KEEP_RECENT_TURNS,
+  compactionCut,
   findWorkflow,
   renderWorkflowBrief,
   runAgentTurn,
+  shouldCompact,
+  summarizeConversation,
   ToolMeaningIndex,
   toolsForWorkflow,
   type AgentEvent,
   type AgentTurnInput,
   type ChatMessage,
+  type ChatModel,
   type ConfirmRequest,
   type ModelEntry,
   type ModelTier,
 } from "@nexus/core";
 import {
+  ASSISTANT_RUNTIME_LIMITS,
   ASSISTANT_TIERS,
   MAX_CONVERSATION_TITLE_LENGTH,
   MAX_MESSAGE_CHARS,
@@ -23,6 +29,8 @@ import {
   type AssistantExport,
   type AssistantMessage,
   type AssistantMessageInput,
+  type AssistantRuntimeNumber,
+  type AssistantRuntimeOptions,
 } from "@nexus/db";
 import { noRecommendation } from "../../../main/assistant/runtime/recommend.js";
 import { localDay } from "../../../main/assistant/tools/support.js";
@@ -41,7 +49,7 @@ import {
   type AssistantKnowledgeView,
   type AssistantMessageView,
   type AssistantPollView,
-  type AssistantRecommendationView,
+  type AssistantProbeView,
   type AssistantSettingsView,
   type AssistantSetupView,
   type AssistantSpeechLanguage,
@@ -113,6 +121,14 @@ interface Turn {
   modelId: string | null;
   /** The thread as it was saved, set before the turn is marked finished and read once. */
   saved: AssistantThreadView | null;
+}
+
+/** What a turn replays from a thread: its summary, and the messages after the ones it stands for. */
+interface Replay {
+  readonly summary: string | null;
+  /** How many of the thread's first messages the summary stands for; `0` without one. */
+  readonly through: number;
+  readonly history: readonly ChatMessage[];
 }
 
 export function register(host: ModuleHostSurface): void {
@@ -192,14 +208,23 @@ export function register(host: ModuleHostSurface): void {
     };
   }
 
-  function threadView(profile: AssistantProfile, conversationId: string): AssistantThreadView {
+  function conversationOf(profile: AssistantProfile, conversationId: string): AssistantConversation {
     const conversation = profile.store.conversation(conversationId);
     if (conversation === null) {
       throw new Error(`No assistant conversation "${conversationId}" in this profile.`);
     }
+    return conversation;
+  }
+
+  function threadView(profile: AssistantProfile, conversationId: string): AssistantThreadView {
+    const conversation = conversationOf(profile, conversationId);
     return {
       conversation: conversationView(conversation),
       messages: profile.store.listMessages(conversationId).map(messageView),
+      summary:
+        conversation.summary === null
+          ? null
+          : { text: conversation.summary, through: conversation.summaryThrough },
     };
   }
 
@@ -232,22 +257,11 @@ export function register(host: ModuleHostSurface): void {
   }
 
   async function setupView(profile: AssistantProfile): Promise<AssistantSetupView> {
-    // The three picks are read once per profile (the probe loads the native
-    // addon), and the installed list is read fresh: a download that just finished
-    // must show up on the next poll without a restart.
-    const recommendations = await profile.recommendations();
+    // Read from the disk and the profile alone, so it answers at once: the
+    // hardware probe is `probeView`'s, and the page joins the two. The installed
+    // list is read fresh, because a download that just finished must show up on
+    // the next poll without a restart.
     const available = await profile.installedEntries();
-    const installedIds = new Set(available.map((entry) => entry.id));
-    const unavailable =
-      recommendations.length === 0
-        ? (noRecommendation(await profile.hardware(), await profile.catalogue()) ?? null)
-        : null;
-    const recommendationsView: AssistantRecommendationView[] = recommendations.map((pick) => ({
-      tier: pick.tier,
-      model: pick.model,
-      reason: pick.reason,
-      installed: installedIds.has(pick.model.id),
-    }));
     // The choice the profile's page may draw, and the EFFECTIVE one: a stored id
     // that names a model this machine no longer has (or that is not a chat
     // model) marks nothing, so the page reads the tier as what answers - the
@@ -261,18 +275,12 @@ export function register(host: ModuleHostSurface): void {
           )?.id ?? null);
     const installedView: AssistantInstalledView[] = available.map((entry) => ({
       model: entry,
-      servesTiers: recommendations
-        .filter((pick) => pick.model.id === entry.id)
-        .map((pick) => pick.tier),
       chosen: entry.id === chosenId,
     }));
     // Every entry main produced is remembered, so `downloadModel` can only name
     // one this process offered.
-    profile.offer([...recommendations.map((pick) => pick.model), ...available]);
+    profile.offer(available);
     return {
-      hardware: await profile.hardware(),
-      recommendations: recommendationsView,
-      unavailable,
       installed: installedView,
       search: profile.searchResults(),
       download: profile.downloadView(),
@@ -280,6 +288,23 @@ export function register(host: ModuleHostSurface): void {
       chatModelId: chosenId,
       downloadsAllowed: profile.downloadsAllowed(),
       networkMode: services().networkMode(),
+      runtime: { options: profile.runtimeOptions(), limits: ASSISTANT_RUNTIME_LIMITS },
+      resident: profile.modelHost().resident(),
+    };
+  }
+
+  /** The hardware reading and the picks made from it: slow the first time, because the probe loads the native runtime. */
+  async function probeView(profile: AssistantProfile): Promise<AssistantProbeView> {
+    const hardware = await profile.hardware();
+    const recommendations = await profile.recommendations();
+    profile.offer(recommendations.map((pick) => pick.model));
+    return {
+      hardware,
+      recommendations: recommendations.map(({ tier, model, reason }) => ({ tier, model, reason })),
+      unavailable:
+        recommendations.length === 0
+          ? (noRecommendation(hardware, await profile.catalogue()) ?? null)
+          : null,
     };
   }
 
@@ -419,19 +444,98 @@ export function register(host: ModuleHostSurface): void {
     }
   }
 
-  /** The history a turn replays: what the thread already holds, in the loop's own message shape. */
-  function historyOf(profile: AssistantProfile, conversationId: string): ChatMessage[] {
-    return profile.store.listMessages(conversationId).map((message) => ({
-      role: message.role,
-      content: message.text,
-      ...(message.toolCalls === null || message.toolCalls.length === 0
-        ? {}
-        : { toolCalls: message.toolCalls }),
-      ...(message.toolCallId === null ? {} : { toolCallId: message.toolCallId }),
-      // Legacy rows carry no outcome and are read as the tool that did the thing,
-      // as `messageView` reads them.
-      ...(message.role === "tool" ? { ok: message.ok ?? true } : {}),
-    }));
+  /** What a turn replays from a thread, in the loop's own message shape. */
+  function replayOf(profile: AssistantProfile, conversation: AssistantConversation): Replay {
+    const history = profile.store
+      .listMessages(conversation.id)
+      .slice(conversation.summaryThrough)
+      .map((message) => ({
+        role: message.role,
+        content: message.text,
+        ...(message.toolCalls === null || message.toolCalls.length === 0
+          ? {}
+          : { toolCalls: message.toolCalls }),
+        ...(message.toolCallId === null ? {} : { toolCallId: message.toolCallId }),
+        // Legacy rows carry no outcome and are read as the tool that did the thing,
+        // as `messageView` reads them.
+        ...(message.role === "tool" ? { ok: message.ok ?? true } : {}),
+      }));
+    return { summary: conversation.summary, through: conversation.summaryThrough, history };
+  }
+
+  /** Holds a turn the registry just opened, so `poll`, `stop` and `answerConfirm` can find it. */
+  function track(log: TurnLog, controller: AbortController, modelId: string): Turn {
+    const turn: Turn = {
+      id: log.id,
+      profileId: log.profileId,
+      conversationId: log.conversationId,
+      controller,
+      log,
+      confirms: new ConfirmPark(),
+      collected: [],
+      openCallsRow: -1,
+      modelId,
+      saved: null,
+    };
+    turns.set(turn.id, turn);
+    return turn;
+  }
+
+  /** Writes what a turn produced, then marks it finished. */
+  function finish(turn: Turn, profile: AssistantProfile): void {
+    refusePending(turn);
+    try {
+      if (turn.collected.length > 0) {
+        profile.store.appendTurn(turn.conversationId, turn.collected, turn.modelId, profile.instant());
+      }
+      turn.saved = threadView(profile, turn.conversationId);
+    } catch (error) {
+      // The turn itself ran; failing to write it is a store problem, and the
+      // page is told by the thread it reads next rather than by a throw out
+      // of a promise nobody awaits.
+      console.error("Nexus: the assistant conversation could not be saved:", error);
+    }
+    // Marked finished AFTER the write, which is what makes `done` mean "the
+    // thread it points at is in the database".
+    registry.finish(turn.profileId, turn.id);
+  }
+
+  /**
+   * Summarizes the head of a thread into its stored summary, keeping its last
+   * turns as they are (`compact.ts` in `@nexus/core`), and says so in the
+   * turn's events. Answers the replay to go on with: the shorter one once the
+   * summary is stored, the same one when it is not - a failed summary leaves the
+   * budget to trim what does not fit, as it did before there were summaries.
+   */
+  async function compact(
+    turn: Turn,
+    profile: AssistantProfile,
+    model: ChatModel,
+    locale: AgentTurnInput["locale"],
+    replay: Replay,
+  ): Promise<Replay> {
+    const cut = compactionCut(replay.history);
+    if (cut === 0) return replay;
+    turn.log.emit({ type: "compaction", status: "running" });
+    try {
+      const summary = await summarizeConversation({
+        model,
+        earlier: replay.summary,
+        messages: replay.history.slice(0, cut),
+        locale,
+        signal: turn.controller.signal,
+      });
+      const through = replay.through + cut;
+      profile.store.setSummary(turn.conversationId, summary, through);
+      turn.log.emit({ type: "compaction", status: "done" });
+      return { summary, through, history: replay.history.slice(cut) };
+    } catch (error) {
+      turn.log.emit({ type: "compaction", status: "failed" });
+      if (!turn.controller.signal.aborted) {
+        console.error("Nexus: the assistant conversation could not be compacted:", error);
+      }
+      return replay;
+    }
   }
 
   ctx.handle("send", async (payload, call) => {
@@ -458,9 +562,7 @@ export function register(host: ModuleHostSurface): void {
       throw new Error(`There is no assistant workflow named "${workflowId}".`);
     }
     const profile = profileFor(call, profileId);
-    if (profile.store.conversation(conversationId) === null) {
-      throw new Error(`No assistant conversation "${conversationId}" in this profile.`);
-    }
+    conversationOf(profile, conversationId);
     // The refusal comes before anything is written, so a page that asks for a
     // second turn while one runs leaves the thread exactly as it was.
     const running = registry.runningTurn(profileId);
@@ -471,7 +573,7 @@ export function register(host: ModuleHostSurface): void {
     // A tier with no installed model is refused here, before the user's message is
     // written: a missing model is a setup mistake, not half a conversation.
     const model = await profile.loadChat(profile.settings().defaultTier, controller.signal);
-    const history = historyOf(profile, conversationId);
+    const replay = replayOf(profile, conversationOf(profile, conversationId));
     // The AUTHORITATIVE refusal. `loadChat` above awaits, so two sends issued in
     // the same breath are both past the check at the top of this handler by the
     // time either reaches here - and only one of them can open the profile's
@@ -488,19 +590,7 @@ export function register(host: ModuleHostSurface): void {
       registry.close(log.id);
       throw error;
     }
-    const turn: Turn = {
-      id: log.id,
-      profileId,
-      conversationId,
-      controller,
-      log,
-      confirms: new ConfirmPark(),
-      collected: [],
-      openCallsRow: -1,
-      modelId: model.info.id,
-      saved: null,
-    };
-    turns.set(turn.id, turn);
+    const turn = track(log, controller, model.info.id);
 
     const offered = profile.tools(profile.webSearchActive());
     const tools = workflow === null ? offered : toolsForWorkflow(workflow, offered);
@@ -510,8 +600,7 @@ export function register(host: ModuleHostSurface): void {
       await profile.embedder(),
       controller.signal,
     );
-    const input: AgentTurnInput = {
-      history,
+    const input: Omit<AgentTurnInput, "history"> = {
       user: {
         role: "user",
         content:
@@ -533,51 +622,64 @@ export function register(host: ModuleHostSurface): void {
       ...(meaning === undefined ? {} : { toolMeaning: meaning }),
     };
 
+    const run = async (): Promise<void> => {
+      // A thread that outgrew its share of the window is summarized first, so
+      // the model reads its start rather than the budget dropping it unseen.
+      const thread =
+        profile.runtimeOptions().autoCompact &&
+        shouldCompact(replay.history, model.info.contextTokens, locale)
+          ? await compact(turn, profile, model, locale, replay)
+          : replay;
+      const summary = thread.summary === null ? {} : { summary: thread.summary };
+      await runAgentTurn({ ...input, history: thread.history, ...summary }, (event) => {
+        const entry = turn.log.emit(event);
+        collect(turn, event);
+        // The model's own reason for a failed turn goes to the app's log: the
+        // page draws the error code, and the sentence that says WHICH failure it
+        // was - a schema llama.cpp refused, a model that ran out of memory -
+        // would otherwise be lost between the runtime and the user.
+        if (event.type === "error" && event.code === "model-failed" && event.detail !== undefined) {
+          console.error("Nexus: the assistant model failed:", event.detail);
+        }
+        if (entry === null) {
+          // The buffer is full: the model is talking without stopping, and the
+          // honest answer is to stop it rather than to keep counting.
+          controller.abort();
+        }
+      });
+    };
+
     // Unawaited: the page polls. The failure of a whole turn is caught here and
     // turned into the turn's own events rather than into an unhandled rejection.
-    void runAgentTurn(input, (event) => {
-      const entry = turn.log.emit(event);
-      collect(turn, event);
-      // The model's own reason for a failed turn goes to the app's log: the
-      // page draws the error code, and the sentence that says WHICH failure it
-      // was - a schema llama.cpp refused, a model that ran out of memory -
-      // would otherwise be lost between the runtime and the user.
-      if (event.type === "error" && event.code === "model-failed" && event.detail !== undefined) {
-        console.error("Nexus: the assistant model failed:", event.detail);
-      }
-      if (entry === null) {
-        // The buffer is full: the model is talking without stopping, and the
-        // honest answer is to stop it rather than to keep counting.
-        controller.abort();
-      }
-    })
+    void run()
       .catch((error: unknown) => {
         turn.log.emit({ type: "error", code: "model-failed" });
         console.error("Nexus: the assistant turn failed:", error);
       })
-      .finally(() => {
-        refusePending(turn);
-        try {
-          if (turn.collected.length > 0) {
-            profile.store.appendTurn(
-              conversationId,
-              turn.collected,
-              turn.modelId,
-              profile.instant(),
-            );
-          }
-          turn.saved = threadView(profile, conversationId);
-        } catch (error) {
-          // The turn itself ran; failing to write it is a store problem, and the
-          // page is told by the thread it reads next rather than by a throw out
-          // of a promise nobody awaits.
-          console.error("Nexus: the assistant conversation could not be saved:", error);
-        }
-        // Marked finished AFTER the write, which is what makes `done` mean "the
-        // thread it points at is in the database".
-        registry.finish(profileId, turn.id);
-      });
+      .finally(() => finish(turn, profile));
 
+    return { turnId: turn.id };
+  });
+
+  // A compaction by hand is a turn of its own: the page polls and may stop it
+  // as it would an answer, and no answer starts while the summary is written.
+  ctx.handle("compact", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const conversationId = call.as.asId(payload.conversationId, "conversationId");
+    const profile = profileFor(call, profileId);
+    const running = registry.runningTurn(profileId);
+    if (running !== null) throw new TurnBusyError(running);
+    if (compactionCut(replayOf(profile, conversationOf(profile, conversationId)).history) === 0) {
+      throw new Error(
+        `The conversation "${conversationId}" is too short to compact: its last ${KEEP_RECENT_TURNS} turns are always kept whole.`,
+      );
+    }
+    const controller = new AbortController();
+    const model = await profile.loadChat(profile.settings().defaultTier, controller.signal);
+    // Read again after the load and before the turn opens, as `send` reads it.
+    const replay = replayOf(profile, conversationOf(profile, conversationId));
+    const turn = track(registry.open(profileId, conversationId), controller, model.info.id);
+    void compact(turn, profile, model, mainLocale(), replay).finally(() => finish(turn, profile));
     return { turnId: turn.id };
   });
 
@@ -628,6 +730,11 @@ export function register(host: ModuleHostSurface): void {
   ctx.handle("setup", async (payload, call) => {
     const profileId = call.as.asId(payload.profileId, "profileId");
     return await setupView(profileFor(call, profileId));
+  });
+
+  ctx.handle("probe", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    return await probeView(profileFor(call, profileId));
   });
 
   ctx.handle("searchModels", async (payload, call) => {
@@ -718,6 +825,23 @@ export function register(host: ModuleHostSurface): void {
       }
       profile.setChatModel(id);
     }
+    return await setupView(profile);
+  });
+
+  ctx.handle("setRuntime", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const runtime = runtimeOf(call, payload.runtime);
+    const profile = profileFor(call, profileId);
+    profile.setRuntimeOptions(runtime);
+    return await setupView(profile);
+  });
+
+  // Gives the memory back now, whatever the idle time says. The next turn
+  // loads the model again, as it would after an idle unload.
+  ctx.handle("unloadModels", async (payload, call) => {
+    const profileId = call.as.asId(payload.profileId, "profileId");
+    const profile = profileFor(call, profileId);
+    await profile.modelHost().unloadAll();
     return await setupView(profile);
   });
 
@@ -902,6 +1026,31 @@ function tierOf(call: { as: ModuleCall["as"] }, value: unknown): ModelTier {
     );
   }
   return tier as ModelTier;
+}
+
+/**
+ * The runtime options, off the wire, each number inside the store's own bounds;
+ * a `null` is the model's own value, which the idle time has none of.
+ */
+function runtimeOf(call: { as: ModuleCall["as"] }, value: unknown): AssistantRuntimeOptions {
+  const record = call.as.asRecord(value);
+  const bounded = (field: AssistantRuntimeNumber): number => {
+    const { min, max, integer } = ASSISTANT_RUNTIME_LIMITS[field];
+    return integer
+      ? call.as.asBoundedInteger(record[field], field, min, max)
+      : call.as.asBoundedNumber(record[field], field, min, max);
+  };
+  const nullable = (field: AssistantRuntimeNumber): number | null =>
+    record[field] === null ? null : bounded(field);
+  return {
+    contextTokens: nullable("contextTokens"),
+    temperature: nullable("temperature"),
+    topP: nullable("topP"),
+    topK: nullable("topK"),
+    repeatPenalty: nullable("repeatPenalty"),
+    idleUnloadMinutes: bounded("idleUnloadMinutes"),
+    autoCompact: call.as.asBoolean(record["autoCompact"], "autoCompact"),
+  };
 }
 
 /** The language a voice request is in, off the wire. The app's own two, and nothing else. */

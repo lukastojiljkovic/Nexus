@@ -15,6 +15,7 @@ import {
   type PuzzleStatsView,
 } from "../shared/ipc.js";
 import { buildPuzzlesExport, parsePuzzlesExport } from "./imex.js";
+import { loadNonogramPictures } from "./pictures.js";
 
 /**
  * PUZZLES in the main process (ADR-090): its handlers and its archive section.
@@ -146,6 +147,13 @@ export function register(host: ModuleHostSurface): void {
       instant(call.now()),
     );
     return viewOf(call, profileId);
+  });
+
+  // --- The installed packs (a read, and it writes nothing) ------------------
+
+  ctx.handle("packs", async (_payload, call) => {
+    const access = call.packs();
+    return { pictures: await loadNonogramPictures(access.userData(), access.publicKeyPem) };
   });
 
   // --- The archive (ADR-090 §imex) ------------------------------------------

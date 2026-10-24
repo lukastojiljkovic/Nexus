@@ -29,8 +29,8 @@ import {
 } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 import { entryText, sourceLine } from "./format.js";
-import { SentenceTranslator } from "./sentences/SentenceTranslator.js";
-import { sentenceRequestOf, type SentenceRequest } from "./sentences/request.js";
+import { TranslateTab } from "./translate/TranslateTab.js";
+import { translateRequestOf, type TranslateRequest } from "./translate/request.js";
 import {
   clearRecent,
   persistRecent,
@@ -46,11 +46,11 @@ import "./translator.css";
  * PREVODILAC (ADR-090) — a Serbian–English dictionary over the
  * `dictionary-sr-en` content pack (ADR-091).
  *
- * **Two tabs, and the second one is a seam.** „Reči" is this module: the
- * search, the recent list and the phrasebook. „Rečenice" belongs to the run
- * that translates sentences: `sentences/SentenceTranslator.tsx` owns everything
- * under that folder — its own copy table, its own engine client, its own worker
- * — and this page renders it and hands it the installed packs.
+ * **Two tabs.** The Translate tab (`translate/TranslateTab.tsx`) is the first
+ * and the default: a text, translated with an installed NLLB model. The Words
+ * tab is this module's dictionary search, the recent list and the phrasebook.
+ * The translation runs in main (`main/nllb/`); the page asks for it and shows
+ * what comes back.
  *
  * **Nothing here computes a lookup.** The search runs in MAIN
  * (`main/register.ts` → `main/pack.ts`), over an index held in memory and read
@@ -70,16 +70,16 @@ import "./translator.css";
 const RESULT_LIMIT = 20;
 const DEBOUNCE_MS = 150;
 
-/** The page's two tabs: this module's word search, and the sentence translator's surface. */
-type TranslatorTab = "words" | "sentences";
+/** The page's two tabs: the translation, and this module's word search. */
+type TranslatorTab = "translate" | "words";
 
 export default function TranslatorPage({ profileId, intent, onIntentHandled }: ModulePageProps) {
   const [status, setStatus] = useState<TranslatorStatusView | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TranslatorTab>("words");
-  // The assistant's sentence request, held until the sentence surface has applied it.
-  const [sentenceRequest, setSentenceRequest] = useState<SentenceRequest | null>(null);
-  const requestApplied = useCallback(() => setSentenceRequest(null), []);
+  const [tab, setTab] = useState<TranslatorTab>("translate");
+  // The assistant's translate request, held until the translate tab has applied it.
+  const [translateRequest, setTranslateRequest] = useState<TranslateRequest | null>(null);
+  const requestApplied = useCallback(() => setTranslateRequest(null), []);
 
   const [query, setQuery] = useState("");
   const [choice, setChoice] = useState<TranslatorDirectionChoice>(() => readStoredDirection());
@@ -107,15 +107,15 @@ export default function TranslatorPage({ profileId, intent, onIntentHandled }: M
     };
   }, []);
 
-  // The assistant's translate action opens the sentence tab with its text. Every
+  // The assistant's translate action opens the Translate tab with its text. Every
   // intent is reported handled, the kinds this page does not use included, so the
   // shell's queue moves on rather than parking the page.
   useEffect(() => {
     if (intent === null || intent === undefined) return;
-    const request = sentenceRequestOf(intent);
+    const request = translateRequestOf(intent);
     if (request !== null) {
-      setTab("sentences");
-      setSentenceRequest(request);
+      setTab("translate");
+      setTranslateRequest(request);
     }
     onIntentHandled?.();
   }, [intent, onIntentHandled]);
@@ -191,7 +191,7 @@ export default function TranslatorPage({ profileId, intent, onIntentHandled }: M
       )}
 
       <div className="translator__tabs" role="tablist" aria-label={declaredText(manifest.copy?.name)}>
-        {(["words", "sentences"] as const).map((each) => (
+        {(["translate", "words"] as const).map((each) => (
           <Button
             key={each}
             role="tab"
@@ -202,15 +202,19 @@ export default function TranslatorPage({ profileId, intent, onIntentHandled }: M
             onKeyDown={(event) => {
               if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
               event.preventDefault();
-              setTab(each === "words" ? "sentences" : "words");
+              setTab(each === "translate" ? "words" : "translate");
             }}
           >
-            {each === "words" ? copy.search.label : copy.sentences.title}
+            {each === "translate" ? copy.translate.tab : copy.search.label}
           </Button>
         ))}
       </div>
 
-      {tab === "words" ? (
+      {tab === "translate" ? (
+        <div role="tabpanel" aria-label={copy.translate.tab}>
+          <TranslateTab request={translateRequest} onRequestApplied={requestApplied} />
+        </div>
+      ) : (
         <div role="tabpanel" aria-label={copy.search.label}>
           {status === null ? (
             <LoadingState label={copy.page.loading} rows={4} />
@@ -242,20 +246,6 @@ export default function TranslatorPage({ profileId, intent, onIntentHandled }: M
               <PackFooter status={status} />
             </>
           )}
-        </div>
-      ) : (
-        <div role="tabpanel" aria-label={copy.sentences.title}>
-          {/* The sentence surface, with its pack list taken from THIS module's
-              ops rather than from the shell's `packsList`: a kit module reaches
-              the machine through its own contract, and the two are the same read
-              (`packs` answers what the registry has installed). */}
-          <SentenceTranslator
-            loadPacks={() =>
-              window.nexus.modules.translator.packs({}).then((view) => view.packs)
-            }
-            request={sentenceRequest}
-            onRequestApplied={requestApplied}
-          />
         </div>
       )}
     </div>

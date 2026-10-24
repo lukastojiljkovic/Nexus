@@ -1,6 +1,7 @@
 # ADR-018 — The local account: passcode, key chain, encryption at rest
 
-**Status:** accepted · 2026-07-26.
+**Status:** Accepted · 2026-07-26; optional passcodes and the no-vault fallback
+are defined by [ADR-120](120-optional-account-passcode.md).
 **Drives:** AUTH-002/003/004/005 (PRD 06), SEC-DAR-01 (local database encrypted
 at rest), SEC-LOC-01/02/04, and the desktop half of **[ADR-004](004-auth.md)**,
 whose local-account section this ADR turns into a concrete mechanism. Supersedes

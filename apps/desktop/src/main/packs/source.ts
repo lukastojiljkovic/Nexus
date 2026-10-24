@@ -167,21 +167,23 @@ function compareWithManifest(found: readonly FoundFile[], manifest: PackManifest
   }
 }
 
-/**
- * Opens a pack folder: signature, manifest, app-version floor, then the three
- * structural questions. Throws `PackError` with a code for every refusal.
- */
-export function openPackSource(input: OpenPackSourceInput): PackSource {
-  let stats;
-  try {
-    stats = statSync(input.dir);
-  } catch (error) {
-    throw new PackError("not-a-pack", `The chosen folder cannot be read: ${messageOf(error)}`);
-  }
-  if (!stats.isDirectory()) {
-    throw new PackError("not-a-directory", "A pack is a folder. Choose the folder that holds pack.json.");
-  }
+/** A pack folder's signed manifest, read and checked up to the app-version floor. */
+export interface SignedManifest {
+  readonly manifest: PackManifest;
+  readonly manifestBytes: Uint8Array;
+  readonly signatureBytes: Uint8Array;
+}
 
+/**
+ * The first half of opening a pack: the two small files, the release key's
+ * signature over the manifest's exact bytes, the manifest's own rules and the
+ * app-version floor. Throws `PackError` with a code for every refusal.
+ *
+ * Exported because a catalogue download needs exactly this before it may trust
+ * the manifest's file list (`download.ts`), and a second copy of the order —
+ * signature before parse, parse before floor — is the copy that drifts.
+ */
+export function readSignedManifest(input: OpenPackSourceInput): SignedManifest {
   let manifestBytes: Uint8Array;
   try {
     manifestBytes = readBoundedFile(
@@ -236,7 +238,25 @@ export function openPackSource(input: OpenPackSourceInput): PackSource {
       `This pack needs Nexus ${manifest.minAppVersion} or newer; this build is ${input.appVersion}.`,
     );
   }
+  return { manifest, manifestBytes, signatureBytes };
+}
 
-  compareWithManifest(walkSource(input.dir), manifest);
-  return { dir: input.dir, manifest, manifestBytes, signatureBytes };
+/**
+ * Opens a pack folder: signature, manifest, app-version floor, then the three
+ * structural questions. Throws `PackError` with a code for every refusal.
+ */
+export function openPackSource(input: OpenPackSourceInput): PackSource {
+  let stats;
+  try {
+    stats = statSync(input.dir);
+  } catch (error) {
+    throw new PackError("not-a-pack", `The chosen folder cannot be read: ${messageOf(error)}`);
+  }
+  if (!stats.isDirectory()) {
+    throw new PackError("not-a-directory", "A pack is a folder. Choose the folder that holds pack.json.");
+  }
+
+  const signed = readSignedManifest(input);
+  compareWithManifest(walkSource(input.dir), signed.manifest);
+  return { dir: input.dir, ...signed };
 }

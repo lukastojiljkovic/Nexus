@@ -53,6 +53,11 @@ allowBuilds:
 # already lands on a patched release, and an override there would pin a
 # transitive we have no business pinning.
 overrides:
+  # GHSA-mrhx-c7xc-m3w5 — validating an oversized constrained collection can
+  # exhaust memory. Build-time only, through eslint-plugin-react-hooks, whose
+  # Zod range already admits the patch. The advisory cuts the fix boundary at
+  # 4.6.6; ordinary caret resolution cannot move an already-locked 4.4.3.
+  zod: ^4.6.6
   # GHSA-3jxr-9vmj-r5cp — DoS via exponential-time brace expansion. Three
   # majors coexist in the tree (via @electron/asar, @electron/universal and
   # ejs>jake>filelist), each with its own patched release. Build-time only,
@@ -126,12 +131,12 @@ overrides:
   # electron-builder's fetch path. 6.x is a separate line with its own tree and
   # is not covered by this advisory's range.
   undici@7: ^7.29.0
-  # GHSA-rfgv-xxqx-mfg5 — DoS when a server answers with a WebSocket
-  # subprotocol the client never requested. Build-time only, through
-  # app-builder-lib > @electron/rebuild > node-gyp, which fetches Electron
-  # headers and opens no WebSocket at all. Retires when node-gyp's own
-  # resolution reaches 6.28.1.
-  undici@6: ^6.28.1
+  # GHSA-rfgv-xxqx-mfg5 (unrequested WebSocket subprotocol) and
+  # GHSA-xjj6-f33q-929c (excessive content-encodings) are both fixed at
+  # 6.29.1. This line is build-time only, through app-builder-lib >
+  # @electron/rebuild > node-gyp, which fetches Electron headers and opens no
+  # WebSocket. Retires when node-gyp's own resolution reaches 6.29.1.
+  undici@6: ^6.29.1
   # GHSA-r292-9mhp-454m — uncontrolled recursion in `mapHas`/`filesFilter`, so
   # a crafted archive with a long member path and a selection filter overflows
   # the stack UNCATCHABLY. Build-time only: `tar` arrives through
@@ -207,7 +212,14 @@ overrides:
   # detached subtree's event handlers armed. 3.4.13 through 3.4.15 are
   # vulnerable, so the floor that was the fix is now inside the range. Retires
   # when mermaid's own range reaches 3.4.16.
-  dompurify: ^3.4.16
+  #
+  # 2026-10-23 — RAISED to 3.4.17 for three advisories published 2026-10-22
+  # against 3.4.16 and below: GHSA-mrv2-3pqr-j5jr (high), an incomplete fix for the IN_PLACE hook
+  # above; GHSA-cg2g-xh64-v4q7 (critical), SAFE_FOR_TEMPLATES expressions
+  # surviving in shadow-root content; and GHSA-c6gr-qvv4-5v3f (low), a skipped
+  # SMIL `href` guard under XHTML parsing. Retires when mermaid's own range
+  # reaches 3.4.17.
+  dompurify: ^3.4.17
   # GHSA-r5fr-rjxr-66jc / -f23m-r3pf-42rh / -xxjr-mmjv-4gpg — prototype
   # pollution in `_.unset`/`_.omit` via array paths. SHIPPED, through
   # excalidraw > mermaid-to-excalidraw > @mermaid-js/parser > langium >

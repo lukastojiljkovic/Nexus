@@ -285,10 +285,14 @@ describe("buildTexturesJson", () => {
     sources,
   );
 
-  it("is layout 1, in the view's body order, without a body that has no map", () => {
+  it("is layout 1, in the view's body order, with Pluto and the sky", () => {
     expect(textures.layout).toBe(1);
-    expect(Object.keys(textures.bodies)).toEqual(BODY_ORDER.filter((id) => id !== "pluto"));
-    expect(textures.bodies.pluto).toBeUndefined();
+    expect(Object.keys(textures.bodies)).toEqual(BODY_ORDER);
+    expect(textures.bodies.pluto?.day).toBe("images/pluto-day.webp");
+    expect(textures.sky).toEqual({
+      image: "images/sky-milky-way.webp",
+      credit: "sky-milky-way credit",
+    });
   });
 
   it("names each image relative to the pack root, slot by slot, with the body's credit", () => {
@@ -363,6 +367,10 @@ describe("build", () => {
       bodies.set(source.url, bytes);
     }
     const download = stubFetch(bodies);
+    mkdirSync(join(packDir, "images"), { recursive: true });
+    writeFileSync(join(packDir, "pack.json"), "{\"stale\":true}\n");
+    writeFileSync(join(packDir, "pack.json.sig"), "stale signature\n");
+    writeFileSync(join(packDir, "images", "removed-planet.webp"), Buffer.from("stale"));
 
     const result = await build({
       cacheDir,
@@ -388,11 +396,15 @@ describe("build", () => {
       "saturn",
       "uranus",
       "neptune",
+      "pluto",
     ]);
+    expect(written.sky.image).toBe("images/sky-milky-way.webp");
     const metadata = JSON.parse(readFileSync(metaPath, "utf8"));
     expect(() => checkMeta(metadata)).not.toThrow();
     // The metadata is not part of the pack folder, so `pack-sign` never lists it.
     expect(existsSync(join(packDir, "pack.json"))).toBe(false);
+    expect(existsSync(join(packDir, "pack.json.sig"))).toBe(false);
+    expect(existsSync(join(packDir, "images", "removed-planet.webp"))).toBe(false);
   });
 
   it("keeps the ring's own limits and the maps' own", () => {

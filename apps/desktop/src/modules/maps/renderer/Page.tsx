@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  GeoJSONSource,
-  MapLibreMap,
-  addProtocol,
-  type MapMouseEvent,
-  type MapOptions,
-} from "maplibre-gl";
-import { Protocol } from "pmtiles";
-import { Button, EmptyState, LoadingState, PageHeader, TextField } from "@nexus/ui";
+import { GeoJSONSource, MapLibreMap, addProtocol, type MapMouseEvent, type MapOptions } from "maplibre-gl";
+import { PMTiles } from "pmtiles";
+import { Button, LoadingState, PageHeader, TextField } from "@nexus/ui";
 import {
   formatCoordinates,
   formatDistanceKilometres,
   formatDistanceMetres,
   formatDistanceShort,
   haversineMetres,
-  remoteStyleUrls,
   scaleBar,
   type GeoPoint,
   type MapPlace,
@@ -22,11 +15,17 @@ import {
 import type { ModulePageProps } from "../../../shared/moduleApi.js";
 import { activeLocale, declaredText } from "../../../renderer/src/moduleKit/moduleSurface.js";
 import { manifest } from "../shared/manifest.js";
-import { MAP_PACK_STYLES, type MapPackTheme } from "../shared/packs.js";
-import type { MapsPinView, MapsView } from "../shared/ipc.js";
-import { copy } from "./copy.js";
 import {
-  emptyCollection,
+  MAP_REGION_DETAILS,
+  type MapRegionView,
+  type MapRegionsView,
+  type MapsPinView,
+  type MapsView,
+} from "../shared/ipc.js";
+import { regionById, type WorldBounds } from "../shared/world/outline.js";
+import { copy } from "./copy.js";
+import { addDisputedImages } from "./disputedImages.js";
+import {
   locationFeatureCollection,
   measureLineCollection,
   measureMetres,
@@ -34,12 +33,26 @@ import {
   pinColourExpression,
   pinsFeatureCollection,
   selectedPinCollection,
-  styleCamera,
+  type MapLineCollection,
+  type MapPointCollection,
 } from "./mapData.js";
 import { PinDialog, type DialogState } from "./PinDialog.js";
 import { PinList } from "./PinList.js";
-import { readPackText } from "./packFile.js";
-import type { SearchRequest, SearchResponse } from "./searchWorker.js";
+import { REGION_TILE_SCHEME, createRegionTiles } from "./regionTiles.js";
+import { RegionCard } from "./regions/RegionCard.js";
+import type { Locale } from "./regions/names.js";
+import { coverBounds, installedTerritories } from "./regions/scope.js";
+import { SEARCH_START, answeredWith, askedFor, pickedPlace, shownResults, type SearchState } from "./searchState.js";
+import type { SearchMessage, SearchResponse } from "./searchWorker.js";
+import {
+  OUTLINE_LAND_LAYER,
+  PICK_INSTALLED_LAYER,
+  PICK_SELECTED_LAYER,
+  fontStack,
+  installedFilter,
+  regionStyle,
+  selectedFilter,
+} from "./style.js";
 // The renderer's own stylesheet, and the ONLY third-party CSS in this module.
 // MapLibre positions its canvas container and its overlay panes from these
 // rules, and no amount of styling by this app can replace them: the classes are
@@ -47,34 +60,40 @@ import type { SearchRequest, SearchResponse } from "./searchWorker.js";
 // restated them would break on the next MapLibre minor. Nothing in this module
 // uses a MapLibre control, so what arrives is one canvas and no chrome.
 import "maplibre-gl/dist/maplibre-gl.css";
+import "./mapLibre.js";
 import "./maps.css";
 
 /**
- * MAPE (ADR-099) — the offline map.
+ * MAPE (ADR-099, ADR-118) — the offline map.
  *
- * **The pack owns the map; the page owns the profile's marks on it.**
- * Everything the map is made of — the tiles, the style, the place labels, the
- * glyphs — comes out of the installed pack through the `nx-pack://` scheme, and
- * this file reads three of those files and hands the style to MapLibre. What it
- * draws itself is what belongs to the PROFILE rather than to the map: its pins,
- * where this machine is, and a measurement the user is taking right now. That
- * split is the difference between two lifetimes — a pack is replaced by
- * installing a new one, and a pin is the user's own mark that survives all of
- * them.
+ * **The machine owns the map; the page owns the profile's marks on it.** The
+ * map is the regions downloaded on this machine, read through `nx-map://` and
+ * drawn with a style this page builds from the app's own tokens (`style.ts`),
+ * over the bundled world outline. What the page draws besides is what belongs
+ * to the PROFILE: its pins, where this machine is, and a measurement the user
+ * is taking right now. A region is replaced by updating it, and a pin is the
+ * user's own mark that survives every update.
  *
- * **Nothing here animates.** The map is created at the style's own camera and
- * moved only by a gesture or an explicit control; selecting a search result
- * JUMPS rather than flies (`jumpTo`, not `flyTo`), because a camera that glides
- * for a second and a half is motion nobody asked for. `prefers-reduced-motion`
- * is respected by having nothing to reduce, which is a stronger answer than a
- * flag that switches off one effect and leaves the rest.
+ * **The map is also where a region is chosen.** With the picker on, a click on
+ * a territory opens its card, which downloads it, its continent or the world
+ * at a chosen detail. The picker is on by itself while nothing is downloaded,
+ * because the outline is then all there is to look at.
  *
- * **Every failure is a sentence and a next step.** A missing pack, a style this
- * app refuses to trust, an index that would not parse: each draws its own line
- * naming what failed and what to do about it, and none shows an exception.
+ * **Nothing here animates.** The map opens on the most detailed region on this
+ * machine, or on the world, and moves only by a gesture or an explicit
+ * control; selecting a search result JUMPS rather than flies (`jumpTo`, not
+ * `flyTo`), because a camera that glides for a second and a half is motion
+ * nobody asked for. `prefers-reduced-motion` is respected by having nothing to
+ * reduce, which is a stronger answer than a flag that switches off one effect
+ * and leaves the rest.
+ *
+ * **Every failure is a sentence and a next step.** A region list that would not
+ * load, a download that stopped, an index that would not be read: each draws
+ * its own line naming what failed and what to do about it, and none shows an
+ * exception.
  */
 
-/** The layer and source ids this page adds to whatever style the pack carries. */
+/** The layer and source ids this page adds to the regions' style. */
 const PINS_SOURCE = "nexus-pins";
 const PINS_LAYER = "nexus-pins";
 const SELECTED_SOURCE = "nexus-pin-selected";
@@ -92,25 +111,44 @@ const SCALE_MAX_PX = 100;
 /** How many search results the box draws. Ten is a column, not a page. */
 const SEARCH_LIMIT = 10;
 
+/** The world as the map frames it: every inhabited latitude, without the empty poles. */
+const WORLD: WorldBounds = { minLon: -180, minLat: -58, maxLon: 180, maxLat: 78 };
+
+/** The room left around a region the camera is fitted to, in pixels. */
+const FIT_PADDING = 32;
+
+/** What the page draws when the regions could not be listed: the outline, and nothing on it. */
+const NO_REGIONS: MapRegionsView = { installed: [], job: null, newestBuild: null };
+
 /**
- * MapLibre's own types for the three things this module builds as plain data.
+ * MapLibre's own types for the things this module builds as plain data.
  *
  * A GeoJSON feature collection and an expression are JSON — that is the point of
  * both formats — and MapLibre's declarations for them are unions of tuple types
  * that a variable-length array cannot be PROVED to be: `@types/geojson` and the
  * style spec's `ExpressionSpecification` are exported by neither package, so the
  * only honest spelling is a cast at the boundary. What makes it safe is that
- * there are three of them, all in this file, and `mapData.test.ts` asserts the
- * exact objects they carry.
+ * they are all in this file, and `mapData.test.ts` and `style.test.ts` assert
+ * the exact objects they carry.
  */
 type GeoJsonData = Parameters<GeoJSONSource["setData"]>[0];
-type MapStyleOption = NonNullable<MapOptions["style"]>;
+
+/**
+ * The one GeoJSON cast. It goes through `unknown` because this module's
+ * collections are readonly and `@types/geojson`'s arrays are not; MapLibre reads
+ * the data it is handed and never writes to it.
+ */
+function geoJson(data: MapPointCollection | MapLineCollection): GeoJsonData {
+  return data as unknown as GeoJsonData;
+}
 /** `never` because the paint value's own union is unnameable here — see the note above. */
 type PaintValue = never;
+/** `never` for the same reason: a filter is an expression. */
+type FilterValue = never;
 
 /** The theme the map is drawn for, read off the document the shell already drives. */
-function currentTheme(): MapPackTheme {
-  return document.documentElement.getAttribute("data-theme") === "noc" ? "noc" : "dan";
+function currentTheme(): string {
+  return document.documentElement.getAttribute("data-theme") ?? "";
 }
 
 /** The live value of one design token. MapLibre paints from values, not from CSS variables. */
@@ -123,27 +161,64 @@ function swatchValue(color: MapsPinView["color"]): string {
   return tokenValue(`--nx-swatch-${color}`);
 }
 
-/** The tile protocol is registered once per renderer process; `addProtocol` would throw on a second call. */
-let pmtilesRegistered = false;
-function ensurePmtilesProtocol(): void {
-  if (pmtilesRegistered) return;
-  addProtocol("pmtiles", new Protocol().tile);
-  pmtilesRegistered = true;
+/**
+ * The regions' tiles, once per renderer process: the tile scheme is registered
+ * once (`addProtocol` would throw on a second call), and the archives it reads
+ * stay open across visits to the page.
+ */
+const regionTiles = createRegionTiles((url) => new PMTiles(url));
+let regionSchemeRegistered = false;
+function ensureRegionScheme(): void {
+  if (regionSchemeRegistered) return;
+  addProtocol(REGION_TILE_SCHEME, async (request, abort) => ({
+    data: await regionTiles.tile(request.url, abort.signal),
+  }));
+  regionSchemeRegistered = true;
 }
 
-/** What the pack's own files are, as the page reads them. */
-type PackState =
-  | { readonly status: "loading" }
-  | { readonly status: "missing" }
-  | { readonly status: "style-broken" }
-  | { readonly status: "network" }
-  | { readonly status: "ready"; readonly styles: Readonly<Record<MapPackTheme, unknown>> };
+/** The style for what is installed, painted from the document's live tokens. */
+function buildStyle(installed: readonly MapRegionView[], locale: Locale): NonNullable<MapOptions["style"]> {
+  return regionStyle({
+    token: (name) => tokenValue(`--nx-${name}`),
+    fonts: fontStack(tokenValue("--nx-font-family-ui")),
+    locale,
+    sources: regionTiles.set(installed),
+  });
+}
 
-/** What the search box is showing. */
-interface SearchState {
-  readonly status: "loading" | "ready" | "failed";
-  readonly query: string;
-  readonly results: readonly MapPlace[];
+/** What a style was built from: a change in any of it is a new style. */
+function styleKey(theme: string, locale: Locale, installed: readonly MapRegionView[]): string {
+  return [theme, locale, ...installed.map((region) => region.url)].join("|");
+}
+
+/** The box the map opens on: the most detailed region on this machine, or the world. */
+function openingBounds(installed: readonly MapRegionView[]): WorldBounds {
+  const rank = (region: MapRegionView) => MAP_REGION_DETAILS.indexOf(region.detail);
+  const best = [...installed].sort((left, right) => rank(right) - rank(left))[0];
+  return (best === undefined ? null : coverBounds(best.id)) ?? WORLD;
+}
+
+function lngLatBox(box: WorldBounds): [[number, number], [number, number]] {
+  return [
+    [box.minLon, box.minLat],
+    [box.maxLon, box.maxLat],
+  ];
+}
+
+/** The page's own sources, as they should read now. */
+interface Overlay {
+  readonly pins: MapPointCollection;
+  readonly selected: MapPointCollection;
+  readonly location: MapPointCollection;
+  readonly measurePoints: MapPointCollection;
+  readonly measureLine: MapLineCollection;
+}
+
+/** What the picker draws: whether it is on, which territories are installed, and which one the card is open for. */
+interface PickState {
+  readonly on: boolean;
+  readonly installed: readonly string[];
+  readonly selected: string | null;
 }
 
 type Run = (action: (maps: typeof window.nexus.modules.maps) => Promise<MapsView>) => Promise<void>;
@@ -152,8 +227,11 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   const locale = activeLocale();
   const [view, setView] = useState<MapsView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pack, setPack] = useState<PackState>({ status: "loading" });
-  const [theme, setTheme] = useState<MapPackTheme>(() => currentTheme());
+  const [regions, setRegions] = useState<MapRegionsView | null>(null);
+  const [theme, setTheme] = useState(() => currentTheme());
+  /** `null` until the person switches it: the picker then follows whether anything is installed. */
+  const [picking, setPicking] = useState<boolean | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [measuring, setMeasuring] = useState(false);
@@ -162,7 +240,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   const [scale, setScale] = useState<{ metres: number; pixels: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [search, setSearch] = useState<SearchState>({ status: "loading", query: "", results: [] });
+  const [search, setSearch] = useState<SearchState>(SEARCH_START);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -171,6 +249,42 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   const searchId = useRef(0);
 
   const pins = view?.pins ?? [];
+  const installed = regions?.installed ?? null;
+  const installedKey = installed?.map((region) => region.url).join("|") ?? null;
+  const pickingOn = !measuring && (picking ?? installed?.length === 0);
+  const results = shownResults(search);
+  const pickedTerritory = picked === null ? undefined : regionById(picked);
+
+  /**
+   * What the map's own layers should show, always from the last render.
+   *
+   * A new style throws every source and layer away, the page's own included,
+   * and they are added again on its `style.load`. That handler is registered
+   * once, when the map is made, so it reads these refs rather than a closure
+   * from that first render, which would put back the pins of an hour ago.
+   */
+  const overlayRef = useRef<Overlay | null>(null);
+  overlayRef.current = {
+    pins: pinsFeatureCollection(pins),
+    selected: selectedPinCollection(pins, selectedId),
+    location: locationFeatureCollection(view?.location ?? null),
+    measurePoints: measurePointCollection(measurePoints),
+    measureLine: measureLineCollection(measurePoints),
+  };
+  const pickRef = useRef<PickState>({ on: false, installed: [], selected: null });
+  pickRef.current = {
+    on: pickingOn,
+    installed: installedTerritories(installed?.map((region) => region.id) ?? []),
+    selected: picked,
+  };
+  const installedRef = useRef(installed);
+  installedRef.current = installed;
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  /** What the map's current style was built from. */
+  const appliedStyle = useRef<string | null>(null);
 
   // --- The profile's own data (main's side) --------------------------------
 
@@ -198,49 +312,33 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     void refresh();
   }, [refresh]);
 
-  // --- The pack (the renderer's side) --------------------------------------
+  // --- The regions on this machine (main's side) ---------------------------
 
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const texts = await Promise.all([
-          readPackText(MAP_PACK_STYLES.dan),
-          readPackText(MAP_PACK_STYLES.noc),
-        ]);
-        if (!active) return;
-        let styles: Record<MapPackTheme, unknown>;
-        try {
-          styles = { dan: JSON.parse(texts[0]) as unknown, noc: JSON.parse(texts[1]) as unknown };
-        } catch (parseError) {
-          setPack({ status: "style-broken" });
-          console.error("Nexus: the map pack's style is not JSON:", parseError);
-          return;
-        }
-        for (const style of [styles.dan, styles.noc]) {
-          // The one promise this module makes is that the map works with the
-          // network off. A style that names an address is refused rather than
-          // drawn, because the failure it would produce is a blank map on an
-          // offline machine and a fine-looking one on a developer's.
-          if (remoteStyleUrls(style).length > 0) {
-            setPack({ status: "network" });
-            return;
-          }
-        }
-        setPack({ status: "ready", styles });
-      } catch (readError) {
-        if (active) setPack({ status: "missing" });
-        console.error("Nexus: the map pack could not be read:", readError);
-      }
-    })();
-    return () => {
-      active = false;
-    };
+  const loadRegions = useCallback(async () => {
+    try {
+      setRegions(await window.nexus.modules.maps.regions({}));
+    } catch (failure) {
+      setRegions((current) => current ?? NO_REGIONS);
+      setError(copy.errors.regions);
+      console.error("Nexus: the map regions could not be listed:", failure);
+    }
   }, []);
 
-  // The shell drives `<html data-theme>`, and the map's colours are baked into
-  // the pack's two styles — so the map follows the theme by swapping the style,
-  // which is also what re-reads the palette's values for the pin layer.
+  useEffect(() => {
+    void loadRegions();
+  }, [loadRegions]);
+
+  // A download reports through the list it changes, read once a second while
+  // it runs: the way the wiki follows a ZIM download.
+  const jobRunning = regions?.job?.state === "measuring" || regions?.job?.state === "downloading";
+  useEffect(() => {
+    if (!jobRunning) return;
+    const handle = window.setInterval(() => void loadRegions(), 1000);
+    return () => window.clearInterval(handle);
+  }, [jobRunning, loadRegions]);
+
+  // The shell drives `<html data-theme>`, and MapLibre paints from values, not
+  // from CSS variables, so a theme switch is a new style read from the tokens.
   useEffect(() => {
     const observer = new MutationObserver(() => setTheme(currentTheme()));
     observer.observe(document.documentElement, {
@@ -250,35 +348,19 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     return () => observer.disconnect();
   }, []);
 
-  const styleForTheme = pack.status === "ready" ? pack.styles[theme] : null;
-  const styleReady = styleForTheme !== null;
-  /**
-   * The style the map should be wearing, always the one from the last render.
-   *
-   * The two effects below are keyed on "is there a style at all" and on "the
-   * theme changed", never on the style OBJECT: a theme switch swaps the style in
-   * place rather than rebuilding the map, because a rebuilt map starts at the
-   * pack's camera and a theme is not a reason to throw away where the user was
-   * looking. A ref is how an effect can read the current value without listing
-   * it — and without the stale closure a missing dependency would leave behind.
-   */
-  const styleRef = useRef<unknown>(null);
-  styleRef.current = styleForTheme;
-
   // --- The map -------------------------------------------------------------
 
+  const listed = installed !== null;
   useEffect(() => {
-    const style = styleRef.current;
-    if (!styleReady || containerRef.current === null || style === null) return;
-    ensurePmtilesProtocol();
-    const start = styleCamera(style);
+    const regionsNow = installedRef.current;
+    if (!listed || containerRef.current === null || regionsNow === null) return;
+    ensureRegionScheme();
+    appliedStyle.current = styleKey(themeRef.current, localeRef.current, regionsNow);
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: style as MapStyleOption,
-      // The camera is the PACK's, not this app's: the builder writes the
-      // region's centre and zoom into the style, so no coordinate of Serbia is
-      // written down in this file.
-      ...(start === null ? {} : { center: [start.center.lon, start.center.lat], zoom: start.zoom }),
+      style: buildStyle(regionsNow, localeRef.current),
+      bounds: lngLatBox(openingBounds(regionsNow)),
+      fitBoundsOptions: { padding: FIT_PADDING },
       // The ODbL credit is drawn by this page, in the app's own type and
       // tokens, and it is drawn ALWAYS — see `.maps__attribution` in the render.
       attributionControl: false,
@@ -287,7 +369,14 @@ export default function MapsPage({ profileId }: ModulePageProps) {
       touchPitch: false,
     });
     mapRef.current = map;
-    map.on("load", () => addMapLayers(map));
+    // The style names runtime drawings that a style file cannot carry.
+    map.on("styleimagemissing", () => addDisputedImages(map, tokenValue("--nx-data")));
+    // Every style, the first and each one after, gets the page's layers back.
+    map.on("style.load", () => {
+      addDisputedImages(map, tokenValue("--nx-data"));
+      if (overlayRef.current !== null) addMapLayers(map, overlayRef.current);
+      applyPicking(map, pickRef.current);
+    });
     // The camera readout and the scale bar follow every movement.
     const onMove = (): void => {
       const center = map.getCenter();
@@ -296,29 +385,32 @@ export default function MapsPage({ profileId }: ModulePageProps) {
       setScale({ metres: bar.metres, pixels: bar.pixels });
     };
     map.on("move", onMove);
+    onMove();
     return () => {
       map.off("move", onMove);
       map.remove();
       mapRef.current = null;
+      appliedStyle.current = null;
       setScale(null);
       setCamera(null);
     };
-  }, [styleReady]);
+  }, [listed]);
 
-  // A theme switch swaps the style in place, and the pins' colours have to be
-  // re-read from the palette afterwards: MapLibre has no way to ask CSS.
-  const firstTheme = useRef(true);
+  // A new theme, language or set of regions is a new style. The camera stays
+  // where the person left it.
   useEffect(() => {
-    if (firstTheme.current) {
-      firstTheme.current = false;
-      return;
-    }
     const map = mapRef.current;
-    const style = styleRef.current;
-    if (map === null || style === null) return;
-    map.setStyle(style as MapStyleOption);
-    map.once("styledata", () => addMapLayers(map));
-  }, [theme]);
+    const regionsNow = installedRef.current;
+    if (map === null || regionsNow === null) return;
+    const key = styleKey(theme, locale, regionsNow);
+    if (key === appliedStyle.current) return;
+    appliedStyle.current = key;
+    map.setStyle(buildStyle(regionsNow, locale), { diff: false });
+  }, [theme, locale, installedKey]);
+
+  useEffect(() => {
+    if (mapRef.current !== null) applyPicking(mapRef.current, pickRef.current);
+  }, [pickingOn, picked, installedKey]);
 
   // The sources this page owns, kept in step with what main said.
   useEffect(() => {
@@ -338,8 +430,9 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     setData(mapRef.current, MEASURE_LINE_SOURCE, measureLineCollection(measurePoints));
   }, [measurePoints]);
 
-  // A click on the map: measuring adds a point, a pin under the pointer is a
-  // SELECTION, and anywhere else clears it.
+  // A click on the map: measuring adds a point, the picker opens the card of
+  // the territory under the pointer, a pin under the pointer is a SELECTION,
+  // and anywhere else clears it.
   //
   // The pin dialog is deliberately not consulted here. It is a modal overlay
   // that covers the whole window, so a click while it is open never reaches the
@@ -353,6 +446,14 @@ export default function MapsPage({ profileId }: ModulePageProps) {
       const point: GeoPoint = { lat: event.lngLat.lat, lon: event.lngLat.lng };
       if (measuring) {
         setMeasurePoints((current) => [...current, point]);
+        return;
+      }
+      if (pickingOn) {
+        const id: unknown = map.queryRenderedFeatures(event.point, { layers: [OUTLINE_LAND_LAYER] })[0]?.properties
+          .id;
+        setPicked(typeof id === "string" ? id : null);
+        // A click that opened a card keeps the picker on once something is installed.
+        setPicking(true);
         return;
       }
       // A pin under the pointer is a SELECTION, not a map click: the layer's
@@ -370,7 +471,11 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     return () => {
       map.off("click", onClick);
     };
-  }, [measuring]);
+  }, [listed, measuring, pickingOn]);
+
+  const showRegion = useCallback((id: string) => {
+    mapRef.current?.fitBounds(lngLatBox(coverBounds(id) ?? WORLD), { padding: FIT_PADDING, animate: false });
+  }, []);
 
   // --- The search worker ---------------------------------------------------
 
@@ -380,21 +485,17 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     worker.onmessage = (event: MessageEvent<SearchResponse>) => {
       const answer = event.data;
       if (answer.type === "ready") {
-        setSearch((current) => ({ ...current, status: "ready" }));
+        setSearch((current) => ({ ...current, status: "ready", count: answer.count }));
         return;
       }
       if (answer.type === "failed") {
-        setSearch({ status: "failed", query: "", results: [] });
+        setSearch({ ...SEARCH_START, status: "failed" });
         return;
       }
       // An answer for a query the user has already typed past is dropped: the
       // box shows what was asked for last, never what came back last.
       if (answer.id !== searchId.current) return;
-      setSearch((current) => ({
-        status: "ready",
-        query: current.query,
-        results: answer.hits.map((hit) => hit.place),
-      }));
+      setSearch((current) => answeredWith(current, answer.hits.map((hit) => hit.place)));
     };
     return () => {
       worker.terminate();
@@ -402,19 +503,27 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     };
   }, []);
 
+  // The index is the installed regions' places, so it is read again when they change.
+  useEffect(() => {
+    const regionsNow = installedRef.current;
+    if (regionsNow === null) return;
+    setSearch((current) => ({ ...current, status: "loading" }));
+    const message: SearchMessage = {
+      type: "regions",
+      regions: regionsNow.map(({ id, detail, url }) => ({ id, detail, url })),
+    };
+    workerRef.current?.postMessage(message);
+  }, [installedKey]);
+
   const askSearch = useCallback((query: string) => {
     const trimmed = query.trim();
-    if (trimmed === "") {
-      // A cleared box asks nothing: the answer that would arrive is "everything
-      // matches nothing", and drawing it would be a list of nothing under an
-      // empty field.
-      searchId.current += 1;
-      setSearch((current) => ({ ...current, query, results: [] }));
-      return;
-    }
     searchId.current += 1;
-    setSearch((current) => ({ ...current, query, results: [] }));
-    const request: SearchRequest = {
+    setSearch((current) => askedFor(current, query));
+    // A cleared box asks nothing: the answer that would arrive is "everything
+    // matches nothing", and drawing it would be a list of nothing under an
+    // empty field.
+    if (trimmed === "") return;
+    const request: SearchMessage = {
       type: "search",
       id: searchId.current,
       query: trimmed,
@@ -428,7 +537,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     // place is, and a glide nobody requested is motion this app must not add.
     mapRef.current?.jumpTo({ center: [place.lon, place.lat], zoom: 12 });
     setSelectedId(null);
-    setSearch((current) => ({ ...current, query: place.name, results: [] }));
+    setSearch((current) => pickedPlace(current, place.name));
   }, []);
 
   const copyCoordinates = useCallback(async (point: GeoPoint) => {
@@ -450,7 +559,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
 
   // Escape closes what this page opened, in the order a person would: the
   // dialog first (it owns the keyboard while it is open), then the pin list,
-  // then the measurement.
+  // then the region card, then the measurement.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape") return;
@@ -459,11 +568,15 @@ export default function MapsPage({ profileId }: ModulePageProps) {
         setListOpen(false);
         return;
       }
+      if (picked !== null) {
+        setPicked(null);
+        return;
+      }
       if (measuring) setMeasuring(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dialog, listOpen, measuring]);
+  }, [dialog, listOpen, picked, measuring]);
 
   const measuredMetres = measureMetres(measurePoints, haversineMetres);
   const cursor: GeoPoint = dialog?.point ?? camera ?? { lat: 0, lon: 0 };
@@ -473,43 +586,21 @@ export default function MapsPage({ profileId }: ModulePageProps) {
     <div className="maps">
       {/* The page's own name is the word the module DECLARED, read in the
           language being spoken, rather than a second copy of it (ADR-090). */}
-      <PageHeader
-        title={declaredText(manifest.copy?.name)}
-        subtitle={copy.page.subtitle}
-        sigil="globe"
-      />
+      <PageHeader title={declaredText(manifest.copy?.name)} subtitle={copy.page.subtitle} sigil="globe" />
       {error !== null && (
         <p className="maps__error" role="alert">
           {error}
         </p>
       )}
 
-      {pack.status === "loading" && <LoadingState label={copy.page.loading} rows={4} />}
-      {pack.status === "missing" && (
-        <EmptyState
-          variant="inline"
-          sigil="globe"
-          title={copy.pack.title}
-          description={copy.pack.body}
-        />
-      )}
-      {pack.status === "style-broken" && (
-        <EmptyState variant="inline" title={copy.pack.styleTitle} description={copy.pack.styleBody} />
-      )}
-      {pack.status === "network" && (
-        <EmptyState
-          variant="inline"
-          title={copy.pack.styleTitle}
-          description={copy.pack.networkBody}
-        />
-      )}
+      {regions === null && <LoadingState label={copy.page.loading} rows={4} />}
       {search.status === "failed" && (
         <p className="maps__error" role="alert">
-          {copy.pack.placesBody}
+          {copy.search.failed}
         </p>
       )}
 
-      {pack.status === "ready" && (
+      {regions !== null && (
         <>
           <div className="maps__tools">
             <div className="maps__search">
@@ -522,26 +613,25 @@ export default function MapsPage({ profileId }: ModulePageProps) {
                 onChange={(event) => askSearch(event.target.value)}
               />
               {search.status === "loading" && <p className="nx-hint">{copy.search.loading}</p>}
-              {search.status !== "loading" && search.query.trim() !== "" && (
+              {search.status === "ready" && regions.installed.length === 0 && (
+                <p className="nx-hint">{copy.search.none}</p>
+              )}
+              {results !== null && (
                 <ul className="maps__results" aria-label={copy.search.results}>
-                  {search.results.length === 0 && (
+                  {results.length === 0 && (
                     <li className="maps__result-empty">
                       <span className="nx-hint">{copy.search.empty}</span>
                     </li>
                   )}
-                  {search.results.map((place) => (
+                  {results.map((place) => (
                     <li key={place.id}>
-                      <button
-                        type="button"
-                        className="maps__result"
-                        onClick={() => selectResult(place)}
-                      >
-                        <span className="maps__result-name">{place.name}</span>
+                      <button type="button" className="maps__result" onClick={() => selectResult(place)}>
+                        <span className="maps__result-name">
+                          {locale === "en" ? (place.nameEn ?? place.name) : place.name}
+                        </span>
                         <span className="maps__result-kind">
-                          {place.kind}
-                          {place.population === null
-                            ? ""
-                            : ` · ${formatPopulation(place.population, locale)}`}
+                          {copy.search.kinds[place.kind]}
+                          {place.population === null ? "" : ` · ${formatPopulation(place.population, locale)}`}
                         </span>
                       </button>
                     </li>
@@ -555,6 +645,16 @@ export default function MapsPage({ profileId }: ModulePageProps) {
               </Button>
               <Button size="sm" onClick={() => mapRef.current?.zoomOut()}>
                 {copy.tools.zoomOut}
+              </Button>
+              <Button
+                size="sm"
+                aria-pressed={pickingOn}
+                onClick={() => {
+                  setPicking(!pickingOn);
+                  setMeasuring(false);
+                }}
+              >
+                {copy.tools.regions}
               </Button>
               <Button
                 size="sm"
@@ -574,27 +674,17 @@ export default function MapsPage({ profileId }: ModulePageProps) {
                   // reachable today, from this button: a laptop with no
                   // receiver can still say where it is, and the marker and the
                   // "clear it" control are the same ones a GPS would use.
-                  void run((maps) =>
-                    maps.setLocation({ profileId, lat: camera.lat, lon: camera.lon }),
-                  );
+                  void run((maps) => maps.setLocation({ profileId, lat: camera.lat, lon: camera.lon }));
                 }}
               >
                 {copy.tools.here}
               </Button>
               {view?.location != null && (
-                <Button
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => void run((maps) => maps.clearLocation({ profileId }))}
-                >
+                <Button size="sm" variant="quiet" onClick={() => void run((maps) => maps.clearLocation({ profileId }))}>
                   {copy.tools.clearLocation}
                 </Button>
               )}
-              <Button
-                size="sm"
-                aria-pressed={measuring}
-                onClick={() => setMeasuring((current) => !current)}
-              >
+              <Button size="sm" aria-pressed={measuring} onClick={() => setMeasuring((current) => !current)}>
                 {measuring ? copy.tools.stopMeasure : copy.tools.measure}
               </Button>
               {measurePoints.length > 0 && (
@@ -605,11 +695,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
               <Button size="sm" onClick={() => void copyCoordinates(cursor)}>
                 {copy.tools.copy}
               </Button>
-              <Button
-                size="sm"
-                aria-pressed={listOpen}
-                onClick={() => setListOpen((current) => !current)}
-              >
+              <Button size="sm" aria-pressed={listOpen} onClick={() => setListOpen((current) => !current)}>
                 {listOpen ? copy.pins.hide : copy.tools.pins}
               </Button>
             </div>
@@ -631,13 +717,26 @@ export default function MapsPage({ profileId }: ModulePageProps) {
           <div className="maps__frame">
             <div className="maps__canvas" ref={containerRef} />
             {measuring && <p className="maps__hint nx-hint">{copy.pins.measureHint}</p>}
+            {pickingOn && pickedTerritory === undefined && (
+              <p className="maps__hint nx-hint">
+                {regions.installed.length === 0 ? copy.picker.empty : copy.picker.hint}
+              </p>
+            )}
+            {pickedTerritory !== undefined && (
+              <div className="maps__card">
+                <RegionCard
+                  territory={pickedTerritory}
+                  regions={regions}
+                  api={window.nexus.modules.maps}
+                  onChange={setRegions}
+                  onShow={showRegion}
+                  onClose={() => setPicked(null)}
+                />
+              </div>
+            )}
             {scale !== null && (
               <div className="maps__scale" role="img" aria-label={copy.tools.scale}>
-                <div
-                  className="maps__scale-bar"
-                  style={{ width: `${String(scale.pixels)}px` }}
-                  aria-hidden="true"
-                />
+                <div className="maps__scale-bar" style={{ width: `${String(scale.pixels)}px` }} aria-hidden="true" />
                 <span className="maps__scale-label">{formatDistanceShort(scale.metres, locale)}</span>
               </div>
             )}
@@ -651,6 +750,7 @@ export default function MapsPage({ profileId }: ModulePageProps) {
                 nothing. */}
             <p className="maps__attribution" aria-label={copy.attribution.label}>
               {copy.attribution.credit} · {copy.attribution.licence}
+              <span className="maps__legend">{copy.attribution.disputed}</span>
             </p>
             {listOpen && (
               <PinList
@@ -686,105 +786,92 @@ export default function MapsPage({ profileId }: ModulePageProps) {
   );
 }
 
+/** The picker's tint and outline, shown or hidden, with the territories they draw. */
+function applyPicking(map: MapLibreMap, pick: PickState): void {
+  if (map.getLayer(PICK_INSTALLED_LAYER) === undefined) return;
+  map.setFilter(PICK_INSTALLED_LAYER, installedFilter(pick.installed) as FilterValue);
+  map.setFilter(PICK_SELECTED_LAYER, selectedFilter(pick.selected) as FilterValue);
+  map.setLayoutProperty(PICK_INSTALLED_LAYER, "visibility", pick.on ? "visible" : "none");
+  map.setLayoutProperty(PICK_SELECTED_LAYER, "visibility", pick.selected === null ? "none" : "visible");
+}
+
 /**
- * The layers this page adds to whatever style the pack carries: the pins, the
- * selected pin's ring, where the machine is, and the measurement.
+ * The layers this page adds to the regions' style: the pins, the selected
+ * pin's ring, where the machine is, and the measurement.
  *
- * **Added after every `load` and after every `styledata`.** `setStyle` throws
- * every layer and source away, so this is called again rather than the layers
- * being readded by hand at one call site. Every `addSource`/`addLayer` below is
- * guarded by the getters above it, which is what makes it safe to call twice.
+ * **Added after every `style.load`.** A new style throws every layer and source
+ * away, so this runs again for each one, with the data the page holds now.
  */
-function addMapLayers(map: MapLibreMap): void {
-  if (map.getSource(PINS_SOURCE) === undefined) {
-    map.addSource(PINS_SOURCE, {
-      type: "geojson",
-      data: emptyCollection() as GeoJsonData,
-      promoteId: "id",
-    });
-    map.addSource(SELECTED_SOURCE, { type: "geojson", data: emptyCollection() as GeoJsonData });
-    map.addSource(LOCATION_SOURCE, { type: "geojson", data: emptyCollection() as GeoJsonData });
-    map.addSource(MEASURE_POINT_SOURCE, {
-      type: "geojson",
-      data: emptyCollection() as GeoJsonData,
-    });
-    map.addSource(MEASURE_LINE_SOURCE, { type: "geojson", data: emptyCollection() as GeoJsonData });
-  }
-  // The palette is read ONCE per pass and baked into the expression, which is
-  // why a theme change calls this again: MapLibre cannot ask CSS for a colour.
-  const colours = pinColourExpression(swatchValue);
-  if (map.getLayer(MEASURE_LINE_LAYER) === undefined) {
-    map.addLayer({
-      id: MEASURE_LINE_LAYER,
-      type: "line",
-      source: MEASURE_LINE_SOURCE,
-      paint: {
-        "line-color": tokenValue("--nx-accent"),
-        "line-width": 2,
-        "line-dasharray": [2, 1.5],
-      },
-    });
-  }
-  if (map.getLayer(PINS_LAYER) === undefined) {
-    map.addLayer({
-      id: PINS_LAYER,
-      type: "circle",
-      source: PINS_SOURCE,
-      paint: {
-        "circle-radius": 7,
-        "circle-stroke-width": 1.5,
-        "circle-stroke-color": tokenValue("--nx-surface-raised"),
-      },
-    });
-  }
-  map.setPaintProperty(PINS_LAYER, "circle-color", colours as PaintValue);
-  if (map.getLayer(SELECTED_LAYER) === undefined) {
-    map.addLayer({
-      id: SELECTED_LAYER,
-      type: "circle",
-      source: SELECTED_SOURCE,
-      paint: {
-        // A RING rather than a second dot: the selected pin keeps its own
-        // colour and gains a statement that says "this one".
-        "circle-radius": 11,
-        "circle-color": "transparent",
-        "circle-stroke-width": 2.5,
-        "circle-stroke-color": tokenValue("--nx-text"),
-      },
-    });
-  }
-  if (map.getLayer(LOCATION_LAYER) === undefined) {
-    map.addLayer({
-      id: LOCATION_LAYER,
-      type: "circle",
-      source: LOCATION_SOURCE,
-      paint: {
-        "circle-radius": 6,
-        "circle-color": tokenValue("--nx-data"),
-        "circle-stroke-width": 2.5,
-        "circle-stroke-color": tokenValue("--nx-surface-raised"),
-      },
-    });
-  }
-  if (map.getLayer(MEASURE_POINT_LAYER) === undefined) {
-    map.addLayer({
-      id: MEASURE_POINT_LAYER,
-      type: "circle",
-      source: MEASURE_POINT_SOURCE,
-      paint: {
-        "circle-radius": 4,
-        "circle-color": tokenValue("--nx-accent"),
-        "circle-stroke-width": 1.5,
-        "circle-stroke-color": tokenValue("--nx-surface-raised"),
-      },
-    });
-  }
+function addMapLayers(map: MapLibreMap, overlay: Overlay): void {
+  map.addSource(PINS_SOURCE, { type: "geojson", data: geoJson(overlay.pins), promoteId: "id" });
+  map.addSource(SELECTED_SOURCE, { type: "geojson", data: geoJson(overlay.selected) });
+  map.addSource(LOCATION_SOURCE, { type: "geojson", data: geoJson(overlay.location) });
+  map.addSource(MEASURE_POINT_SOURCE, { type: "geojson", data: geoJson(overlay.measurePoints) });
+  map.addSource(MEASURE_LINE_SOURCE, { type: "geojson", data: geoJson(overlay.measureLine) });
+  map.addLayer({
+    id: MEASURE_LINE_LAYER,
+    type: "line",
+    source: MEASURE_LINE_SOURCE,
+    paint: {
+      "line-color": tokenValue("--nx-accent"),
+      "line-width": 2,
+      "line-dasharray": [2, 1.5],
+    },
+  });
+  map.addLayer({
+    id: PINS_LAYER,
+    type: "circle",
+    source: PINS_SOURCE,
+    paint: {
+      "circle-radius": 7,
+      // The palette is read here and baked into the expression, which is why a
+      // theme's new style calls this again: MapLibre cannot ask CSS for a colour.
+      "circle-color": pinColourExpression(swatchValue) as PaintValue,
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": tokenValue("--nx-surface-raised"),
+    },
+  });
+  map.addLayer({
+    id: SELECTED_LAYER,
+    type: "circle",
+    source: SELECTED_SOURCE,
+    paint: {
+      // A RING rather than a second dot: the selected pin keeps its own
+      // colour and gains a statement that says "this one".
+      "circle-radius": 11,
+      "circle-color": "transparent",
+      "circle-stroke-width": 2.5,
+      "circle-stroke-color": tokenValue("--nx-text"),
+    },
+  });
+  map.addLayer({
+    id: LOCATION_LAYER,
+    type: "circle",
+    source: LOCATION_SOURCE,
+    paint: {
+      "circle-radius": 6,
+      "circle-color": tokenValue("--nx-data"),
+      "circle-stroke-width": 2.5,
+      "circle-stroke-color": tokenValue("--nx-surface-raised"),
+    },
+  });
+  map.addLayer({
+    id: MEASURE_POINT_LAYER,
+    type: "circle",
+    source: MEASURE_POINT_SOURCE,
+    paint: {
+      "circle-radius": 4,
+      "circle-color": tokenValue("--nx-accent"),
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": tokenValue("--nx-surface-raised"),
+    },
+  });
 }
 
 /** Data into one source, if the map and the source both exist yet. */
-function setData(map: MapLibreMap | null, sourceId: string, data: unknown): void {
+function setData(map: MapLibreMap | null, sourceId: string, data: MapPointCollection | MapLineCollection): void {
   const source = map?.getSource(sourceId);
-  if (source instanceof GeoJSONSource) source.setData(data as GeoJsonData);
+  if (source instanceof GeoJSONSource) source.setData(geoJson(data));
 }
 
 /** A population through `Intl`, so a Serbian reading groups with a dot: `1.197.714`. */

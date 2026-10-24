@@ -82,7 +82,7 @@
       "tools": [
         {
           "name": "translator.translate",
-          "effect": "read",
+          "effect": "navigate",
           "content": "Otvoren je Prevodilac sa tim tekstom. Prevod se prikazuje na toj stranici i ne mogu da ga pročitam, pa ga ne prevodi sam."
         }
       ],
@@ -124,7 +124,7 @@
       "tools": [
         {
           "name": "translator.translate",
-          "effect": "read",
+          "effect": "navigate",
           "content": "Opened the Translator page with that text. The translation appears on that page and I cannot read it, so do not translate the text yourself."
         }
       ],

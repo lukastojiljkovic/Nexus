@@ -2726,9 +2726,11 @@ export {
   NONOGRAM_ATTEMPT_LIMIT,
   NONOGRAM_MAX,
   NONOGRAM_MIN,
+  NONOGRAM_PICTURE_ID,
   checkNonogram,
   cluesOf,
   generateNonogram,
+  isNonogramPictureId,
   solveNonogramLines,
 } from "./games/nonogram/nonogram.js";
 export type {
@@ -3000,20 +3002,15 @@ export {
 export type { CoordinateStyle, GeoPoint, ScaleBar } from "./maps/geo.js";
 
 export {
-  MAX_MAP_PLACES,
-  MAX_PLACE_NAME_LENGTH,
-  MAP_PLACES_VERSION,
   MAP_PLACE_KINDS,
   MAP_PLACE_KIND_RANK,
   foldPlaces,
-  parsePlacesFile,
   rankPlaces,
 } from "./maps/places.js";
 export type {
   FoldedPlace,
   MapPlace,
   MapPlaceKind,
-  MapPlacesFile,
   PlaceHit,
   PlaceMatchTier,
 } from "./maps/places.js";
@@ -3276,8 +3273,18 @@ export {
   buildSystemPrompt,
   hasSafetyNotice,
   renderKnowledgeBlock,
+  renderSummaryBlock,
 } from "./assistant/prompts.js";
 export type { SystemPromptOptions } from "./assistant/prompts.js";
+export {
+  COMPACT_HISTORY_SHARE,
+  KEEP_RECENT_TURNS,
+  SUMMARY_MAX_TOKENS,
+  compactionCut,
+  shouldCompact,
+  summarizeConversation,
+} from "./assistant/compact.js";
+export type { SummarizeInput } from "./assistant/compact.js";
 export {
   contentWords,
   detectAnswerLanguage,

@@ -35,6 +35,48 @@ import { register } from "./register.js";
 const state = vi.hoisted(() => ({ root: "" }));
 vi.mock("./packDir.js", () => ({ installedPacksRoot: () => state.root }));
 
+/**
+ * The translator's worker, faked at the host: a real one runs NLLB in a utility
+ * process. It answers each sentence as `[target] sentence`, or holds every
+ * translation until it is cancelled when `hold` is set.
+ */
+const nllb = vi.hoisted(() => ({
+  jobs: [] as { directory: string; sentences: readonly string[]; source: string; target: string }[],
+  loads: [] as string[],
+  disposals: 0,
+  hold: false,
+  fail: false,
+}));
+vi.mock("./nllb/workerEntry.js", () => ({ NLLB_WORKER_ENTRY: "nllb-worker.js" }));
+vi.mock("./nllb/host.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./nllb/host.js")>();
+  return {
+    ...original,
+    createNllbHost: (): import("./nllb/host.js").NllbHost => ({
+      load(job) {
+        nllb.loads.push(job.directory);
+        return nllb.fail
+          ? Promise.reject(new original.NllbError("load-failed", "the model did not load"))
+          : Promise.resolve();
+      },
+      translate(job, onSentence, signal) {
+        nllb.jobs.push(job);
+        if (nllb.fail) return Promise.reject(new original.NllbError("load-failed", "the model did not load"));
+        if (nllb.hold) {
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener("abort", () => reject(new original.NllbError("aborted", "cancelled.")));
+          });
+        }
+        job.sentences.forEach((sentence, index) => onSentence(index, `[${job.target}] ${sentence}`));
+        return Promise.resolve();
+      },
+      dispose: () => {
+        nllb.disposals += 1;
+      },
+    }),
+  };
+});
+
 const TRUSTED = { trusted: true };
 const PACK_VERSION = "2026.10.0";
 const GOLDEN = fileURLToPath(new URL("../../../../../../scripts/packs/dictionary/fixtures/expected", import.meta.url));
@@ -54,6 +96,11 @@ const packKey = makeKey();
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "nexus-translator-"));
   state.root = join(dir, "packs");
+  nllb.jobs = [];
+  nllb.loads = [];
+  nllb.disposals = 0;
+  nllb.hold = false;
+  nllb.fail = false;
 });
 
 afterEach(() => {
@@ -119,10 +166,17 @@ describe("the translator handler surface", () => {
       "translator:status",
       "translator:search",
       "translator:phrases",
-      // The sentence translator's model lookup: the installed packs, by id and
-      // kind, so a pack the user installs makes a direction offerable without a
-      // reload (ADR-107's wiring of `sentences/SentenceTranslator.tsx`).
+      // The Translate tab's model lookup: the installed packs, by id and kind, so
+      // a pack the user installs makes a model choosable without a reload (ADR-107's
+      // wiring of `renderer/translate/TranslateTab.tsx`).
       "translator:packs",
+      "translator:runtime",
+      "translator:loadModel",
+      "translator:ejectModel",
+      // The Translate tab: a job the page polls, and cancels when the text changes.
+      "translator:translate",
+      "translator:translation",
+      "translator:cancelTranslation",
     ]);
   });
 
@@ -331,7 +385,7 @@ describe("the phrasebook", () => {
 });
 
 /**
- * The sentence translator's model lookup.
+ * The Translate tab's model lookup.
  *
  * What is asserted is the boundary rather than the engine: the list is the
  * REGISTRY's — a signed folder on this machine, verified against the key main
@@ -339,7 +393,7 @@ describe("the phrasebook", () => {
  * is a real one written by the pack suite's own fixture builder, so this drives
  * the same `readInstalled` the Packs card does.
  */
-describe("the installed packs the sentence translator reads", () => {
+describe("the installed packs the Translate tab reads", () => {
   it("answers nothing when no pack is installed, rather than refusing", async () => {
     expect(await call(harness(), "translator:packs", {})).toEqual({ packs: [] });
   });
@@ -347,11 +401,11 @@ describe("the installed packs the sentence translator reads", () => {
   it("answers every installed pack by id and kind, and not by path", async () => {
     const contents = { "model.bin": "not a real model, and not read here" };
     writePack({
-      dir: join(state.root, "translate-sr-en", "1.0.0"),
+      dir: join(state.root, "nllb-600m", "1.0.0"),
       key: packKey.privateKey,
       contents,
       manifest: baseManifest([entry("model.bin", contents["model.bin"])], {
-        id: "translate-sr-en",
+        id: "nllb-600m",
         kind: "model",
       }),
     });
@@ -361,7 +415,7 @@ describe("the installed packs the sentence translator reads", () => {
     // seen it. That is the reader split the module's header records.
     installPack();
     expect(await call(harness(), "translator:packs", {})).toEqual({
-      packs: [{ id: "translate-sr-en", kind: "model" }],
+      packs: [{ id: "nllb-600m", kind: "model" }],
     });
   });
 });
@@ -415,5 +469,124 @@ describe("what the wire refuses", () => {
     await expect(harness().dispatch("translator:summon", TRUSTED, {})).rejects.toThrow(
       /No module answers channel/,
     );
+  });
+});
+
+describe("translating with an installed NLLB model", () => {
+  function installModel(id: string): void {
+    const contents = { "config.json": "{}" };
+    writePack({
+      dir: join(state.root, id, "1.0.0"),
+      key: packKey.privateKey,
+      contents,
+      manifest: baseManifest([entry("config.json", contents["config.json"])], { id, kind: "model" }),
+    });
+  }
+
+  async function finished(host: ModuleHost, jobId: string) {
+    for (;;) {
+      const view = await call<{ text: string; done: boolean; error: string | null }>(
+        host,
+        "translator:translation",
+        { jobId },
+      );
+      if (view.done) return view;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+  }
+
+  it("runs the model from the registry's folder, a sentence at a time, keeping the text's layout", async () => {
+    installModel("nllb-600m");
+    const host = harness();
+    const { jobId } = await call<{ jobId: string }>(host, "translator:translate", {
+      packId: "nllb-600m",
+      text: "Добар дан. Како сте?\n\nХвала.",
+      source: "srp_Cyrl",
+      target: "eng_Latn",
+    });
+    expect(await finished(host, jobId)).toMatchObject({
+      text: "[eng_Latn] Добар дан. [eng_Latn] Како сте?\n\n[eng_Latn] Хвала.",
+      error: null,
+    });
+    expect(nllb.jobs).toEqual([
+      {
+        directory: join(state.root, "nllb-600m", "1.0.0"),
+        sentences: ["Добар дан.", "Како сте?", "Хвала."],
+        source: "srp_Cyrl",
+        target: "eng_Latn",
+      },
+    ]);
+  });
+
+  it("loads once, reports the resident model and ejects its worker on request", async () => {
+    installModel("nllb-600m");
+    const host = harness();
+    const resident = await call<{ state: string; model: string | null }>(
+      host,
+      "translator:loadModel",
+      { packId: "nllb-600m" },
+    );
+    expect(resident).toMatchObject({ state: "resident", model: "nllb-600m" });
+    expect(nllb.loads).toEqual([join(state.root, "nllb-600m", "1.0.0")]);
+
+    await call(host, "translator:loadModel", { packId: "nllb-600m" });
+    expect(nllb.loads).toHaveLength(1);
+
+    expect(await call(host, "translator:ejectModel", {})).toMatchObject({
+      state: "absent",
+      model: null,
+    });
+    expect(nllb.disposals).toBe(1);
+  });
+
+  it("does not claim a resident model when a translation fails to load it", async () => {
+    installModel("nllb-600m");
+    nllb.fail = true;
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const host = harness();
+    const { jobId } = await call<{ jobId: string }>(host, "translator:translate", {
+      packId: "nllb-600m",
+      text: "Hello.",
+      source: "eng_Latn",
+      target: "srp_Cyrl",
+    });
+    expect(await finished(host, jobId)).toMatchObject({ error: "load-failed" });
+    expect(await call(host, "translator:runtime", {})).toMatchObject({
+      state: "error",
+      model: null,
+    });
+    quiet.mockRestore();
+  });
+
+  it("stops a translation the page cancels", async () => {
+    installModel("nllb-600m");
+    nllb.hold = true;
+    const host = harness();
+    const { jobId } = await call<{ jobId: string }>(host, "translator:translate", {
+      packId: "nllb-600m",
+      text: "Hello.",
+      source: "eng_Latn",
+      target: "deu_Latn",
+    });
+    expect(await call(host, "translator:cancelTranslation", { jobId })).toBeNull();
+    expect(await finished(host, jobId)).toMatchObject({ error: "aborted" });
+  });
+
+  it("refuses a model that is not one of the three or not installed, and a language NLLB does not name", async () => {
+    installModel("nllb-600m");
+    const host = harness();
+    const valid = { packId: "nllb-600m", text: "Hello.", source: "eng_Latn", target: "srp_Cyrl" };
+    for (const [payload, refusal] of [
+      [{ ...valid, packId: "nllb-7b" }, /packId/],
+      [{ ...valid, packId: "nllb-3300m" }, /not installed/],
+      [{ ...valid, source: "srp_Latn" }, /source/],
+      [{ ...valid, target: "eng_Latn" }, /two languages/],
+      [{ ...valid, text: "   " }, /blank/],
+      [{ ...valid, text: "a".repeat(4001) }, /text/],
+    ] as const) {
+      await expect(call(host, "translator:translate", payload), JSON.stringify(payload)).rejects.toThrow(refusal);
+    }
+    expect(nllb.jobs).toEqual([]);
+    await expect(call(host, "translator:translation", { jobId: "no-such-job" })).rejects.toThrow(/No translation/);
   });
 });

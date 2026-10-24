@@ -154,32 +154,3 @@ export function measureMetres(points: readonly GeoPoint[], distance: (a: GeoPoin
   }
   return total;
 }
-
-/**
- * The camera a pack's style states for itself.
- *
- * A map style may carry `center` and `zoom` among its own fields
- * (`https://maplibre.org/maplibre-style-spec/`, read 2026-10-10), and the pack's
- * builder writes them from the region polygon it cut the tiles out of — so the
- * app never states a coordinate of Serbia, and a second region needs no line
- * here. `null` means the style states no camera, which is a style that has not
- * been built by this app's builder; the page then leaves the camera to the
- * renderer rather than inventing a viewpoint.
- */
-export function styleCamera(style: unknown): { readonly center: GeoPoint; readonly zoom: number } | null {
-  if (typeof style !== "object" || style === null) return null;
-  const record = style as Record<string, unknown>;
-  const center = record.center;
-  const zoom = record.zoom;
-  if (
-    !Array.isArray(center) ||
-    center.length < 2 ||
-    typeof center[0] !== "number" ||
-    typeof center[1] !== "number" ||
-    typeof zoom !== "number" ||
-    !Number.isFinite(zoom)
-  ) {
-    return null;
-  }
-  return { center: { lon: center[0], lat: center[1] }, zoom };
-}

@@ -28,7 +28,7 @@ export type TranslatorDirection = (typeof TRANSLATOR_DIRECTIONS)[number];
 export const TRANSLATOR_DIRECTION_CHOICES = ["auto", "en-sr", "sr-en"] as const;
 
 /**
- * The longest text the assistant may hand the sentence translator, in characters.
+ * The longest text the assistant may hand the Translate tab, in characters.
  * A policy choice, not a measurement: the page translates as you type, and a
  * paragraph is what it is for. The assistant's tool refuses more, and the page
  * refuses it again because the request travelled through a window event.
@@ -99,7 +99,7 @@ export interface TranslatorPhrasesView {
 }
 
 /**
- * One installed pack, as the sentence translator needs it: its id, and what kind
+ * One installed pack, as the Translate tab needs it: its id, and what kind
  * of content it carries.
  *
  * Deliberately NOT the shell's `InstalledPackView`: a translation model is a
@@ -117,6 +117,32 @@ export interface TranslatorPacksView {
   readonly packs: readonly TranslatorPackView[];
 }
 
+export interface TranslatorRuntimeView {
+  readonly state: "absent" | "loading" | "resident" | "ejecting" | "error";
+  readonly model: NllbPackId | null;
+  readonly idleUnloadMinutes: number;
+}
+
+/** The translator's models, one pack per size (`docs/packs/nllb.md`); the user installs the one they want. */
+export const NLLB_PACK_IDS = ["nllb-600m", "nllb-1300m", "nllb-3300m"] as const;
+export type NllbPackId = (typeof NLLB_PACK_IDS)[number];
+
+/** Why a translation stopped, in the worker's own codes. */
+export type TranslationFailure = "bad-request" | "load-failed" | "translate-failed" | "aborted" | "no-worker";
+
+/**
+ * A translation as far as it got. The model works one sentence at a time, and
+ * `text` holds the sentences done from the start, laid out as the source is.
+ */
+export interface TranslationView {
+  readonly text: string;
+  readonly translated: number;
+  readonly total: number;
+  readonly done: boolean;
+  /** Set when the translation stopped before its end; `aborted` when it was replaced or cancelled. */
+  readonly error: TranslationFailure | null;
+}
+
 /** One search: which way, what to look up, and how many neighbours to answer with. */
 interface SearchPayload {
   direction: TranslatorDirectionChoice;
@@ -124,11 +150,34 @@ interface SearchPayload {
   limit: number;
 }
 
+/** A text to translate with an installed model, between two NLLB codes (`shared/languages.ts`). */
+interface TranslatePayload {
+  packId: NllbPackId;
+  text: string;
+  source: string;
+  target: string;
+}
+
+interface TranslationPayload {
+  jobId: string;
+}
+
+interface ModelPayload {
+  packId: NllbPackId;
+}
+
 type TranslatorOps = {
   status: { request: Record<string, never>; response: TranslatorStatusView };
   search: { request: SearchPayload; response: TranslatorSearchView };
   phrases: { request: Record<string, never>; response: TranslatorPhrasesView };
   packs: { request: Record<string, never>; response: TranslatorPacksView };
+  /** Starts a translation, replacing the one before it; the page reads it with `translation`. */
+  translate: { request: TranslatePayload; response: { readonly jobId: string } };
+  translation: { request: TranslationPayload; response: TranslationView };
+  cancelTranslation: { request: TranslationPayload; response: null };
+  runtime: { request: Record<string, never>; response: TranslatorRuntimeView };
+  loadModel: { request: ModelPayload; response: TranslatorRuntimeView };
+  ejectModel: { request: Record<string, never>; response: TranslatorRuntimeView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -143,6 +192,12 @@ export const contract = defineModuleContract<"translator", TranslatorOps>("trans
   "search",
   "phrases",
   "packs",
+  "translate",
+  "translation",
+  "cancelTranslation",
+  "runtime",
+  "loadModel",
+  "ejectModel",
 ]);
 
 /**

@@ -2,7 +2,7 @@
  * The markdown-to-note path, as a module of its own so the shell can reach it
  * with `import()`.
  *
- * `Onboarding` writes one welcome note per profile, ever, and before this file
+ * Profile creation writes one welcome note per profile, ever, and before this file
  * existed its static import of these two functions was the only reason Yjs and
  * the markdown importer sat in the chunk every session parses at startup —
  * about 270 kB of it, for a write that happens once. `@nexus/core` cannot be the

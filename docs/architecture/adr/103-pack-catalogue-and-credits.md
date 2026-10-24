@@ -2,7 +2,8 @@
 
 **Status:** accepted (2026-10-10) · **Owner:** founder · Amends
 [ADR-091](091-content-packs.md) (format 1 gains an optional `notice`) and uses
-the seam [ADR-092](092-downloads-network-mode.md) left open
+the seam [ADR-092](092-downloads-network-mode.md) left open · **Amended**
+2026-10-22: catalogue format 2 (§11)
 
 ADR-091 built a pack as a signed folder and installed it from a disk. ADR-092
 built a mode that may reach the network and a service that moves a file against
@@ -286,3 +287,54 @@ rather than the element.
 - **A per-pack disclaimer string in the manifest.** The sentence is the
   product's obligation to the reader, not the publisher's copy: a pack that
   could word it would be a pack that could word it away.
+
+## 11. Amended 2026-10-22: catalogue format 2
+
+**The finding.** Format 1 lists every file of every pack, and a pack of many
+small files is a long entry: the published catalogue reached 966,906 bytes with
+22 packs, against the 1 MiB cap the client reads it under. The packs 2.5 adds
+would put it over, and a catalogue over the cap is refused whole, so every 2.1
+client would lose the list.
+
+**The decision.** From 2.5 the app reads format 2, at its own address:
+
+```
+https://github.com/lukastojiljkovic/nexus-packs/releases/download/catalogue-2/catalogue.json
+```
+
+An entry keeps §3's metadata and drops `files`. In their place it carries
+`fileCount`, `minAppVersion`, `assets` (the base URL the pack's release assets
+live under, https on a download host, ending in `/`, no query or fragment) and
+`manifest` and `signature`, each `{ size, sha256 }`: the pair §3 already pinned,
+pinned the same way. Every other address is derived: an asset is named
+`<id>__<path with / as __>`, unsafe characters replaced and a long name cut and
+suffixed with its own digest (`packs/assets.ts`, and `assetName` in
+`scripts/packs/catalogue.mjs`; the script's test holds the two spellings
+together).
+
+**What this changes in §5.** The download fetches the pair first and checks the
+signature (`readSignedManifest`, the install's own reader) before it asks for
+any content, so a manifest the release key did not sign costs two small
+requests rather than the whole pack. The content list is then the signed
+manifest's, and its sizes and digests pin each file as the catalogue's did. The
+entry must agree with the manifest it pinned (`id`, `version`, `fileCount`,
+`size`), or the download is refused with `"catalogue-entry"`. The install still
+verifies everything, unchanged.
+
+**The floor travels in the entry.** An entry whose `minAppVersion` is newer than
+the running app is not listed, so a pack that needs a newer build is never
+offered to one that would refuse it at install.
+
+**Format 1 stays where it is, frozen.** 2.1 reads it and nothing writes it
+again; 2.5 refuses it with `"format-unknown"`, as §2 says of any format it does
+not read. The format-2 entries of the packs already published are written from
+format 1 by `catalogue.mjs --from-v1`, which reads each pinned manifest for its
+floor and refuses any file whose published name is not the one the rule
+derives. Their assets are not uploaded again. The six `translate-*` packs are
+left out of format 2, because 2.5 has no reader for them ([ADR-119](119-translator-on-nllb.md) §9);
+format 1 keeps them for 2.1.
+
+**Rejected:** raising the cap (2.1 clients keep the old one, so they would
+still lose the list); one catalogue per kind (more signed documents, the same
+growth); a compressed catalogue (a decompressor in front of the signature
+check, for a document that no longer needs to grow per file).

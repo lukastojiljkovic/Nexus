@@ -2,12 +2,16 @@
  * Downloading a catalogue pack (ADR-103), and the one thing it does with the
  * bytes: hands the finished folder to `installPackFromDirectory`.
  *
- * **Nothing here verifies anything.** Every hash is checked by the download
- * service while the file is written (`download/service.ts`), the manifest's
- * signature and the whole structural comparison are checked by the install
- * (`packs/install.ts`), and this module's job is the seam between them: fetch
- * the files the signed catalogue pins, one at a time, into one folder, and then
- * call the install with that folder. A second copy of any of those rules here
+ * **It fetches in two steps, and verifies nothing itself.** A format-2
+ * catalogue entry pins the pack's `pack.json` and `pack.json.sig`; those come
+ * first. Once both are placed, `readSignedManifest` (`source.ts`, the install's
+ * own first half) checks the release key's signature and the manifest's rules,
+ * `catalogueContentFiles` checks that the manifest is the pack the entry
+ * described, and only then are the content files queued — each pinned by the
+ * SIGNED manifest's size and digest. Every hash is checked by the download
+ * service while the file is written (`download/service.ts`), and the whole
+ * structural comparison by the install (`packs/install.ts`) at the end. This
+ * module is the seam between them; a second copy of any of those rules here
  * would be the copy that drifts.
  *
  * **One folder per pack, and it is the install's input.** The pack is assembled
@@ -26,9 +30,9 @@
  * resumed pack re-downloads nothing it already has. Cancelling removes the whole
  * staging folder.
  *
- * There is no URL in this module's vocabulary: a `PackCatalogueEntry` came out
- * of a document the release key signed, and a `DownloadRequest` is built from it
- * field by field. The renderer names a pack id and nothing else.
+ * There is no URL in this module's vocabulary: every address is built by
+ * `catalogue.ts` from an entry the release key signed and, for the content, a
+ * manifest it signed too. The renderer names a pack id and nothing else.
  */
 
 import { createHash, randomBytes } from "node:crypto";
@@ -44,12 +48,21 @@ import type {
 } from "../download/service.js";
 import { downloadStagingPath } from "../download/service.js";
 import { modeAllowsDownloads, type NetworkMode } from "../net/offline.js";
-import type { PackCatalogueEntry } from "./catalogue.js";
+import {
+  catalogueContentFiles,
+  catalogueMetadataFiles,
+  type PackCatalogueEntry,
+  type PackCatalogueFile,
+} from "./catalogue.js";
 import { packRefusalCode, type PackRefusalCode } from "./errors.js";
 import { installPackFromDirectory } from "./install.js";
 import { PACK_LIMITS } from "./limits.js";
 import { packPathSegments } from "./paths.js";
 import { PACKS_STAGING_DIR, packsRoot, type InstalledPack } from "./registry.js";
+import { readSignedManifest } from "./source.js";
+
+/** The manifest and its signature: the files an entry pins, fetched before any content. */
+const METADATA_FILES = 2;
 
 /** What a `download` answers. `"paused"` is not a failure; `packsResume` continues it. */
 export type PackDownloadOutcome =
@@ -124,6 +137,11 @@ function statusOf(job: { readonly status: "running" | "paused" | "cancelled" }):
 /** A download in flight, or paused; forgotten the moment it ends either way. */
 interface Job {
   readonly entry: PackCatalogueEntry;
+  /**
+   * What to fetch, in order: the manifest and its signature, then — once the
+   * manifest is verified — the content files it lists. Grows exactly once.
+   */
+  readonly files: PackCatalogueFile[];
   /** `packs/.staging/dl-<random>`: the pack is assembled here, in `pack/`. */
   readonly stage: string;
   readonly packDir: string;
@@ -193,7 +211,7 @@ export function createPackDownloader(deps: PackDownloadDeps): PackDownloader {
       phase: "download",
       file: job.file,
       filesDone: job.index,
-      filesTotal: job.entry.files.length,
+      filesTotal: job.entry.fileCount,
       bytesDone: job.placedBytes + job.currentBytes,
       bytesTotal: job.entry.size,
     });
@@ -274,6 +292,29 @@ export function createPackDownloader(deps: PackDownloadDeps): PackDownloader {
   }
 
   /**
+   * Queues the content files, once the manifest and its signature are placed.
+   *
+   * The refusal comes back as a code rather than a throw, `installNow`'s split:
+   * a `PackError` here is the pack's fault (a signature that is not the key's,
+   * a manifest that is not the entry's pack), anything else is a bug.
+   */
+  function queueContent(job: Job): PackRefusalCode | null {
+    try {
+      const { manifest } = readSignedManifest({
+        dir: job.packDir,
+        appVersion: deps.appVersion,
+        publicKeyPem: deps.publicKeyPem,
+      });
+      job.files.push(...catalogueContentFiles(job.entry, manifest));
+      return null;
+    } catch (error) {
+      const code = packRefusalCode(error);
+      if (code === null) throw error;
+      return code;
+    }
+  }
+
+  /**
    * Fetches file after file, then installs. `resume` says the first answer
    * arrives from the service's `resume` rather than from a fresh `start`: the
    * file in flight already has a service job, and starting it again would be
@@ -291,7 +332,16 @@ export function createPackDownloader(deps: PackDownloadDeps): PackDownloader {
       }
       if (job.status === "paused") return { outcome: "paused", id: job.entry.id };
 
-      const file = job.entry.files[job.index];
+      if (!resume && job.index === METADATA_FILES && job.files.length === METADATA_FILES) {
+        const code = queueContent(job);
+        if (code !== null) {
+          forget(job);
+          await removeStage(job);
+          return refused(job.entry.id, code);
+        }
+      }
+
+      const file = job.files[job.index];
       let outcome: DownloadOutcome;
       if (resume) {
         resume = false;
@@ -331,7 +381,7 @@ export function createPackDownloader(deps: PackDownloadDeps): PackDownloader {
           job.token = null;
           // The next file's name, or the last file's: either way the card has
           // something true to draw between two files.
-          job.file = job.entry.files[job.index]?.path ?? job.file;
+          job.file = job.files[job.index]?.path ?? job.file;
           emit(job);
           // A pause that landed while this reply was arriving leaves the file
           // placed (it is verified) and the job paused; a cancel is handled by
@@ -371,12 +421,14 @@ export function createPackDownloader(deps: PackDownloadDeps): PackDownloader {
       if (free !== null && free < needed) return refused(entry.id, "no-space");
 
       const stage = downloadStageRoot(deps.userData, randomBytes(8).toString("hex"));
+      const files = [...catalogueMetadataFiles(entry)];
       const job: Job = {
         entry,
+        files,
         stage,
         packDir: join(stage, "pack"),
         index: 0,
-        file: entry.files[0]?.path ?? "",
+        file: files[0]?.path ?? "",
         placedBytes: 0,
         currentBytes: 0,
         token: null,

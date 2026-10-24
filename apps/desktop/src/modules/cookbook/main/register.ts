@@ -195,6 +195,8 @@ export function register(host: ModuleHostSurface): void {
       favourite: recipe.favourite,
       source: recipe.source,
       hasPhoto: recipe.photo !== null,
+      hasIngredients: recipe.ingredients.length > 0,
+      hasSteps: recipe.steps.length > 0,
       updatedAt: recipe.updatedAt,
     };
   }
@@ -671,6 +673,11 @@ export function register(host: ModuleHostSurface): void {
     const profileId = call.as.asId(payload.profileId, "profileId");
     const pack = requireRecipesPack(call, payload.packId);
     const recipe = requirePackRecipe(call, pack, payload.id);
+    if (!recipe.saveable) {
+      throw new Error(
+        `Pack "${pack.manifest.id}" recipe "${recipe.id}" is readable but its method is too large for the cookbook.`,
+      );
+    }
     const recipes = store(call, profileId);
     const copy = packRecipeInput(pack, recipe);
     const now = instant(call.now());
@@ -1024,6 +1031,7 @@ function packSummaryOf(recipe: PackRecipe): PackRecipeSummaryView {
     title: recipe.title,
     language: recipe.language,
     servings: recipe.servings,
+    saveable: recipe.saveable,
     tags: [...recipe.tags],
     ingredientCount: recipe.ingredients.length,
     stepCount: recipe.steps.length,

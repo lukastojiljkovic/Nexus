@@ -1276,7 +1276,7 @@
   border-radius: var(--nx-radius-lg);
   /* LIFTED, not raised — the one card on this screen and the only reason the
      screen exists, the same shape (and so the same tier) as `.auth__card` and
-     `.onb__card`. „Minimal chrome, one card centred" only works if the card is
+     `.auth__card`. „Minimal chrome, one card centred" only works if the card is
      unmistakably the object; at the raised tier it would read as one card that
      happens to be alone, and on Dan — where it had `--nx-shadow: none` — it did
      not read as an object at all. */

@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { generateNonogram } from "@nexus/core";
 import type { NonogramPuzzle } from "@nexus/core";
+import type { NonogramPictureView } from "../shared/ipc.js";
 import {
   MARK_CROSSED,
   MARK_FILLED,
   MARK_UNKNOWN,
   ZOOM_CELL_SIZES,
   applyMark,
+  choosePicture,
   completedLines,
   emptyMarks,
   isSolved,
   lineIsDone,
   nonogramSizeOf,
+  pictureToPuzzle,
   progressOf,
   zoomCellSize,
 } from "./nonogram.js";
@@ -124,5 +127,63 @@ describe("the nonogram marks", () => {
       progress: puzzle.solution.filter(Boolean).length,
       wrong: 0,
     });
+  });
+});
+
+/** A pack picture of one size whose rows do not matter to the choice it is in. */
+function packPicture(id: string, size: number): NonogramPictureView {
+  return {
+    id,
+    size,
+    rows: Array.from({ length: size }, () => "0".repeat(size)),
+    title: { en: id, sr: id },
+    author: "Author",
+  };
+}
+
+describe("pictureToPuzzle", () => {
+  it("builds the puzzle a picture describes, with its clues read from the rows", () => {
+    const puzzle = pictureToPuzzle({
+      id: "3-fixture",
+      size: 3,
+      rows: ["110", "100", "000"],
+      title: { en: "Fixture", sr: "Fiksna" },
+      author: "Author",
+    });
+    expect(puzzle).toEqual({
+      width: 3,
+      height: 3,
+      rowClues: [[2], [1], []],
+      colClues: [[2], [1], []],
+      solution: [true, true, false, true, false, false, false, false, false],
+      seed: 0,
+      attempts: 0,
+    });
+    expect(isSolved([1, 1, 0, 1, 0, 0, 0, 0, 0], puzzle)).toBe(true);
+  });
+});
+
+describe("choosePicture", () => {
+  const pool = [packPicture("10-a", 10), packPicture("10-b", 10), packPicture("15-c", 15)];
+
+  it("answers null when the pack has no picture at that size", () => {
+    expect(choosePicture(pool, 20, 3, null)).toBeNull();
+    expect(choosePicture([], 10, 3, null)).toBeNull();
+  });
+
+  it("deals the size's picture the seed points at", () => {
+    expect(choosePicture(pool, 10, 0, null)?.id).toBe("10-a");
+    expect(choosePicture(pool, 10, 1, null)?.id).toBe("10-b");
+    expect(choosePicture(pool, 10, 2, null)?.id).toBe("10-a");
+    expect(choosePicture(pool, 15, 9, null)?.id).toBe("15-c");
+  });
+
+  it("skips the picture just played when the size has another", () => {
+    expect(choosePicture(pool, 10, 1, "10-b")?.id).toBe("10-a");
+    expect(choosePicture(pool, 10, 0, "10-a")?.id).toBe("10-b");
+  });
+
+  it("deals the same picture again when it is the only one of its size", () => {
+    expect(choosePicture(pool, 15, 0, "15-c")?.id).toBe("15-c");
   });
 });

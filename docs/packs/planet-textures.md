@@ -12,8 +12,9 @@ JSON file, and the renderer never reads a byte the manifest does not list.
 
 ## What it contains
 
-Twelve images, 2048 × 1024 WebP each except the ring strip at 2048 × 125, and
-`textures.json`. Sizes are the bytes the builder measured on 2026-10-10.
+Fourteen images, 2048 × 1024 WebP each except the ring strip at 2048 × 125, and
+`textures.json`. The table names each source; the final byte sizes are recorded
+in the signed pack metadata produced by the next build.
 
 | Body | Slot | Image | Size | Source | Licence |
 | --- | --- | --- | --- | --- | --- |
@@ -29,10 +30,14 @@ Twelve images, 2048 × 1024 WebP each except the ring strip at 2048 × 125, and
 | Saturn | `rings` | `images/saturn-rings.webp` | 5.7 KiB | Solar System Scope `2k_saturn_ring_alpha.png` | CC BY 4.0 |
 | Uranus | `day` | `images/uranus-day.webp` | 9.3 KiB | Solar System Scope `2k_uranus.jpg` | CC BY 4.0 |
 | Neptune | `day` | `images/neptune-day.webp` | 21.3 KiB | Solar System Scope `2k_neptune.jpg` | CC BY 4.0 |
+| Pluto | `day` | `images/pluto-day.webp` | 236.2 KiB | NASA/JHUAPL/SwRI global colour mosaic | Public domain (NASA) |
+| Sky | `sky` | `images/sky-milky-way.webp` | 74.9 KiB | Solar System Scope `2k_stars_milky_way.jpg` | CC BY 4.0 |
 
-**Measured size: 2 665 085 bytes (2 602.6 KiB) in 13 files**, against 7 466 384
-bytes (7 291.4 KiB) of sources — the WebP encode is 36% of what was downloaded.
-`textures.json` is 1 456 bytes of that; the twelve images are the rest.
+The measured content is **2,983,997 bytes (2,914.1 KiB) in fifteen files**:
+fourteen images and `textures.json` (1,807 bytes). The two new WebP outputs hash
+to `8485a0741bff3d30f928564b23067cc6b8fb2934c0c75c07a8f2115db6543221`
+(sky) and `67a17e562475b616146b15bd7efaca3cbe887f8b7c22e91f6ae3f5b1f350db90`
+(Pluto). The source digests and dimensions are pinned in `sources.json`.
 
 ### `textures.json`
 
@@ -45,6 +50,10 @@ bytes (7 291.4 KiB) of sources — the WebP encode is 36% of what was downloaded
       "night": "images/earth-night.webp",
       "credit": "Earth: NASA Earth Observatory, Blue Marble (day) and Black Marble (night) — not subject to copyright in the United States"
     }
+  },
+  "sky": {
+    "image": "images/sky-milky-way.webp",
+    "credit": "Milky Way sky: Solar System Scope (INOVE) — CC BY 4.0"
   }
 }
 ```
@@ -53,13 +62,9 @@ One entry per body that has an image, in the contract's body order (the Sun,
 then outwards, with the Moon after the Earth); `day`, `night` and `rings` are
 the slots, and `credit` is that body's attribution line, which the module shows.
 
-## What it does not contain, and why
-
-**Pluto.** No NASA, USGS or Solar System Scope source for it was found with both
-a stable URL and a licence that could be quoted, inside the budget of this run.
-The body is left out rather than filled with something whose provenance is a
-guess: the view draws Pluto as a neutral sphere with its name, and the pack can
-gain the map the day a source with evidence is found.
+The optional top-level `sky` object is a backward-compatible addition to layout
+1. Older readers ignore it. The v3 viewer validates its path against the signed
+manifest and renders it as a non-interactive inward-facing background sphere.
 
 ## Sources and licences
 
@@ -67,7 +72,7 @@ Both licences are quoted verbatim in
 [`scripts/packs/planet-textures/sources.json`](../../scripts/packs/planet-textures/sources.json),
 which is also what the builder verifies every download against.
 
-**Solar System Scope — CC BY 4.0.** Ten of the twelve images. Their texture page
+**Solar System Scope — CC BY 4.0.** Twelve of the fourteen images. Their texture page
 (`https://www.solarsystemscope.com/textures/`) states:
 
 > Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially.
@@ -76,7 +81,8 @@ The attribution the licence requires travels in three places: this document, the
 `credit` line each body carries inside `textures.json`, and the pack manifest's
 `licence.attribution`, which `pack-sign.mjs` writes into the signed `pack.json`.
 
-**NASA — not subject to copyright in the United States.** The two Earth maps.
+**NASA — not subject to copyright in the United States.** The two Earth maps and
+Pluto's global colour mosaic.
 NASA's media guidelines (`https://www.nasa.gov/nasa-brand-center/images-and-media/`)
 state:
 
@@ -120,7 +126,7 @@ is ever enlarged, so a smaller source stays at its own size.
 
 Measured on this machine on 2026-10-10: **2.7 s** with every source already in
 the cache, and about 6 s for the first run, which also downloads 7.3 MiB (the
-twelve downloads alone took 5.6 s).
+downloads alone took about 5.6 s).
 
 Then the maintainer signs it — this run never has the key:
 

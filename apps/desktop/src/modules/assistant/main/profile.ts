@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type {
+  ChatLoadOverrides,
   ChatModel,
   Embedder,
   HardwareProfile,
@@ -12,7 +13,11 @@ import type {
   VoiceService,
   WebService,
 } from "@nexus/core";
-import { ConversationStore, type AssistantSettings } from "@nexus/db";
+import {
+  ConversationStore,
+  type AssistantRuntimeOptions,
+  type AssistantSettings,
+} from "@nexus/db";
 import { createKnowledgeService } from "../../../main/assistant/knowledge/index.js";
 import type { KnowledgeIndex } from "../../../main/assistant/knowledge/types.js";
 import { createToolRegistry } from "../../../main/assistant/tools/index.js";
@@ -133,6 +138,7 @@ export class AssistantProfile {
       userData,
       packPublicKeyPem: this.services.releasePublicKeyPem(),
       embedder: () => this.embedder(),
+      embedderId: () => this.embedderId(),
       // The offline wiki is passed whenever this build has a ZIM service,
       // whether or not a library is on disk at this moment: the adapter reads
       // `libraries()` on every call, so a library downloaded while the app runs
@@ -306,7 +312,10 @@ export class AssistantProfile {
   async loadChat(tier: ModelTier, signal: AbortSignal): Promise<ChatModel> {
     const entry = await this.chatModelEntry(tier);
     if (entry === null) throw new AssistantModelMissingError(tier);
-    return await this.modelHost().loadChat(entry.id, signal);
+    const runtime = this.runtimeOptions();
+    const host = this.modelHost();
+    host.keepLoadedFor(runtime.idleUnloadMinutes);
+    return await host.loadChat(entry.id, signal, loadOverrides(runtime));
   }
 
   /**
@@ -317,6 +326,13 @@ export class AssistantProfile {
    * user who has none keeps working - full text alone is a described state of the
    * knowledge base, not a degraded one.
    */
+  /** The embedding model `embedder` loads, by id, read off the disk and never loaded for it. */
+  async embedderId(): Promise<string | null> {
+    if (this.embedderCache !== undefined) return this.embedderCache?.modelId ?? null;
+    const installed = await this.modelHost().installed();
+    return installed.find((candidate) => candidate.capabilities.includes("embedding"))?.id ?? null;
+  }
+
   async embedder(): Promise<Embedder | null> {
     if (this.embedderCache !== undefined) return this.embedderCache;
     try {
@@ -414,6 +430,20 @@ export class AssistantProfile {
     return this.store.setChatModel(id, this.instant());
   }
 
+  runtimeOptions(): AssistantRuntimeOptions {
+    return this.store.runtimeOptions();
+  }
+
+  /**
+   * Writes how the chat model runs. The idle time applies to the model in memory
+   * at once; the context and the sampling, at the next turn's load.
+   */
+  setRuntimeOptions(options: AssistantRuntimeOptions): AssistantRuntimeOptions {
+    const saved = this.store.setRuntimeOptions(options, this.instant());
+    this.modelHost().keepLoadedFor(saved.idleUnloadMinutes);
+    return saved;
+  }
+
   /**
    * Whether web search may act right now: the user's consent AND a mode that
    * allows a connection (`webSearchActive`, ADR-097's own rule).
@@ -502,4 +532,15 @@ export class AssistantProfile {
   async hardware(): Promise<HardwareProfile> {
     return await this.modelHost().hardware();
   }
+}
+
+/** The options a profile set, as a load's overrides: a `null` is the model's own and is left out. */
+function loadOverrides(options: AssistantRuntimeOptions): ChatLoadOverrides {
+  return {
+    ...(options.contextTokens === null ? {} : { contextTokens: options.contextTokens }),
+    ...(options.temperature === null ? {} : { temperature: options.temperature }),
+    ...(options.topP === null ? {} : { topP: options.topP }),
+    ...(options.topK === null ? {} : { topK: options.topK }),
+    ...(options.repeatPenalty === null ? {} : { repeatPenalty: options.repeatPenalty }),
+  };
 }

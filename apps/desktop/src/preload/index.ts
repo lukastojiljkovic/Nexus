@@ -35,6 +35,7 @@ const api: NexusApi = {
     ipcRenderer.invoke(IpcChannel.authRenameAccount, { accountId, label }),
   deleteAccount: (accountId) => ipcRenderer.invoke(IpcChannel.authDeleteAccount, { accountId }),
   unlockWithPasscode: (passcode) => ipcRenderer.invoke(IpcChannel.authUnlock, { passcode }),
+  openWithoutPasscode: () => ipcRenderer.invoke(IpcChannel.authOpenWithoutPasscode),
   unlockWithRecovery: (recoveryCode, newPasscode) =>
     ipcRenderer.invoke(IpcChannel.authRecover, { recoveryCode, newPasscode }),
   changePasscode: (currentPasscode, nextPasscode) =>

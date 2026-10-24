@@ -58,8 +58,8 @@ export interface LabelViewport {
   readonly height: number;
 }
 
-/** One line of `--nx-font-size-caption` at `--nx-font-leading-tight`, padded: the layer's own height for a label. */
-export const LABEL_HEIGHT_PX = 18;
+/** The rendered label height, including the 24px pointer-target floor. */
+export const LABEL_HEIGHT_PX = 24;
 
 /** The clear space between a body's disc and the label that names it. */
 export const LABEL_GAP_PX = 8;

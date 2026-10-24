@@ -12,7 +12,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  PUBLIC_DOMAIN_LICENCE,
   WIKIBOOKS_ATTRIBUTION,
+  WIKIBOOKS_LICENCE,
   categoriesOf,
   extractSections,
   parseBeeton,
@@ -34,7 +36,14 @@ const SR_PAGES = json("sr-wikibooks-pages.json").pages;
 
 const page = (pages, title) => pages.find((entry) => entry.title === title);
 
-const GUTENBERG_SOURCE = { title: "T", url: "https://example.org", licence: "Public domain", attribution: "A" };
+const GUTENBERG_SOURCE = { title: "T", url: "https://example.org", licence: "public-domain", attribution: "A" };
+
+describe("dataset licences", () => {
+  it("uses the identifiers the Cookbook reader stores", () => {
+    expect(WIKIBOOKS_LICENCE).toBe("CC-BY-SA-4.0");
+    expect(PUBLIC_DOMAIN_LICENCE).toBe("public-domain");
+  });
+});
 
 describe("toPlain", () => {
   it("shows a link's display text, and a namespace-less target without one", () => {
@@ -127,10 +136,12 @@ describe("parseWikibooksPage", () => {
       source: {
         title: "Cookbook:Beurre Blanc",
         url: "https://en.wikibooks.org/wiki/Cookbook:Beurre_Blanc",
-        licence: "CC BY-SA 4.0",
+        licence: "CC-BY-SA-4.0",
         attribution: WIKIBOOKS_ATTRIBUTION,
       },
-      servings: "4 portions",
+      // The app's dataset layout stores servings as an integer; the source's
+      // unit word is prose around the count, not part of the value.
+      servings: 4,
     });
   });
 
@@ -198,11 +209,23 @@ describe("parseWikibooksPage", () => {
       source: {
         title: "Kuvar:Bubrezi u umaku",
         url: "https://sr.wikibooks.org/wiki/Kuvar:Bubrezi_u_umaku",
-        licence: "CC BY-SA 4.0",
+        licence: "CC-BY-SA-4.0",
         attribution: WIKIBOOKS_ATTRIBUTION,
       },
-      servings: "Za broj osoba: 4",
+      servings: 4,
     });
+  });
+
+  it("omits a yield that states a quantity rather than a number of servings", () => {
+    const { recipe } = parseWikibooksPage({
+      title: "Cookbook:Stock",
+      wikitext: "{{Recipe summary\n| Yield = 1 quart\n}}\n\n== Ingredients ==\n* 1 onion\n\n== Procedure ==\n# Simmer.\n",
+      host: "en.wikibooks.org",
+      language: "en",
+      kinds: KINDS,
+    });
+
+    expect(recipe.servings).toBeUndefined();
   });
 
   it("drops a page with no ingredients and a page with no procedure heading", () => {

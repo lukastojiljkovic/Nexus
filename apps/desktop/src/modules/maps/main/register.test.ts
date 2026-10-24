@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_PIN_NOTE_LENGTH, NexusDatabase, openDatabase, uuidv7 } from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
+import type { MapRegionEstimate, MapRegionsView } from "../shared/ipc.js";
+import { allTiles, buildArchive } from "./extract/fixtures.js";
+import { BUILD_BASE_URL, BUILDS_URL } from "./regions/builds.js";
+import { fakeHost } from "./regions/fixtures.js";
+import { configureMapRegions, mapRegions } from "./regions/services.js";
 import { register } from "./register.js";
 
 /**
@@ -94,6 +100,12 @@ describe("the maps handler surface", () => {
       "maps:removePin",
       "maps:setLocation",
       "maps:clearLocation",
+      "maps:regions",
+      "maps:estimateRegion",
+      "maps:downloadRegion",
+      "maps:pauseRegion",
+      "maps:cancelRegion",
+      "maps:removeRegion",
     ]);
   });
 
@@ -347,5 +359,54 @@ describe("the maps archive section", () => {
   it("writes nothing for a session that names more than one profile, rather than guess", () => {
     const { host } = harness();
     expect(host.collectExports(["profile-1", "profile-2"])).toEqual([]);
+  });
+});
+
+describe("the map regions", () => {
+  // Zooms 0 to 6: a build is always larger than the 16 KiB its header and root are read in.
+  const planet = buildArchive(allTiles(6));
+
+  beforeEach(() => {
+    const md5 = createHash("md5").update(planet).digest("base64");
+    const list = [{ key: "20261022.pmtiles", size: planet.length, md5sum: md5, version: "4.15.2" }];
+    configureMapRegions(() => ({
+      userData: dir,
+      mode: () => "downloads",
+      isAllowedUrl: () => true,
+      http: fakeHost({ [BUILDS_URL]: JSON.stringify(list), [`${BUILD_BASE_URL}20261022.pmtiles`]: planet }),
+      freeSpaceBytes: async () => 1e12,
+    }));
+  });
+
+  it("measures, downloads and removes a region through the host", async () => {
+    const { host } = harness();
+    expect(await call<MapRegionsView>(host, "maps:regions", {})).toEqual({
+      installed: [],
+      job: null,
+      newestBuild: null,
+    });
+    const estimate = await call<MapRegionEstimate>(host, "maps:estimateRegion", { id: "SRB", detail: "overview" });
+    expect(estimate).toMatchObject({ ok: true, build: "20261022" });
+
+    await call(host, "maps:downloadRegion", { id: "SRB", detail: "overview" });
+    await mapRegions().idle();
+    const view = await call<MapRegionsView>(host, "maps:regions", {});
+    expect(view.installed).toMatchObject([{ id: "SRB", detail: "overview", build: "20261022" }]);
+
+    expect((await call<MapRegionsView>(host, "maps:removeRegion", { id: "SRB" })).installed).toEqual([]);
+  });
+
+  it("refuses a region the outline does not carry and a detail the wire does not name", async () => {
+    const { host } = harness();
+    await expect(call(host, "maps:estimateRegion", { id: "XXX", detail: "overview" })).rejects.toThrow(
+      /not a region/,
+    );
+    await expect(call(host, "maps:downloadRegion", { id: "SRB", detail: "streets" })).rejects.toThrow(
+      /not a detail/,
+    );
+    await expect(call(host, "maps:removeRegion", { id: "" })).rejects.toThrow(/non-empty string/);
+    await expect(call(host, "maps:estimateRegion", { id: "continent:Europe", detail: 2 })).rejects.toThrow(
+      /must be a string/,
+    );
   });
 });

@@ -107,6 +107,7 @@ export function zimResponseHeaders(mime: string): Record<string, string> {
   const headers: Record<string, string> = {
     "content-type": mime,
     "cache-control": "no-store",
+    "access-control-allow-origin": "*",
     // Every ZIM entry is local content: there is no origin it could be a
     // credential for, and saying so keeps a pack from being treated as one.
     "x-content-type-options": "nosniff",

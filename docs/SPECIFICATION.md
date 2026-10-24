@@ -10,7 +10,7 @@
 > detailed per-module requirements live in [prd/](prd/); the technical decisions in
 > [architecture/](architecture/).
 >
-> **Verified on 2026-10-15** against the tree it lives in.
+> **Verified on 2026-10-24** against the 3.0.0 release candidate.
 
 ---
 
@@ -30,7 +30,7 @@ private by design, and never holds your data hostage.
 ## 2. What is built today
 
 **Plain language.** Nexus is a **desktop application**, and it is in daily use:
-forty modules in six groups, beside the Dashboard and Settings, all of it
+forty-three modules in six groups, beside the Dashboard and Settings, all of it
 on your own computer. Everything is stored in one encrypted database that needs
 no network, and the app works with the network off. Public knowledge arrives
 beside it as **content packs** — signed folders a reader opens in the app — and
@@ -77,8 +77,9 @@ tools.
   the calendar (with clear visual markers for which side an event belongs to).
 - **Technical.** Every data row is scoped by `profile_id`; stores are constructed
   per profile so one profile's data is invisible to another's. **Built:** every
-  switch *into* another profile passes the passcode gate, and the account may
-  hold one business profile beside the personal one
+  switch *into* another profile requires the account credential when one is set,
+  or an explicit Open action in convenience mode, and the account may hold one
+  business profile beside the personal one
   ([ADR-058](architecture/adr/058-business-profile.md)).
 
 ### 3.2 Offline-first storage
@@ -93,20 +94,21 @@ tools.
   document format ([ADR-079](architecture/adr/079-canvas-engine.md)).
 
 ### 3.3 Accounts & privacy
-- **Plain.** You can use Nexus with a fully **local, PIN-protected account** — no
+- **Plain.** You can use Nexus with a fully **local account** — no
   server ever involved. Private notes are locked so thoroughly that **not even we
   could read them**. You can always export **all** of your data.
-- **Technical.** Local accounts derive a key from a PIN via the OS keystore. Private
+- **Technical.** Local accounts wrap one random data key with the OS vault when
+  available, or an owner-only local guard when not. An account passcode is
+  optional; Private
   notes are zero-knowledge encrypted (AEAD at rest, Argon2id KDF, a DEK/KEK scheme
   with a Recovery Kit); the shipped primitives are the local-first ones
   ([ADR-057](architecture/adr/057-private-notes-local.md)). Security is a binding baseline
   ([security/baseline.md](security/baseline.md)), designed in from the first commit.
 
-### 3.4 Modular by onboarding
-- **Plain.** Nexus has many modules, but you only ever see the ones you chose. A
-  short, visual **onboarding** sets the app up for you; everything else stays hidden
-  until you enable it in Settings.
-- **Technical.** A module registry + per-profile feature flags gate every surface.
+### 3.4 Modular from the first screen
+- **Plain.** Every registered module is visible immediately. You may hide the
+  ones you do not use and reorder the sidebar in Settings.
+- **Technical.** A module registry plus one device-level visibility setting gates every surface.
   Modules declare themselves through contracts (widgets, settings, search, stats,
   automation, import/export, tools) so the app — and, later, plugins — consumes them
   uniformly. Cross-module imports are lint-banned; modules talk through contracts.
@@ -142,10 +144,9 @@ Grouped by area. Each carries a **priority** — **Must** (core, ships early),
 describes the intended product in full.
 
 ### Core experience
-- **Onboarding (ONB) — Must.** *Plain:* a short, friendly setup that names your
-  profile, picks a theme, and tailors which modules you see. *Technical:* four
-  blocking screens + progressive in-module depth; local-account instant start is the
-  primary path; pre-populates the dashboard.
+- **No onboarding questionnaire.** *Plain:* a new account opens directly in the
+  app with every module visible. *Technical:* account creation names the personal
+  profile with a localized default and lands in the shell.
 - **Dashboard (DASH) — Must.** *Plain:* your home screen — one glance answers "what
   matters today?": today's agenda, upcoming tasks, documents about to expire, exam
   countdowns, quick actions, recent items. *Technical:* an arrangeable grid of
@@ -166,10 +167,12 @@ describes the intended product in full.
   document expiry, study reviews — that you can snooze. *Technical:* a scheduling +
   delivery layer (OS notifications on desktop) with a cleanup contract so deleting a
   source removes its reminders.
-- **Accounts & Auth (AUTH) — Must.** *Plain:* sign in with a nickname + password, or
-  use a fully local PIN account with no server at all. *Technical:* local accounts
-  are **built** (PIN + OS-keystore key wrap), and they are the shipped account
-  type. The cloud account (Supabase auth, MFA through aal2-restrictive RLS) is
+- **Accounts & Auth (AUTH) — Must.** *Plain:* use a fully local account with no
+  server at all, protected by a passcode or explicit device-convenience mode.
+  *Technical:* local accounts are **built** (optional passcode wrap plus a system
+  vault or owner-only guard, and a Recovery Kit), and they are the shipped account
+  type. Private notes retain their own mandatory credential. The cloud account
+  (Supabase auth, MFA through aal2-restrictive RLS) is
   built on the server side and **parked** with the rest of the cloud phase (§2):
   the master sync key it mints is wrapped twice so that nothing about local
   at-rest protection ever depends on an account.

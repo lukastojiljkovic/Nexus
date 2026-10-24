@@ -29,9 +29,14 @@
  *     building a fresh context for a model that is sitting in memory is the cost
  *     this host removes: a load whose request is the one that put the resident
  *     model there is answered from memory, without a message to the worker.
+ *   - **Memory is given back when nobody is asking.** Once no request has been
+ *     pending for `keepLoadedFor` minutes, the models are unloaded. The host is
+ *     the one place that knows a request is pending - a reindex's embed as much
+ *     as a turn's answer - so the timer lives here and not in the module.
  */
 
 import type {
+  ChatLoadOverrides,
   ChatModel,
   DownloadProgress,
   Embedder,
@@ -40,6 +45,7 @@ import type {
   ModelEntry,
   ModelHost,
   ModelRecommendation,
+  ResidentModels,
 } from "@nexus/core";
 import { existsSync } from "node:fs";
 
@@ -128,6 +134,31 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
    */
   let loadedChat: { readonly key: string; readonly info: LoadedModelInfo } | null = null;
   let loadedEmbedder: string | null = null;
+  /** Milliseconds with nothing pending before the models are unloaded; `0` is never. */
+  let idleMs = 0;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function disarmIdle(): void {
+    if (idleTimer !== null) clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+
+  /**
+   * Armed whenever the last pending request settles, and checked again when it
+   * fires: a load's answer arrives before the load records what it put in
+   * memory, so whether anything is resident is the firing's question.
+   */
+  function armIdle(): void {
+    disarmIdle();
+    if (idleMs === 0 || waiting.size > 0) return;
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      if (waiting.size > 0 || (loadedChat === null && loadedEmbedder === null)) return;
+      // A worker that is gone has nothing to unload; the next request forks a new one.
+      unloadAll().catch(() => undefined);
+    }, idleMs);
+    idleTimer.unref?.();
+  }
 
   function ensurePort(): WorkerPort {
     if (port !== null) return port;
@@ -192,6 +223,7 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
   function send(request: (seq: number) => HostRequest): Promise<HostEvent> {
     const seq = nextSeq;
     nextSeq += 1;
+    disarmIdle();
     const promise = new Promise<HostEvent>((resolve, reject) => {
       waiting.set(seq, { resolve, reject });
     });
@@ -199,9 +231,10 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
       ensurePort().post(request(seq));
     } catch (error) {
       waiting.delete(seq);
+      armIdle();
       throw error;
     }
-    return promise;
+    return promise.finally(armIdle);
   }
 
   async function hardware(): Promise<HardwareProfile> {
@@ -213,9 +246,17 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
   /** One reading per session: the probe loads the native addon, and nothing here changes. */
   const hardwareOnce = createHardwareCache(hardware);
 
-  async function loadChatModel(id: string, signal: AbortSignal): Promise<ChatModel> {
+  async function loadChatModel(
+    id: string,
+    signal: AbortSignal,
+    overrides: ChatLoadOverrides = {},
+  ): Promise<ChatModel> {
     const entry = requireInstalled(id);
     const profile = await hardwareOnce();
+    // The profile's own choices over the entry's: a context in place of its cap,
+    // and each sampling value it names in place of the entry's.
+    const { contextTokens: contextCap = entry.contextCap, ...chosen } = overrides;
+    const sampling = { ...entry.sampling, ...chosen };
     // The body of the load, built once: it is what is sent, and it is what the
     // resident model is remembered BY. A key that is the request itself cannot
     // drift from the request the way a hand-kept list of fields can: a field
@@ -225,32 +266,38 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
       id: entry.id,
       modelPath: pathOf(entry),
       contextTokens: entry.contextTokens > 0 ? entry.contextTokens : 0,
-      ...(entry.contextCap === undefined ? {} : { contextCap: entry.contextCap }),
+      ...(contextCap === undefined ? {} : { contextCap }),
       ...(entry.thoughtTokens === undefined ? {} : { thoughtTokens: entry.thoughtTokens }),
-      ...(entry.sampling === undefined ? {} : { sampling: entry.sampling }),
+      ...(Object.keys(sampling).length === 0 ? {} : { sampling }),
       gpuLayers: deps.gpuLayers?.() ?? "auto",
       threads: profile.cpuThreads,
       title: entry.title,
       capabilities: entry.capabilities,
     };
     const key = JSON.stringify(load);
-    const resident = loadedChat;
-    if (resident !== null && resident.key === key) {
+    // Read from disk only when this exact request is not what the worker holds;
+    // a handle that outlives an unload (idle, or the page's own) calls it again.
+    const resident = async (): Promise<LoadedModelInfo> => {
+      if (loadedChat !== null && loadedChat.key === key) return loadedChat.info;
+      // Whatever was resident is being replaced, or is about to be disposed by a
+      // load that then fails. Either way this host must not answer a later load
+      // from a request that no longer describes what the worker holds.
+      loadedChat = null;
+      const event = await send((seq) => ({ v: PROTOCOL_VERSION, kind: "load-chat", seq, ...load }));
+      if (event.kind !== "loaded") throw new RuntimeError("worker", "The model host did not answer with a model.");
+      loadedChat = { key, info: event.info };
+      return event.info;
+    };
+    if (loadedChat !== null && loadedChat.key === key) {
       if (signal.aborted) {
         // Nothing was read from disk for this call, so there is nothing to give
         // back: the decision is honoured by refusing the load, and the loop that
         // asked for it sees the same signal before its first model call.
         throw new RuntimeError("aborted", "The turn was aborted before the model was used.");
       }
-      return chatModelOf(resident.info);
+      return chatModelOf(loadedChat.info, key, resident);
     }
-    // Whatever was resident is being replaced, or is about to be disposed by a
-    // load that then fails. Either way this host must not answer a later load
-    // from a request that no longer describes what the worker holds.
-    loadedChat = null;
-    const event = await send((seq) => ({ v: PROTOCOL_VERSION, kind: "load-chat", seq, ...load }));
-    if (event.kind !== "loaded") throw new RuntimeError("worker", "The model host did not answer with a model.");
-    loadedChat = { key, info: event.info };
+    const info = await resident();
     if (signal.aborted) {
       // The load itself is not interruptible — llama.cpp reads and maps gigabytes
       // and offers no cancel for that — so the user's decision is honoured at the
@@ -259,10 +306,14 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
       await unloadAll();
       throw new RuntimeError("aborted", "The model load was aborted once it finished.");
     }
-    return chatModelOf(event.info);
+    return chatModelOf(info, key, resident);
   }
 
-  function chatModelOf(info: LoadedModelInfo): ChatModel {
+  function chatModelOf(
+    info: LoadedModelInfo,
+    key: string,
+    resident: () => Promise<LoadedModelInfo>,
+  ): ChatModel {
     return {
       info,
       complete: async (request, completeSignal, onToken) => {
@@ -272,8 +323,17 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
             "This runtime loads no vision model, so an image cannot be part of the conversation.",
           );
         }
-        if (completeSignal.aborted) {
-          return { text: "", toolCalls: [], stopReason: "aborted", promptTokens: 0, completionTokens: 0 };
+        const unstarted = {
+          text: "",
+          toolCalls: [],
+          stopReason: "aborted",
+          promptTokens: 0,
+          completionTokens: 0,
+        } as const;
+        if (completeSignal.aborted) return unstarted;
+        if (loadedChat?.key !== key) {
+          await resident();
+          if (completeSignal.aborted) return unstarted;
         }
         const callId = nextCall;
         nextCall += 1;
@@ -314,19 +374,25 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
   async function loadEmbeddingModel(id: string, signal: AbortSignal): Promise<Embedder> {
     const entry = requireInstalled(id);
     const profile = await hardwareOnce();
-    const event = await send((seq) => ({
-      v: PROTOCOL_VERSION,
-      kind: "load-embedder",
-      seq,
-      id: entry.id,
-      modelPath: pathOf(entry),
-      contextTokens: entry.contextTokens > 0 ? entry.contextTokens : 0,
-      threads: profile.cpuThreads,
-    }));
-    if (event.kind !== "embedder-ready") {
-      throw new RuntimeError("worker", "The model host did not answer with an embedder.");
-    }
-    loadedEmbedder = entry.id;
+    // The same rule as a chat handle's: the profile keeps this embedder for its
+    // session, so a use after an unload reads the model again rather than failing.
+    const resident = async (): Promise<number> => {
+      const event = await send((seq) => ({
+        v: PROTOCOL_VERSION,
+        kind: "load-embedder",
+        seq,
+        id: entry.id,
+        modelPath: pathOf(entry),
+        contextTokens: entry.contextTokens > 0 ? entry.contextTokens : 0,
+        threads: profile.cpuThreads,
+      }));
+      if (event.kind !== "embedder-ready") {
+        throw new RuntimeError("worker", "The model host did not answer with an embedder.");
+      }
+      loadedEmbedder = entry.id;
+      return event.dimensions;
+    };
+    const dimensions = await resident();
     if (signal.aborted) {
       // The same rule as a chat load: llama.cpp offers no cancel for reading a
       // model, so the user's decision is honoured the moment it can be.
@@ -334,12 +400,13 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
       throw new RuntimeError("aborted", "The embedder load was aborted once it finished.");
     }
     return {
-      modelId: event.modelId,
+      modelId: entry.id,
       // The model's own vector width, reported by the worker after the load; a
       // stored dimension would be a second opinion about the file's geometry.
-      dimensions: event.dimensions,
+      dimensions,
       embed: async (texts, signal) => {
         if (signal.aborted) throw new RuntimeError("aborted", "The embedding was aborted.");
+        if (loadedEmbedder !== entry.id) await resident();
         const callId = nextCall;
         nextCall += 1;
         const answered = await send((seq) => ({
@@ -374,7 +441,15 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
     loadedChat = null;
     loadedEmbedder = null;
     streaming.clear();
-    await send((seq) => ({ v: PROTOCOL_VERSION, kind: "unload", seq }));
+    try {
+      await send((seq) => ({ v: PROTOCOL_VERSION, kind: "unload", seq }));
+    } catch (error) {
+      // Application shutdown can end the utility process before its unload
+      // acknowledgement reaches main. The memory is already released; treating
+      // that expected race as a failed unload only produces a false error.
+      if (port === null && error instanceof RuntimeError && error.code === "worker") return;
+      throw error;
+    }
   }
 
   return {
@@ -423,6 +498,15 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
     loadChat: loadChatModel,
 
     loadEmbedder: loadEmbeddingModel,
+
+    resident(): ResidentModels {
+      return { chat: loadedChat?.info.id ?? null, embedder: loadedEmbedder };
+    },
+
+    keepLoadedFor(minutes: number): void {
+      idleMs = Math.max(0, minutes) * 60_000;
+      armIdle();
+    },
 
     unloadAll,
   };

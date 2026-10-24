@@ -9,7 +9,9 @@
  * tested — nothing under Vitest resolves `?modulePath`, and nothing needs to.
  */
 
-import workerEntryPath from "./worker.js?modulePath";
+// The bundle is `workerMain.ts`, which starts the loop: `worker.ts` only defines it, so a
+// process started on it would answer nothing.
+import workerEntryPath from "./workerMain.js?modulePath";
 
 /** The built voice worker's absolute path, as electron-vite resolved it. */
 export const VOICE_WORKER_ENTRY: string = workerEntryPath;

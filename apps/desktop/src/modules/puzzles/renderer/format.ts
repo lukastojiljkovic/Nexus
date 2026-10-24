@@ -22,17 +22,17 @@ export function formatCount(value: number, locale: Locale): string {
 }
 
 /**
- * A length in pixels, with its unit, through `Intl` rather than as a glued
- * string: „22 px" is what the reader's own locale puts between the number and
- * the unit, and a board's cell size is a measurement a person can act on when
- * they are deciding whether the grid is readable yet.
+ * A length in pixels, with its unit: a board's cell size is a measurement a
+ * person can act on when they are deciding whether the grid is readable yet.
+ *
+ * **The unit is appended, not asked of `Intl`.** ECMA-402 sanctions no pixel
+ * unit, so `Intl.NumberFormat` with `unit: "pixel"` throws a RangeError, which
+ * took the whole Nonograms tab down in every release from 2.0.0 to 2.1.1.
+ * „px" reads the same in both languages; the number keeps the locale's own
+ * grouping.
  */
 export function formatPixels(value: number, locale: Locale): string {
-  return new Intl.NumberFormat(locale === "sr" ? "sr-Latn" : "en", {
-    style: "unit",
-    unit: "pixel",
-    unitDisplay: "short",
-  }).format(value);
+  return `${formatCount(value, locale)} px`;
 }
 
 /**

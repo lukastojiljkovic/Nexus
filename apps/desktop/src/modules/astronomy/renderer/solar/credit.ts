@@ -20,6 +20,9 @@ import type { PlanetTextures } from "./textures.js";
 export function textureCredits(textures: PlanetTextures | null): readonly string[] {
   if (textures === null) return [];
   const seen = new Set<string>();
+  if (typeof textures.sky?.credit === "string" && textures.sky.credit.trim().length > 0) {
+    seen.add(textures.sky.credit);
+  }
   for (const id of BODY_ORDER) {
     const credit = textures.bodies[id]?.credit;
     if (typeof credit === "string" && credit.trim().length > 0) seen.add(credit);

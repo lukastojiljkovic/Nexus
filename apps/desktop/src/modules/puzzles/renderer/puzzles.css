@@ -221,6 +221,16 @@
   line-height: var(--nx-font-leading-tight);
 }
 
+/* A column's clue stands over its column: one cell wide, its numbers stacked
+   down to the grid. */
+.pz-nono__line--clues .pz-nono__clue:not(.pz-nono__clue--corner) {
+  flex-direction: column;
+  justify-content: flex-end;
+  width: var(--pz-nono-cell);
+  padding-inline-end: 0;
+  padding-block-end: var(--nx-space-1);
+}
+
 .pz-nono__clue--done {
   color: var(--nx-text-faint);
 }

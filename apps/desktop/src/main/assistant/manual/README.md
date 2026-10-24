@@ -46,7 +46,7 @@ The rule, rather than a list of names the next module would make stale:
   `check:manual` — a module with no page is a finding, and a module whose screen
   genuinely is not real yet goes into `COVERAGE_ALLOWLIST` in that script, one
   line per module with the reason beside it.
-- **The shell's pages** — onboarding, the account picker, the lock screen,
+- **The shell's pages** — the account picker, the lock screen,
   search, the shortcut list — are pages too. A screen the assistant can open
   names its place in `location` (`search` is a built-in id, so `{ module: search }`);
   one it cannot open, such as the account picker or the lock screen, omits it.

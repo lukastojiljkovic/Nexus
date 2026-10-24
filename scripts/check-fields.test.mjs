@@ -188,13 +188,13 @@ describe("the live tree", () => {
    * the tree, and the count is exact rather than „greater than zero" for the
    * same reason: a walk that lost one directory would still be non-empty.
    *
-   * TWENTY-ONE, and the breakdown is the whole claim this gate makes about the app:
+   * TWENTY-TWO, and the breakdown is the whole claim this gate makes about the app:
    * every intrinsic `<input>` left in it draws something other than a text
    * entry. Eight radios (PRIVATNO's four credential and recovery-kit choices,
    * ELEKTRONIKA's chassis shape, and ELEKTRONIKA's runner profile — one element
    * in source, drawn three times by a `map` over the closed table), six ranges
    * (the dashboard dim slider, CULTURE's seek bar, the LAB's light and two tone
-   * controls, the WORKSHOP's toolpath layer), six
+   * controls, the WORKSHOP's toolpath layer), seven
    * hidden file pickers (NOTE's attachment input, CULTURE's three: a visit's
    * photos, a plan's ticket and the music import; the QR
    * reader's image and the SCANNER's page) and one checkbox — the `Checkbox` primitive's own element, which is why the
@@ -206,11 +206,11 @@ describe("the live tree", () => {
    * does not: a bare one renders at 13x13 in the OS widget with an eleven-pixel
    * hole in its hit area, and this count would go on being green while it did.
    */
-  it("sees exactly the twenty-one inputs the rule deliberately leaves alone", () => {
+  it("sees exactly the twenty-two inputs the rule deliberately leaves alone", () => {
     const census = inputsInRepo();
     const counts = {};
     for (const input of census) counts[input.type] = (counts[input.type] ?? 0) + 1;
-    expect(counts).toEqual({ radio: 8, range: 6, file: 6, checkbox: 1 });
+    expect(counts).toEqual({ radio: 8, range: 6, file: 7, checkbox: 1 });
   });
 
   /**

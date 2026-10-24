@@ -209,11 +209,10 @@ export function createKnowledgeService(deps: KnowledgeDeps): KnowledgeIndex {
     },
 
     async status(): Promise<KnowledgeStatus> {
-      const embedder = await deps.embedder();
       return {
         indexedChunks: store.countChunksForProfile(),
         pendingSources: pending.size,
-        embedderId: embedder?.modelId ?? null,
+        embedderId: await deps.embedderId(),
       };
     },
 

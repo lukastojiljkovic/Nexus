@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   PACK_CATALOGUE_SIGNATURE_CONTEXT,
+  PACK_ID,
   PACK_SIGNATURE_CONTEXT,
   buildManifest,
   checkMeta,
@@ -139,6 +140,13 @@ describe("the metadata it is willing to sign", () => {
 
   it("refuses a file list in the metadata, because that half is computed here", () => {
     expect(() => checkMeta(meta({ files: [] }))).toThrow(/"files"/);
+  });
+
+  it("refuses an id the app refuses, such as one with a dot in it", () => {
+    expect(() => checkMeta(meta({ id: "nllb-1.3b" }))).toThrow(/"id"/);
+    expect(() => checkMeta(meta({ id: "Pack" }))).toThrow(/"id"/);
+    expect(() => checkMeta(meta({ id: "a".repeat(65) }))).toThrow(/"id"/);
+    expect(checkMeta(meta({ id: "nllb-1300m" })).id).toBe("nllb-1300m");
   });
 
   it("accepts ADR-103's safety notice, and refuses one the app would refuse", () => {
@@ -320,6 +328,11 @@ describe("the signature context", () => {
     expect(verifier).toContain(
       `export const PACK_SIGNATURE_CONTEXT = ${JSON.stringify(PACK_SIGNATURE_CONTEXT)};`,
     );
+  });
+
+  it("has the id rule the app's manifest parser applies", () => {
+    const parser = readFileSync(new URL("../apps/desktop/src/main/packs/manifest.ts", import.meta.url), "utf8");
+    expect(parser).toContain(`const KEBAB_ID = ${String(PACK_ID)};`);
   });
 
   it("has a catalogue context the app verifies against, and it is a different string", () => {

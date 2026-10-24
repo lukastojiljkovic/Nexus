@@ -153,3 +153,95 @@
   justify-content: flex-end;
   margin-top: var(--nx-space-2);
 }
+
+/* The translate tab. The card is the container, so the two panes stack when the
+   card is narrow, whatever the window's width. */
+.translator__translate {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+}
+
+.translator__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+.translator__memory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-left: auto;
+}
+
+/* The model choice sits at the end of the bar, and wraps under the pickers on a narrow card. */
+.translator__model {
+  margin-inline-start: auto;
+}
+
+/* A picker's panel opens in the flow of the card, under the bar: the search, the
+   recent languages, then every language as a grid. The panel scrolls on its own
+   so that the panes do not move down while it is open. */
+.translator__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-3);
+  max-height: 24rem;
+  overflow-y: auto;
+  padding-block: var(--nx-space-3);
+  border-block: 1px solid var(--nx-border-subtle);
+}
+
+.translator__languages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-2);
+}
+
+.translator__panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nx-space-4);
+}
+
+@container (max-width: 720px) {
+  .translator__panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.translator__pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-2);
+  min-width: 0;
+}
+
+.translator__pane-head,
+.translator__pane-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-2);
+}
+
+/* The translation is selectable text, and it keeps the line breaks it was written with. */
+.translator__output {
+  min-height: 8rem;
+  padding: var(--nx-space-3);
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-sunken);
+  overflow-wrap: anywhere;
+}
+
+.translator__result {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--nx-text);
+  user-select: text;
+}

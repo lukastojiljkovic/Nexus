@@ -290,10 +290,27 @@ describe("packSource", () => {
     options: { readonly content?: unknown; readonly id?: string } = {},
   ): void {
     const id = options.id ?? "prva-pomoc";
+    // The layout every content builder in `scripts/packs/` writes: a table of
+    // contents whose groups nest, and whose leaves name an article and its source.
     const content = options.content ?? {
-      format: 1,
+      layout: 1,
+      language: "sr",
       notice: "safety",
-      articles: [{ path: "articles/sta-uciniti.md" }, { path: "articles/dalje.md" }],
+      toc: [
+        {
+          id: "osnove",
+          title: "Osnove",
+          children: [
+            {
+              id: "sta-uciniti",
+              title: "Sta uciniti",
+              file: "articles/sta-uciniti.md",
+              source: { title: "Crveni krst", url: "https://example.test/prva-pomoc" },
+            },
+            { id: "dalje-grupa", title: "Dalje", children: [{ id: "dalje", title: "Dalje", file: "articles/dalje.md" }] },
+          ],
+        },
+      ],
     };
     const contents: Record<string, string> = {
       "content.json": `${JSON.stringify(content)}\n`,
@@ -368,10 +385,10 @@ describe("packSource", () => {
 
   it("skips a pack whose content manifest this build does not read, and keeps reading the others", async () => {
     const key = makeKey();
-    installContentPack(key, { id: "losa", content: { format: 2, articles: [] } });
+    installContentPack(key, { id: "losa", content: { layout: 2, language: "sr", toc: [] } });
     installContentPack(key, {
       id: "dobra",
-      content: { format: 1, articles: [{ path: "articles/dalje.md" }] },
+      content: { layout: 1, language: "sr", toc: [{ id: "dalje", title: "Dalje", file: "articles/dalje.md" }] },
     });
 
     const batch = await packSource({ userData: dir, publicKeyPem: key.publicKeyPem }).collect(
@@ -379,6 +396,20 @@ describe("packSource", () => {
       NEVER,
     );
     expect(batch.documents.map((document) => document.id)).toEqual(["dobra/articles/dalje.md"]);
+  });
+
+  it("refuses an article path outside articles/, and a field the layout does not define", async () => {
+    const key = makeKey();
+    installContentPack(key, {
+      id: "van",
+      content: { layout: 1, language: "sr", toc: [{ id: "x", title: "X", file: "../dalje.md" }] },
+    });
+    installContentPack(key, {
+      id: "visak",
+      content: { layout: 1, language: "sr", toc: [{ id: "x", title: "X", file: "articles/dalje.md", extra: 1 }] },
+    });
+    const batch = await packSource({ userData: dir, publicKeyPem: key.publicKeyPem }).collect(null, NEVER);
+    expect(batch.documents).toEqual([]);
   });
 
   it("indexes nothing when no release key is configured", async () => {

@@ -96,7 +96,10 @@ describe("drawer.find", () => {
 
   it("does not list a tool whose module is switched off", async () => {
     const hidden: ShellVisibility = { ...DEFAULT_SHELL_VISIBILITY, hidden: ["tools"] };
-    const result = await toolNamed("drawer.find", drawerWith(hidden)).run({ query: "pdv" }, context());
+    const result = await toolNamed("drawer.find", drawerWith(hidden)).run(
+      { query: "pdv", drawer: "utilities" },
+      context(),
+    );
     expect(result.content).toBe("No tool matches “pdv”.");
   });
 

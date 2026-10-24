@@ -43,6 +43,7 @@
    the button's own box. The input keeps its native behaviour and its own
    accessible name; the span beside it is the word the user reads. */
 .scanner__file {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--nx-space-2);
@@ -59,10 +60,15 @@
 }
 
 .scanner__file input[type="file"] {
-  max-width: 100%;
-  color: var(--nx-text-muted);
-  font-family: var(--nx-font-family-ui);
-  font-size: var(--nx-font-size-body-sm);
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.scanner__file:focus-within {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
 }
 
 /* The camera frame is a square-ish box that never exceeds the page: a webcam

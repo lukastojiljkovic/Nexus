@@ -12,8 +12,8 @@ Add new terms alphabetically as modules are written.
 - **Conflict copy** — the preserved "both versions" result when sync cannot
   safely merge; visible, diffable, never a modal.
 - **Dashboard** — the configurable home screen composed of widgets.
-- **Essentials preset** — the default module set (DASH, TASK, NOTE, CAL)
-  applied when onboarding is skipped.
+- **Essentials preset** — the profile-planning table used by later settings and
+  business presets; it is not a first-run questionnaire.
 - **Feature flag** — per-user switch controlling a module's visibility;
   disabling never deletes data.
 - **Local account** — fully offline account, PIN-protected, zero network
@@ -22,8 +22,8 @@ Add new terms alphabetically as modules are written.
   registry (e.g. TASK, STUDY); user-visible per feature flags.
 - **Note-mirror card** — a canvas card that live-mirrors a note (or note
   section); edits flow both ways, one source of truth.
-- **Onboarding questionnaire** — the 4-screen blocking flow plus progressive
-  in-module questions that personalize the app (see ONB).
+- **Onboarding** — removed in Nexus 3.0. There is no blocking first-run
+  questionnaire.
 - **Private note** — zero-knowledge encrypted note in the Private section;
   server and operators can never read it.
 - **Problem card** — a flashcard whose front is an exercise/problem and whose

@@ -119,14 +119,14 @@ export interface ShotPageScene {
 
 /**
  * The states a person meets BEFORE there is a shell to have a page in: the
- * first-run questionnaire, and the lock screen.
+ * network choice and the lock screen.
  *
  * They are two values of one kind rather than two kinds because they want the
  * same thing from the harness — an ENTRY, a SET OF FRAMES, and an EXIT back to
  * the shell — and nothing else in the walk: neither has a sidebar row, a
  * switcher, or a `module` to land on.
  */
-export type ShotShellState = "onboarding" | "lock" | "network";
+export type ShotShellState = "lock" | "network";
 
 /**
  * A scene whose surface is NOT a page.
@@ -135,17 +135,13 @@ export type ShotShellState = "onboarding" | "lock" | "network";
  * which means every scene above begins AFTER the shell — and the two screens
  * that come before it are the product's first impression. That is [[DC-57]]'s
  * shape exactly: a fixture that can never reach the state, and a run that says
- * „no findings" about a surface it never saw. The rerun of the questionnaire
- * (see `ONB_SCREENS`) covers six of the six SCREENS of `Onboarding` and none of
- * the FIRST RUN — the empty name field, „Preskoči" in place of „Otkaži", the
- * copy that has no live state behind it yet — and the lock screen had no route
+ * „no findings" about a surface it never saw. The lock screen had no route
  * at all: the old note here said it „wants a harness that can unlock again".
  * This is that harness.
  *
  * The mechanics are in `shootShellScene`, one branch per state, and they are
  * NOT `prepare`/`cleanup` because both states outlive a script: entering one
- * can reload the renderer, and the questionnaire takes six frames with an
- * answer typed into five of them.
+ * can reload the renderer.
  */
 export interface ShotShellScene {
   readonly kind: "shell";
@@ -225,7 +221,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // button read „Sakrij detalje" and „Detalji" matched nothing — and the
     // scene named after TASK's detail form photographed the list, in a mode,
     // for as long as it has existed.
-    prepare: CLICK_THEN("text:Lista", "text:Detalji"),
+    prepare: CLICK_THEN("text:Lista|List", "text:Detalji|Details"),
     fanout: null,
   },
   {
@@ -250,14 +246,14 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "tasks",
     prepare: OPEN_CREATE_FORM({ open: ".tasks__new-list" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "tasks-new-tag",
     module: "tasks",
     prepare: OPEN_CREATE_FORM({ open: ".tasks__new-tag" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // „Nova sekcija" is the one TASK create form with a precondition: it is
@@ -289,7 +285,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "tasks",
     prepare: OPEN_CREATE_FORM({ open: ".tasks__new-section" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   { id: "calendar", module: "calendar" },
   // CAL's two template panels, neither of which the sweep had ever seen. They
@@ -320,7 +316,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "calendar",
     prepare: OPEN_CREATE_FORM({
       path: ["text:Agenda", ".cal__edit", ".cal__template-menu"],
-      open: "text:Sačuvaj kao šablon",
+      open: "text:Sačuvaj kao šablon|Save as template",
       expect: ".cal__template-form",
     }),
     fanout: null,
@@ -337,7 +333,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     id: "calendar-documents-renew",
     module: "calendar",
     prepare: OPEN_CREATE_FORM({
-      path: ["text:Dokumenta"],
+      path: ["text:Dokumenta|Documents"],
       open: ".documents__renew-start",
       // The ROW, not the renewal line inside it. What is waited for is also
       // what is scrolled to the top of the frame, and scrolling to the line
@@ -377,23 +373,23 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // wears that same class, so a selector would give both scenes the folder.
     id: "notes-new-folder",
     module: "notes",
-    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova fascikla" }),
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova fascikla|New folder" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".note__org-toggle"),
   },
   {
     id: "notes-new-tag",
     module: "notes",
     prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: ".note__new-tag" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".note__org-toggle"),
   },
   {
     id: "notes-new-category",
     module: "notes",
-    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova kategorija" }),
+    prepare: OPEN_CREATE_FORM({ path: [".note__org-toggle"], open: "text:Nova kategorija|New category" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".note__org-toggle"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".note__org-toggle"),
   },
   { id: "priv", module: "priv", fanout: null },
   { id: "files", module: "files" },
@@ -414,30 +410,30 @@ const SCENE_PLAN: readonly ShotScene[] = [
   {
     id: "study-new-subject",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj predmet" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj predmet|Add subject" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "study-new-exam",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj ispit" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj ispit|Add exam" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "study-new-deck",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj špil" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Dodaj špil|Add deck" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "study-new-plan",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ open: "text:Novi plan" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Novi plan|New plan" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // The deck DRILL-IN, which is a route rather than a form — and the reason
@@ -450,7 +446,7 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // page it did not ask for.
     id: "study-cards",
     module: "study",
-    prepare: CLICK_THEN("text:Kartice"),
+    prepare: CLICK_THEN("text:Kartice|Cards"),
     fanout: null,
     cleanup: CLICK_THEN(".study__back"),
   },
@@ -467,9 +463,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // the two whose placeholders are worked examples rather than names.
     id: "study-new-card",
     module: "study",
-    prepare: OPEN_CREATE_FORM({ path: ["text:Kartice"], open: "text:Dodaj karticu" }),
+    prepare: OPEN_CREATE_FORM({ path: ["text:Kartice|Cards"], open: "text:Dodaj karticu|Add card" }),
     fanout: ".study__segmented .nx-button",
-    cleanup: CLICK_THEN("text:Otkaži", ".study__back"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".study__back"),
   },
   { id: "finance", module: "finance" },
   {
@@ -482,30 +478,30 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "finance",
     prepare: OPEN_CREATE_FORM({
       path: [".fin__segmented .nx-segmented__option"],
-      open: "text:Novi račun",
+      open: "text:Novi račun|New account",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "finance-new-category",
     module: "finance",
     prepare: OPEN_CREATE_FORM({
       path: [".fin__segmented .nx-segmented__option"],
-      open: "text:Nova kategorija",
+      open: "text:Nova kategorija|New category",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "finance-new-subscription",
     module: "finance",
     prepare: OPEN_CREATE_FORM({
       path: [".fin__segmented .nx-segmented__option:nth-child(3)"],
-      open: "text:Nova pretplata",
+      open: "text:Nova pretplata|New subscription",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži", ".fin__segmented .nx-segmented__option"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel", ".fin__segmented .nx-segmented__option"),
   },
   { id: "habits", module: "habits", fanout: null },
   {
@@ -519,9 +515,56 @@ const SCENE_PLAN: readonly ShotScene[] = [
   {
     id: "habits-new",
     module: "habits",
-    prepare: OPEN_CREATE_FORM({ open: "text:Nova navika" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Nova navika|New habit" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
+  },
+  {
+    // A Gallery with an installed art pack loads hundreds of protocol-backed
+    // images. Capture after the first screenful has decoded, not while the
+    // browser still shows its alt text.
+    id: "page-gallery-art",
+    module: "gallery",
+    prepare: `(async () => {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        const images = Array.from(document.querySelectorAll(".gallery__tile img")).slice(0, 12);
+        if (images.length > 0 && images.every((image) => image.complete)) {
+          const broken = images.filter((image) => image.naturalWidth === 0).length;
+          return broken === 0 ? "gallery thumbnails loaded" :
+            "Gallery thumbnails broken=" + broken;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return "none: Gallery images did not load";
+    })()`,
+    fanout: null,
+  },
+  {
+    // The full-image viewer is the primary interaction on every Gallery tile.
+    id: "page-gallery-viewer",
+    module: "gallery",
+    prepare: `(async () => {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        const tile = document.querySelector(".gallery__tile");
+        const image = tile?.querySelector("img");
+        if (tile !== null && image?.complete && image.naturalWidth > 0) {
+          tile.click();
+          for (let waited = 0; waited < 3000; waited += 50) {
+            if (document.querySelector(".nx-dialog__panel .gallery__viewer") !== null) {
+              return "gallery viewer open";
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          return "none: the Gallery viewer did not open";
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return "none: no Gallery tile became ready";
+    })()`,
+    fanout: null,
+    cleanup: DISPATCH_KEY("Escape"),
   },
   {
     id: "fitness",
@@ -581,10 +624,10 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(3)"],
-      open: "text:Nova rutina",
+      open: "text:Nova rutina|New routine",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // The routine form with ITEMS in it, which „Nova rutina" above can never
@@ -606,20 +649,20 @@ const SCENE_PLAN: readonly ShotScene[] = [
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(3)"],
-      open: '.fit__section[aria-label="Rutine"] .fit__row-action',
+      open: '.fit__section:is([aria-label="Rutine"], [aria-label="Routines"]) .fit__row-action',
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     id: "fitness-new-exercise",
     module: "fitness",
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(3)"],
-      open: "text:Nova vežba",
+      open: "text:Nova vežba|New exercise",
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // „Ishrana" is the second tab, and its food form is the widest of the three
@@ -632,11 +675,11 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // neither of the controls the block is for.
     prepare: OPEN_CREATE_FORM({
       path: [".fit__section-tab:nth-child(2)"],
-      open: "text:Nova namirnica",
-      then: ["text:Dodaj meru"],
+      open: "text:Nova namirnica|New food",
+      then: ["text:Dodaj meru|Add measure"],
     }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   { id: "focus", module: "focus", fanout: null },
   {
@@ -672,9 +715,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // below it.
     id: "canvas-new-board",
     module: "canvas",
-    prepare: OPEN_CREATE_FORM({ open: "text:Nova tabla" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Nova tabla|New board" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // The workbench with the demo profile's three circuits on it. `fanout: null`
@@ -692,9 +735,9 @@ const SCENE_PLAN: readonly ShotScene[] = [
     // have to own.
     id: "electronics-new-circuit",
     module: "electronics",
-    prepare: OPEN_CREATE_FORM({ open: "text:Novo kolo" }),
+    prepare: OPEN_CREATE_FORM({ open: "text:Novo kolo|New circuit" }),
     fanout: null,
-    cleanup: CLICK_THEN("text:Otkaži"),
+    cleanup: CLICK_THEN("text:Otkaži|Cancel"),
   },
   {
     // „Mašina" (E4c) — the nine-field form, and a MODAL, so it is invisible to
@@ -1119,24 +1162,22 @@ const SCENE_PLAN: readonly ShotScene[] = [
   // --- Before there is a shell ----------------------------------------------
   //
   // LAST, and for the reason the lock screen was left out of this list for so
-  // long: all three RELOAD the renderer (the shell comes back on its landing
-  // rather than wherever the scene before them had walked to), and the
-  // first-run one creates a profile and deletes it again. A scene that changes
+  // long: both RELOAD the renderer (the shell comes back on its landing rather
+  // than wherever the scene before them had walked to). A scene that changes
   // the window that much is followed by scenes that do not depend on it, which
-  // is the order this list is written in — so these three are its end.
+  // is the order this list is written in — so these two are its end.
   //
   // A scene that LOCKS is the case the old note here said the loop could not
   // have: every frame after it would be a photograph of the lock screen. It is
   // survivable only because the scene unlocks again, which is what
   // `shootShellScene` does and what needs the fixture passcode.
   //
-  // The network scene is FIRST of the three because it answers its own
+  // The network scene is FIRST of the two because it answers its own
   // question: it deletes the recorded choice, photographs the screen that
   // appears, then chooses „Offline only" and presses Continue, so the file is
   // written again and everything after it runs against the same shell the
   // other scenes expect.
   { kind: "shell", id: "network", shell: "network" },
-  { kind: "shell", id: "onboarding", shell: "onboarding" },
   { kind: "shell", id: "lock", shell: "lock" },
 ];
 
@@ -1282,7 +1323,9 @@ function CLICK_THEN(...steps: readonly string[]): string {
       const target = step.startsWith("text:")
         ? Array.prototype.find.call(
             document.querySelectorAll("button"),
-            (node) => (node.textContent || "").trim().startsWith(step.slice(5)),
+            (node) => step.slice(5).split("|").some(
+              (label) => (node.textContent || "").trim().startsWith(label),
+            ),
           )
         : document.querySelector(step);
       if (target) target.click();
@@ -1324,8 +1367,10 @@ function OPEN_FIRST_TASK_LIST(): string {
       const list = lists()[index];
       if (!list) break;
       list.click();
-      await frame();
-      if (document.querySelector(".tasks__rows .nx-list-row")) return true;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await frame();
+        if (document.querySelector(".tasks__rows .nx-list-row")) return true;
+      }
     }
     return "none: no list in the rail drew a row";
   })()`;
@@ -1553,12 +1598,12 @@ function SET_WAVE_KINDS(kinds: readonly string[]): string {
 function OPEN_WIDGET_CONFIG(): string {
   return `(async () => {
     const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const button = (text) =>
+    const button = (...texts) =>
       Array.prototype.find.call(
         document.querySelectorAll("button"),
-        (node) => (node.textContent || "").trim() === text,
+        (node) => texts.includes((node.textContent || "").trim()),
       );
-    const enter = button("Uredi");
+    const enter = button("Uredi", "Edit");
     if (enter) {
       enter.click();
       await frame();
@@ -1568,7 +1613,7 @@ function OPEN_WIDGET_CONFIG(): string {
     for (const trigger of triggers) {
       trigger.click();
       await frame();
-      const configure = button("Podesi…");
+      const configure = button("Podesi…", "Configure…");
       if (configure) {
         configure.click();
         await frame();
@@ -1589,7 +1634,7 @@ function LEAVE_EDIT_MODE(): string {
     await frame();
     const done = Array.prototype.find.call(
       document.querySelectorAll("button"),
-      (node) => (node.textContent || "").trim() === "Gotovo",
+      (node) => ["Gotovo", "Done"].includes((node.textContent || "").trim()),
     );
     if (done) {
       done.click();
@@ -1627,7 +1672,9 @@ function OPEN_RECURRENCE_EDITOR(): string {
     if (!document.querySelector(".tasks__fields")) {
       const toggle = Array.prototype.find.call(
         document.querySelectorAll("button"),
-        (node) => (node.textContent || "").trim().startsWith("Detalji"),
+        (node) => ["Detalji", "Details"].some(
+          (label) => (node.textContent || "").trim().startsWith(label),
+        ),
       );
       if (!toggle) return "none: no Detalji toggle on this view";
       toggle.click();
@@ -1769,7 +1816,9 @@ function OPEN_CREATE_FORM(spec: {
     step.startsWith("text:")
       ? Array.prototype.find.call(
           document.querySelectorAll("button"),
-          (node) => (node.textContent || "").trim() === step.slice(5),
+          (node) => step.slice(5).split("|").some(
+            (label) => (node.textContent || "").trim() === label,
+          ),
         )
       : document.querySelector(step);
   for (const step of ${jsLiteral(spec.path ?? [])}) {
@@ -1791,6 +1840,10 @@ function OPEN_CREATE_FORM(spec: {
   if (!open) return "none: no " + ${jsLiteral(spec.open)};
   const expect = ${jsLiteral(spec.expect ?? null)};
   const before = new Set(document.querySelectorAll("form"));
+  // A popover must be opened from a trigger the reader can actually see: an
+  // offscreen anchor makes a correct placement algorithm look like the defect.
+  open.scrollIntoView({ behavior: "instant", block: "center" });
+  await frame();
   open.click();
   const form = await waitFor(() =>
     expect === null
@@ -1806,8 +1859,10 @@ function OPEN_CREATE_FORM(spec: {
     node.click();
     await frame();
   }
-  form.scrollIntoView({ behavior: "instant", block: "start" });
-  await frame();
+  if (expect === null) {
+    form.scrollIntoView({ behavior: "instant", block: "start" });
+    await frame();
+  }
   return true;
 })()`;
 }
@@ -2002,185 +2057,6 @@ function OPEN_SETTINGS_LOCATION(
 }
 
 /**
- * ADR-086's questionnaire, which no PAGE scene in this sweep can reach.
- *
- * Every page scene is anchored to a sidebar row, and the questionnaire is not
- * a page — it replaces the shell. So eight screens that decide what a new
- * user's whole app looks like had no photograph at all, which is exactly the
- * shape DC-57 named: a harness whose fixture can never reach the state, and a
- * run that says „2 483 frames, no findings" about a surface it never saw.
- *
- * The way in is the RERUN (`Podešavanja → Kako je Nexus podešen za tebe`),
- * which mounts the same component in `mode: "rerun"`. That is not a weaker
- * subject than a first run: it is one component with one render site, told
- * apart by a prop.
- *
- * **And the FIRST RUN is the `onboarding` shell scene**, which reaches the same
- * six screens with the sentinel still on them — the empty name field, the
- * „Preskoči" that no rerun draws, the copy that has no live state behind it.
- * The two passes share this screen list, `ONB_ANSWERS` and the walk below, so a
- * screen both of them visit cannot be answered two different ways.
- *
- * The pass ANSWERS the questions rather than clicking through them empty. An
- * unanswered flow photographs six screens in the one state none of them is
- * interesting in — no recognition chips, no chosen cards, an empty reveal — and
- * the states that carry the design are precisely the ones a person produces by
- * answering. It runs last, and it COMPLETES: „Priprema" and „Evo tvog Nexusa"
- * only exist on the far side of the write, and a rerun over the demo profile in
- * a disposable `userData` is free to make it. A FIRST RUN is not completed —
- * see `shootShellScene` for why its exit is a delete rather than an „Uđi".
- */
-const ONB_SCREENS = ["ime", "nedelja", "posao", "ritam", "oko", "podsetnici"] as const;
-
-/** The trade sentence the pass types. Two clean stems, so the „Prepoznato“ chips are in the frame. */
-const ONB_TRADE = "stolar, advokat";
-
-/** Which step the questionnaire is on („Korak N od 6“), or „none“ when it is not on screen. */
-const ONB_STEP = `(() => {
-  const el = document.querySelector(".onb__steps");
-  if (!el) return "none";
-  const found = (el.textContent || "").match(/[0-9]+/);
-  return found ? found[0] : "none";
-})()`;
-
-/**
- * What the questionnaire is showing, for the three screens that have no step
- * counter. Ordered most-specific first: the manual override is a form inside
- * the same card as the reveal, so „has a stage list“ and „is the manual form“
- * are both asked before the reveal's own button.
- */
-const ONB_PHASE = `(() => {
-  if (!document.querySelector(".onb")) return "none";
-  if (document.querySelector(".onb__stages")) return "prepare";
-  if (document.querySelector(".onb__form--manual")) return "manual";
-  if (document.querySelector(".onb__enter")) return "reveal";
-  return "asking";
-})()`;
-
-/**
- * Types into the first visible text field of the screen, the way `WRITE_PROBE`
- * does — through the prototype's value setter, because React listens to the
- * `input` event and a plain assignment fires nothing.
- */
-function ONB_TYPE(selector: string, text: string): string {
-  return `(async () => {
-    const field = document.querySelector(${jsLiteral(selector)});
-    if (!field) return "none";
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-    field.focus();
-    setter.call(field, ${jsLiteral(text)});
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    return "typed";
-  })()`;
-}
-
-/** Clicks the nth match of a selector, and says whether there was one. */
-function ONB_PICK(selector: string, ...indexes: readonly number[]): string {
-  return `(async () => {
-    const all = document.querySelectorAll(${jsLiteral(selector)});
-    let hit = 0;
-    for (const index of ${jsLiteral(indexes)}) {
-      const el = all[index];
-      if (!el) continue;
-      el.click();
-      hit += 1;
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    }
-    return hit === ${jsLiteral(indexes.length)} ? "picked" : "none";
-  })()`;
-}
-
-/**
- * What each screen is answered with before it is photographed.
- *
- * Keyed by screen so a screen added to the flow without an answer here is
- * visibly missing rather than silently unanswered — the same argument
- * `fanoutLabels` makes about a selector that has gone stale.
- */
-const ONB_ANSWERS: Readonly<Record<string, string | null>> = {
-  ime: null,
-  nedelja: ONB_PICK(".pro-kit", 0, 5),
-  posao: null,
-  ritam: ONB_PICK(".pro-kit", 1),
-  oko: ONB_PICK(".pro-kit", 0, 2),
-  podsetnici: ONB_PICK(".onb__choice", 1),
-};
-
-/**
- * Answers ONE screen, so the frame taken straight after it is of the state a
- * person produces rather than of an empty page.
- *
- * One implementation for both passes through the questionnaire — the rerun and
- * the first run — because they are the same six screens of the same component:
- * two copies would be two descriptions of how to answer a question, and the
- * first one to be corrected would leave the other photographing the old answer.
- *
- * Every step reports its own miss rather than returning quietly, for
- * `OPEN_CREATE_FORM`'s reason: an answer that was never given photographs as a
- * perfectly ordinary screen, and the reader has no way to tell.
- */
-async function answerOnboardingScreen(win: BrowserWindow, screen: string): Promise<void> {
-  if (screen === "posao") {
-    if ((await evalIn(win, ONB_TYPE(".onb__form input", ONB_TRADE))) !== "typed") {
-      process.stderr.write("shots: the trade field was not on the „posao“ screen\n");
-    }
-    await settle(win);
-    await evalIn(win, ONB_PICK(".onb__act", 0, 4));
-  }
-  const answer = ONB_ANSWERS[screen];
-  if (answer !== null && answer !== undefined && (await evalIn(win, answer)) !== "picked") {
-    process.stderr.write(`shots: nothing to answer on the „${screen}“ screen\n`);
-  }
-  await settle(win);
-}
-
-/**
- * Walks the questionnaire's six screens, answering each one and photographing
- * it, and reports whether it reached the end.
- *
- * The step counter is checked on every round rather than assumed from the order
- * the screens are listed in, and a mismatch ABANDONS the walk — a run that kept
- * clicking would submit screen N while naming its frames after screen N+1, and
- * the frames would be of a flow nobody can reach. It answers with a boolean
- * rather than a message because the two callers want different things from a
- * failure: a first run has nothing left to photograph and leaves, while the
- * RERUN carries on to „Priprema" and the reveal, which are on the far side of
- * the write and exist whether or not the asking phase went to plan.
- */
-async function walkQuestionnaire(
-  win: BrowserWindow,
-  stemOf: (screen: string) => string,
-  shoot: (stem: string) => Promise<void>,
-  /** Typed into screen one AFTER its frame, for a run whose screen one has no name yet — see `ONB_FIRST_NAME`. Null on a rerun, which opens on the live one. */
-  nameForFirstScreen: string | null,
-): Promise<boolean> {
-  for (let index = 0; index < ONB_SCREENS.length; index += 1) {
-    const screen = ONB_SCREENS[index] ?? "";
-    const step = await evalIn(win, ONB_STEP);
-    if (step !== String(index + 1)) {
-      process.stderr.write(
-        `shots: questionnaire was on step ${String(step)}, not ${String(index + 1)} ("${screen}")\n`,
-      );
-      return false;
-    }
-    // Answered BEFORE the frame: an unanswered screen is the one state none of
-    // these six is interesting in.
-    await answerOnboardingScreen(win, screen);
-    await shoot(stemOf(screen));
-    if (screen === "ime" && nameForFirstScreen !== null) {
-      if ((await evalIn(win, ONB_TYPE(".onb__form input", nameForFirstScreen))) !== "typed") {
-        process.stderr.write("shots: the name field was not on the „ime“ screen\n");
-      }
-      await settle(win);
-    }
-    await evalIn(win, CLICK(".onb__actions .nx-button[type=submit]"));
-    await settle(win);
-  }
-  return true;
-}
-
-/**
  * The lock screen, and the two halves that make it a subject rather than an
  * end: locking through the app's own chord, and getting back in.
  *
@@ -2291,96 +2167,6 @@ const LOCK_REFUSAL = `(async () => {
   if (card !== null) bits.push("on screen: " + (card.textContent || "").replace(/\\s+/g, " ").trim());
   return bits.join("; ");
 })()`;
-
-/**
- * Enters a FIRST RUN, and answers with the profile it made.
- *
- * **What a first run is.** `App` withholds the whole shell while the ACTIVE
- * profile's name is empty (ADR-058) — that one sentinel is what routes a
- * profile through the questionnaire, and it is the same sentinel on the
- * account's very first profile and on a profile created later. So there is no
- * need to reach the account's own first profile, and no way to: it is the
- * personal anchor, which the store refuses to delete (ADR-058) and which this
- * fixture has already renamed „Demo" and filled with several hundred rows.
- *
- * What is made here is a NEW business profile, created the way the switcher's
- * „Napravi poslovni profil" creates one and left unnamed the way that flow
- * leaves it — `window.nexus.createProfile("business", "")` is the same call,
- * with the same arguments, that `App.createBusinessProfile` makes. The only
- * step skipped is the passcode gate in front of entering it; the device pref it
- * would have written is written here instead, and the reload below is what makes
- * the app LAUNCH into the state rather than be pushed into it.
- *
- * It is a business profile and not a second personal one for two reasons, and
- * both are the same reason: a personal profile is the account's anchor, so it
- * could never be deleted again (leaving one dead profile per size and theme for
- * the life of the fixture), and no path in the product creates one. The cost is
- * the one the screen itself documents — a business first entry has no theme
- * group on its first screen, because the theme is device-wide and was chosen
- * long before a second profile existed.
- */
-function ENTER_FIRST_RUN(): string {
-  return `(async () => {
-    try {
-      const made = await window.nexus.createProfile("business", "");
-      localStorage.setItem("nexus.activeProfile", made.id);
-      return made.id;
-    } catch (error) {
-      return "none: " + String(error);
-    }
-  })()`;
-}
-
-/**
- * Leaves a first run: points the device pref back at the account's anchor and
- * deletes the profile the questionnaire was asked against.
- *
- * „Uđi" is the other way out, and it is the wrong one here. It WRITES — a name,
- * a plan, flag rows, and on a personal profile a welcome note — into a profile
- * that exists only to be photographed, and it would have to be repeated for
- * every size and every theme; the frames it would add are the reveal and the
- * manual override, which the rerun pass already takes. So the run is abandoned
- * mid-questionnaire, which is a state the product has an answer for: the
- * in-progress draft is a `localStorage` key per profile, and the next boot
- * prunes it, because the profile it names is gone.
- *
- * The profile to return to is resolved the way the SHELL resolves it
- * (`resolveActiveProfile`): the personal anchor. Nothing here has to remember
- * which profile the sweep was standing in, and the anchor is exactly what the
- * shell itself falls back to — so a scene that was interrupted after the create
- * still lands where a user would.
- */
-function LEAVE_FIRST_RUN(profileId: string): string {
-  return `(async () => {
-    try {
-      const profiles = await window.nexus.listProfiles();
-      const anchor = profiles.find((profile) => profile.kind === "personal") ?? profiles[0];
-      if (anchor === undefined) return "none: the account has no profile to return to";
-      localStorage.setItem("nexus.activeProfile", anchor.id);
-      await window.nexus.deleteProfile(${jsLiteral(profileId)});
-      return anchor.id;
-    } catch (error) {
-      return "none: " + String(error);
-    }
-  })()`;
-}
-
-/**
- * What a FIRST RUN names itself before its second screen can be reached.
- *
- * Screen one is the one screen whose PICTURE differs by mode, and the empty box
- * is the half a rerun can never show: a rerun opens with the profile's live name
- * already in the field, while a first run opens on the empty-name sentinel. So
- * the frame is taken EMPTY and the name is typed after it — screen one cannot be
- * left without one, by either button: „Nastavi" refuses an empty field, and so
- * does „Preskoči" („a profile needs its name, and one field is not a flow").
- *
- * Not a plausible person's name, deliberately. It lands in the questionnaire's
- * in-progress draft, which a later reader can find in `localStorage` — and a
- * marker that is obviously the harness is worth more there than a name that
- * reads like somebody's, which is `WRITE_MARKER`'s argument one screen over.
- */
-const ONB_FIRST_NAME = "Snimak — prvo pokretanje";
 
 /**
  * The modules whose create form the write pass exercises, and the marker it
@@ -2528,11 +2314,13 @@ export interface ShotFixtures {
   /**
    * The sandbox `userData` this run is using. The network scene deletes the
    * recorded choice from here (`networkModePath`) to put the app back in the
-   * first-run state the harness otherwise answers at startup. Handed in for
+   * unanswered state the harness otherwise resolves at startup. Handed in for
    * `passcode`'s reason: the path belongs to main, and a sweep that guessed it
    * could delete the wrong file.
    */
   readonly userDataDir: string;
+  /** Puts every module back in the device-wide rail before a new pass. */
+  readonly restoreShell: () => void;
 }
 
 /**
@@ -2845,10 +2633,7 @@ async function auditPage(win: BrowserWindow): Promise<AuditFinding[]> {
  *
  * The wait is on a SELECTOR rather than on a fixed pause because what is being
  * waited for differs by caller and only the page can answer it: a theme lands on
- * the shell, while a first run lands on a questionnaire that has no shell at all
- * — `waitFor(".app__sidebar")` there would spend its whole timeout watching for
- * a sidebar the gate deliberately withholds, and every scene after it would be
- * taken against an unsettled page.
+ * the shell while the network choice lands on its own pre-shell surface.
  */
 async function reloadAndWait(win: BrowserWindow, selector: string): Promise<void> {
   win.webContents.reload();
@@ -2905,7 +2690,7 @@ async function serveLocale(win: BrowserWindow, language: ShotLanguage): Promise<
 
 /**
  * Deletes the recorded network choice, which is how this sweep reaches
- * ADR-089's first-run screen: `main/index.ts` writes the default into the
+ * ADR-089's initial network screen: `main/index.ts` writes the default into the
  * sandbox at startup so an ordinary run photographs the app rather than the
  * question. The path comes from `networkModePath`, so the file removed here is
  * exactly the one `readNetworkChoice` reads.
@@ -2996,7 +2781,7 @@ async function shootShellScene(
   if (scene.shell === "network") {
     // The choice screen is what a person meets BEFORE there is a shell, and an
     // ordinary sweep never sees it: `main/index.ts` records the default in the
-    // sandbox at startup. Deleting the file puts this run back in the first-run
+    // sandbox at startup. Deleting the file puts this run back in the unanswered
     // state, and the reload is what makes the renderer ask main for the mode
     // again instead of rendering from the read it already had.
     clearNetworkChoice(fixtures.userDataDir);
@@ -3029,42 +2814,6 @@ async function shootShellScene(
     return;
   }
 
-  const created = await evalIn(win, ENTER_FIRST_RUN());
-  if (typeof created !== "string" || created.startsWith("none")) {
-    process.stderr.write(
-      `shots: scene "${scene.id}" could not enter a first run — ${String(created)}\n`,
-    );
-    return;
-  }
-  await reloadAndWait(win, ".onb");
-  // The state this scene exists for is the questionnaire OVER THE SENTINEL —
-  // a profile whose name is still the empty string, which is what withholds
-  // the shell. `ONB_PHASE` is the probe the rerun pass uses, so a reload that
-  // landed on a shell, or on the reveal of a run somebody else started, says so
-  // instead of being photographed as a first run.
-  const phase = await evalIn(win, ONB_PHASE);
-  if (phase !== "asking") {
-    process.stderr.write(
-      `shots: scene "${scene.id}" landed on "${String(phase)}", not on a first run — no frames taken\n`,
-    );
-    return;
-  }
-  const walked = await walkQuestionnaire(
-    win,
-    (screen) => `${scene.id}-${screen}`,
-    shoot,
-    ONB_FIRST_NAME,
-  );
-  if (!walked) {
-    process.stderr.write(`shots: the first run was abandoned before its last screen\n`);
-  }
-
-  const left = await evalIn(win, LEAVE_FIRST_RUN(created));
-  if (typeof left !== "string" || left.startsWith("none")) {
-    process.stderr.write(`shots: scene "${scene.id}" could not leave the first run — ${String(left)}\n`);
-    return;
-  }
-  await reloadAndWait(win, ".app__sidebar");
 }
 
 /** Lands on a module by its stable id, never by its (translated) label. */
@@ -3294,8 +3043,7 @@ export async function runShots(
   };
   // A partial run is a DIFFERENT KIND OF RUN, and every consequence below is
   // about not letting it pretend otherwise. It does not prune (every frame it
-  // did not take would go), it does not run the questionnaire (which completes,
-  // and rewrites this profile's flags, board and sidebar), and it writes its
+  // did not take would go), and it writes its
   // findings beside `report.md` rather than over it — a one-scene report sitting
   // where the full one was is a stale-report-next-to-fresh-frames again, with
   // the staleness moved into the other file.
@@ -3310,7 +3058,7 @@ export async function runShots(
       `shots: PARTIAL RUN — ${String(plan.scenes.length)} scene(s) [${names}], ` +
         `${String(plan.sizes.length)} size(s), ${String(plan.themes.length)} theme(s), ` +
         `${plan.languages.join("/")}. ` +
-        "No pruning, no questionnaire, findings in report.partial.md.\n",
+        "No pruning, findings in report.partial.md.\n",
     );
   }
 
@@ -3427,6 +3175,7 @@ async function sweep(
     for (const pass of plan.languages.flatMap((language) =>
       plan.themes.map((theme) => ({ language, theme })),
     )) {
+      fixtures.restoreShell();
       await serveLocale(win, pass.language);
       await serveTheme(win, pass.theme);
       const dir = join(outDir, passDir(size.id, pass.theme, pass.language));
@@ -3800,120 +3549,6 @@ async function sweep(
     }
   }
 
-  // The questionnaire, last of all.
-  //
-  // It COMPLETES, which rewrites this profile's flags, board and sidebar — so
-  // it runs after every other frame has been taken rather than before any of
-  // them. It is its own loop over sizes and themes rather than a scene, for the
-  // reason `ONB_SCREENS` gives: it is not a page, and `openModule` is how every
-  // scene above begins.
-  //
-  // And it is the one part a PARTIAL run skips outright, for that same reason:
-  // somebody iterating on one scene must not have the profile rewritten under
-  // them between attempts.
-  if (partial) return;
-  for (const size of plan.sizes) {
-    win.setSize(size.width, size.height);
-    await pause(300);
-    for (const theme of plan.themes) {
-      // Serbian, for the write pass's reason: these frames are filed under a
-      // bare `<size>/<theme>` and must not inherit the last pass's language.
-      await serveLocale(win, "sr");
-      await serveTheme(win, theme);
-      const dir = join(outDir, passDir(size.id, theme, "sr"));
-      mkdirSync(dir, { recursive: true });
-
-      // These stems are constants, so unlike `shoot`'s they cannot collide with
-      // each other by construction — the write probe's argument, and the reason
-      // this path is allowed to stand outside `taken`.
-      const shootOnb = async (stem: string): Promise<void> => {
-        if (win.isMaximized()) win.unmaximize();
-        const actual = win.getSize();
-        if (actual[0] !== size.width || actual[1] !== size.height) {
-          const was = `${String(actual[0])}×${String(actual[1])}`;
-          const want = `${String(size.width)}×${String(size.height)}`;
-          process.stderr.write(`shots: window was ${was} at "${stem}", not ${want} — corrected\n`);
-          win.setSize(size.width, size.height);
-          await pause(300);
-        }
-        await settle(win);
-        const file = join(dir, `${stem}.png`);
-        await capture(win, file);
-        frames.push({
-          file,
-          scene: stem,
-          theme,
-          language: "sr",
-          size: size.id,
-          findings: await auditPage(win),
-        });
-      };
-
-      if (!(await openModule(win, "settings"))) {
-        process.stderr.write(`shots: no sidebar row for module "settings"\n`);
-        continue;
-      }
-      // „Kako je Nexus podešen za tebe" lives in the „Moduli" category now, so
-      // the scene opens that category before it reaches for the row.
-      await evalIn(win, OPEN_SETTINGS_LOCATION("modules"));
-      await settle(win);
-      await evalIn(win, CLICK("#set-section-setup .set__module-row--foot .nx-button"));
-      await settle(win);
-      if ((await evalIn(win, ONB_PHASE)) !== "asking") {
-        // Said out loud and abandoned rather than photographed. Every frame
-        // below would otherwise be the settings page under a questionnaire's
-        // name, which reads as „the questionnaire looks like Podešavanja“.
-        process.stderr.write("shots: the rerun row did not open the questionnaire\n");
-        continue;
-      }
-
-      // The six screens, answered and photographed — the SAME walk the
-      // `onboarding` scene runs, told apart only by where it starts, by what the
-      // frames are called and by the name this one already has (a rerun opens on
-      // the profile's live name; a first run opens on the empty-name sentinel
-      // and has to be given one). Its answer is deliberately ignored here: a walk
-      // that abandons early leaves „Priprema" and the reveal to be photographed
-      // below, which is what `break` did when this loop stood here itself.
-      await walkQuestionnaire(win, (screen) => `onb-${screen}`, shootOnb, null);
-
-      // „Priprema“, caught mid-flight. Each stage is held for `STAGE_MS` (520)
-      // and there are five, so a frame at ~800 ms lands on the second or third
-      // with the ones behind it already ticked — which is the state worth
-      // having, rather than a list of five identical pending rows.
-      await pause(800);
-      if ((await evalIn(win, ONB_PHASE)) === "prepare") await shootOnb("onb-priprema");
-      else process.stderr.write("shots: „Priprema“ was over before it could be photographed\n");
-
-      // The far side. Generous, because the beats are a FLOOR under real work —
-      // four flag loops, a board rebuild and a rename — not a fixed animation.
-      await pause(4000);
-      if ((await evalIn(win, ONB_PHASE)) !== "reveal") {
-        process.stderr.write("shots: the reveal never arrived — no „Evo tvog Nexusa“ frame\n");
-        continue;
-      }
-      await shootOnb("onb-evo");
-
-      await evalIn(win, CLICK(".onb__quiet"));
-      await settle(win);
-      if ((await evalIn(win, ONB_PHASE)) === "manual") {
-        await shootOnb("onb-rucno");
-        // Back to the reveal rather than saving: „Podesi ručno“ writes its own
-        // deltas and this pass has nothing to say about the modules — it is
-        // here to be photographed, not to decide anything.
-        await evalIn(win, CLICK_THEN(".onb__actions .nx-button"));
-        await settle(win);
-      } else {
-        process.stderr.write("shots: „Podesi ručno“ did not open\n");
-      }
-
-      // And out through the front door, so the shell is back for the next pass.
-      await evalIn(win, CLICK(".onb__enter"));
-      await settle(win);
-      if ((await evalIn(win, ONB_PHASE)) !== "none") {
-        process.stderr.write("shots: the questionnaire did not close\n");
-      }
-    }
-  }
 }
 
 /**

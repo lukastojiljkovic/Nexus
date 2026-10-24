@@ -43,6 +43,8 @@ export interface NonogramStateView {
   readonly width: number;
   readonly height: number;
   readonly marks: readonly number[];
+  /** The installed pack picture the game was dealt from, by id; absent for a random board. */
+  readonly picture?: string;
 }
 
 /** A mahjong board as it stands: the faces, what is left of them, and how often they have been dealt out again. */
@@ -128,6 +130,26 @@ export interface PuzzlesView {
   readonly variants: Readonly<Record<PuzzleId, readonly string[]>>;
 }
 
+/** One picture from the installed `nonograms-pictures` pack, as the page plays it. */
+export interface NonogramPictureView {
+  readonly id: string;
+  readonly size: number;
+  /** `size` rows of `size` characters each, `1` where the picture is filled and `0` where it is empty. */
+  readonly rows: readonly string[];
+  readonly title: { readonly en: string; readonly sr: string };
+  readonly author: string;
+}
+
+/** The pictures a nonogram can be dealt from, in the order the pack lists them. */
+export interface NonogramPicturesView {
+  readonly pictures: readonly NonogramPictureView[];
+}
+
+/** What a read of the packs answers with: the pictures, or `null` when no pack is installed or it carries none. */
+export interface PuzzlesPacksView {
+  readonly pictures: NonogramPicturesView | null;
+}
+
 /** One read: whose view is being asked for. */
 interface ListPayload {
   profileId: string;
@@ -179,6 +201,7 @@ type PuzzlesOps = {
   clearSave: { request: ClearPayload; response: PuzzlesView };
   finish: { request: FinishPayload; response: PuzzlesView };
   setCheckWhileTyping: { request: SettingsPayload; response: PuzzlesView };
+  packs: { request: Record<string, never>; response: PuzzlesPacksView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -191,6 +214,7 @@ export const contract = defineModuleContract<"puzzles", PuzzlesOps>("puzzles", [
   "clearSave",
   "finish",
   "setCheckWhileTyping",
+  "packs",
 ]);
 
 /** The type-level half: this module's API joins `NexusApi.modules` from here. */

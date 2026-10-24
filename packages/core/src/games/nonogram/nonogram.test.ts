@@ -7,6 +7,7 @@ import {
   checkNonogram,
   cluesOf,
   generateNonogram,
+  isNonogramPictureId,
   solveNonogramLines,
 } from "./nonogram.js";
 
@@ -193,5 +194,40 @@ describe("the generator's cost", () => {
     let attempts = 0;
     for (let seed = 0; seed < 20; seed += 1) attempts += generateNonogram(seed, 20).attempts;
     expect(attempts / 20).toBeLessThan(20);
+  });
+});
+
+describe("isNonogramPictureId", () => {
+  it("accepts the size, then lowercase words joined by single hyphens", () => {
+    expect(isNonogramPictureId("10-carl-olsen-flame")).toBe(true);
+    expect(isNonogramPictureId("5-a")).toBe(true);
+    expect(isNonogramPictureId("20-x1-2y")).toBe(true);
+  });
+
+  it("refuses a size outside the board range, or one with a leading zero", () => {
+    expect(isNonogramPictureId("4-flame")).toBe(false);
+    expect(isNonogramPictureId("21-flame")).toBe(false);
+    expect(isNonogramPictureId("05-flame")).toBe(false);
+    expect(isNonogramPictureId("flame")).toBe(false);
+  });
+
+  it("refuses case, separators other than single hyphens, and empty words", () => {
+    expect(isNonogramPictureId("10-Flame")).toBe(false);
+    expect(isNonogramPictureId("10-carl_olsen")).toBe(false);
+    expect(isNonogramPictureId("10-carl--olsen")).toBe(false);
+    expect(isNonogramPictureId("10-flame-")).toBe(false);
+    expect(isNonogramPictureId("10-")).toBe(false);
+    expect(isNonogramPictureId("10-fla me")).toBe(false);
+  });
+
+  it("caps the id at 96 characters", () => {
+    expect(isNonogramPictureId(`10-${"a".repeat(93)}`)).toBe(true);
+    expect(isNonogramPictureId(`10-${"a".repeat(94)}`)).toBe(false);
+  });
+
+  it("refuses anything that is not a string", () => {
+    expect(isNonogramPictureId(10)).toBe(false);
+    expect(isNonogramPictureId(null)).toBe(false);
+    expect(isNonogramPictureId(undefined)).toBe(false);
   });
 });

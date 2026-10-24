@@ -179,6 +179,17 @@ describe("the ranges", () => {
   });
 });
 
+describe("a read from the app's own page", () => {
+  it("is allowed whole, by range and past the end, since a page at file:// is another origin", async () => {
+    const url = `${PACK_SCHEME}://prva-pomoc/slike/velika.png`;
+    for (const init of [{}, { headers: { range: "bytes=0-9" } }, { headers: { range: "bytes=400-" } }]) {
+      const response = await handler(new Request(url, init));
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
+      expect(response.headers.get("access-control-expose-headers")).toBe("Content-Range");
+    }
+  });
+});
+
 describe("the content types", () => {
   it("names the types the packs this module serves actually carry", () => {
     expect(packContentType("slike/a.png")).toBe("image/png");

@@ -50,7 +50,10 @@ function s(): typeof strings.settings {
 
 const REGISTRY = createModuleRegistry();
 /** The device's visible set for an arrangement nothing has touched (ADR-101) — the app as it ships. */
-const VISIBLE = visibleModuleSet(REGISTRY, DEFAULT_SHELL_VISIBILITY);
+const VISIBLE = visibleModuleSet(REGISTRY, {
+  ...DEFAULT_SHELL_VISIBILITY,
+  hidden: ["priv", "pro"],
+});
 const INDEX = buildSettingsIndex(REGISTRY, VISIBLE);
 const SUB_PAGE_IDS = Object.values(SETTINGS_SUB_PAGE_LISTS).flatMap((list) =>
   list.subPages.map((subPage) => subPage.id),
@@ -137,6 +140,7 @@ describe("the category table", () => {
       "appearance",
       "keyboard",
       "modules",
+      "content-packs",
       "notifications",
       "data",
       "privacy",
@@ -147,6 +151,7 @@ describe("the category table", () => {
       "palette",
       "keyboard",
       "grid",
+      "archive",
       "bell",
       "database",
       "shield",
@@ -156,10 +161,12 @@ describe("the category table", () => {
 
   it("interleaves the two sub-page lists where the brief puts them", () => {
     const data = SETTINGS_CATEGORIES.find((category) => category.id === "data");
+    const contentPacks = SETTINGS_CATEGORIES.find((category) => category.id === "content-packs");
     const modules = SETTINGS_CATEGORIES.find((category) => category.id === "modules");
-    expect(data && categoryCardIds(data)).toEqual(["backup", "content-packs"]);
+    expect(data && categoryCardIds(data)).toEqual(["backup"]);
+    expect(contentPacks && categoryCardIds(contentPacks)).toEqual(["content-packs"]);
     expect(data && categoryListIds(data)).toEqual(["import-export"]);
-    expect(modules && categoryCardIds(modules)).toEqual(["setup", "modules", "packs", "risk"]);
+    expect(modules && categoryCardIds(modules)).toEqual(["modules", "packs", "risk"]);
     expect(modules && categoryListIds(modules)).toEqual(["module-settings"]);
   });
 
@@ -267,7 +274,7 @@ describe("the category table", () => {
   it("reaches the content packs card by its name and by the words people type (ADR-091)", () => {
     // A device card in „Podaci", and one no module owns: the card is the only
     // place a pack can arrive, so a search has to be able to find it.
-    expect(categoryOf("content-packs")).toBe("data");
+    expect(categoryOf("content-packs")).toBe("content-packs");
     expect(search(s().sectionTitle["content-packs"]).sections.has("content-packs")).toBe(true);
     for (const query of ["paket", "vikipedija", "offline", "instaliraj"]) {
       expect(search(query).sections.has("content-packs"), query).toBe(true);
@@ -327,9 +334,13 @@ describe("visibleSections", () => {
     expect(visibility.groups).toEqual(["profile"]);
 
     const data = visibleSections({ category: "data", sub: null }, null);
-    expect([...data.cards].sort()).toEqual(["backup", "content-packs"]);
+    expect([...data.cards].sort()).toEqual(["backup"]);
     expect([...data.lists]).toEqual(["import-export"]);
     expect(data.groups).toEqual(["data"]);
+
+    const packs = visibleSections({ category: "content-packs", sub: null }, null);
+    expect([...packs.cards]).toEqual(["content-packs"]);
+    expect(packs.groups).toEqual(["content-packs"]);
   });
 
   it("shows one sub-page card when a sub-page is open, in its parent's group", () => {

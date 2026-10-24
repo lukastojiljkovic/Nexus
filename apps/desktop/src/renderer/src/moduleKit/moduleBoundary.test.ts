@@ -34,7 +34,8 @@ function shellReaches(source: string): string[] {
 }
 
 const REASONS = {
-  strings: "reads the shell's string helpers (fill, Locale, countUnit) directly; moduleSurface does not re-export them yet",
+  strings:
+    "reads the shell's string helpers (fill, countUnit) directly; moduleSurface does not re-export them yet (Locale is on it, so an import of Locale converts)",
   intl: "reads the shell's Intl helpers directly; the call site converts when the file is next touched",
   money: "formats money through the shell directly; formatMoney is on moduleSurface, so the call site converts",
   links: "opens links through the shell's helper directly; openExternal is on moduleSurface, so the call site converts",
@@ -59,7 +60,7 @@ const ALLOWLIST: Record<string, Reason> = {
   "assistant/renderer/Page.tsx": "safetyNotice",
   "assistant/renderer/copy.ts": "strings",
   "assistant/renderer/thread.test.ts": "strings",
-  "astronomy/renderer/Page.tsx": "strings",
+  "astronomy/renderer/bodyCard.test.ts": "strings",
   "astronomy/renderer/copy.ts": "strings",
   "astronomy/renderer/earth/EarthDayNightMap.tsx": "intl",
   "astronomy/renderer/earth/copy.ts": "strings",
@@ -96,6 +97,7 @@ const ALLOWLIST: Record<string, Reason> = {
   "drawings/renderer/Page.tsx": "links",
   "drawings/renderer/copy.ts": "strings",
   "emergency/renderer/copy.ts": "strings",
+  "gallery/renderer/copy.ts": "strings",
   "lab/renderer/BatteryCard.tsx": "strings",
   "lab/renderer/SerialCard.tsx": "strings",
   "lab/renderer/ToneCard.tsx": "strings",
@@ -124,8 +126,8 @@ const ALLOWLIST: Record<string, Reason> = {
   "translator/renderer/Page.tsx": "strings",
   "translator/renderer/copy.ts": "strings",
   "translator/renderer/pageViews.test.ts": "strings",
+  "translator/renderer/translate/TranslateTab.tsx": "strings",
   "translator/renderer/prefs.test.ts": "testStorage",
-  "translator/renderer/sentences/copy.ts": "strings",
   "wiki/renderer/copy.ts": "strings",
   "workshop/renderer/copy.ts": "strings",
   "workshop/renderer/format.test.ts": "strings",

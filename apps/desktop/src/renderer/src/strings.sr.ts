@@ -302,263 +302,6 @@ export const sr = {
     },
   },
 
-  /**
-   * ADR-065 — the four-screen questionnaire: ime + tema, uloga, oblasti,
-   * podsetnici. Every screen is skippable, and the copy never pretends
-   * otherwise: each answer says what it changes and that Podešavanja can undo
-   * it later, because that is the only honest way to ask four questions before
-   * anybody has seen the app.
-   */
-  onboarding: {
-    /** Screen 1 — the original ONB-lite content, unchanged. */
-    title: "Tvoj Nexus",
-    description:
-      "Nexus radi potpuno lokalno — svi podaci ostaju na ovom uređaju. Upiši ime profila i izaberi temu; sve ostalo podešavaš kasnije.",
-    /**
-     * The business first entry (ADR-058 §5): the same naming screen, minus the
-     * theme group — the theme is device-wide and was chosen long before a
-     * second profile existed — so the copy asks for exactly what the screen
-     * still asks for: a name.
-     */
-    titleBusiness: "Poslovni profil",
-    descriptionBusiness:
-      "Poslovni profil drži posao odvojeno od ličnog — ima svoje zadatke, beleške i podešavanja, pod istim nalogom. Upiši mu ime; sve ostalo podešavaš kasnije.",
-    nameLabel: "Ime profila",
-    namePlaceholder: "Upiši ime",
-    themeLabel: "Tema",
-    /**
-     * ADR-086's four questions, and what makes them different from the two they
-     * replaced: every one of them is about the PERSON and none is about the
-     * software. „Do you want the Finance module" is the questionnaire asking the
-     * user to do its job; „do you want Nexus to keep an eye on money" is a
-     * question anybody can answer about themselves. The mapping from the second
-     * to the first lives in `buildProfilePlan`, where it can be argued with.
-     */
-    week: {
-      title: "Na šta ti odlazi nedelja?",
-      description: "Izaberi najviše dve — one na koje stvarno ode najviše vremena.",
-      /** Said out loud, the „remindersNoChoice" idiom: choosing nothing is an answer here. */
-      noChoice: "Ako ništa ne izabereš, Nexus kreće standardno.",
-      shapes: {
-        posao: { name: "Posao", desc: "Radim za nekoga — zadaci, sastanci, rokovi." },
-        skola: { name: "Škola i fakultet", desc: "Predavanja, ispiti, učenje." },
-        dom: { name: "Dom i porodica", desc: "Kuća, računi, obaveze koje ne čekaju." },
-        kondicija: { name: "Trening i zdravlje", desc: "Vežbanje, navike, san i ishrana." },
-        stvaranje: { name: "Stvaranje", desc: "Pišem, crtam, gradim nešto svoje." },
-        firma: { name: "Svoja firma", desc: "Klijenti, ponude, naplata." },
-      } satisfies Record<string, { name: string; desc: string }>,
-    },
-    /**
-     * The screen that replaced eighteen toolkit cards with one text field.
-     *
-     * The cards were „the same taxonomy with fewer boxes": eighteen packs
-     * regrouped, and a person outside the eighteen still has nowhere to be. A
-     * field the user writes their own word into fails OPEN — the lexicon reads
-     * „zidar" in every case Serbian inflects it into — and the activity chips
-     * below the rule are the net for whoever it does not know.
-     */
-    trade: {
-      title: "Čime se baviš?",
-      description:
-        "Napiši svojim rečima. Nexus prepoznaje posao i dodaje alatke za njega — ništa ne menja tvoje podatke.",
-      label: "Tvoj posao",
-      placeholder: "npr. stolar, advokat, fotografkinja, vodim knjige",
-      /** The recognition receipt. Quotes the person's own word back, then what it opened. */
-      heard: "Prepoznato",
-      /** Removing one chip un-says it — the recognition is a suggestion, not a verdict. */
-      remove: "Ukloni",
-      activitiesLabel: "Ili izaberi šta radiš:",
-      noChoice:
-        "Ako ne prepoznam ništa, ništa se ne dodaje — stručne alatke uključuješ kasnije, kad zatrebaju.",
-      /** One per `TRADE_ACTIVITIES` id. A verb, because the question is what somebody DOES. */
-      activities: {
-        "mere-sece": "Merim i sečem",
-        ponude: "Pravim ponude i predračune",
-        teren: "Radim na terenu",
-        predaje: "Držim nastavu",
-        ugovori: "Pišem ugovore",
-        vozi: "Vozim i isporučujem",
-        kuva: "Kuvam",
-        snima: "Snimam i fotografišem",
-        kod: "Pišem kod",
-        svira: "Sviram",
-        knjige: "Vodim knjige",
-        dogadjaji: "Organizujem događaje",
-        trenira: "Treniram druge",
-        prevodi: "Prevodim i lektorišem",
-        laboratorija: "Radim u laboratoriji",
-        instalacije: "Postavljam instalacije",
-        sistemi: "Održavam mreže i sisteme",
-        servis: "Servisiram vozila",
-        jedrim: "Jedrim",
-        letim: "Letim",
-        "merim-teren": "Merim teren i koordinate",
-        radio: "Radim sa radiom",
-        solar: "Montiram solarne sisteme",
-      } satisfies Record<string, string>,
-    },
-    /** Not what somebody does but HOW — and it decides what every module opens on. */
-    tempo: {
-      title: "Kako ti izgleda dan?",
-      description: "Izaberi jedno — po ovome Nexus bira šta ti prvo pokazuje.",
-      noChoice: "Ako preskočiš, sve ostaje kako je i menjaš u hodu.",
-      options: {
-        planer: { name: "Planiram unapred", desc: "Volim da vidim ceo mesec pre nego što krene." },
-        reaktivan: { name: "Rešavam kako naiđe", desc: "Bitno mi je šta je danas i šta kasni." },
-        beleznik: { name: "Prvo zapišem", desc: "Sve ide u beleške, pa se posle složi." },
-      } satisfies Record<string, { name: string; desc: string }>,
-    },
-    /** Asked about CONTENT, never about modules — the honest form of the same question. */
-    keep: {
-      title: "Šta hoćeš da ti Nexus drži na oku?",
-      description: "Izaberi koliko god hoćeš, ili ništa.",
-      noChoice: "Ništa od ovoga nije obavezno — sve se uključuje i isključuje kasnije.",
-      options: {
-        novac: { name: "Novac", desc: "Računi, pretplate, ko još nije platio." },
-        zdravlje: { name: "Zdravlje i navike", desc: "Ono što se meri iz dana u dan." },
-        dokumenta: { name: "Dokumenta", desc: "Ugovori, lične isprave, rokovi važenja." },
-        ideje: { name: "Ideje i beleške", desc: "Da mi ništa ne propadne." },
-        privatno: {
-          name: "Nešto samo moje",
-          desc: "Zaključana sekcija — otvara se posebnom lozinkom.",
-        },
-      } satisfies Record<string, { name: string; desc: string }>,
-    },
-    /**
-     * The „Priprema" screen. It narrates REAL steps — each line is a thing that
-     * is actually being written — because a progress screen that invents its
-     * stages is the one kind of loading screen a user is right to resent.
-     */
-    prepare: {
-      title: "Sklapam tvoj Nexus",
-      description: "Nameštam početnu, meni i boje prema tvojim odgovorima.",
-      stages: {
-        packs: "Uključujem alatke",
-        modules: "Nameštam module",
-        board: "Slažem početnu",
-        look: "Biram boju i ritam",
-        done: "Završavam",
-      } satisfies Record<string, string>,
-    },
-    /**
-     * „Evo tvog Nexusa" — the receipt.
-     *
-     * Every line is generated from `plan.reasons`, so the app can only say what
-     * it actually did: a decision with no sentence here is a decision law 4
-     * makes unrepresentable. The screen exists because an app that reshapes
-     * itself without saying so is an app that feels broken rather than personal.
-     */
-    reveal: {
-      title: "Evo tvog Nexusa",
-      description: "Ovako smo ga složili. Sve može da se menja — u Podešavanjima, kad god.",
-      /** The Serbian list conjunction (`joinList`) — „A, B i C". */
-      and: "i",
-      heard: "Tvoje reči",
-      /**
-       * The participle is a VERB here („složili smo ih") and not an adjective
-       * agreeing with the noun, which it cannot be: a composed board is 3–6
-       * cards, so `{unit}` is „kartice" at three and „kartica" — genitive
-       * plural — at five, and one modifier cannot be right for both.
-       */
-      board: "Početna ti ima {count} {unit} — složili smo ih prema tvojim odgovorima.",
-      boardUnitOne: "karticu",
-      boardUnitFew: "kartice",
-      boardUnitMany: "kartica",
-      packs: "Uključene su alatke za: {packs}.",
-      nav: "U meniju su ti prvi: {modules}.",
-      priv: "Privatna sekcija je uključena — otvara se posebnom lozinkom.",
-      calendar: "Kalendar se otvara na prikazu „{view}“.",
-      accent: "Boja aplikacije je {colour}.",
-      /** What a run where nothing was answered says. Not an apology: it is a legitimate answer. */
-      nothing: "Bez odgovora Nexus kreće standardno — sve podešavaš kad zatreba.",
-      enter: "Uđi u Nexus",
-      /** The escape hatch, quiet: ADR-065's two checkbox screens survive as this. */
-      advanced: "Podesi ručno",
-    },
-    /**
-     * „Napredno" — ADR-065's two screens, kept.
-     *
-     * They were the whole questionnaire and are now the override: reachable from
-     * the reveal and from Podešavanja, never on the path. A person who wants to
-     * tick thirty-two boxes should be able to; nobody should have to.
-     */
-    advancedTitle: "Podesi ručno",
-    advancedDescription:
-      "Ovde biraš tačno šta hoćeš. Ista lista stoji i u Podešavanjima → Moduli, pa ništa ovde nije poslednja prilika.",
-    advancedSave: "Sačuvaj",
-    /**
-     * Screen 2 — „Tvoja nedelja". Which toolkits „Stručne alatke" carries.
-     *
-     * **It asks about the WEEK, not about the person, and that is the whole
-     * question.** „Šta te najbolje opisuje?" — five buttons, student to
-     * preduzetnik — is what stood here, and generalising it to the professions
-     * Nexus serves would have meant asking somebody to find their job title in a
-     * list of twenty-two. Serbian titles do not survive that: a „geodeta" or a
-     * „strukovni vaspitač" is on nobody's list and would land on „Nešto drugo",
-     * which carries no information at all. A subject fails open where a title
-     * fails closed — the geodeta reads „Gradnja i projektovanje" and knows.
-     *
-     * The description says what the answer does, on the old line's terms
-     * exactly: a suggestion, changeable, and reversible later.
-     */
-    /** Said out loud, the „remindersNoChoice" idiom: picking nothing is a real answer here, not a skipped step. */
-    packsNoChoice: "Ako ništa ne izabereš, Nexus kreće bez stručnih alatki — dodaješ ih kad zatrebaju.",
-    /** Screen 3 — oblasti. The module names and one-line descriptions are the gallery's own (`settings.moduleDescriptions`), never respelled. */
-    modulesTitle: "Šta ti treba?",
-    /** Screen 4 — podsetnici; the three choices reuse `settings.notificationPresets`, so a word means the same set everywhere. */
-    /**
-     * The demo offer on the last screen — a personal first run only. Says what
-     * it is (a SECOND profile, not a change to this one), what is in it, and
-     * that it can be removed, because all three are what somebody needs in
-     * order to say yes without wondering what they just agreed to.
-     */
-    demoLabel: "Dodaj i „Demo“ profil",
-    demoHint:
-      "Drugi profil u ovom nalogu, pun primera — zadaci, beleške, finansije, učenje, " +
-      "navike i ishrana — da vidiš kako Nexus izgleda kada je pun. Tvoj profil ostaje " +
-      "prazan i netaknut, a „Demo“ možeš obrisati kad god poželiš.",
-    remindersTitle: "Podsetnici",
-    remindersDescription: "Koliko obaveštenja želiš od Nexusa?",
-    /** Said out loud rather than left as a surprise: no pick here is a valid answer, and the one-time question (NTF-008) simply stays where it was. */
-    remindersNoChoice: "Ako ne izabereš, Nexus će pitati kada prvi podsetnik bude spreman.",
-    /** Screen chrome. „Korak 2 od 4“ is composed in JSX around the number, the `settings.backup.savedPrefix` idiom. */
-    stepPrefix: "Korak",
-    stepOf: "od",
-    next: "Dalje",
-    back: "Nazad",
-    start: "Počni",
-    /** First run only: stop asking and take what the flow already holds. */
-    skip: "Preskoči",
-    /** Rerun only: leave without writing anything — see `Onboarding.tsx` for why a rerun cannot „skip to Osnovno“. */
-    cancel: "Otkaži",
-    /** The same flow reopened from Podešavanja (SET). Screen 1 shows the current name, screen 3 the live modules. */
-    rerunTitle: "Ponovo podesi Nexus",
-    rerunDescription:
-      "Ista pitanja kao pri prvom pokretanju. Kreće od onoga što sada imaš i menja samo ono što promeniš.",
-    /**
-     * The one genuine starter row (ADR-065 §4): a real, useful, deletable note
-     * written through the ordinary note path. Markdown, because that is what
-     * `parseMarkdownNote` reads and what the note editor renders back. Every
-     * sentence is checkable in the app — no invented numbers, no promises the
-     * build does not keep, and no printed keyboard chord (they are remappable,
-     * ADR-040, so the note points at the screen that shows the live ones).
-     */
-    welcomeNote: {
-      title: "Dobro došli u Nexus",
-      body: `# Dobro došli u Nexus
-
-Ovo je tvoja prva beleška — promeni je ili obriši, tvoja je.
-
-- Svi podaci ostaju na ovom uređaju. Nexus ne šalje ništa na internet.
-- Oblasti uključuješ i isključuješ u Podešavanjima → Moduli.
-- Prečice na tastaturi vidiš i menjaš u Podešavanjima → Prečice.
-
-Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde.
-`,
-    },
-    saveError: "Čuvanje nije uspelo. Pokušaj ponovo.",
-  },
-
   /** Local account lock screen (ADR-018 / AUTH-002..005, extended by ADR-044 / AUTH-006): picker → create → Kit za oporavak → unlock → recovery, plus the shared error map and the sidebar lock/switch actions. */
   auth: {
     validation: {
@@ -583,12 +326,12 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       confirmLabel: "Potvrdi pristupni kod",
       confirmPlaceholder: "Ponovi pristupni kod",
       note: "Svi podaci se šifruju ovim kodom. Ako ga zaboraviš, jedini put nazad je Kit za oporavak koji dobijaš u sledećem koraku — bez koda i bez Kita podaci ostaju trajno nedostupni.",
+      passcodeToggle: "Zaštiti nalog pristupnim kodom",
+      ownerFileNote:
+        "Na ovom računaru nema upotrebljivog sistemskog trezora. Nexus će čuvati ključ uređaja za nalog u datoteci koju može da čita samo tvoj korisnički nalog operativnog sistema. To štiti od drugih korisnika, ali ne od programa koji već rade kao ti.",
+      noPasscodeNote:
+        "Bez pristupnog koda naloga, svako ko može da koristi ovu sesiju operativnog sistema može da otvori nalog. Privatne beleške i dalje traže sopstveni pristupni kod.",
       submit: "Napravi nalog",
-    },
-    keystoreUnavailable: {
-      title: "Sistemski trezor nije dostupan",
-      description:
-        "Nexus čuva deo ključa za šifrovanje u sistemskom trezoru Windows-a, a on trenutno nije dostupan na ovom Windows nalogu — bez njega se lokalni nalog ne može napraviti. Proveri da li je ovaj Windows nalog ispravno postavljen i pokušaj ponovo.",
     },
     recoveryKit: {
       title: "Kit za oporavak",
@@ -607,6 +350,9 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       passcodeLabel: "Pristupni kod",
       passcodePlaceholder: "Upiši pristupni kod",
       submit: "Otključaj",
+      noPasscodeDescription:
+        "Nalog nema pristupni kod. Otvori ga da nastaviš; Privatne beleške i dalje čuvaju sopstveni pristupni kod.",
+      openNoPasscode: "Otvori nalog",
       forgot: "Zaboravljen pristupni kod?",
       retryPrefix: "Previše pokušaja — probaj ponovo za",
       otherAccount: "Drugi nalog",
@@ -617,7 +363,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       description: "Na ovom računaru postoji više naloga. Svaki ima svoj pristupni kod i svoje podatke.",
       stateLocked: "Zaključan",
       stateRecovery: "Traži Kit za oporavak",
-      stateKeystoreUnavailable: "Sistemski trezor nije dostupan",
+      stateNoPasscode: "Bez pristupnog koda naloga",
       rename: "Preimenuj",
       renameFieldLabel: "Novo ime naloga",
       renameSave: "Sačuvaj",
@@ -669,6 +415,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       throttled: "Previše pokušaja — sačekaj da prođe vreme ispod.",
       weakPasscode: "Pristupni kod mora imati bar 8 karaktera, uz najmanje jedno slovo i jednu cifru.",
       keystoreUnavailable: "Sistemski trezor za ključeve nije dostupan na ovom Windows nalogu.",
+      passcodeNotSet: "Nalog trenutno nema pristupni kod.",
       otherDevice: "Ovi podaci dolaze sa drugog računara ili Windows naloga — otključaj Kitom za oporavak.",
       corruptKeychain: "Fajl sa ključevima je oštećen i ne može se pročitati.",
       generic: "Radnja nije uspela. Pokušaj ponovo.",
@@ -5875,6 +5622,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       appearance: "Izgled",
       keyboard: "Tastatura",
       modules: "Prikaz",
+      "content-packs": "Paketi sadržaja",
       notifications: "Obaveštenja",
       data: "Podaci",
       privacy: "Privatnost",
@@ -5885,6 +5633,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       appearance: "Jezik, tema, boja naglaska, nedelja i sat",
       keyboard: "Prečice na tastaturi",
       modules: "Koji delovi Nexusa su uključeni i podešavanja svakog modula",
+      "content-packs": "Preuzimanje, instalacija i provera sadržaja za rad bez mreže",
       notifications: "Šta te obaveštava i kada",
       data: "Rezervna kopija, vraćanje, uvoz i izvoz",
       privacy: "Mreža i ažuriranja, šta se čuva i gde, istorija pretrage",
@@ -5954,7 +5703,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       focus: "Fokus",
       fitness: "Fitnes",
       tools: "Alatke",
-      setup: "Kako je Nexus podešen za tebe",
       modules: "Moduli",
       packs: "Paketi alatki",
       risk: "Napomene uz stručne alatke",
@@ -6063,11 +5811,23 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
     /** Sigurnost section (ADR-018 / AUTH): change passcode, regenerate the Recovery Kit, idle auto-lock. */
     security: {
       changeTitle: "Promeni pristupni kod",
+      addTitle: "Dodaj pristupni kod naloga",
+      passcodeOn: "Nalog traži pristupni kod kada se otvori.",
+      passcodeOff:
+        "Nalog se na ovom uređaju otvara bez pristupnog koda. Privatne beleške i dalje čuvaju sopstveni pristupni kod.",
       currentLabel: "Trenutni kod",
       newLabel: "Novi kod",
       confirmLabel: "Potvrdi novi kod",
       save: "Sačuvaj",
+      add: "Dodaj pristupni kod",
       changeSuccess: "Pristupni kod je promenjen.",
+      removePasscode: "Ukloni pristupni kod naloga",
+      removePasscodeTitle: "Uklanjanje pristupnog koda naloga",
+      removePasscodeQuestion:
+        "Nalog će se na ovom uređaju otvarati bez pristupnog koda. Privatne beleške i dalje traže sopstveni pristupni kod.",
+      removePasscodeConfirm: "Ukloni pristupni kod",
+      passcodeRemoved: "Pristupni kod naloga je uklonjen.",
+      cancel: "Otkaži",
       recoveryTitle: "Novi kod za oporavak",
       recoveryWarning:
         "Pravljenje novog koda odmah poništava stari — ako je stari negde zapisan, prepiši preko njega novi.",
@@ -6095,7 +5855,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
         never: "Nikad",
       } satisfies Record<string, string>,
       askPasscodeWarning:
-        "Svako ko može da koristi ovaj Windows nalog može da otvori Nexus bez pristupnog koda u tom periodu.",
+        "Svako ko može da koristi tvoju sesiju operativnog sistema može da otvori Nexus bez pristupnog koda u tom periodu.",
       askPasscodePasscodeLabel: "Pristupni kod",
       askPasscodeSaved: "Podešavanje je sačuvano.",
       /** Keyed by UnlockSettingUnavailableReason, read through `lookup` so the table keeps literal keys. */
@@ -6455,10 +6215,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * do, since it starts from what the profile has and writes only what
      * changes.
      */
-    onboardingRerunTitle: "Tvoji odgovori",
-    onboardingRerunAction: "Ponovo pokreni upitnik",
-    onboardingRerunCaption:
-      "Ista pitanja kao pri prvom pokretanju — kreće od onoga što sada imaš i menja samo ono što promeniš.",
     /**
      * ADR-086 §5 — „Kako je Nexus podešen za tebe".
      *
@@ -6468,21 +6224,6 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * with what the person actually said — never a sentence written beside a
      * decision and free to drift from it.
      */
-    setup: {
-      description:
-        "Nexus se složio prema tvojim odgovorima pri prvom pokretanju. Evo šta je od toga izašlo.",
-      /** No stored answers: not an apology, and not a nag — the standard app is a legitimate answer. */
-      none: "Pitanja nisu popunjena, pa Nexus stoji standardno. Sve možeš da podesiš i odavde, ručno.",
-      /**
-       * Forgetting is separated from changing, and it says exactly what it
-       * does: the answers go, the app stays as it is. A person who wants the
-       * standard app back gets it by turning things off, not by deleting a
-       * record — otherwise „zaboravi" would be an undo nobody asked for.
-       */
-      forget: "Zaboravi odgovore",
-      forgetHint:
-        "Briše sačuvane odgovore sa ovog uređaja. Ništa se ne vraća unazad — aplikacija ostaje kako jeste.",
-    },
     /** NTF-008 appetite presets — shortcuts over the per-source toggles below. */
     notificationPresets: {
       /** The row's own name, so the three buttons stop being an unlabelled bar at the top of the card. */
@@ -7960,6 +7701,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
      * `network.problem` — the codes are main's, and the words are this table's.
      */
     contentPacks: {
+      openGallery: "Otvori umetničku galeriju",
       intro:
         "Paket je fascikla javnog sadržaja — na primer cela Vikipedija za čitanje bez interneta, mapa ili skup podataka — koju Nexus prihvata samo ako je potpisana ključem Nexusa. Sadržaj ostaje na ovom uređaju, u fascikli pored šifrovane baze, i ne ulazi u rezervnu kopiju profila.",
       emptyTitle: "Nema instaliranih paketa.",
@@ -8042,7 +7784,7 @@ Kada ti zatreba nešto novo — zadatak, događaj ili beleška — počni odavde
       catalogueRefresh: "Osveži katalog",
       catalogueEmpty: "U katalogu trenutno nema paketa.",
       catalogueModeOff:
-        "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti da bi preuzimao pakete.",
+        "Preuzimanje je isključeno. Uključi „Preuzimanja“ u privatnosti za preuzimanje paketa.",
       catalogueDetails: "Detalji",
       download: "Preuzmi",
       downloadPause: "Pauza",

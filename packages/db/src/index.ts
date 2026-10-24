@@ -1439,10 +1439,13 @@ export type {
 // three tables; `imex/restoreStore.test.ts` names them in the exemption list.
 export {
   ASSISTANT_EXPORT_VERSION,
+  ASSISTANT_RUNTIME_LIMITS,
   ASSISTANT_TIERS,
   AssistantNotFoundError,
   AssistantValidationError,
   ConversationStore,
+  DEFAULT_ASSISTANT_RUNTIME,
+  MAX_CONVERSATION_SUMMARY_CHARS,
   MAX_CONVERSATION_TITLE_LENGTH,
   MAX_CONVERSATIONS,
   MAX_MESSAGE_CHARS,
@@ -1453,12 +1456,37 @@ export {
   emptyAssistantExport,
   parseAssistantExport,
 } from "./assistant/conversationStore.js";
+
+// --- GALLERY (migration 100, a kit module) -----------------------------------
+//
+// `gallery_items` is deliberately outside `RESTORE_WIPE_TABLES`: Gallery's own
+// archive section replaces its rows inside the kit's restore transaction.
+export {
+  GALLERY_EXPORT_VERSION,
+  GalleryNotFoundError,
+  GalleryStore,
+  GalleryValidationError,
+  MAX_GALLERY_NOTES_LENGTH,
+  MAX_GALLERY_TAGS,
+  MAX_GALLERY_TAG_LENGTH,
+  MAX_GALLERY_TITLE_LENGTH,
+  parseGalleryExport,
+} from "./gallery/galleryStore.js";
+// The assistant's archive types share the end of this export surface.
+export type {
+  CreateGalleryItemInput,
+  GalleryExport,
+  GalleryItem,
+  UpdateGalleryItemFields,
+} from "./gallery/galleryStore.js";
 export type {
   AssistantConversation,
   AssistantExport,
   AssistantMessage,
   AssistantMessageInput,
   AssistantRole,
+  AssistantRuntimeNumber,
+  AssistantRuntimeOptions,
   AssistantSettings,
   ExportedAssistantConversation,
   ExportedAssistantMessage,

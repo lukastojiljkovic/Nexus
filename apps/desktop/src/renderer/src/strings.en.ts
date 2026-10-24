@@ -299,252 +299,6 @@ export const en = {
     },
   },
 
-  /**
-   * ADR-065 — the four-screen questionnaire: ime + tema, uloga, oblasti,
-   * podsetnici. Every screen is skippable, and the copy never pretends
-   * otherwise: each answer says what it changes and that Podešavanja can undo
-   * it later, because that is the only honest way to ask four questions before
-   * anybody has seen the app.
-   */
-  onboarding: {
-    /** Screen 1 — the original ONB-lite content, unchanged. */
-    title: "Your Nexus",
-    description:
-      "Nexus works entirely offline — all your data stays on this device. Enter a profile name and pick a theme; you can set up everything else later.",
-    /**
-     * The business first entry (ADR-058 §5): the same naming screen, minus the
-     * theme group — the theme is device-wide and was chosen long before a
-     * second profile existed — so the copy asks for exactly what the screen
-     * still asks for: a name.
-     */
-    titleBusiness: "Business profile",
-    descriptionBusiness:
-      "A business profile keeps work separate from personal — it has its own tasks, notes and settings, under the same account. Give it a name; you can set up everything else later.",
-    nameLabel: "Profile name",
-    namePlaceholder: "Enter a name",
-    themeLabel: "Theme",
-    /**
-     * ADR-086's four questions, and what makes them different from the two they
-     * replaced: every one of them is about the PERSON and none is about the
-     * software. „Do you want the Finance module" is the questionnaire asking the
-     * user to do its job; „do you want Nexus to keep an eye on money" is a
-     * question anybody can answer about themselves. The mapping from the second
-     * to the first lives in `buildProfilePlan`, where it can be argued with.
-     */
-    week: {
-      title: "What does your week go on?",
-      description: "Pick at most two — the ones that really take up most of your time.",
-      /** Said out loud, the „remindersNoChoice" idiom: choosing nothing is an answer here. */
-      noChoice: "If you pick nothing, Nexus starts with the defaults.",
-      shapes: {
-        posao: { name: "Work", desc: "I work for someone — tasks, meetings, deadlines." },
-        skola: { name: "School and university", desc: "Lectures, exams, study." },
-        dom: { name: "Home and family", desc: "The house, bills, chores that will not wait." },
-        kondicija: { name: "Training and health", desc: "Exercise, habits, sleep and nutrition." },
-        stvaranje: { name: "Making things", desc: "I write, draw, build something of my own." },
-        firma: { name: "My own business", desc: "Clients, quotes, invoicing." },
-      } satisfies Record<string, { name: string; desc: string }>,
-    },
-    /**
-     * The screen that replaced eighteen toolkit cards with one text field.
-     *
-     * The cards were „the same taxonomy with fewer boxes": eighteen packs
-     * regrouped, and a person outside the eighteen still has nowhere to be. A
-     * field the user writes their own word into fails OPEN — the lexicon reads
-     * „zidar" in every case Serbian inflects it into — and the activity chips
-     * below the rule are the net for whoever it does not know.
-     */
-    trade: {
-      title: "What do you do?",
-      description:
-        "Write it in your own words. Nexus recognises the work and adds tools for it — nothing touches your data.",
-      label: "Your work",
-      placeholder: "e.g. carpenter, lawyer, photographer, I keep the books",
-      /** The recognition receipt. Quotes the person's own word back, then what it opened. */
-      heard: "Recognised",
-      /** Removing one chip un-says it — the recognition is a suggestion, not a verdict. */
-      remove: "Remove",
-      activitiesLabel: "Or pick what you do:",
-      noChoice:
-        "If nothing is recognised, nothing is added — you can turn professional tools on later, when you need them.",
-      /** One per `TRADE_ACTIVITIES` id. A verb, because the question is what somebody DOES. */
-      activities: {
-        "mere-sece": "I measure and cut",
-        ponude: "I make quotes and estimates",
-        teren: "I work on site",
-        predaje: "I teach",
-        ugovori: "I draft contracts",
-        vozi: "I drive and deliver",
-        kuva: "I cook",
-        snima: "I shoot video and photos",
-        kod: "I write code",
-        svira: "I play music",
-        knjige: "I keep the books",
-        dogadjaji: "I organise events",
-        trenira: "I train others",
-        prevodi: "I translate and proofread",
-        laboratorija: "I work in a lab",
-        instalacije: "I wire installations",
-        sistemi: "I run networks and systems",
-        servis: "I service vehicles",
-        jedrim: "I sail",
-        letim: "I fly",
-        "merim-teren": "I survey and map",
-        radio: "I work with radio",
-        solar: "I install solar systems",
-      } satisfies Record<string, string>,
-    },
-    /** Not what somebody does but HOW — and it decides what every module opens on. */
-    tempo: {
-      title: "What does your day look like?",
-      description: "Pick one — Nexus uses it to decide what to show you first.",
-      noChoice: "If you skip this, everything stays as it is and you can change it as you go.",
-      options: {
-        planer: { name: "I plan ahead", desc: "I like to see the whole month before it starts." },
-        reaktivan: { name: "I deal with things as they come", desc: "What matters to me is what is due today and what is late." },
-        beleznik: { name: "I write it down first", desc: "Everything goes into notes, then falls into place later." },
-      } satisfies Record<string, { name: string; desc: string }>,
-    },
-    /** Asked about CONTENT, never about modules — the honest form of the same question. */
-    keep: {
-      title: "What would you like Nexus to keep an eye on?",
-      description: "Pick as many as you like, or none.",
-      noChoice: "None of this is required — everything can be turned on and off later.",
-      options: {
-        novac: { name: "Money", desc: "Bills, subscriptions, who has not paid yet." },
-        zdravlje: { name: "Health and habits", desc: "The things you measure day after day." },
-        dokumenta: { name: "Documents", desc: "Contracts, ID papers, expiry dates." },
-        ideje: { name: "Ideas and notes", desc: "So nothing slips past me." },
-        privatno: {
-          name: "Something just for me",
-          desc: "A locked section — opened with its own password.",
-        },
-      } satisfies Record<string, { name: string; desc: string }>,
-    },
-    /**
-     * The „Priprema" screen. It narrates REAL steps — each line is a thing that
-     * is actually being written — because a progress screen that invents its
-     * stages is the one kind of loading screen a user is right to resent.
-     */
-    prepare: {
-      title: "Putting your Nexus together",
-      description: "Setting up your dashboard, menu and colours from your answers.",
-      stages: {
-        packs: "Turning on tools",
-        modules: "Setting up modules",
-        board: "Arranging your dashboard",
-        look: "Picking colour and pace",
-        done: "Finishing up",
-      } satisfies Record<string, string>,
-    },
-    /**
-     * „Evo tvog Nexusa" — the receipt.
-     *
-     * Every line is generated from `plan.reasons`, so the app can only say what
-     * it actually did: a decision with no sentence here is a decision law 4
-     * makes unrepresentable. The screen exists because an app that reshapes
-     * itself without saying so is an app that feels broken rather than personal.
-     */
-    reveal: {
-      title: "Here is your Nexus",
-      description: "This is how we put it together. Everything can be changed — in Settings, whenever you like.",
-      /** The Serbian list conjunction (`joinList`) — „A, B i C". */
-      and: "and",
-      heard: "Your words",
-      /**
-       * The participle is a VERB here („složili smo ih") and not an adjective
-       * agreeing with the noun, which it cannot be: a composed board is 3–6
-       * cards, so `{unit}` is „kartice" at three and „kartica" — genitive
-       * plural — at five, and one modifier cannot be right for both.
-       */
-      board: "Your dashboard has {count} {unit} — we arranged them from your answers.",
-      boardUnitOne: "card",
-      boardUnitFew: "cards",
-      boardUnitMany: "cards",
-      packs: "Tools are on for: {packs}.",
-      nav: "Your menu starts with: {modules}.",
-      priv: "The private section is on — it opens with its own password.",
-      calendar: "The calendar opens in the “{view}” view.",
-      accent: "The app colour is {colour}.",
-      /** What a run where nothing was answered says. Not an apology: it is a legitimate answer. */
-      nothing: "With no answers, Nexus starts with the defaults — you can set everything up when you need it.",
-      enter: "Enter Nexus",
-      /** The escape hatch, quiet: ADR-065's two checkbox screens survive as this. */
-      advanced: "Set up manually",
-    },
-    /**
-     * „Napredno" — ADR-065's two screens, kept.
-     *
-     * They were the whole questionnaire and are now the override: reachable from
-     * the reveal and from Podešavanja, never on the path. A person who wants to
-     * tick thirty-two boxes should be able to; nobody should have to.
-     */
-    advancedTitle: "Set up manually",
-    advancedDescription:
-      "Here you choose exactly what you want. The same list is in Settings → Modules, so nothing here is your last chance.",
-    advancedSave: "Save",
-    /**
-     * Screen 2 — „Tvoja nedelja". Which toolkits „Stručne alatke" carries.
-     *
-     * **It asks about the WEEK, not about the person, and that is the whole
-     * question.** „Šta te najbolje opisuje?" — five buttons, student to
-     * preduzetnik — is what stood here, and generalising it to the professions
-     * Nexus serves would have meant asking somebody to find their job title in a
-     * list of twenty-two. Serbian titles do not survive that: a „geodeta" or a
-     * „strukovni vaspitač" is on nobody's list and would land on „Nešto drugo",
-     * which carries no information at all. A subject fails open where a title
-     * fails closed — the geodeta reads „Gradnja i projektovanje" and knows.
-     *
-     * The description says what the answer does, on the old line's terms
-     * exactly: a suggestion, changeable, and reversible later.
-     */
-    /** Said out loud, the „remindersNoChoice" idiom: picking nothing is a real answer here, not a skipped step. */
-    packsNoChoice: "If you pick nothing, Nexus starts without professional tools — you can add them when you need them.",
-    /** Screen 3 — oblasti. The module names and one-line descriptions are the gallery's own (`settings.moduleDescriptions`), never respelled. */
-    modulesTitle: "What do you need?",
-    /** Screen 4 — podsetnici; the three choices reuse `settings.notificationPresets`, so a word means the same set everywhere. */
-    /**
-     * The demo offer on the last screen — a personal first run only. Says what
-     * it is (a SECOND profile, not a change to this one), what is in it, and
-     * that it can be removed, because all three are what somebody needs in
-     * order to say yes without wondering what they just agreed to.
-     */
-    demoLabel: "Also add a “Demo” profile",
-    demoHint:
-      "A second profile in this account, full of examples — tasks, notes, finance, study, habits and nutrition — so you can see what Nexus looks like when it is full. Your own profile stays empty and untouched, and you can delete “Demo” whenever you like.",
-    remindersTitle: "Reminders",
-    remindersDescription: "How many notifications would you like from Nexus?",
-    /** Said out loud rather than left as a surprise: no pick here is a valid answer, and the one-time question (NTF-008) simply stays where it was. */
-    remindersNoChoice: "If you pick nothing, Nexus will ask when the first reminder is ready.",
-    /** Screen chrome. „Korak 2 od 4“ is composed in JSX around the number, the `settings.backup.savedPrefix` idiom. */
-    stepPrefix: "Step",
-    stepOf: "of",
-    next: "Next",
-    back: "Back",
-    start: "Start",
-    /** First run only: stop asking and take what the flow already holds. */
-    skip: "Skip",
-    /** Rerun only: leave without writing anything — see `Onboarding.tsx` for why a rerun cannot „skip to Osnovno“. */
-    cancel: "Cancel",
-    /** The same flow reopened from Podešavanja (SET). Screen 1 shows the current name, screen 3 the live modules. */
-    rerunTitle: "Set up Nexus again",
-    rerunDescription:
-      "The same questions as on the first run. It starts from what you have now and changes only what you change.",
-    /**
-     * The one genuine starter row (ADR-065 §4): a real, useful, deletable note
-     * written through the ordinary note path. Markdown, because that is what
-     * `parseMarkdownNote` reads and what the note editor renders back. Every
-     * sentence is checkable in the app — no invented numbers, no promises the
-     * build does not keep, and no printed keyboard chord (they are remappable,
-     * ADR-040, so the note points at the screen that shows the live ones).
-     */
-    welcomeNote: {
-      title: "Welcome to Nexus",
-      body: "# Welcome to Nexus\n\nThis is your first note — change it or delete it, it is yours.\n\n- All your data stays on this device. Nexus sends nothing to the internet.\n- You turn areas on and off in Settings → Modules.\n- You can see and change keyboard shortcuts in Settings → Shortcuts.\n\nWhen you need something new — a task, an event or a note — start here.\n",
-    },
-    saveError: "Saving failed. Try again.",
-  },
-
   /** Local account lock screen (ADR-018 / AUTH-002..005, extended by ADR-044 / AUTH-006): picker → create → Kit za oporavak → unlock → recovery, plus the shared error map and the sidebar lock/switch actions. */
   auth: {
     validation: {
@@ -569,12 +323,12 @@ export const en = {
       confirmLabel: "Confirm passcode",
       confirmPlaceholder: "Repeat the passcode",
       note: "All your data is encrypted with this code. If you forget it, the only way back is the recovery kit you get in the next step — without the code and the kit, the data stays permanently out of reach.",
+      passcodeToggle: "Protect this account with a passcode",
+      ownerFileNote:
+        "This computer has no usable system vault. Nexus will keep the account's device key in a file readable only by your operating-system user. That protects other users, but not someone already running as you.",
+      noPasscodeNote:
+        "Without an account passcode, anyone who can use this operating-system session can open the account. Private Notes still requires its own passcode.",
       submit: "Create account",
-    },
-    keystoreUnavailable: {
-      title: "System vault unavailable",
-      description:
-        "Nexus keeps part of the encryption key in the Windows system vault, and it is currently unavailable on this Windows account — without it, a local account cannot be created. Check that this Windows account is set up correctly and try again.",
     },
     recoveryKit: {
       title: "Recovery kit",
@@ -593,6 +347,9 @@ export const en = {
       passcodeLabel: "Passcode",
       passcodePlaceholder: "Enter your passcode",
       submit: "Unlock",
+      noPasscodeDescription:
+        "This account has no account passcode. Open it to continue; Private Notes keeps its own passcode.",
+      openNoPasscode: "Open account",
       forgot: "Forgot your passcode?",
       retryPrefix: "Too many attempts — try again in",
       otherAccount: "Another account",
@@ -603,7 +360,7 @@ export const en = {
       description: "There are several accounts on this computer. Each has its own passcode and its own data.",
       stateLocked: "Locked",
       stateRecovery: "Needs a recovery kit",
-      stateKeystoreUnavailable: "System vault unavailable",
+      stateNoPasscode: "No account passcode",
       rename: "Rename",
       renameFieldLabel: "New account name",
       renameSave: "Save",
@@ -655,6 +412,7 @@ export const en = {
       throttled: "Too many attempts — wait for the time below to pass.",
       weakPasscode: "The passcode must be at least 8 characters, with at least one letter and one digit.",
       keystoreUnavailable: "The system key vault is unavailable on this Windows account.",
+      passcodeNotSet: "This account currently has no account passcode.",
       otherDevice: "This data comes from another computer or Windows account — unlock it with a recovery kit.",
       corruptKeychain: "The key file is damaged and cannot be read.",
       generic: "The action failed. Try again.",
@@ -5849,6 +5607,7 @@ export const en = {
       appearance: "Appearance",
       keyboard: "Keyboard",
       modules: "Display",
+      "content-packs": "Content packs",
       notifications: "Notifications",
       data: "Data",
       privacy: "Privacy",
@@ -5859,6 +5618,7 @@ export const en = {
       appearance: "Language, theme, accent colour, week and clock",
       keyboard: "Keyboard shortcuts",
       modules: "Which parts of Nexus are on, and each module's settings",
+      "content-packs": "Download, install and verify offline content",
       notifications: "What notifies you, and when",
       data: "Backup, restore, import and export",
       privacy: "Network and updates, what is stored and where, search history",
@@ -5920,7 +5680,6 @@ export const en = {
       focus: "Focus",
       fitness: "Fitness",
       tools: "Tools",
-      setup: "How Nexus is set up for you",
       modules: "Modules",
       packs: "Tool packs",
       risk: "Notes on the professional tools",
@@ -6029,11 +5788,23 @@ export const en = {
     /** Sigurnost section (ADR-018 / AUTH): change passcode, regenerate the Recovery Kit, idle auto-lock. */
     security: {
       changeTitle: "Change passcode",
+      addTitle: "Add an account passcode",
+      passcodeOn: "This account asks for its passcode when it opens.",
+      passcodeOff:
+        "This account opens without a passcode on this device. Private Notes still keeps its own passcode.",
       currentLabel: "Current passcode",
       newLabel: "New passcode",
       confirmLabel: "Confirm new passcode",
       save: "Save",
+      add: "Add passcode",
       changeSuccess: "The passcode was changed.",
+      removePasscode: "Remove account passcode",
+      removePasscodeTitle: "Remove the account passcode",
+      removePasscodeQuestion:
+        "This account will open without a passcode on this device. Private Notes will still require its own passcode.",
+      removePasscodeConfirm: "Remove passcode",
+      passcodeRemoved: "The account passcode was removed.",
+      cancel: "Cancel",
       recoveryTitle: "New recovery code",
       recoveryWarning:
         "Making a new code cancels the old one immediately — if the old one is written down anywhere, write the new one over it.",
@@ -6061,7 +5832,7 @@ export const en = {
         never: "Never",
       } satisfies Record<string, string>,
       askPasscodeWarning:
-        "Anyone who can use this Windows account can open Nexus without the passcode for that long.",
+        "Anyone who can use your operating-system session can open Nexus without the passcode for that long.",
       askPasscodePasscodeLabel: "Passcode",
       askPasscodeSaved: "The setting was saved.",
       /** Keyed by UnlockSettingUnavailableReason, read through `lookup` so the table keeps literal keys. */
@@ -6420,10 +6191,6 @@ export const en = {
      * do, since it starts from what the profile has and writes only what
      * changes.
      */
-    onboardingRerunTitle: "Your answers",
-    onboardingRerunAction: "Run the questionnaire again",
-    onboardingRerunCaption:
-      "The same questions as on the first run — it starts from what you have now and changes only what you change.",
     /**
      * ADR-086 §5 — „Kako je Nexus podešen za tebe".
      *
@@ -6433,21 +6200,6 @@ export const en = {
      * with what the person actually said — never a sentence written beside a
      * decision and free to drift from it.
      */
-    setup: {
-      description:
-        "Nexus was put together from your answers on the first run. Here is what came out of them.",
-      /** No stored answers: not an apology, and not a nag — the standard app is a legitimate answer. */
-      none: "The questions were not answered, so Nexus stands at its defaults. You can set everything from here as well, by hand.",
-      /**
-       * Forgetting is separated from changing, and it says exactly what it
-       * does: the answers go, the app stays as it is. A person who wants the
-       * standard app back gets it by turning things off, not by deleting a
-       * record — otherwise „zaboravi" would be an undo nobody asked for.
-       */
-      forget: "Forget the answers",
-      forgetHint:
-        "Deletes the saved answers from this device. Nothing is reverted — the app stays as it is.",
-    },
     /** NTF-008 appetite presets — shortcuts over the per-source toggles below. */
     notificationPresets: {
       /** The row's own name, so the three buttons stop being an unlabelled bar at the top of the card. */
@@ -7921,6 +7673,7 @@ export const en = {
      * the compiler is what keeps them honest.
      */
     contentPacks: {
+      openGallery: "Open art gallery",
       intro:
         "A pack is a folder of public content — offline Wikipedia, a map, a dataset — and Nexus accepts it only when it is signed with Nexus's own key. The content stays on this device, in a folder beside the encrypted database, and it is not part of a profile backup.",
       emptyTitle: "No packs are installed.",

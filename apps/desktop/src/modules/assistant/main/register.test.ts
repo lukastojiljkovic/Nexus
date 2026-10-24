@@ -4,13 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createScriptedModel,
+  type ChatLoadOverrides,
   type HardwareProfile,
   type ModelEntry,
   type ModelHost,
   type ModelRecommendation,
   type ScriptedChatModel,
 } from "@nexus/core";
-import { NexusDatabase, TaskListStore, openDatabase, uuidv7 } from "@nexus/db";
+import {
+  ConversationStore,
+  DEFAULT_ASSISTANT_RUNTIME,
+  NexusDatabase,
+  TaskListStore,
+  openDatabase,
+  uuidv7,
+} from "@nexus/db";
 import { ModuleHost, type ModulePlatform } from "../../../main/moduleIpc.js";
 import type { VoiceHost } from "../../../main/assistant/voice/host.js";
 import type { VoiceReply, VoiceRequest } from "../../../main/assistant/voice/protocol.js";
@@ -120,11 +128,18 @@ let dir: string;
 let db: NexusDatabase;
 let profileId: string;
 let unloads = 0;
+/** How many times the host was asked for the hardware reading: the probe that loads the native runtime. */
+let hardwareReads = 0;
 let loadError: Error | null = null;
 /** The models on this machine, written by the tests that add or remove one. */
 let installedEntries: ModelEntry[] = [];
-/** Every model id `loadChat` was asked for, in order. */
+/** Every model id `loadChat` was asked for, in order, and the overrides each load carried. */
 let loaded: string[] = [];
+let loadOverrides: (ChatLoadOverrides | undefined)[] = [];
+/** Every idle time the host was told to keep its models for, in minutes. */
+let keptFor: number[] = [];
+/** The chat model the fake host holds, as `resident()` answers it. */
+let residentChat: string | null = null;
 /** The voice worker, as this module sees it: one canned reply per request kind. */
 let voiceRequests: VoiceRequest[] = [];
 let voiceDisposals = 0;
@@ -172,6 +187,7 @@ function fakeHost(): ModelHost {
   ];
   return {
     async hardware(): Promise<HardwareProfile> {
+      hardwareReads += 1;
       return HARDWARE;
     },
     async catalogue(): Promise<readonly ModelEntry[]> {
@@ -193,9 +209,11 @@ function fakeHost(): ModelHost {
     async remove(id: string): Promise<void> {
       installedEntries = installedEntries.filter((candidate) => candidate.id !== id);
     },
-    async loadChat(id: string) {
+    async loadChat(id: string, _signal: AbortSignal, overrides?: ChatLoadOverrides) {
       loaded.push(id);
+      loadOverrides.push(overrides);
       if (loadError !== null) throw loadError;
+      residentChat = id;
       // The window the app itself loads: a chat model is asked for
       // `CHAT_CONTEXT_TOKENS` (8_192). The fake's own default is 4_096, and the
       // tool registry the merged build offers needs more room than that - its
@@ -214,8 +232,15 @@ function fakeHost(): ModelHost {
     async loadEmbedder() {
       throw new Error("this machine has no embedding model");
     },
+    resident() {
+      return { chat: residentChat, embedder: null };
+    },
+    keepLoadedFor(minutes: number): void {
+      keptFor.push(minutes);
+    },
     async unloadAll(): Promise<void> {
       unloads += 1;
+      residentChat = null;
     },
   };
 }
@@ -280,9 +305,13 @@ beforeEach(() => {
   // it, and the `tasks.create` tool this file drives writes through that store.
   new TaskListStore(db.raw, profileId).ensureInbox(new Date(NOW).toISOString());
   unloads = 0;
+  hardwareReads = 0;
   loadError = null;
   installedEntries = [ENTRY];
   loaded = [];
+  loadOverrides = [];
+  keptFor = [];
+  residentChat = null;
   voiceRequests = [];
   voiceDisposals = 0;
   voiceTranscript = "Zdravo iz mikrofona.";
@@ -432,6 +461,16 @@ describe("the assistant module through the kit", () => {
       enabled: true,
     })) as { webSearch: { enabled: boolean; modeAllows: boolean } };
     expect(after.webSearch).toEqual({ enabled: true, modeAllows: false, mode: "offline" });
+  });
+
+  it("names the installed embedding model in the list without loading it", async () => {
+    // The fake's `loadEmbedder` throws, so a list that loaded the model would reject.
+    installedEntries = [ENTRY, EMBEDDING];
+    const host = harness();
+    const view = (await host.dispatch("assistant:list", TRUSTED, { profileId })) as {
+      knowledge: { embedderId: string | null };
+    };
+    expect(view.knowledge.embedderId).toBe("embed-model");
   });
 
   it("says which voice packs are installed, and arms the microphone when the page asks", async () => {
@@ -963,6 +1002,31 @@ describe("the assistant module through the kit", () => {
     expect(thread.messages).toEqual([]);
   });
 
+  it("answers setup from the disk alone, without waiting for the hardware probe", async () => {
+    const host = harness();
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as Record<string, unknown>;
+    expect(hardwareReads).toBe(0);
+    expect(view["installed"]).toEqual([{ model: ENTRY, chosen: false }]);
+    expect(Object.keys(view)).not.toContain("hardware");
+  });
+
+  it("reads the hardware and the picks in probe, and offers the picks for download", async () => {
+    installedEntries = [];
+    const host = harness();
+    await host.dispatch("assistant:setup", TRUSTED, { profileId });
+    // A pick nobody has been shown yet cannot be named by a download.
+    await expect(
+      host.dispatch("assistant:downloadModel", TRUSTED, { profileId, modelId: ENTRY.id }),
+    ).rejects.toThrow(/was offered/);
+    const probe = await host.dispatch("assistant:probe", TRUSTED, { profileId });
+    expect(probe).toEqual({
+      hardware: HARDWARE,
+      recommendations: [{ tier: "balance", model: ENTRY, reason: { sr: "Sredina.", en: "The middle." } }],
+      unavailable: null,
+    });
+    await host.dispatch("assistant:downloadModel", TRUSTED, { profileId, modelId: ENTRY.id });
+  });
+
   it("reports the chosen model on the setup view, and that a tier clears the choice", async () => {
     const host = harness();
     installedEntries = [ENTRY, DOWNLOADED];
@@ -1051,5 +1115,263 @@ describe("the assistant module through the kit", () => {
     };
     expect(view.chatModelId).toBeNull();
     expect(view.installed.some((row) => row.chosen)).toBe(false);
+  }, 30_000);
+});
+
+describe("the assistant's runtime: context, sampling and memory", () => {
+  const RUNTIME = {
+    contextTokens: 16_384,
+    temperature: 0.4,
+    topP: null,
+    topK: 40,
+    repeatPenalty: null,
+    idleUnloadMinutes: 5,
+    autoCompact: false,
+  };
+
+  async function sendOne(host: ModuleHost): Promise<void> {
+    const created = (await host.dispatch("assistant:createConversation", TRUSTED, {
+      profileId,
+      title: "Rad",
+    })) as { conversations: { id: string }[] };
+    const started = (await host.dispatch("assistant:send", TRUSTED, {
+      profileId,
+      conversationId: created.conversations[0]?.id ?? "",
+      text: "zdravo",
+      workflowId: null,
+    })) as { turnId: string };
+    await pollUntil(host, started.turnId, (events) => events.some((entry) => entry.event.type === "done"));
+  }
+
+  it("answers the defaults and the bounds in the setup view of a profile that set nothing", async () => {
+    const host = harness();
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      runtime: { options: unknown; limits: { contextTokens: { min: number; max: number } } };
+      resident: unknown;
+    };
+    expect(view.runtime.options).toEqual(DEFAULT_ASSISTANT_RUNTIME);
+    expect(view.runtime.limits.contextTokens).toMatchObject({ min: 2048, max: 131_072 });
+    expect(view.resident).toEqual({ chat: null, embedder: null });
+  });
+
+  it("loads with the profile's runtime options, and keeps the model for the idle time they name", async () => {
+    const host = harness();
+    script = [{ text: "Odgovor." }];
+    const view = (await host.dispatch("assistant:setRuntime", TRUSTED, {
+      profileId,
+      runtime: RUNTIME,
+    })) as { runtime: { options: unknown } };
+    expect(view.runtime.options).toEqual(RUNTIME);
+    // A changed idle time applies to the model in memory now, not at the next turn.
+    expect(keptFor.at(-1)).toBe(5);
+
+    await sendOne(host);
+    // Only what the profile set travels: a `null` is the model's own value.
+    expect(loadOverrides).toEqual([{ contextTokens: 16_384, temperature: 0.4, topK: 40 }]);
+    expect(keptFor.at(-1)).toBe(5);
+  }, 30_000);
+
+  it("loads a profile that set nothing with no overrides at all", async () => {
+    const host = harness();
+    script = [{ text: "Odgovor." }];
+    await sendOne(host);
+    expect(loadOverrides).toEqual([{}]);
+    expect(keptFor.at(-1)).toBe(15);
+  }, 30_000);
+
+  it("refuses a runtime option outside its bounds, and keeps the last one", async () => {
+    const host = harness();
+    await host.dispatch("assistant:setRuntime", TRUSTED, { profileId, runtime: RUNTIME });
+    for (const wrong of [
+      { ...RUNTIME, temperature: 9 },
+      { ...RUNTIME, contextTokens: 100 },
+      { ...RUNTIME, topK: 2.5 },
+      { ...RUNTIME, idleUnloadMinutes: null },
+      { ...RUNTIME, idleUnloadMinutes: undefined },
+      { ...RUNTIME, autoCompact: "yes" },
+      "all of them",
+    ]) {
+      await expect(
+        host.dispatch("assistant:setRuntime", TRUSTED, { profileId, runtime: wrong }),
+        JSON.stringify(wrong),
+      ).rejects.toThrow();
+    }
+    const view = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      runtime: { options: unknown };
+    };
+    expect(view.runtime.options).toEqual(RUNTIME);
+  });
+
+  it("names the model in memory, and lets it go on request", async () => {
+    const host = harness();
+    script = [{ text: "Odgovor." }];
+    await sendOne(host);
+    const before = (await host.dispatch("assistant:setup", TRUSTED, { profileId })) as {
+      resident: { chat: string | null };
+    };
+    expect(before.resident.chat).toBe(ENTRY.id);
+    const after = (await host.dispatch("assistant:unloadModels", TRUSTED, { profileId })) as {
+      resident: { chat: string | null };
+    };
+    expect(unloads).toBe(1);
+    expect(after.resident.chat).toBeNull();
+  }, 30_000);
+});
+
+describe("compacting a long conversation", () => {
+  /** More than 0.4 of an 8 192-token window's ceiling in either language: 12 000 characters. */
+  const LONG = "reč ".repeat(3000);
+
+  const THREE_TURNS: readonly (readonly [string, string])[] = [
+    ["prvo pitanje", "prvi odgovor"],
+    ["drugo pitanje", "drugi odgovor"],
+    ["treće pitanje", "treći odgovor"],
+  ];
+
+  async function conversation(host: ModuleHost): Promise<string> {
+    const created = (await host.dispatch("assistant:createConversation", TRUSTED, {
+      profileId,
+      title: "Dug razgovor",
+    })) as { conversations: { id: string }[] };
+    return created.conversations[0]?.id ?? "";
+  }
+
+  /** Writes finished exchanges straight into the store, as earlier turns would have. */
+  function seed(conversationId: string, exchanges: readonly (readonly [string, string])[]): void {
+    const store = new ConversationStore(db.raw, profileId);
+    for (const [question, answer] of exchanges) {
+      store.appendTurn(
+        conversationId,
+        [
+          { role: "user", text: question },
+          { role: "assistant", text: answer, citations: [] },
+        ],
+        ENTRY.id,
+        new Date(NOW).toISOString(),
+      );
+    }
+  }
+
+  async function send(host: ModuleHost, conversationId: string) {
+    const started = (await host.dispatch("assistant:send", TRUSTED, {
+      profileId,
+      conversationId,
+      text: "a sada?",
+      workflowId: null,
+    })) as { turnId: string };
+    return await pollUntil(host, started.turnId, () => false);
+  }
+
+  async function compact(host: ModuleHost, conversationId: string) {
+    const started = (await host.dispatch("assistant:compact", TRUSTED, {
+      profileId,
+      conversationId,
+    })) as { turnId: string };
+    return await pollUntil(host, started.turnId, () => false);
+  }
+
+  function compactions(events: readonly AssistantTurnEventEntry[]): string[] {
+    return events.flatMap(({ event }) => (event.type === "compaction" ? [event.status] : []));
+  }
+
+  function summaryOf(thread: unknown): unknown {
+    return (thread as { summary: unknown }).summary;
+  }
+
+  it("summarizes the head of a thread that outgrew its share of the window, and the turn reads the summary", async () => {
+    const host = harness();
+    const conversationId = await conversation(host);
+    seed(conversationId, [[LONG, "prvi odgovor"], ...THREE_TURNS.slice(1)]);
+    script = [{ text: "Korisnik je poslao dug tekst." }, { text: "Odgovor." }];
+    const turn = await send(host, conversationId);
+
+    expect(compactions(turn.events)).toEqual(["running", "done"]);
+    const [summarize, answer] = lastModel?.requests ?? [];
+    expect(summarize?.tools).toEqual([]);
+    expect(summarize?.messages[1]?.content).toContain("User: reč reč");
+    // The answer is asked with the summary in the system prompt and without the
+    // turn it stands for, which the thread still holds.
+    expect(answer?.messages[0]?.content).toContain("Korisnik je poslao dug tekst.");
+    expect(answer?.messages.some((message) => message.content.includes(LONG))).toBe(false);
+    expect(answer?.messages.some((message) => message.content === "drugo pitanje")).toBe(true);
+    expect(summaryOf(turn.thread)).toEqual({ text: "Korisnik je poslao dug tekst.", through: 2 });
+    expect((turn.thread as { messages: unknown[] }).messages).toHaveLength(8);
+  }, 30_000);
+
+  it("answers from the whole thread when the summary fails, and stores none", async () => {
+    const host = harness();
+    const conversationId = await conversation(host);
+    seed(conversationId, [[LONG, "prvi odgovor"], ...THREE_TURNS.slice(1)]);
+    script = [{ text: "   " }, { text: "Odgovor." }];
+    const turn = await send(host, conversationId);
+    expect(compactions(turn.events)).toEqual(["running", "failed"]);
+    expect(turn.events.some((entry) => entry.event.type === "done")).toBe(true);
+    expect(summaryOf(turn.thread)).toBeNull();
+  }, 30_000);
+
+  it("leaves a long thread whole when the profile turned compaction off", async () => {
+    const host = harness();
+    await host.dispatch("assistant:setRuntime", TRUSTED, {
+      profileId,
+      runtime: { ...DEFAULT_ASSISTANT_RUNTIME, autoCompact: false },
+    });
+    const conversationId = await conversation(host);
+    seed(conversationId, [[LONG, "prvi odgovor"], ...THREE_TURNS.slice(1)]);
+    script = [{ text: "Odgovor." }];
+    const turn = await send(host, conversationId);
+    expect(compactions(turn.events)).toEqual([]);
+    expect(lastModel?.requests).toHaveLength(1);
+    expect(summaryOf(turn.thread)).toBeNull();
+  }, 30_000);
+
+  it("compacts by hand, folds the last summary into the next, and refuses a thread too short to compact", async () => {
+    const host = harness();
+    const conversationId = await conversation(host);
+    seed(conversationId, THREE_TURNS);
+    script = [{ text: "Prvi sažetak." }];
+    const first = await compact(host, conversationId);
+    expect(compactions(first.events)).toEqual(["running", "done"]);
+    expect(lastModel?.requests[0]?.messages[1]?.content).toContain("User: prvo pitanje");
+    expect(summaryOf(first.thread)).toEqual({ text: "Prvi sažetak.", through: 2 });
+
+    // What is left after a summary is the two turns a compaction always keeps.
+    await expect(
+      host.dispatch("assistant:compact", TRUSTED, { profileId, conversationId }),
+    ).rejects.toThrow(/too short/);
+
+    seed(conversationId, [
+      ["četvrto pitanje", "četvrti odgovor"],
+      ["peto pitanje", "peti odgovor"],
+    ]);
+    script = [{ text: "Drugi sažetak." }];
+    const second = await compact(host, conversationId);
+    const request = lastModel?.requests[0]?.messages[1]?.content ?? "";
+    expect(request).toContain("Prvi sažetak.");
+    expect(request).toContain("User: drugo pitanje");
+    expect(request).not.toContain("prvo pitanje");
+    expect(summaryOf(second.thread)).toEqual({ text: "Drugi sažetak.", through: 6 });
+    const opened = (await host.dispatch("assistant:open", TRUSTED, {
+      profileId,
+      conversationId,
+    })) as { messages: unknown[] };
+    expect(summaryOf(opened)).toEqual({ text: "Drugi sažetak.", through: 6 });
+    expect(opened.messages).toHaveLength(10);
+  }, 30_000);
+
+  it("refuses to compact while a turn runs in the profile", async () => {
+    const host = harness();
+    const conversationId = await conversation(host);
+    seed(conversationId, THREE_TURNS);
+    script = [{ text: "Odgovor." }];
+    const started = (await host.dispatch("assistant:send", TRUSTED, {
+      profileId,
+      conversationId,
+      text: "a sada?",
+      workflowId: null,
+    })) as { turnId: string };
+    await expect(
+      host.dispatch("assistant:compact", TRUSTED, { profileId, conversationId }),
+    ).rejects.toBeInstanceOf(TurnBusyError);
+    await pollUntil(host, started.turnId, () => false);
   }, 30_000);
 });

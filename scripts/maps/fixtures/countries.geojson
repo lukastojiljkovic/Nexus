@@ -1,0 +1,80 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "ADM0_A3": "AAA",
+        "ISO_A2_EH": "AA",
+        "ISO_A3_EH": "AAA",
+        "NAME_EN": "Alpha",
+        "CONTINENT": "Europe",
+        "LABEL_X": 1.0,
+        "LABEL_Y": 1.0,
+        "SOVEREIGNT": "Alpha",
+        "POP_EST": 12345
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [[0, 0], [1, 0.0001], [2, 0], [2, 2], [0, 2], [0, 0]]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ADM0_A3": "BBB",
+        "ISO_A2_EH": "-99",
+        "ISO_A3_EH": "-99",
+        "NAME_EN": "Beta",
+        "CONTINENT": "Europe",
+        "LABEL_X": 5.123456,
+        "LABEL_Y": 5.0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ADM0_A3": "CCC",
+        "ISO_A2_EH": "CC",
+        "ISO_A3_EH": "CCC",
+        "NAME_EN": "Gamma",
+        "CONTINENT": "Asia",
+        "LABEL_X": 10.0,
+        "LABEL_Y": 10.0
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [[[10, 10], [14, 10], [14, 14], [10, 14], [10, 10]]],
+          [[[20, 20], [20.001, 20], [20.001, 20.001], [20, 20.001], [20, 20]]]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ADM0_A3": "DDD",
+        "ISO_A2_EH": "DD",
+        "ISO_A3_EH": "DDD",
+        "NAME_EN": "Delta",
+        "CONTINENT": "Africa",
+        "LABEL_X": 30.0,
+        "LABEL_Y": 30.0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [[30, 30], [30.001, 30], [30.001, 30.001], [30, 30.001], [30, 30]]
+        ]
+      }
+    }
+  ]
+}

@@ -89,6 +89,7 @@ export const IpcChannel = {
   authStatus: "auth:status",
   authCreate: "auth:create",
   authUnlock: "auth:unlock",
+  authOpenWithoutPasscode: "auth:open-without-passcode",
   authRecover: "auth:recover",
   authChangePasscode: "auth:change-passcode",
   authRegenerateRecovery: "auth:regenerate-recovery",
@@ -1127,6 +1128,7 @@ export type AuthErrorReason =
   | "throttled"
   | "weakPasscode"
   | "keystoreUnavailable"
+  | "passcodeNotSet"
   | "otherDevice"
   | "corruptKeychain";
 
@@ -1155,6 +1157,8 @@ export interface AccountSummary {
   id: string;
   label: string;
   createdAt: string;
+  /** False for an account that opens without a credential on this device. */
+  requiresPasscode: boolean;
   /**
    * Per-account, not per-device: each account's guard blob is bound to its own
    * device secret, so one carried over from another machine needs its Recovery
@@ -1168,8 +1172,12 @@ export interface AuthStatus {
   state: AuthState;
   /** Milliseconds still to wait before another attempt is accepted; 0 when none. */
   lockedForMs: number;
-  /** False when the OS keystore is unavailable — account creation is refused rather than silently downgraded. Device-global: `safeStorage` knows nothing about accounts. */
+  /** False when the OS keystore is unavailable. New accounts then use an owner-only local guard file. */
   keystoreAvailable: boolean;
+  /** Where this account's device secret actually lives. */
+  deviceProtection: DeviceProtection;
+  /** False for convenience mode: the account opens without a credential on this device. */
+  requiresPasscode: boolean;
   /**
    * True when this data was carried over from another machine or Windows
    * account: its OS-bound guard cannot be read here, so the passcode is
@@ -1190,6 +1198,8 @@ export interface AuthStatus {
    */
   selectedAccountId: string | null;
 }
+
+export type DeviceProtection = "system-vault" | "owner-only-file";
 
 /**
  * The outcome of every auth mutation (create/unlock/recover/change-passcode/
@@ -1291,7 +1301,7 @@ export type UnlockPolicyResult =
 /** `label` names the account on the lock screen and is stored in plaintext (see `AccountSummary`); creation is refused outright once any account exists. */
 export interface AuthCreateRequest {
   label: string;
-  passcode: string;
+  passcode: string | null;
 }
 
 /**
@@ -1305,7 +1315,7 @@ export interface AuthCreateRequest {
  */
 export interface AuthCreateAdditionalRequest {
   label: string;
-  passcode: string;
+  passcode: string | null;
 }
 
 /** Switches which account every other auth channel acts on. Switching away from an unlocked one locks it first (ADR-044 section 5). */
@@ -9308,9 +9318,9 @@ export interface NexusApi {
   /** ADR-018: the local account's status. The first thing the renderer asks about, before profiles or flags — there is no code path where a data channel is called before this. */
   getAuthStatus(): Promise<AuthStatus>;
   /** First run: creates the local account (encrypting an existing plaintext database in place if one predates this) and returns the one-time Recovery Kit code on success — the only time it is ever handed back. */
-  createAccount(label: string, passcode: string): Promise<AuthResult>;
+  createAccount(label: string, passcode: string | null): Promise<AuthResult>;
   /** Adds another local account and switches to it, locking whatever was open first (ADR-044). Returns the new account's one-time Recovery Kit code, exactly as `createAccount` does. */
-  createAdditionalAccount(label: string, passcode: string): Promise<AuthResult>;
+  createAdditionalAccount(label: string, passcode: string | null): Promise<AuthResult>;
   /** Points every other auth channel at a different account, locking the current one first when it was open. Answers with the freshly computed status so the picker never has to ask twice. */
   selectAccount(accountId: string): Promise<AuthStatus>;
   /** Renames an account's lock-screen label; allowed while locked. Answers with the freshly computed status. */
@@ -9319,10 +9329,12 @@ export interface NexusApi {
   deleteAccount(accountId: string): Promise<AuthStatus>;
   /** Opens the database with the passcode-derived key, or a throttled/wrong-passcode refusal. */
   unlockWithPasscode(passcode: string): Promise<AuthResult>;
+  /** Opens a convenience-mode account without a credential; passcode-protected accounts refuse. */
+  openWithoutPasscode(): Promise<AuthResult>;
   /** Recovers from a forgotten passcode: verifies the Recovery Kit code and sets a new passcode in the same call. */
   unlockWithRecovery(recoveryCode: string, newPasscode: string): Promise<AuthResult>;
   /** Rewraps the data key under a new passcode; never re-encrypts the database, never touches the Recovery Kit already written down. */
-  changePasscode(currentPasscode: string, nextPasscode: string): Promise<AuthResult>;
+  changePasscode(currentPasscode: string | null, nextPasscode: string | null): Promise<AuthResult>;
   /** Issues a fresh Recovery Kit code, invalidating the old one. Unlocked session only. */
   regenerateRecoveryCode(): Promise<AuthResult>;
   /** ADR-110: how often the app asks for the passcode, and whether this machine can honour that at all. */

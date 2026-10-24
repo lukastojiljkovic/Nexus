@@ -14,8 +14,8 @@ the binding rules) → §1 and §2 below (where we are, what exists) → §4 (wh
 left) → §5 (what needs the founder). [README.md](README.md) maps every other
 document.
 
-**Last updated:** 2026-10-21. The state below was verified on that date, in the
-tree the release `v2.1.1` was cut from; every figure says in §1 how a reader
+**Last updated:** 2026-10-24. The state below was verified on that date in the
+`feat/nexus-3` working tree; every figure says in §1 how a reader
 re-measures it, because a number that cannot be re-derived is the defect class
 this file keeps recording. Deliberately no commit sha: a sha in a header goes
 stale the moment anything is pushed.
@@ -24,10 +24,11 @@ stale the moment anything is pushed.
 [SPECIFICATION.md](SPECIFICATION.md) (the whole product) ·
 [roadmap.md](roadmap.md) (what order).
 
-**Where things stand (2026-10-21).** The desktop application is finished and
-the repository is public. The latest release, **2.1.1**, is tagged `v2.1.1` on
-`main`, built by the release workflow and published with its checksums, their
-Ed25519 signature, an SBOM and build provenance; 1.4.0 was the first. Every
+**Where things stand (2026-10-24).** The desktop application is finished and
+the repository is public. The latest published release is **2.5.0**, tagged
+`v2.5.0`; it was built by the release workflow and published with its checksums,
+their Ed25519 signature, an SBOM and build provenance. The **3.0.0** release
+candidate is in final verification. Every
 release ships unsigned ([DEV-008](deviations.md)), and sync, cloud and the web
 app are on hold permanently.
 
@@ -36,14 +37,14 @@ app are on hold permanently.
 ## 1. Where the project is
 
 **The desktop app is finished, and the repository is public.** Every module in
-the registry — 42 of them today, counted from the two places a module is
+the registry — 43 of them today, counted from the two places a module is
 declared (§2) — is usable end to end, on an encrypted local SQLite database.
 The network boundary has three modes, and `offline`, the default, cannot make a
 request at all; the two that can reach anything, `updates` and `downloads`, are
 each opt-in and each fixed for the life of a launch. It installs like an
 ordinary Windows program and the founder has used it daily since 2026-08-02.
 Eight releases are tagged — **1.4.0** (2026-10-05, `v1.4.0`, the first public
-one) through **2.1.1** (2026-10-21, `v2.1.1`, the latest); every installer
+one) through **2.5.0** (2026-10-23, `v2.5.0`, the latest); every installer
 before 1.4.0 was built by hand and never tagged, the last being 1.3.0, from
 `eceb07e` on 2026-09-23.
 
@@ -97,17 +98,17 @@ no round has run for real. It is the head of the web/sync queue.
 
 |  |  |
 | --- | --- |
-| Desktop version | **2.1.1**, released as `v2.1.1` (2026-10-21): unsigned, per [DEV-008](deviations.md) |
+| Desktop version | **3.0.0** release candidate; latest published release **2.5.0**, unsigned per [DEV-008](deviations.md) |
 | Windows | an NSIS installer, per user |
 | Linux | an AppImage and a tarball, plus a Gentoo ebuild |
 | macOS | an arm64 dmg — unsigned and un-notarised, like the rest |
-| Modules registered | **42** — 16 compiled in (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and 26 discovered (`apps/desktop/src/modules/*/shared/manifest.ts`) |
-| Local migrations | **97** at `v2.1.1` (latest `097-culture-plan-tickets`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts` |
+| Modules registered | **43** — 16 compiled in (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and 27 discovered (`apps/desktop/src/modules/*/shared/manifest.ts`) |
+| Local migrations | **100** (latest `100-gallery`), counted by the `MIGRATIONS` array in `packages/db/src/migrations/migrations.ts` |
 | Server | 14 Supabase migrations, 3 Edge Functions, 165 pgTAP assertions |
 | Static gates | **30** (`check:*` in `package.json`), each its own CI step |
-| Commits | **1 282** on `main` at `v2.1.1` (`git rev-list --count v2.1.1`) |
-| Changes since the release | **none** in the product: what reached `main` after `v2.1.1` is the agent guide's move to `AGENTS.md` and the Gentoo bump (`git log v2.1.1..HEAD`), so [CHANGELOG.md](../CHANGELOG.md) has no `[Unreleased]` section |
-| Git tags / GitHub releases | `v1.4.0` through `v2.1.1` — eight tags, each a published release |
+| Commits | **1 380** through the `v2.5.0` base (`git rev-list --count 0b9374dd`) |
+| Changes since the release | The v3.0 release in [CHANGELOG.md](../CHANGELOG.md) |
+| Git tags / GitHub releases | `v1.4.0` through `v2.5.0` — nine tags, each a published release |
 | Repository | public since 2026-10-05; `main` changes only through a pull request with CI green (ruleset `main`, no bypass, admins included) |
 
 ---
@@ -165,20 +166,12 @@ no round has run for real. It is the head of the web/sync queue.
   module's data gets all four.
 - **Interchange** — a versioned `.nexus.zip` archive (NDJSON + Markdown/CSV
   mirrors), encrypted under an export-time passphrase, with restore and merge.
-- **The profile plan** (2026-08-23, [ADR-086](architecture/adr/086-profile-plan.md))
-  — the layer that makes one build of the app arrive differently for different
-  people. Six organic questions produce `Signal`s, `buildProfilePlan` turns
-  those into a `ProfilePlan` (modules, professional packs, a dashboard, the
-  calendar's opening view, the accent, a capped sidebar shortlist) and
-  `applyProfilePlan` writes it. Four laws hold it honest: **no signals means the
-  app exactly as it is today**; the plan is total over the live registry, so a
-  module added next year is planned for without editing the questionnaire; every
-  board entry is a widget something actually publishes; and **every decision
-  names at least one answer that caused it** — which is what the reveal screen
-  and the Settings card „Kako je Nexus podešen za tebe" read out loud. The
-  **answers** are what is stored, never the plan, so the explanation cannot drift
-  and re-running the questionnaire a year later gets the modules that exist then.
-  The plan never turns a module OFF.
+- **Direct first use and visible breadth** — account creation creates and names
+  the personal profile, then opens the shell. Every registered module is visible
+  on a fresh install and after the visibility-v2 migration; users may hide or
+  reorder modules later in Settings. The former profile-plan layer and
+  first-run questionnaire were removed after their remaining data and behavior
+  moved into profile defaults, module presets and the shell.
 - **Thirty static gates in CI**, registered in `package.json` and each its
   own CI step so a red check names the rule. **They are deliberately not listed
   here.** The list is generated from `package.json` by
@@ -265,10 +258,9 @@ no round has run for real. It is the head of the web/sync queue.
 
 ### The modules
 
-**42 registered modules**, each usable end to end — **16 compiled into the
-shell** (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and **26
-discovered** by the kit (`apps/desktop/src/modules/*/shared/manifest.ts`) — plus
-onboarding, which is a flow rather than a module and so carries no manifest.
+**43 registered modules**, each usable end to end — **16 compiled into the
+shell** (`V0_MODULES` in `apps/desktop/src/shared/modules.ts`) and **27
+discovered** by the kit (`apps/desktop/src/modules/*/shared/manifest.ts`).
 What is on screen is one device-level setting
 ([ADR-101](architecture/adr/101-shell-visibility.md)): a module can be hidden,
 and the groups and their rows reordered.
@@ -277,7 +269,6 @@ The sixteen, in registry order:
 
 | Module | State |
 | --- | --- |
-| **Onboarding** (ONB) | Rebuilt 2026-08-23 ([ADR-086](architecture/adr/086-profile-plan.md)) — six screens (name, four organic questions about the person rather than about the software, notification appetite), then „Priprema" and the „Evo tvog Nexusa" reveal. Nothing is a checkbox over a module list; the module list is still reachable, once, behind „Napredno". |
 | **Dashboard** (DASH) | Whole — edit mode with drag/resize, a widget gallery, several named dashboards, per-widget configuration, a background image. |
 | **Tasks** (TASK) | Complete — priorities, due dates, sub-tasks, lists and sections, recurrence, dependencies, templates, attachments, four views, smart lists, batch edits, undo. |
 | **Calendar** (CAL) | Complete — month/week/day/agenda, drag and resize, recurrence, birthdays, semester dates, the document-expiry tracker with per-type reminder ladders, ICS in and out. |
@@ -295,7 +286,7 @@ The sixteen, in registry order:
 | **Electronics** (ELEC) | **All six slices complete** ([ADR-085](architecture/adr/085-electronics-module.md)) — a 153-component catalogue, a pan/zoom bench with rotation and snapping, two-click wiring in the trade's nine jumper colours, a panel that reports the *electrical* faults too (thirteen rules over a derived net model, from a 5 V rail on a 3.3 V part to two I²C devices strapped to the same address), and „Kod": the code the wiring implies — an Arduino sketch for a microcontroller, a ROS 2 `ament_python` package for a board that runs Linux — previewed in the app and written out through the native dialog the artefact calls for (a save dialog for the `.ino`, a directory picker for the package, and main decides which from the stored circuit). And „Mašina": two parametric chassis and nine measured numbers turn the mounted sensors into a URDF that ships inside the ROS 2 package, listing what it has no honest geometry for rather than guessing at it (ADR-085 §8, answered 2026-09-01). And „Klupa" (E5): the same derivation running on a deterministic clock — one channel per board pin that carries a signal, with its direction, its unit, its ROS topic and a waveform the *user* declares, plus the one warning a static rule cannot give (a value above the board’s logic level at THIS tick). And **E6, the external runner**: the module can hand the generated workspace to a real toolchain — `colcon build`, natively, through WSL2 or in a Docker container pinned by digest — with the command line written down in one table in source, off until the user consents once, one run at a time, and killed on quit. All six slices are complete. |
 | **Settings** (SET) | Built — themes, accent, module switches, per-module preferences, remappable shortcuts, notification appetite and quiet hours, profiles, scheduled encrypted backups, third-party notices. |
 
-The twenty-six the kit discovers, in registry order — each one's name and the
+The twenty-seven the kit discovers, in registry order — each one's name and the
 sentence below it are the `copy` in its manifest, which is what the rail and the
 settings gallery draw before any of its chunks load:
 
@@ -304,25 +295,26 @@ settings gallery draw before any of its chunks load:
 | Timers (`timers`) | plan | A stopwatch and named countdowns that keep running with the page closed. |
 | Library (`library`) | culture | The books, films and series you read and watch: what is on the wish list, what is in progress, and what is finished. |
 | Culture (`culture`) | culture | Museums, theatre, concerts and cinema — a programme, an arts guide and music. |
+| Gallery (`gallery`) | culture | Art from installed packs, images found in downloaded Reference libraries, and personal pictures in encrypted local storage, with search, filters, a full viewer and archive support. |
 | Car (`car`) | life | A service book: vehicles, services, intervals, fuel and faults. No advice of its own. |
 | Pantry (`pantry`) | life | What is in the house, what runs out, and what expires. |
-| Cookbook (`cookbook`) | life | Your recipes and the world's cuisines from packs — ingredients, steps and nutrition. |
+| Cookbook (`cookbook`) | life | Your recipes and the world's cuisines from packs — ingredients, steps and nutrition. The recipes-world builder and reader share integer servings and SPDX licence identifiers. |
 | Emergency card (`emergency`) | life | The facts a stranger or a medic can read when you cannot speak. |
 | Recorder (`recorder`) | knowledge | A voice and camera diary: record sound or video and play it back when you need it. |
 | Calculator (`calculator`) | make | One-line calculation: variables, units, history and a scientific keypad. |
-| Astronomy (`astronomy`) | knowledge | The solar system in 3D, day and night on Earth, tonight's sky, and the Sun and Moon for a chosen place. |
+| Astronomy (`astronomy`) | knowledge | The solar system in 3D beneath a Milky Way sky, with textured Pluto, a card per body, day and night on Earth, tonight's sky, and the Sun and Moon for a chosen place. |
 | Signals (`signals`) | make | Morse, an ASCII table, a tuner and a sound meter — the microphone opens only when one is started. |
 | Mini apps (`miniapps`) | make | Nine small tools in one place: a metronome, dice, counters, a scoreboard, typing, dates, a world clock, a screen light and a QR reader. |
 | Arcade (`arcade`) | play | Five quick games for a break: Minesweeper, Blocks, Snake, Bricks and 2048 — all of it offline. |
 | Cards (`cards`) | play | Nine card games — six solitaires and three against the computer. |
 | Chess (`chess`) | play | A board game — against the engine or another person, with clocks, saved games and PGN. |
 | Board games (`boards`) | play | Six board games — against the computer or on one machine. |
-| Puzzles (`puzzles`) | play | Sudoku, nonograms, mahjong and Numbers — every game is saved and picks up where it stopped. |
-| Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet. |
+| Puzzles (`puzzles`) | play | Sudoku, nonograms (pictures from the `nonograms-pictures` pack when it is installed), mahjong and Numbers — every game is saved and picks up where it stopped. |
+| Reference (`wiki`) | knowledge | Wikipedia, dictionaries and manuals you read without the internet; a downloaded article opens from the packaged renderer through the cross-origin-limited nx-zim scheme. |
 | Reader (`reader`) | knowledge | Books from content packs — read, search and print them. |
-| Maps (`maps`) | knowledge | Search places, drop pins and measure a distance on an offline map. The map data arrives as a pack; the Serbia map pack is not built yet. |
-| Translator (`translator`) | knowledge | A Serbian–English dictionary and travel phrases — they work offline. |
-| Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note. Its OCR language packs are not built yet. |
+| Maps (`maps`) | knowledge | A world outline to download a country, a continent or the world from, at the detail chosen ([ADR-118](architecture/adr/118-maps-cut-from-the-planet-build.md)); then search places, drop pins and measure a distance offline; disputed areas are hatched and their parties are named neutrally on a territory card; Kosovo is drawn as part of Serbia and marked disputed. |
+| Translator (`translator`) | knowledge | Translation between NLLB-200's 202 languages on the device ([ADR-119](architecture/adr/119-translator-on-nllb.md)), with explicit Load and Eject controls for model memory, and a Serbian–English dictionary with travel phrases — all of it offline. |
+| Scanner (`scanner`) | make | Reads text off an image or the camera and hands it to a note, in English and Serbian with the `tessdata-fast` pack. |
 | Drawings (`drawings`) | make | Open an AutoCAD drawing: layers, measurements and print to PDF. DXF right away, DWG with a pack. |
 | Workshop (`workshop`) | make | View STL models, G-code toolpaths and Gerber boards — with nothing else installed. |
 | The Lab (`lab`) | make | Serial, battery, tone and light — what the laptop can do beyond its job. |
@@ -698,11 +690,13 @@ schedule is now a migration) — reached `main` through the public-release pull
 request (#39), the English locale followed it, and `v1.4.0` was tagged from
 the result. The narrative is in [log/2026-10.md](log/2026-10.md).
 
-**Seven releases followed it,** each in `CHANGELOG.md` with its date: the
+**Eight releases followed it,** each in `CHANGELOG.md` with its date: the
 2026-10-08 release with Settings in categories (ADR-088) and the opt-in update
 check (ADR-089); then 2.0.0 (2026-10-11), 2.0.1, 2.0.2 and 2.0.3 (2026-10-15),
-2.1.0 (2026-10-16), in which the assistant reaches every module, and 2.1.1
-(2026-10-21), which moves to Electron 44.9.0 and updates the libraries.
+2.1.0 (2026-10-16), in which the assistant reaches every module; 2.1.1
+(2026-10-21), which moves to Electron 44.9.0 and updates the libraries; and
+2.5.0 (2026-10-23), which adds NLLB translation, maps, the final content packs
+and the assistant's runtime controls.
 The 2026-10-08 release is the first whose `SHA256SUMS.txt` carries the Ed25519
 signature the app's update check verifies, and 2.0.0 is the first with a macOS
 dmg.
@@ -815,11 +809,7 @@ suggestion, cheapest and highest-leverage first.
    way to produce either state, so `.app__banner` has never been photographed
    or audited. Reaching them needs a fault the sweep can cause on purpose, not a
    hook in the shipped renderer.
-10. **„Dalje" sits below the fold on onboarding step 3 at 900 × 600.** Measured
-    and reachable by scrolling, deliberately left: the card is the scroller, step
-    3 is the only step whose actions do not fit, and a sticky action bar would
-    change the first screen a user ever sees.
-11. **Nothing enforces the line-ending rule.** `.gitattributes` pins the files
+10. **Nothing enforces the line-ending rule.** `.gitattributes` pins the files
     where an ending is load-bearing (the Gentoo overlay, the `Makefile`,
     generated `licences.json`, `patches/**`, the pack and chess fixtures), and
     no tracked text file carries a carriage return today — `git grep --cached
@@ -827,7 +817,7 @@ suggestion, cheapest and highest-leverage first.
     fixtures). What is missing is the guard: a `check:line-endings` gate over
     committed blobs. Until it exists, every scripted edit has to be EOL-aware,
     and that has cost two redoes.
-12. **What 2.1.0 left open** (recorded 2026-10-16, none of it a regression):
+11. **What 2.1.0 left open** (recorded 2026-10-16, none of it a regression):
     - **A keyboard pass over the pages, and a screenshot sweep of 2.1's UX
       changes.** No page has a render test, so those changes were checked by
       typecheck, unit tests and diff review only.
@@ -937,7 +927,7 @@ and the app is finished where it is.**
   and launch the result.
 - **`v1.4.0` is the first tag and the first release.** Every installer before
   it reports a number nothing could be verified against. The Gentoo ebuild is
-  `nexus-bin-2.1.1`, and its `Manifest` digests the published 2.1.1 tarball.
+  `nexus-bin-2.1.1`, and its `Manifest` still digests the published 2.1.1 tarball.
   Each release still needs its own bump: rename the ebuild, regenerate
   `Manifest` from the published tarball (never from a local build) and
   re-check `metadata.xml`. It has still not been run through portage
@@ -951,10 +941,9 @@ and the app is finished where it is.**
   `main` with more packages in it. Fix on the branch, push, and merge promptly;
   the window between push and merge is the window in which the branch can be
   recreated underneath the fix.
-- **`main` is at `v2.1.1`** plus documentation; the next change to the
-  product opens an `[Unreleased]` section in `CHANGELOG.md`. Whether
-  anything is open on GitHub is not a fact this file can carry: ask the
-  repository.
+- **The latest published tag is `v2.5.0`.** The 3.0.0 release candidate is
+  recorded in `CHANGELOG.md`; whether anything is open on GitHub is not a fact
+  this file can carry, so ask the repository.
 
 ## 5. Open questions for the founder
 
@@ -978,7 +967,7 @@ implemented until the founder says otherwise.
 | Five smaller confirmations | Open. Three items: the tier-constants doctrine, one agro domain question, desktop→desktop pairing. |
 | Linux | Open. Two items: is Linux supported or a courtesy build, and code signing. The separate releases repository is settled — releases publish in this repository. |
 | The developer drawer | Open. `lf8` naming, the `tf19`/`tf32` label, and `MXINT8`. |
-| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Seven more releases have been tagged since, through `v2.1.1` (2026-10-21). |
+| Version numbering and tagging | **Answered** 2026-10-05: `1.4.0` is the first public release, tagged `v1.4.0`. Eight more releases have been tagged since, through `v2.5.0` (2026-10-23). |
 | `gitleaks-action` carries a commercial EULA | Irrelevant while the repository is personal; a licence question the day it moves under an organisation. |
 
 ### SEC-VER-01 is binding on paper and has one instance (2026-09-22)
@@ -988,7 +977,7 @@ lightweight threat-model pass at design time (STRIDE-style, ~30 minutes,
 documented in `docs/security/threat-models/`)"*. That directory holds **one**
 document — the E6 external-runner threat model, written on 2026-09-22 for the
 slice that has since been **built and shipped** — and **no module has had a
-pass**. All 42 registered modules, ELEC included: its document covers one
+pass**. All 43 registered modules, ELEC included: its document covers one
 slice of one of them, and the other 41 are untouched.
 Several of them carry a real trust boundary:
 the private section's blob protocol, archive import and export, the attachment
@@ -1078,17 +1067,11 @@ Fixing it needs two knobs, and the second is the question:
 **Recommendation: (a), gated on the harness refusing to run in a packaged
 build** — which `--shots` already is, for the same reason `--demo` is.
 
-**The other half of DC-57 is closed** (2026-08-23). Every `ShotScene` anchors to
-a sidebar row, and the questionnaire *replaces* the shell — so the nine screens
-ADR-086 introduced were unreachable for exactly the same reason the sync forms
-are, and by exactly the same mechanism: the fixture cannot get into the state.
-That one is fixable without touching the packet boundary, so it was: the sweep
-now ends with a pass that opens Settings → „Kako je Nexus podešen za tebe" →
-„Promeni odgovore", **answers each screen** (an unanswered flow photographs the
-one state none of them is interesting in), and photographs „Priprema", the
-reveal and „Napredno" before completing. It runs last because completing rewrites
-the profile's flags, board and sidebar. The sync forms are still the open
-question above; nothing about this pass changes them.
+**The questionnaire half of DC-57 no longer exists.** The sweep once needed a
+special final pass to photograph the questionnaire because it replaced the
+shell. Nexus 3.0 removed the questionnaire, its draft and its screens, so every
+surface is now reached through a normal sidebar row. The sync forms remain the
+open question above.
 
 ### Two packs may still have built one computation under two names (2026-08-21)
 
@@ -1269,8 +1252,8 @@ All three artifacts exist and work without an answer.
    `v*` tags since `v1.4.0` make that `SRC_URI` resolve. What is still missing is
    a run: the ebuild has never been installed through portage (§4.4).
 2. **Is Linux a supported target or a courtesy build?** Supporting it
-   commercially means every release gets a Linux run and the keyring requirement
-   becomes a support question.
+   commercially means every release gets a Linux run and the owner-only fallback
+   becomes part of the support surface.
 3. **Code signing.** Answered for 1.4.0 on 2026-10-02: it ships unsigned under
    [DEV-008](deviations.md), with signing paused and the source public. Still
    open is the route for a later release; the packaging config is where a
@@ -1310,7 +1293,7 @@ Tagging is settled: `v1.4.0` was the first tag and release (2026-10-05), and
 the seven tags since then are the releases §4 lists. The Gentoo ebuild's
 `SRC_URI` points at this repository's releases
 (`github.com/lukastojiljkovic/Nexus/releases/download/v${PV}/…`), so it resolves
-for every tag. Its `Manifest` digests the published 2.1.1 tarball, so each bump has to
+for every tag. Its `Manifest` currently digests the published 2.1.1 tarball, so each bump has to
 regenerate it from the published tarball, never from a local build:
 `dist.mjs` refuses a Linux target from a Windows host, since the native SQLite
 module is built for the host it runs on.
@@ -1327,7 +1310,7 @@ becomes a licence question the day it moves under an organisation.
 These outrank everything in §3 and §4. No piece of work may trade one of them
 away for being convenient.
 
-- **Code signing is still open, and every release from 1.4.0 to 2.1.1 ships
+- **Code signing is still open, and every release from 1.4.0 to 2.5.0 ships
   without it under [DEV-008](deviations.md)** (SEC-EL-07, SEC-SC-05), confirmed
   by the founder on 2026-10-02. The Windows installer is unsigned, so Windows
   shows a SmartScreen warning on first run; the macOS dmg (from 2.0.0) is
@@ -1379,8 +1362,8 @@ away for being convenient.
   `pnpm test`, `pnpm build`, `pnpm --filter @nexus/desktop smoke`, and all
   thirty static gates.
 - **The screenshot sweep runs longer than ten minutes and must be backgrounded.**
-  **2 839 frames** at three measured widths in both themes — measured at the end
-  of the 2026-09-22 run that added the runner scene, and worth the sentence this
+  **9 871 frames** at four measured widths in both themes and both languages —
+  measured by the 2026-10-24 v3 sweep, and worth the sentence this
   replaces: that one said „2 776 at three widths **plus maximised**", and the
   second half of it was a coverage claim the sweep was not delivering. A full
   pass also tries a maximised capture, and it has been refused in four runs out
@@ -1394,7 +1377,7 @@ away for being convenient.
   infer a missing surface from a number that looks complete. And
   `NEXUS_SHOTS_SCENES` / `SIZES` / `THEMES` run a named subset in about forty
   seconds, which is how a scene's selector is now checked before a full pass
-  pays for it. A partial run prunes nothing, skips the questionnaire and writes
+  pays for it. A partial run prunes nothing and writes
   `report.partial.md`; a full run removes that file again. It also needs its
   two `--shots` Chromium switches to survive a machine somebody is using: without
   them Chromium stands an occluded window down, and the harness reports on the

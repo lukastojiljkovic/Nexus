@@ -301,6 +301,35 @@ describe("the cookbook handler surface", () => {
 });
 
 describe("the recipes this profile wrote", () => {
+  it("round-trips the editor draft with quotes, commas, blank times and no initial steps", async () => {
+    const { host } = harness();
+    const profileId = createProfile();
+    const recipe = draft({
+      title: 'Pečena "punjena" paprika, porodični recept',
+      prepMinutes: null,
+      cookMinutes: null,
+      ingredients: [
+        ingredient("paprika", { rawText: '2 velike "mesnate" paprike', quantity: 2 }),
+        ingredient("pirinač", { rawText: "100 g pirinča, opran", quantity: 100, unit: "g" }),
+      ],
+      steps: [],
+      tags: ["porodično", "ljeto, 2026"],
+    });
+    const created = await call<{ recipeId: string }>(host, "cookbook:create", {
+      profileId,
+      recipe,
+    });
+    await expect(
+      call<RecipeView>(host, "cookbook:get", { profileId, id: created.recipeId }),
+    ).resolves.toMatchObject({
+      title: recipe["title"],
+      prepMinutes: null,
+      cookMinutes: null,
+      steps: [],
+      tags: recipe["tags"],
+    });
+  });
+
   it("creates, patches and removes a recipe, and the list follows every time", async () => {
     const { host } = harness();
     const profileId = createProfile();

@@ -2,9 +2,9 @@
 id: content-packs
 title: Content packs
 location: { module: settings, settings: data }
-keywords: [pack, content, wikipedia, map, signature, installing]
+keywords: [pack, content, wikipedia, model, signature, installing]
 ---
-A content pack is a folder of public content — offline Wikipedia, a map, a dataset — and Nexus accepts it only when it is signed with Nexus's own key. The content stays on this device, in a folder beside the encrypted database, and it is not part of a profile backup.
+A content pack is a folder of public content — offline Wikipedia, a model, a dataset — and Nexus accepts it only when it is signed with Nexus's own key. The content stays on this device, in a folder beside the encrypted database, and it is not part of a profile backup.
 
 Download from the catalogue:
 

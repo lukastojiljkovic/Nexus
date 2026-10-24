@@ -1,17 +1,20 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentErrorCode, Citation } from "@nexus/core";
 import { applyLocale } from "../../../renderer/src/strings.js";
-import type { AssistantMessageView } from "../shared/ipc.js";
+import type { AssistantMessageView, AssistantSummaryView } from "../shared/ipc.js";
 import { en } from "./copy.en.js";
 import { sr } from "./copy.sr.js";
 import {
   CITATION_LOCATOR_SEPARATOR,
   TOOL_LINE_CHARS,
+  canCompact,
   citationTarget,
   firstLine,
   groupThread,
   numberedCitations,
+  summaryBoundary,
   toolLineView,
+  turnEndError,
   turnErrorSentence,
   type ThreadToolLine,
 } from "./thread.js";
@@ -338,5 +341,71 @@ describe("what a failed turn says", () => {
     }
     // The user's own Stop keeps the sentence the page has always drawn for it.
     expect(turnErrorSentence("aborted")).toBe("Stopped.");
+  });
+
+  // The defect: the page set the sentence as the event arrived and then read the
+  // thread again at the turn's end, which cleared it, so a turn cut short by a
+  // full context ended with no answer and no word of why.
+  it("is what a finished turn leaves under the thread: its last error, or nothing", () => {
+    applyLocale("en");
+    expect(turnEndError([{ type: "token", text: "Hi" }, { type: "done", stopReason: "end" }])).toBeNull();
+    expect(
+      turnEndError([
+        { type: "compaction", status: "running" },
+        { type: "compaction", status: "done" },
+        { type: "error", code: "context-full" },
+        { type: "done", stopReason: "end" },
+      ]),
+    ).toBe(en.thread.errors["context-full"]);
+    expect(
+      turnEndError([
+        { type: "error", code: "tool-failed" },
+        { type: "error", code: "step-limit" },
+        { type: "done", stopReason: "length" },
+      ]),
+    ).toBe(en.thread.errors["step-limit"]);
+  });
+});
+
+/** A thread of `turns` exchanges, each a user message and an answer, numbered from 1. */
+function turns(count: number): AssistantMessageView[] {
+  return Array.from({ length: count }, (_, index) => [
+    message({ id: `u${index + 1}`, role: "user", text: `Pitanje ${index + 1}` }),
+    message({ id: `a${index + 1}`, role: "assistant", text: `Odgovor ${index + 1}` }),
+  ]).flat();
+}
+
+const summaryThrough = (through: number): AssistantSummaryView => ({ text: "Sažetak.", through });
+
+describe("canCompact", () => {
+  it("needs more user turns than the loop keeps whole when there is no summary", () => {
+    expect(canCompact(turns(2), null)).toBe(false);
+    expect(canCompact(turns(3), null)).toBe(true);
+  });
+
+  it("counts only the user turns after the summary's cut", () => {
+    // Three turns, the first summarized: exactly two remain after the cut, which is not more than the loop keeps.
+    expect(canCompact(turns(3), summaryThrough(2))).toBe(false);
+    // Four turns, the first summarized: three remain after the cut.
+    expect(canCompact(turns(4), summaryThrough(2))).toBe(true);
+  });
+
+  it("is false when the cut lies past the last message", () => {
+    expect(canCompact(turns(3), summaryThrough(99))).toBe(false);
+  });
+});
+
+describe("summaryBoundary", () => {
+  it("answers null when there is no summary", () => {
+    expect(summaryBoundary(turns(3), null)).toBeNull();
+  });
+
+  it("answers the id of the message at the cut", () => {
+    expect(summaryBoundary(turns(3), summaryThrough(2))).toBe("u2");
+  });
+
+  it("answers null when the cut is past the last message", () => {
+    expect(summaryBoundary(turns(1), summaryThrough(2))).toBeNull();
+    expect(summaryBoundary(turns(1), summaryThrough(3))).toBeNull();
   });
 });

@@ -1,9 +1,10 @@
 import { dictionaryKey } from "@nexus/core";
 
-import { TRANSLATOR_DIRECTION_CHOICES, type TranslatorDirectionChoice } from "../shared/ipc.js";
+import { NLLB_PACK_IDS, TRANSLATOR_DIRECTION_CHOICES, type NllbPackId, type TranslatorDirectionChoice } from "../shared/ipc.js";
+import { languageByCode } from "../shared/languages.js";
 
 /**
- * TRANSLATOR's three device preferences, on the `focusPrefs.ts` recipe: one
+ * TRANSLATOR's device preferences, on the `focusPrefs.ts` recipe: one
  * `localStorage` key each, a safe fallback for anything unrecognized, and no
  * IPC.
  *
@@ -30,6 +31,92 @@ export const MAX_RECENT_LIMIT = 20;
 
 const DIRECTION_KEY = "nexus.translator.direction";
 const RECENT_LIMIT_KEY = "nexus.translator.recent-limit";
+const TRANSLATE_SOURCE_KEY = "nexus.translator.translate.source";
+const TRANSLATE_TARGET_KEY = "nexus.translator.translate.target";
+const TRANSLATE_MODEL_KEY = "nexus.translator.translate.model";
+const TRANSLATE_SCRIPT_KEY = "nexus.translator.translate.script";
+
+/** How many recently used languages each side of the translate page remembers. */
+export const TRANSLATE_RECENT_LIMIT = 4;
+
+/** The script the page shows Serbian output in, when the target is Serbian. */
+export type SerbianScript = "latin" | "cyrillic";
+
+/** One of the two language pickers on the translate page. */
+export type LanguageSide = "source" | "target";
+
+/** A stored NLLB code the table still carries, or `null` for anything else. */
+function languageCodeOrNull(value: unknown): string | null {
+  return typeof value === "string" && languageByCode(value) !== undefined ? value : null;
+}
+
+/** The source the translate page opens on: `auto`, or one NLLB code. */
+export function readStoredTranslateSource(): string {
+  const stored = localStorage.getItem(TRANSLATE_SOURCE_KEY);
+  return stored === "auto" ? "auto" : (languageCodeOrNull(stored) ?? "auto");
+}
+
+export function persistTranslateSource(code: string): void {
+  localStorage.setItem(TRANSLATE_SOURCE_KEY, code);
+}
+
+/** The target the page opens on; `fallback` is the page's own choice for the interface language. */
+export function readStoredTranslateTarget(fallback: string): string {
+  return languageCodeOrNull(localStorage.getItem(TRANSLATE_TARGET_KEY)) ?? fallback;
+}
+
+export function persistTranslateTarget(code: string): void {
+  localStorage.setItem(TRANSLATE_TARGET_KEY, code);
+}
+
+/** The model the user last chose, or `null` when none was chosen (the page then takes the smallest installed). */
+export function readStoredTranslateModel(): NllbPackId | null {
+  const stored = localStorage.getItem(TRANSLATE_MODEL_KEY);
+  return (NLLB_PACK_IDS as readonly string[]).includes(stored ?? "") ? (stored as NllbPackId) : null;
+}
+
+export function persistTranslateModel(id: NllbPackId): void {
+  localStorage.setItem(TRANSLATE_MODEL_KEY, id);
+}
+
+export function readStoredSerbianScript(): SerbianScript {
+  return localStorage.getItem(TRANSLATE_SCRIPT_KEY) === "cyrillic" ? "cyrillic" : "latin";
+}
+
+export function persistSerbianScript(script: SerbianScript): void {
+  localStorage.setItem(TRANSLATE_SCRIPT_KEY, script);
+}
+
+/**
+ * The languages one side of the translate page used last, newest first. Only
+ * codes the table carries survive a read, each once.
+ */
+export function readRecentLanguages(side: LanguageSide): string[] {
+  const stored = localStorage.getItem(recentLanguagesKey(side));
+  if (stored === null) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stored);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const codes = parsed.map(languageCodeOrNull).filter((code): code is string => code !== null);
+  return [...new Set(codes)].slice(0, TRANSLATE_RECENT_LIMIT);
+}
+
+export function persistRecentLanguages(side: LanguageSide, codes: readonly string[]): void {
+  localStorage.setItem(recentLanguagesKey(side), JSON.stringify(codes.slice(0, TRANSLATE_RECENT_LIMIT)));
+}
+
+/** The recent list after one language is chosen: it moves to the front, and the list keeps its limit. */
+export function withRecentLanguage(current: readonly string[], code: string): string[] {
+  return [code, ...current.filter((each) => each !== code)].slice(0, TRANSLATE_RECENT_LIMIT);
+}
+
+function recentLanguagesKey(side: LanguageSide): string {
+  return `nexus.translator.translate.recent.${side}`;
+}
 
 /** One profile's recent list on this machine. */
 function recentKey(profileId: string): string {
