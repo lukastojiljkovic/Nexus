@@ -66,7 +66,10 @@ import { createDownloadService, freeSpaceBytes } from "./download/service.js";
 import { createZimHost, setZimHost, type ZimHost } from "./zim/host.js";
 import { createZimHttp, installExternalLinkRule, installZimProtocol } from "./zim/zimElectron.js";
 import { launchInstaller } from "./update/launch.js";
-import { RELEASE_PUBLIC_KEY_PEM } from "./update/releaseKey.js";
+import {
+  PACK_PUBLIC_KEYRING_PEM,
+  RELEASE_PUBLIC_KEY_PEM,
+} from "./update/releaseKey.js";
 import { createUpdateService, type UpdateService } from "./update/service.js";
 import { buildCloudEnv } from "./sync/config.js";
 import { electronCloudFetch } from "./sync/electronFetch.js";
@@ -1563,7 +1566,7 @@ function activeProfileForAttachments(): string {
 
 // The kit's tool-pack capability (ADR-094), built once and shared by the module host
 // and the assistant's tools: both read the same installed packs.
-const moduleTools = createModuleTools({ userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM });
+const moduleTools = createModuleTools({ userData: userDataDir, publicKeyPem: PACK_PUBLIC_KEYRING_PEM });
 
 /**
  * The module kit's host: every module discovered from `src/modules/<id>/`, its
@@ -1636,7 +1639,7 @@ const moduleHost = createModuleHost({
   // rather than through a path of its own. A module can name neither a pack to
   // install nor a file the pack's signed manifest does not list, and the
   // renderer never sees either value.
-  packs: { userData: userDataDir, publicKeyPem: RELEASE_PUBLIC_KEY_PEM },
+  packs: { userData: userDataDir, publicKeyPem: PACK_PUBLIC_KEYRING_PEM },
   // The kit's tool packs (ADR-094), over the same two values `packs` takes: a
   // module finds an installed pack by id, reads the licence and the source it has
   // to show, and opens a session on one — and nothing a renderer sends ever
@@ -1662,7 +1665,7 @@ configureCultureServices({
     openExternally(blobStorePathsFor(), requireBlobKeys(), tmpOpenDirPath(), { fileName, sha256 }),
   blobRefCount,
   packsRoot: () => packsRoot(userDataDir()),
-  releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+  releasePublicKeyPem: () => PACK_PUBLIC_KEYRING_PEM,
 });
 
 // MAPS' region downloads (ADR-118), on the download service's terms: the same
@@ -1697,7 +1700,7 @@ configureCookbook({
   // Resolved at launch and after the harness sandbox has been applied, which is
   // exactly what the pack index expects: `<userData>/packs` (ADR-091 §5).
   userData: userDataDir(),
-  packsPublicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+  packsPublicKeyPem: PACK_PUBLIC_KEYRING_PEM,
   host: createCookbookHost({
     window: () => mainWindow,
     blobPaths: blobStorePathsFor,
@@ -1870,7 +1873,7 @@ configureAssistant({
   // `app.getVersion()`: the release running now, which the web tools' User-Agent
   // names (the module never imports Electron, so this is handed over like the rest).
   appVersion: () => app.getVersion(),
-  releasePublicKeyPem: () => RELEASE_PUBLIC_KEY_PEM,
+  releasePublicKeyPem: () => PACK_PUBLIC_KEYRING_PEM,
   networkMode: () => activeNetworkMode(runningNetworkMode, readNetworkMode(userDataDir())),
   // The default parameter builds the app's own wiring (the utility process and
   // the dedicated session) - which imports Electron, and is therefore handed in
@@ -6071,7 +6074,7 @@ function packs(): PacksIpc {
   packsIpc ??= createPacksIpc({
     userData: userDataDir(),
     appVersion: app.getVersion(),
-    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    publicKeyPem: PACK_PUBLIC_KEYRING_PEM,
     pickFolder: async () => {
       const options: OpenDialogOptions = {
         properties: ["openDirectory"],
@@ -6118,7 +6121,8 @@ function packCatalogue(): PackCatalogueIpc {
   packCatalogueIpc ??= createPackCatalogueIpc({
     userData: userDataDir(),
     appVersion: app.getVersion(),
-    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    publicKeyPem: PACK_PUBLIC_KEYRING_PEM,
+    cataloguePublicKeyPem: RELEASE_PUBLIC_KEY_PEM,
     // The mode this launch may ACT on, never the stored file: a stored change
     // is a restart owed, and until then downloads behave as if the mode were
     // offline. `packsIpc`'s two folder paths reach no network and need no mode.
@@ -14890,7 +14894,7 @@ app.whenReady().then(async () => {
     installReaderEnvironment();
     registerPackProtocol(protocol, {
       userData: userDataDir(),
-      publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+      publicKeyPem: PACK_PUBLIC_KEYRING_PEM,
     });
 
     // The private section's read protocol (PRIV v1 / ADR-057): decrypts a

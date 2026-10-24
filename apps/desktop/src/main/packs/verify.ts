@@ -1,12 +1,11 @@
 /**
  * The two primitives the pack layer is built out of.
  *
- * **There is no second verifier.** A pack is signed by the same Ed25519 key and
- * checked by the same call as a release: `verifyDetachedSignature` from
- * `update/verify.ts`, over the exact bytes of a small file, with the public key
- * compiled into the binary. A second implementation of "does this signature
- * check out" is a second thing to get wrong, and the one that is wrong is the
- * one nobody reviewed — so `verifyPackSignature` is a thin wrapper.
+ * **There is no second verifier.** A pack signature is checked by the same call
+ * as a release: `verifyDetachedSignature` from `update/verify.ts`, over the
+ * exact bytes of a small file. Pack manifests accept an ordered keyring because
+ * 3.0 rotated the release key while old published manifests remain valid; the
+ * updater and catalogue never use the retired key.
  *
  * **What it adds is a context.** The release key also signs `SHA256SUMS.txt`
  * for the updater, so a pack signature covers `PACK_SIGNATURE_CONTEXT` followed
@@ -50,6 +49,8 @@ export function packSignedBytes(manifestBytes: Uint8Array): Uint8Array {
  */
 export const PACK_CATALOGUE_SIGNATURE_CONTEXT = "nexus-pack-catalogue-v1\n";
 
+const PUBLIC_KEY_PEM = /-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----/g;
+
 /** What a catalogue signature is made over: the context, then the document's exact bytes. */
 export function catalogueSignedBytes(catalogueBytes: Uint8Array): Uint8Array {
   return Buffer.concat([Buffer.from(PACK_CATALOGUE_SIGNATURE_CONTEXT, "utf8"), catalogueBytes]);
@@ -66,11 +67,17 @@ export function verifyPackSignature(input: {
   readonly signatureBytes: Uint8Array;
   readonly publicKeyPem: string;
 }): boolean {
-  return verifyDetachedSignature({
-    data: packSignedBytes(input.manifestBytes),
-    signature: input.signatureBytes,
-    publicKeyPem: input.publicKeyPem,
-  });
+  const keyPems = [...input.publicKeyPem.matchAll(PUBLIC_KEY_PEM)].map((match) => match[0]);
+  const residue = input.publicKeyPem.replace(PUBLIC_KEY_PEM, "").trim();
+  if (keyPems.length === 0 || residue !== "") return false;
+  const data = packSignedBytes(input.manifestBytes);
+  return keyPems.some((publicKeyPem) =>
+    verifyDetachedSignature({
+      data,
+      signature: input.signatureBytes,
+      publicKeyPem,
+    }),
+  );
 }
 
 /**

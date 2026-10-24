@@ -73,12 +73,12 @@ export const PACK_CATALOGUE_FORMAT = 2;
  * process could not vouch for. Its host is `github.com`, which is on
  * `DOWNLOAD_HOSTS` already (`release-assets.githubusercontent.com` is where a
  * release asset 302-redirects to, and the download rule checks every hop).
- * Format 2 lives under its own release, `catalogue-2`, because the format-1
- * document at `catalogue` is what every 2.1 install reads and must not change
- * shape under them.
+ * Format 2 lives under `catalogue-3` from 3.0 because the `catalogue-2`
+ * document is signed by the retired key and what every 2.5 install reads. Both
+ * older releases stay immutable under their original keys.
  */
 export const PACK_CATALOGUE_URL =
-  "https://github.com/lukastojiljkovic/nexus-packs/releases/download/catalogue-2/catalogue.json";
+  "https://github.com/lukastojiljkovic/nexus-packs/releases/download/catalogue-3/catalogue.json";
 
 /** The detached signature over the catalogue's exact bytes. */
 export const PACK_CATALOGUE_SIGNATURE_URL = `${PACK_CATALOGUE_URL}.sig`;

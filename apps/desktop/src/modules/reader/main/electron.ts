@@ -1,7 +1,7 @@
 import { app } from "electron";
 
 import { openDocumentExternalUrl } from "../../../main/external.js";
-import { RELEASE_PUBLIC_KEY_PEM } from "../../../main/update/releaseKey.js";
+import { PACK_PUBLIC_KEYRING_PEM } from "../../../main/update/releaseKey.js";
 import { configureReaderEnvironment } from "./env.js";
 import { printReaderPdf } from "./print.js";
 
@@ -27,7 +27,7 @@ import { printReaderPdf } from "./print.js";
 export function installReaderEnvironment(): void {
   configureReaderEnvironment({
     userData: app.getPath("userData"),
-    publicKeyPem: RELEASE_PUBLIC_KEY_PEM,
+    publicKeyPem: PACK_PUBLIC_KEYRING_PEM,
     print: printReaderPdf,
     openExternal: async (url) => {
       try {

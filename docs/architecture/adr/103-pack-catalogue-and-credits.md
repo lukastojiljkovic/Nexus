@@ -302,6 +302,13 @@ client would lose the list.
 https://github.com/lukastojiljkovic/nexus-packs/releases/download/catalogue-2/catalogue.json
 ```
 
+**3.0 key rotation.** [ADR-121](121-release-key-rotation.md) moves the current
+format-2 document to `catalogue-3`. The `catalogue-2` release stays immutable:
+it is signed by the retired key and remains the document 2.5 reads. Content-pack
+manifest verification keeps the retired public key in its keyring so those
+published packs remain installable; updates and catalogue signatures use only
+the current key.
+
 An entry keeps §3's metadata and drops `files`. In their place it carries
 `fileCount`, `minAppVersion`, `assets` (the base URL the pack's release assets
 live under, https on a download host, ending in `/`, no query or fragment) and
