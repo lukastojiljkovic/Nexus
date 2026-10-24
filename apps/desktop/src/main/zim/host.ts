@@ -182,6 +182,15 @@ export interface ZimHost {
   /** One entry (or the main page when `zimPath` is `null`), or `null`. */
   open(libraryId: string, zimPath: string | null): ZimArticle | null;
   search(libraryId: string, prefix: string, limit: number): readonly ZimSearchHit[];
+  images(
+    libraryId: string,
+    afterIndex: number,
+    limit: number,
+  ): {
+    readonly entries: readonly (ZimSearchHit & { readonly index: number })[];
+    readonly nextIndex: number;
+    readonly done: boolean;
+  };
   /** One entry's bytes, for the `nx-zim://` handler, or `null` when this build serves nothing there. */
   serve(request: ZimRequest): ZimServeResult | null;
   closeAll(): void;
@@ -525,6 +534,26 @@ export function createZimHost(deps: ZimHostDeps): ZimHost {
         // keystroke is worse than an empty list, and the page's own copy says
         // what it searched.
         return [];
+      }
+    },
+
+    images(libraryId, afterIndex, limit) {
+      const reader = readerFor(libraryId);
+      if (reader === null) return { entries: [], nextIndex: afterIndex, done: true };
+      try {
+        const page = reader.imagesAfter(afterIndex, limit, 2_000);
+        return {
+          entries: page.entries.map((entry) => ({
+            index: entry.index,
+            zimPath: entry.zimPath,
+            title: entry.title,
+            mime: entry.mimetype,
+          })),
+          nextIndex: page.nextIndex,
+          done: page.done,
+        };
+      } catch {
+        return { entries: [], nextIndex: afterIndex, done: true };
       }
     },
 

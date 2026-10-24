@@ -142,12 +142,21 @@ export function parseTexturesLayout(value: unknown, packId: string): PlanetTextu
   if (record === null || record["layout"] !== PLANET_TEXTURES_LAYOUT) return null;
   const rawBodies = asRecord(record["bodies"]);
   if (rawBodies === null) return null;
+  const rawSky = asRecord(record["sky"]);
+  const skyImage = rawSky === null ? null : asText(rawSky["image"]);
+  const skyCredit = rawSky === null ? null : asText(rawSky["credit"]);
+  const sky =
+    skyImage !== null &&
+    skyCredit !== null &&
+    packPathProblem(skyImage) === null
+      ? { image: packUrl(packId, skyImage), credit: skyCredit }
+      : undefined;
   const bodies: Partial<Record<BodyId, PlanetTextureSetView>> = {};
   for (const id of BODY_IDS) {
     const set = textureSet(rawBodies[id], packId);
     if (set !== null) bodies[id] = set;
   }
-  return { layout: 1, bodies };
+  return { layout: 1, ...(sky === undefined ? {} : { sky }), bodies };
 }
 
 /**

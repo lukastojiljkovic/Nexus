@@ -475,7 +475,7 @@ describe("the live tree", () => {
     const row = (path) => census.find((leaf) => leaf.path === path);
     expect(row("app.brand")?.read, "a chain that spells the path").toBe("named");
     expect(row("dashboard.today.title")?.read, "a path written as registry data").toBe("keyed");
-    expect(row("onboarding.week.shapes.posao.name")?.read, "inside an indexed subtree").toBe(
+    expect(row("app.navGroups.plan")?.read, "inside an indexed subtree").toBe(
       "indexed",
     );
     // `pro.title`, not `tools.title`: the tool finder names the everyday

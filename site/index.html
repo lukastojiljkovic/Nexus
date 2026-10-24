@@ -59,7 +59,7 @@
                     { "@type": "Question", "name": "Does Nexus need the internet?", "acceptedAnswer": { "@type": "Answer", "text": "No. Everything you write works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, which contact GitHub only for a new version of Nexus, or to downloads, which also fetch the content packs, Wikipedia libraries and models you choose from a short list of hosts. Your notes and data never leave the computer." } },
                     { "@type": "Question", "name": "Is Nexus available in English?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English." } },
                     { "@type": "Question", "name": "Which platforms does Nexus run on?", "acceptedAnswer": { "@type": "Answer", "text": "Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild), all x64." } },
-                    { "@type": "Question", "name": "How is my data protected?", "acceptedAnswer": { "@type": "Answer", "text": "Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them." } },
+                    { "@type": "Question", "name": "How is my data protected?", "acceptedAnswer": { "@type": "Answer", "text": "Everything is stored in one encrypted database on your computer. An account can use a passcode or explicit device-convenience mode, and a Recovery Kit provides recovery. Attachments are encrypted with AES-256-GCM. Private notes always require their own credential and are encrypted so that only you can read them." } },
                     { "@type": "Question", "name": "Can I take my data with me?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule." } }
                 ]
             }
@@ -111,7 +111,7 @@
             <img class="shot-dark" src="images/dashboard-dark.png" width="1600" height="1000" alt="The Nexus dashboard with today's agenda, upcoming tasks, expiring documents, exams and study time">
         </div>
         <dl class="readout">
-            <div class="row"><dt>Modules</dt><dd>40, switched on per profile</dd></div>
+            <div class="row"><dt>Modules</dt><dd>43, visible on a new install</dd></div>
             <div class="row"><dt>Storage</dt><dd>Encrypted, on your computer</dd></div>
             <div class="row"><dt>Network</dt><dd>Never required</dd></div>
             <div class="row"><dt>Data sent</dt><dd><b>None</b></dd></div>
@@ -148,7 +148,7 @@
             </article>
             <article class="cell">
                 <h3>Tools and a canvas</h3>
-                <p>Calculators, eighteen professional toolkits you opt into, an infinite canvas with live cards, and an electronics bench that writes the Arduino or ROS 2 code your wiring implies.</p>
+                <p>Calculators, thirty-two professional toolkits you opt into, an infinite canvas with live cards, and an electronics bench that writes the Arduino or ROS 2 code your wiring implies.</p>
             </article>
             <article class="cell cell-wide">
                 <h3>A translator and maps that work offline</h3>
@@ -191,9 +191,9 @@
         <h2 class="section-title">How it works</h2>
         <p class="section-lede">Your privacy in Nexus comes from how the code is built, not from a promise in a policy.</p>
         <ol class="steps">
-            <li><div><h3>Your computer is the server</h3><p>Everything lives in one encrypted SQLite database on your computer that opens only with your passcode or your Recovery Kit. Attachments are encrypted with AES-256-GCM.</p></div></li>
+            <li><div><h3>Your computer is the server</h3><p>Everything lives in one encrypted SQLite database on your computer. An account can use a passcode or explicit device-convenience mode, with a Recovery Kit for recovery. Attachments are encrypted with AES-256-GCM, and Private notes keep a separate credential.</p></div></li>
             <li><div><h3>Offline unless you say otherwise</h3><p>Nexus asks once, on first start, whether it may use the network at all. “Offline only” makes no network call of any kind, and CI enforces the boundary; “Offline + update checks” contacts GitHub only to check for and download a new version of Nexus itself; “Downloads” also fetches the content packs, map regions, Wikipedia libraries and models you choose, each from a compiled-in list of hosts. Your notes and data never leave the computer in any mode.</p></div></li>
-            <li><div><h3>Only what you need</h3><p>A short setup asks about your week and switches on the modules that fit. Personal and business profiles keep their data apart, and several accounts can share one computer.</p></div></li>
+            <li><div><h3>Everything visible, then yours</h3><p>A new account opens with every module visible; you hide or reorder only what you do not use. Personal and business profiles keep their data apart, and several accounts can share one computer.</p></div></li>
             <li><div><h3>A locked-down interface</h3><p>The interface runs sandboxed and never touches the database. It asks the main process through an allowlist of typed requests, each validated field by field, and every query binds its values.</p></div></li>
             <li><div><h3>Yours to take away</h3><p>Export everything into one sealed archive and restore it anywhere, or merge another archive into yours. Encrypted backups can run on a schedule.</p></div></li>
         </ol>
@@ -228,7 +228,7 @@
             <details><summary>Does Nexus need the internet?</summary><p>No. Everything you write works with the network off, and the default is “Offline only”: the app makes no network call at all, which a CI check enforces. You can opt in to update checks, which contact GitHub only for a new version of Nexus, or to downloads, which also fetch the content packs, Wikipedia libraries and models you choose from a short list of hosts. Your notes and data never leave the computer.</p></details>
             <details><summary>Is Nexus available in English?</summary><p>Yes. The interface ships in Serbian and English: on first run it follows the system language (Serbian when the system locale is sr*, English otherwise) and remembers the choice, which you can change in Settings. The code and documentation are in English.</p></details>
             <details><summary>Which platforms does Nexus run on?</summary><p>Windows 10 and 11 (a per-user installer) and Linux (an AppImage, a tarball and a Gentoo ebuild) on x64, and macOS on Apple silicon (an unsigned dmg).</p></details>
-            <details><summary>How is my data protected?</summary><p>Everything is stored in one encrypted database on your computer that opens only with your passcode or your Recovery Kit, and attachments are encrypted with AES-256-GCM. Private notes are encrypted so that only you can read them.</p></details>
+            <details><summary>How is my data protected?</summary><p>Everything is stored in one encrypted database on your computer. An account can use a passcode or explicit device-convenience mode, and a Recovery Kit provides recovery. Attachments are encrypted with AES-256-GCM. Private notes always require their own credential and are encrypted so that only you can read them.</p></details>
             <details><summary>Can I take my data with me?</summary><p>Yes. Nexus exports everything into a single sealed archive that you can restore later, on the same computer or another one, or merge into an existing profile. Encrypted backups can also run on a schedule.</p></details>
         </div>
     </section>
@@ -246,7 +246,7 @@
             </div>
         </div>
         <dl class="get-facts">
-            <div><dt>Requires</dt><dd>Windows 10 or 11, or a Linux desktop with a keyring, x64</dd></div>
+            <div><dt>Requires</dt><dd>Windows 10 or 11, or a Linux desktop on x64; no keyring required</dd></div>
             <div><dt>Language</dt><dd>Serbian (Latin) and English</dd></div>
             <div><dt>License</dt><dd>Apache-2.0, source on GitHub</dd></div>
             <div><dt>Network</dt><dd>Not needed for anything</dd></div>

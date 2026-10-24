@@ -70,9 +70,9 @@
   top: 0;
   left: 0;
   box-sizing: border-box;
-  height: 18px;
+  height: 24px;
   margin: 0;
-  padding: 1px var(--nx-space-2);
+  padding: 3px var(--nx-space-2);
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius-sm);
   background: var(--nx-surface);

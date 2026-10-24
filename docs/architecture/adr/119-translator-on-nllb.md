@@ -47,7 +47,7 @@ bytes unchanged. Two rules follow, both pinned by tests:
 
 The conversion, the split and the per-file sizes are in [`docs/packs/nllb.md`](../../packs/nllb.md).
 
-## 3. A process of its own, loaded on the first translation
+## 3. A process of its own, with explicit memory controls
 
 NLLB runs in an Electron utility process (`main/nllb/`), on the voice host's arrangement: nothing
 starts until the first translation, every message is checked against `protocol.ts` in both
@@ -59,8 +59,16 @@ dictates and translates would load a gigabyte model again for every sentence. No
 renderer, where Bergamot ran: ONNX Runtime's native build runs in main's children, and a model
 of several gigabytes does not belong in the window's process.
 
-The worker ends fifteen minutes after the last translation (`IDLE_UNLOAD_MS`, the assistant's own
-default), which gives the model's memory back; the next translation starts it again.
+The Translate tab exposes the same load and eject actions as the assistant's local model panel.
+`loadModel` starts one worker and warms the selected signed model without translating;
+`ejectModel` terminates the worker and releases its memory. Repeated load for the resident folder
+is idempotent. The first translation still loads automatically when no model is resident, and a
+change of selected model replaces the old one rather than holding two.
+
+The worker also ends fifteen minutes after the last translation (`IDLE_UNLOAD_MS`, the assistant's
+own default). Account lock, session end and profile change eject immediately. A cancelled
+translation leaves the model resident because its worker survived; a failed load returns the
+visible runtime to `error` without claiming that a model is resident.
 
 ## 4. A sentence at a time, as the user types
 

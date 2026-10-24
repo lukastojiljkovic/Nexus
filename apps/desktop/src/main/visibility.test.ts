@@ -56,9 +56,9 @@ afterEach(() => {
 describe("the file", () => {
   it("round-trips the arrangement exactly", () => {
     const stored = {
-      version: 1,
+      version: 2,
       hidden: ["tasks", "gone"],
-      shown: ["priv"],
+      shown: [],
       groupOrder: ["life", "plan"],
       moduleOrder: { life: ["priv", "finance"] },
     };
@@ -70,7 +70,7 @@ describe("the file", () => {
     writeShellVisibility(userData, DEFAULT_SHELL_VISIBILITY);
     const raw = JSON.parse(readFileSync(shellVisibilityPath(userData), "utf8")) as unknown;
     expect(raw).toEqual({
-      version: 1,
+      version: 2,
       hidden: [],
       shown: [],
       groupOrder: [],
@@ -97,7 +97,7 @@ describe("the file", () => {
 
   it("refuses a FUTURE version rather than reading the fields it happens to carry", () => {
     const future = {
-      version: 2,
+      version: 3,
       hidden: ["tasks"],
       shown: [],
       groupOrder: [],
@@ -145,7 +145,7 @@ describe("the migration", () => {
     expect(createShellVisibilityMigration(userData, registry()).open).toBe(false);
   });
 
-  it("starts the setting as the union of what the profiles had on", () => {
+  it("starts every module visible and ignores inherited per-profile switches", () => {
     const migration = createShellVisibilityMigration(userData, registry());
     const merged = migration.merge([
       // One profile: everything at its default.
@@ -165,14 +165,12 @@ describe("the migration", () => {
     expect(readShellVisibility(userData)).toEqual(merged);
   });
 
-  it("rescues a module the FIRST profile had off but a later one had on", () => {
+  it("keeps a module visible even when the first and only migrated profile had it off", () => {
     const migration = createShellVisibilityMigration(userData, registry());
     // The first profile is the only one readable so far, and it answered the
     // questionnaire with TASKS off — so the seed hides it.
     const seeded = migration.merge([profile("p1", { tasks: false })]);
-    expect(seeded?.hidden).toEqual(["tasks"]);
-    // The second profile had it on, and that is the union growing rather than
-    // the migration starting over.
+    expect(seeded?.hidden).toEqual([]);
     const grown = migration.merge([profile("p2", {})]);
     expect(grown?.hidden).toEqual([]);
     expect(visibleModuleIds(registry(), grown ?? DEFAULT_SHELL_VISIBILITY)).toContain("tasks");
@@ -186,11 +184,11 @@ describe("the migration", () => {
     expect(readShellVisibility(userData)).toEqual(once);
   });
 
-  it("records an opt-in module somebody had switched on", () => {
+  it("does not need a shown entry because every registered module is already visible", () => {
     const merged = createShellVisibilityMigration(userData, registry()).merge([
       profile("p1", { priv: true }),
     ]);
-    expect(merged?.shown).toEqual(["priv"]);
+    expect(merged?.shown).toEqual([]);
     // A fresh profile's defaults had everything else on, so nothing is hidden.
     expect(merged?.hidden).toEqual([]);
     expect(visibleModuleIds(registry(), merged ?? DEFAULT_SHELL_VISIBILITY)).toContain("priv");

@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
-import { closeSync, fsyncSync, openSync, readFileSync, renameSync, writeSync } from "node:fs";
+import { closeSync, fsyncSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { safeStorage } from "electron";
+import { ownerGuardPath, readOwnerGuard, writeOwnerGuard } from "./authGuard.js";
 import {
   DEFAULT_KDF_PARAMS,
   KeyUnwrapError,
@@ -43,8 +44,12 @@ export interface AuthStatus {
   state: AuthState;
   /** Milliseconds still to wait before another attempt is accepted; 0 when none. */
   lockedForMs: number;
-  /** False when the OS keystore is unavailable — creation is refused rather than silently downgraded. */
+  /** False when the OS keystore is unavailable. New key chains then use the owner-only file fallback. */
   keystoreAvailable: boolean;
+  /** The device protection this account's key chain actually uses. */
+  deviceProtection: DeviceProtection;
+  /** False for a convenience-mode account whose local data-key wrap opens without a credential. */
+  requiresPasscode: boolean;
   /**
    * True when this data was carried over from another machine or Windows
    * account: the guard blob is DPAPI-bound and cannot be decrypted here, so
@@ -90,6 +95,7 @@ export type AuthErrorReason =
   | "throttled"
   | "weakPasscode"
   | "keystoreUnavailable"
+  | "passcodeNotSet"
   | "otherDevice"
   | "corruptKeychain";
 
@@ -107,7 +113,36 @@ export class AuthError extends Error {
 const KEYCHAIN_FILE_NAME = "keychain.json";
 
 /** The keychain file's on-disk shape, exactly ADR-018's. Only `guard` is secret, and it is OS-encrypted; every other field is a public parameter of the key chain. */
-interface KeychainFile {
+export type DeviceProtection = "system-vault" | "owner-only-file";
+
+interface KeystoreAvailability {
+  isEncryptionAvailable(): boolean;
+  getSelectedStorageBackend(): string;
+}
+
+/**
+ * True only for a keystore that protects the guard with a real OS secret.
+ *
+ * Electron's Linux `basic_text` backend reports encryption as available while
+ * using a hard-coded key. Treating that as a vault would put the device secret
+ * in a file that only LOOKS protected; the owner-file fallback is more honest.
+ */
+export function isUsableKeystore(
+  keystore: KeystoreAvailability,
+  platform: NodeJS.Platform,
+): boolean {
+  if (!keystore.isEncryptionAvailable()) return false;
+  if (platform !== "linux") return true;
+  try {
+    return ["gnome_libsecret", "kwallet", "kwallet5", "kwallet6"].includes(
+      keystore.getSelectedStorageBackend(),
+    );
+  } catch {
+    return false;
+  }
+}
+
+interface KeychainFileV1 {
   version: 1;
   kdf: KdfParams;
   passcodeSalt: string;
@@ -116,6 +151,23 @@ interface KeychainFile {
   recoveryWrap: WrappedKey;
   guard: string;
 }
+
+type GuardRef =
+  | { readonly storage: "system-vault"; readonly value: string }
+  | { readonly storage: "owner-only-file" };
+
+interface KeychainFileV2 {
+  version: 2;
+  kdf: KdfParams;
+  passcodeSalt: string | null;
+  passcodeWrap: WrappedKey | null;
+  deviceWrap: WrappedKey | null;
+  recoverySalt: string;
+  recoveryWrap: WrappedKey;
+  guard: GuardRef;
+}
+
+type KeychainFile = KeychainFileV1 | KeychainFileV2;
 
 /**
  * The `guard` blob's plaintext, once decrypted through `safeStorage`
@@ -179,17 +231,40 @@ function isKdfParamsShape(value: unknown): value is KdfParams {
 }
 
 /** Structural check for a parsed `keychain.json`: wrong shape or a `version` other than 1 both count as corrupt, never as "uninitialized" — see `readKeychainFile`'s doc comment for why that distinction matters. */
-function isKeychainFileShape(value: unknown): value is KeychainFile {
+function isGuardRef(value: unknown): value is GuardRef {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    v.version === 1 &&
+    v.storage === "owner-only-file" ||
+    (v.storage === "system-vault" && typeof v.value === "string")
+  );
+}
+
+function isKeychainFileShape(value: unknown): value is KeychainFile {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const common =
     isKdfParamsShape(v.kdf) &&
-    typeof v.passcodeSalt === "string" &&
-    isWrappedKeyShape(v.passcodeWrap) &&
     typeof v.recoverySalt === "string" &&
-    isWrappedKeyShape(v.recoveryWrap) &&
-    typeof v.guard === "string"
+    isWrappedKeyShape(v.recoveryWrap);
+  if (
+    !common ||
+    (v.version !== 1 && v.version !== 2)
+  ) {
+    return false;
+  }
+  if (v.version === 1) {
+    return (
+      typeof v.passcodeSalt === "string" &&
+      isWrappedKeyShape(v.passcodeWrap) &&
+      typeof v.guard === "string"
+    );
+  }
+  return (
+    (v.passcodeSalt === null || typeof v.passcodeSalt === "string") &&
+    (v.passcodeWrap === null || isWrappedKeyShape(v.passcodeWrap)) &&
+    (v.deviceWrap === null || isWrappedKeyShape(v.deviceWrap)) &&
+    isGuardRef(v.guard)
   );
 }
 
@@ -254,7 +329,53 @@ function writeKeychainFileAtomic(dir: string, file: KeychainFile): void {
 }
 
 function persistGuard(dir: string, file: KeychainFile, payload: GuardPayload): void {
-  writeKeychainFileAtomic(dir, { ...file, guard: encryptGuard(payload) });
+  if (file.version === 1) {
+    if (!isUsableKeystore(safeStorage, process.platform)) {
+      throw new AuthError("keystoreUnavailable", "The OS keystore is unavailable.");
+    }
+    writeKeychainFileAtomic(dir, { ...file, guard: encryptGuard(payload) });
+    return;
+  }
+  if (file.guard.storage === "system-vault") {
+    writeKeychainFileAtomic(dir, {
+      ...file,
+      guard: { storage: "system-vault", value: encryptGuard(payload) },
+    });
+    return;
+  }
+  writeOwnerGuard(dir, JSON.stringify(payload));
+}
+
+/**
+ * Publishes a recovery that may have minted a new device secret.
+ *
+ * The owner guard is written first because it is the secret every new wrap in
+ * the keychain depends on. If the keychain commit then fails, the previous guard
+ * is restored so the old keychain remains usable.
+ */
+function publishRecoveredKeychain(
+  dir: string,
+  keychain: KeychainFileV2,
+  guard: GuardPayload,
+): void {
+  if (keychain.guard.storage === "system-vault") {
+    writeKeychainFileAtomic(dir, keychain);
+    return;
+  }
+  const previous = readOwnerGuard(dir);
+  writeOwnerGuard(dir, JSON.stringify(guard));
+  try {
+    writeKeychainFileAtomic(dir, keychain);
+  } catch (error) {
+    try {
+      if (previous === null) rmSync(ownerGuardPath(dir), { force: true });
+      else writeOwnerGuard(dir, previous);
+    } catch {
+      // Preserve the original commit failure. The Recovery Kit remains the
+      // only route back if even the rollback filesystem operation failed.
+    }
+    throw error;
+  }
 }
 
 function encryptGuard(payload: GuardPayload): string {
@@ -296,6 +417,35 @@ function decryptGuard(guardBase64: string): GuardPayload | null {
   return parsed;
 }
 
+function protectionOf(file: KeychainFile): DeviceProtection | null {
+  if (file.version === 1) return isUsableKeystore(safeStorage, process.platform) ? "system-vault" : null;
+  if (file.guard.storage === "owner-only-file") return "owner-only-file";
+  return isUsableKeystore(safeStorage, process.platform) ? "system-vault" : null;
+}
+
+function readGuard(dir: string, file: KeychainFile): GuardPayload | null {
+  if (file.version === 1) {
+    return isUsableKeystore(safeStorage, process.platform) ? decryptGuard(file.guard) : null;
+  }
+  if (file.guard.storage === "system-vault") {
+    return isUsableKeystore(safeStorage, process.platform) ? decryptGuard(file.guard.value) : null;
+  }
+  const raw = readOwnerGuard(dir);
+  if (raw === null) {
+    throw new AuthError("corruptKeychain", "The owner-only account guard is missing.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new AuthError("corruptKeychain", "The owner-only account guard could not be parsed.");
+  }
+  if (!isGuardPayloadShape(parsed)) {
+    throw new AuthError("corruptKeychain", "The owner-only account guard has an unrecognized shape.");
+  }
+  return parsed;
+}
+
 /**
  * Whether the OS keystore can encrypt at all. Device-global — `safeStorage`
  * knows nothing about accounts — so `main/index.ts` reads it directly when
@@ -303,14 +453,7 @@ function decryptGuard(guardBase64: string): GuardPayload | null {
  * ADR-044), rather than pointing that function at a directory it invented.
  */
 export function isKeystoreAvailable(): boolean {
-  return safeStorage.isEncryptionAvailable();
-}
-
-/** Refuses up front — no silent PIN-only downgrade (ADR-018) — for every call that needs the device-bound half of the key chain. */
-function assertKeystoreAvailable(): void {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new AuthError("keystoreUnavailable", "The OS keystore is unavailable.");
-  }
+  return isUsableKeystore(safeStorage, process.platform);
 }
 
 /**
@@ -328,26 +471,60 @@ function assertKeystoreAvailable(): void {
  * unlocked from this OS session at this moment).
  */
 export function readStatus(dir: string): AuthStatus {
-  const keystoreAvailable = safeStorage.isEncryptionAvailable();
+  const keystoreAvailable = isUsableKeystore(safeStorage, process.platform);
   const file = readKeychainFile(dir);
   if (file === null) {
-    return { state: "uninitialized", lockedForMs: 0, keystoreAvailable, requiresRecovery: false };
+    return {
+      state: "uninitialized",
+      lockedForMs: 0,
+      keystoreAvailable,
+      deviceProtection: keystoreAvailable ? "system-vault" : "owner-only-file",
+      requiresPasscode: true,
+      requiresRecovery: false,
+    };
   }
-  if (!keystoreAvailable) {
-    return { state: "locked", lockedForMs: 0, keystoreAvailable, requiresRecovery: false };
+  const deviceProtection = protectionOf(file);
+  const requiresPasscode = file.version === 1 || file.passcodeWrap !== null;
+  if (deviceProtection === null) {
+    // A version-1 guard was encrypted on another machine or in a session whose
+    // OS vault is no longer available. The Recovery Kit is the only usable
+    // route; this must be offered rather than presenting an impossible passcode
+    // form.
+    return {
+      state: "locked",
+      lockedForMs: 0,
+      keystoreAvailable,
+      deviceProtection: "owner-only-file",
+      requiresPasscode,
+      requiresRecovery: true,
+    };
   }
 
-  const guard = decryptGuard(file.guard);
+  const guard = readGuard(dir, file);
   if (guard === null) {
     // Carried over from another machine/account: the passcode cannot be
     // derived here at all, so there is no throttle state to report either.
-    return { state: "locked", lockedForMs: 0, keystoreAvailable, requiresRecovery: true };
+    return {
+      state: "locked",
+      lockedForMs: 0,
+      keystoreAvailable,
+      deviceProtection,
+      requiresPasscode,
+      requiresRecovery: true,
+    };
   }
   const lockedForMs = remainingLockMs(
     { failedAttempts: guard.failedAttempts, lockedUntil: guard.lockedUntil },
     new Date().toISOString(),
   );
-  return { state: "locked", lockedForMs, keystoreAvailable, requiresRecovery: false };
+  return {
+    state: "locked",
+    lockedForMs,
+    keystoreAvailable,
+    deviceProtection,
+    requiresPasscode,
+    requiresRecovery: false,
+  };
 }
 
 /**
@@ -357,8 +534,8 @@ export function readStatus(dir: string): AuthStatus {
  * one — and telling the user "wrong passcode" for a passcode that is in fact
  * correct would be a lie that sends them looking for the wrong problem.
  */
-function requireLocalGuard(file: KeychainFile): GuardPayload {
-  const guard = decryptGuard(file.guard);
+function requireLocalGuard(dir: string, file: KeychainFile): GuardPayload {
+  const guard = readGuard(dir, file);
   if (guard === null) {
     throw new AuthError(
       "otherDevice",
@@ -378,20 +555,20 @@ function requireLocalGuard(file: KeychainFile): GuardPayload {
  */
 export async function createAccount(
   dir: string,
-  passcode: string,
-): Promise<{ dataKeyHex: string; recoveryCode: string }> {
+  passcode: string | null,
+): Promise<{ dataKeyHex: string; recoveryCode: string; deviceProtection: DeviceProtection }> {
   if (readKeychainFile(dir) !== null) {
     throw new AuthError("alreadyInitialized", "A local account already exists.");
   }
-  assertKeystoreAvailable();
-  const problem = validatePasscode(passcode);
-  if (problem !== null) {
-    throw new AuthError("weakPasscode", `Passcode rejected: ${problem}`);
+  if (passcode !== null) {
+    const problem = validatePasscode(passcode);
+    if (problem !== null) {
+      throw new AuthError("weakPasscode", `Passcode rejected: ${problem}`);
+    }
   }
 
   const dataKey = generateDataKey();
   const deviceSecret = generateDeviceSecret();
-  const passcodeSalt = generateSalt();
   const recoverySalt = generateSalt();
 
   const recoveryCode = generateRecoveryCode();
@@ -403,23 +580,64 @@ export async function createAccount(
     throw new Error("Internal error: freshly generated recovery code failed to normalize.");
   }
 
-  const passcodeKek = await derivePasscodeKey(passcode, passcodeSalt, deviceSecret, DEFAULT_KDF_PARAMS);
-  const passcodeWrap = await wrapDataKey(dataKey, passcodeKek);
+  const passcodeSalt = passcode === null ? null : generateSalt();
+  const passcodeWrap =
+    passcode === null || passcodeSalt === null
+      ? null
+      : await wrapDataKey(
+          dataKey,
+          await derivePasscodeKey(passcode, passcodeSalt, deviceSecret, DEFAULT_KDF_PARAMS),
+        );
+  const deviceWrap = passcode === null ? await wrapDataKey(dataKey, deviceSecret) : null;
 
   const recoveryKek = await deriveRecoveryKey(canonicalRecovery, recoverySalt, DEFAULT_KDF_PARAMS);
   const recoveryWrap = await wrapDataKey(dataKey, recoveryKek);
 
-  writeKeychainFileAtomic(dir, {
-    version: 1,
+  const deviceProtection: DeviceProtection = isUsableKeystore(safeStorage, process.platform)
+    ? "system-vault"
+    : "owner-only-file";
+  const guard = { deviceSecret: toBase64(deviceSecret), ...INITIAL_ATTEMPT_STATE };
+  const keychain: KeychainFileV2 = {
+    version: 2,
     kdf: DEFAULT_KDF_PARAMS,
-    passcodeSalt: toBase64(passcodeSalt),
+    passcodeSalt: passcodeSalt === null ? null : toBase64(passcodeSalt),
     passcodeWrap,
+    deviceWrap,
     recoverySalt: toBase64(recoverySalt),
     recoveryWrap,
-    guard: encryptGuard({ deviceSecret: toBase64(deviceSecret), ...INITIAL_ATTEMPT_STATE }),
-  });
+    guard:
+      deviceProtection === "system-vault"
+        ? { storage: "system-vault", value: encryptGuard(guard) }
+        : { storage: "owner-only-file" },
+  };
+  // The keychain is the account's commit point. Publish its separate guard
+  // first so a failed owner-file write cannot leave a keychain that looks
+  // initialized even though the Recovery Kit was never handed to the user.
+  if (deviceProtection === "owner-only-file") writeOwnerGuard(dir, JSON.stringify(guard));
+  writeKeychainFileAtomic(dir, keychain);
 
-  return { dataKeyHex: dataKeyToHex(dataKey), recoveryCode };
+  return { dataKeyHex: dataKeyToHex(dataKey), recoveryCode, deviceProtection };
+}
+
+/** Opens a convenience-mode account whose data key is wrapped to the local device secret. */
+export async function openWithoutPasscode(
+  dir: string,
+): Promise<{ dataKeyHex: string; deviceProtection: DeviceProtection }> {
+  const file = readKeychainFile(dir);
+  if (file === null) throw new AuthError("notInitialized", "No local account exists yet.");
+  if (file.version === 1 || file.passcodeWrap !== null) {
+    throw new AuthError("passcodeNotSet", "This account requires its passcode.");
+  }
+  if (file.deviceWrap === null) {
+    throw new AuthError("corruptKeychain", "The convenience-mode data-key wrap is missing.");
+  }
+  const guard = requireLocalGuard(dir, file);
+  const dataKey = await unwrapDataKey(file.deviceWrap, fromBase64(guard.deviceSecret));
+  persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...INITIAL_ATTEMPT_STATE });
+  return {
+    dataKeyHex: dataKeyToHex(dataKey),
+    deviceProtection: protectionOf(file) ?? "owner-only-file",
+  };
 }
 
 /**
@@ -440,9 +658,11 @@ export async function unlockWithPasscode(
   if (file === null) {
     throw new AuthError("notInitialized", "No local account exists yet.");
   }
-  assertKeystoreAvailable();
+  if (file.version === 1 ? false : file.passcodeWrap === null) {
+    throw new AuthError("passcodeNotSet", "This account has no passcode.");
+  }
 
-  const guard = requireLocalGuard(file);
+  const guard = requireLocalGuard(dir, file);
   const now = new Date().toISOString();
   const attemptState: AttemptState = { failedAttempts: guard.failedAttempts, lockedUntil: guard.lockedUntil };
   const lockedForMs = remainingLockMs(attemptState, now);
@@ -451,6 +671,9 @@ export async function unlockWithPasscode(
   }
 
   const deviceSecret = fromBase64(guard.deviceSecret);
+  if (file.version === 1 || file.passcodeSalt === null || file.passcodeWrap === null) {
+    throw new AuthError("corruptKeychain", "The passcode wrap is incomplete.");
+  }
   const kek = await derivePasscodeKey(passcode, fromBase64(file.passcodeSalt), deviceSecret, file.kdf);
 
   try {
@@ -493,9 +716,11 @@ export async function verifyPasscode(
   if (file === null) {
     throw new AuthError("notInitialized", "No local account exists yet.");
   }
-  assertKeystoreAvailable();
+  if (file.version === 2 && file.passcodeWrap === null) {
+    throw new AuthError("passcodeNotSet", "This account has no passcode.");
+  }
 
-  const guard = requireLocalGuard(file);
+  const guard = requireLocalGuard(dir, file);
   const now = new Date().toISOString();
   const attemptState: AttemptState = {
     failedAttempts: guard.failedAttempts,
@@ -507,6 +732,9 @@ export async function verifyPasscode(
   }
 
   const deviceSecret = fromBase64(guard.deviceSecret);
+  if (file.version === 1 || file.passcodeSalt === null || file.passcodeWrap === null) {
+    throw new AuthError("corruptKeychain", "The passcode wrap is incomplete.");
+  }
   const kek = await derivePasscodeKey(passcode, fromBase64(file.passcodeSalt), deviceSecret, file.kdf);
 
   let dataKey: Uint8Array;
@@ -544,29 +772,39 @@ export async function verifyPasscode(
 export async function unlockWithRecovery(
   dir: string,
   recoveryCode: string,
-  newPasscode: string,
-): Promise<{ dataKeyHex: string; clearedThrottle: ClearedThrottle | null }> {
+  newPasscode: string | null,
+): Promise<{
+  dataKeyHex: string;
+  clearedThrottle: ClearedThrottle | null;
+  deviceProtection: DeviceProtection;
+}> {
   const canonical = normalizeRecoveryCode(recoveryCode);
   if (canonical === null) {
     throw new AuthError("wrongRecoveryCode", "The recovery code is not valid.");
   }
-  const problem = validatePasscode(newPasscode);
-  if (problem !== null) {
-    throw new AuthError("weakPasscode", `New passcode rejected: ${problem}`);
+  if (newPasscode !== null) {
+    const problem = validatePasscode(newPasscode);
+    if (problem !== null) {
+      throw new AuthError("weakPasscode", `New passcode rejected: ${problem}`);
+    }
   }
 
   const file = readKeychainFile(dir);
   if (file === null) {
     throw new AuthError("notInitialized", "No local account exists yet.");
   }
-  assertKeystoreAvailable();
-
   // A guard this machine cannot decrypt means the account was carried over
   // from another machine or Windows account — the case the Recovery Kit
   // exists to serve (ADR-018), since `recoveryWrap` was never device-bound.
   // There is then no throttle state to honour (it lived in that unreadable
   // blob), which costs nothing: the code being guessed is 160 random bits.
-  const guard = decryptGuard(file.guard);
+  let guard: GuardPayload | null;
+  try {
+    guard = readGuard(dir, file);
+  } catch (error) {
+    if (error instanceof AuthError && error.reason === "corruptKeychain") guard = null;
+    else throw error;
+  }
   const now = new Date().toISOString();
   const attemptState: AttemptState =
     guard !== null
@@ -601,23 +839,45 @@ export async function unlockWithRecovery(
   // `recoveryWrap`/`recoverySalt` are untouched: the Kit the user just used
   // keeps working until they explicitly regenerate it.
   const deviceSecret = guard !== null ? fromBase64(guard.deviceSecret) : generateDeviceSecret();
-  const newPasscodeSalt = generateSalt();
-  const newKek = await derivePasscodeKey(newPasscode, newPasscodeSalt, deviceSecret, file.kdf);
-  const newPasscodeWrap = await wrapDataKey(dataKey, newKek);
+  const deviceProtection: DeviceProtection = isUsableKeystore(safeStorage, process.platform)
+    ? "system-vault"
+    : "owner-only-file";
+  const passcodeSalt = newPasscode === null ? null : generateSalt();
+  const passcodeWrap =
+    newPasscode === null || passcodeSalt === null
+      ? null
+      : await wrapDataKey(
+          dataKey,
+          await derivePasscodeKey(newPasscode, passcodeSalt, deviceSecret, file.kdf),
+        );
+  const deviceWrap = newPasscode === null ? await wrapDataKey(dataKey, deviceSecret) : null;
+  const guardPayload = { deviceSecret: toBase64(deviceSecret), ...INITIAL_ATTEMPT_STATE };
 
-  writeKeychainFileAtomic(dir, {
-    ...file,
-    passcodeSalt: toBase64(newPasscodeSalt),
-    passcodeWrap: newPasscodeWrap,
-    guard: encryptGuard({ deviceSecret: toBase64(deviceSecret), ...INITIAL_ATTEMPT_STATE }),
-  });
+  const nextKeychain: KeychainFileV2 = {
+    version: 2,
+    kdf: file.kdf,
+    passcodeSalt: passcodeSalt === null ? null : toBase64(passcodeSalt),
+    passcodeWrap,
+    deviceWrap,
+    recoverySalt: file.recoverySalt,
+    recoveryWrap: file.recoveryWrap,
+    guard:
+      deviceProtection === "system-vault"
+        ? { storage: "system-vault", value: encryptGuard(guardPayload) }
+        : { storage: "owner-only-file" },
+  };
+  publishRecoveredKeychain(dir, nextKeychain, guardPayload);
 
   // Reported for the same reason the passcode path reports it: this write is
   // where the trip's only record stops existing. On a migrated account there
   // was no readable guard to begin with, so `attemptState` is the initial one
   // and this is `null` — correctly, since the failures it counted happened on
   // a machine that is not this one.
-  return { dataKeyHex: dataKeyToHex(dataKey), clearedThrottle: clearedThrottle(attemptState) };
+  return {
+    dataKeyHex: dataKeyToHex(dataKey),
+    clearedThrottle: clearedThrottle(attemptState),
+    deviceProtection,
+  };
 }
 
 /**
@@ -633,23 +893,25 @@ export async function unlockWithRecovery(
  * one at the lock screen does — and this write is equally the moment that
  * evidence would otherwise be destroyed.
  */
-export async function changePasscode(
+export async function setAccountPasscode(
   dir: string,
-  currentPasscode: string,
-  nextPasscode: string,
+  currentPasscode: string | null,
+  nextPasscode: string | null,
+  sessionDataKeyHex: string,
 ): Promise<ClearedThrottle | null> {
-  const problem = validatePasscode(nextPasscode);
-  if (problem !== null) {
-    throw new AuthError("weakPasscode", `New passcode rejected: ${problem}`);
+  if (nextPasscode !== null) {
+    const problem = validatePasscode(nextPasscode);
+    if (problem !== null) {
+      throw new AuthError("weakPasscode", `New passcode rejected: ${problem}`);
+    }
   }
 
   const file = readKeychainFile(dir);
   if (file === null) {
     throw new AuthError("notInitialized", "No local account exists yet.");
   }
-  assertKeystoreAvailable();
-
-  const guard = requireLocalGuard(file);
+  const guard = requireLocalGuard(dir, file);
+  const sessionDataKey = dataKeyFromHex(sessionDataKeyHex);
   // Throttled on the same counter as unlocking, for the same reason: this
   // verifies the current passcode, so leaving it open would hand an attacker
   // at an unlocked session an unlimited oracle for the passcode itself — the
@@ -665,32 +927,84 @@ export async function changePasscode(
   }
 
   const deviceSecret = fromBase64(guard.deviceSecret);
-  const currentKek = await derivePasscodeKey(currentPasscode, fromBase64(file.passcodeSalt), deviceSecret, file.kdf);
-
-  let dataKey: Uint8Array;
-  try {
-    dataKey = await unwrapDataKey(file.passcodeWrap, currentKek);
-  } catch (error) {
-    if (!(error instanceof KeyUnwrapError)) throw error;
-    const updated = registerFailedAttempt(attemptState, now);
-    persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...updated });
-    throw new AuthError("wrongPasscode", "The current passcode is incorrect.");
+  let dataKey: Uint8Array = sessionDataKey;
+  const hasPasscode = file.version === 2 && file.passcodeWrap !== null;
+  if (hasPasscode) {
+    if (
+      file.version !== 2 ||
+      currentPasscode === null ||
+      file.passcodeSalt === null ||
+      file.passcodeWrap === null
+    ) {
+      throw new AuthError("wrongPasscode", "The current passcode is required.");
+    }
+    const currentKek = await derivePasscodeKey(
+      currentPasscode,
+      fromBase64(file.passcodeSalt),
+      deviceSecret,
+      file.kdf,
+    );
+    try {
+      dataKey = await unwrapDataKey(file.passcodeWrap, currentKek);
+    } catch (error) {
+      if (!(error instanceof KeyUnwrapError)) throw error;
+      const updated = registerFailedAttempt(attemptState, now);
+      persistGuard(dir, file, { deviceSecret: guard.deviceSecret, ...updated });
+      throw new AuthError("wrongPasscode", "The current passcode is incorrect.");
+    }
+    if (
+      dataKey.length !== sessionDataKey.length ||
+      !timingSafeEqual(dataKey, sessionDataKey)
+    ) {
+      throw new Error("Internal error: the keychain no longer matches the unlocked session.");
+    }
+  } else if (currentPasscode !== null) {
+    throw new AuthError("passcodeNotSet", "This account currently has no passcode.");
   }
 
-  const newSalt = generateSalt();
-  const newKek = await derivePasscodeKey(nextPasscode, newSalt, deviceSecret, file.kdf);
-  const newWrap = await wrapDataKey(dataKey, newKek);
+  const newSalt = nextPasscode === null ? null : generateSalt();
+  const newWrap =
+    nextPasscode === null || newSalt === null
+      ? null
+      : await wrapDataKey(
+          dataKey,
+          await derivePasscodeKey(nextPasscode, newSalt, deviceSecret, file.kdf),
+        );
+  const deviceWrap = nextPasscode === null ? await wrapDataKey(dataKey, deviceSecret) : null;
+  const deviceProtection: DeviceProtection =
+    protectionOf(file) ?? (isUsableKeystore(safeStorage, process.platform) ? "system-vault" : "owner-only-file");
+  const guardPayload = { deviceSecret: guard.deviceSecret, ...INITIAL_ATTEMPT_STATE };
 
   // One write: the new wrap AND the reset throttle, so a successful change
   // cannot leave a stale attempt counter behind.
   writeKeychainFileAtomic(dir, {
-    ...file,
-    passcodeSalt: toBase64(newSalt),
+    version: 2,
+    kdf: file.kdf,
+    passcodeSalt: newSalt === null ? null : toBase64(newSalt),
     passcodeWrap: newWrap,
-    guard: encryptGuard({ deviceSecret: guard.deviceSecret, ...INITIAL_ATTEMPT_STATE }),
+    deviceWrap,
+    recoverySalt: file.recoverySalt,
+    recoveryWrap: file.recoveryWrap,
+    guard:
+      deviceProtection === "system-vault"
+        ? { storage: "system-vault", value: encryptGuard(guardPayload) }
+        : { storage: "owner-only-file" },
   });
+  if (deviceProtection === "owner-only-file") {
+    writeOwnerGuard(dir, JSON.stringify(guardPayload));
+  }
 
   return clearedThrottle(attemptState);
+}
+
+/** Backwards-compatible passcode-to-passcode change for existing callers. */
+export async function changePasscode(
+  dir: string,
+  currentPasscode: string,
+  nextPasscode: string,
+  sessionDataKeyHex: string,
+): Promise<ClearedThrottle | null> {
+  return setAccountPasscode(dir, currentPasscode, nextPasscode, sessionDataKeyHex);
 }
 
 /**
@@ -707,8 +1021,7 @@ export function readDeviceSecret(dir: string): Uint8Array {
   if (file === null) {
     throw new AuthError("notInitialized", "No local account exists yet.");
   }
-  assertKeystoreAvailable();
-  return fromBase64(requireLocalGuard(file).deviceSecret);
+  return fromBase64(requireLocalGuard(dir, file).deviceSecret);
 }
 
 /**

@@ -3,7 +3,12 @@ import { Button, Card, EmptyState, Icon, LoadingState, Segmented, TextArea } fro
 
 import { activeLocale } from "../../../../renderer/src/moduleKit/moduleSurface.js";
 import { fill, intlTags } from "../../../../renderer/src/strings.js";
-import { NLLB_PACK_IDS, TRANSLATOR_TEXT_MAX_CHARS, type NllbPackId } from "../../shared/ipc.js";
+import {
+  NLLB_PACK_IDS,
+  TRANSLATOR_TEXT_MAX_CHARS,
+  type NllbPackId,
+  type TranslatorRuntimeView,
+} from "../../shared/ipc.js";
 import { languageByCode } from "../../shared/languages.js";
 import { copy } from "../copy.js";
 import {
@@ -72,6 +77,7 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
   const [open, setOpen] = useState<LanguageSide | null>(null);
   const [view, setView] = useState<SessionView>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
+  const [runtime, setRuntime] = useState<TranslatorRuntimeView | null>(null);
   const [session] = useState(() => new TranslationSession(window.nexus.modules.translator, setView));
   const sourceButton = useRef<HTMLButtonElement>(null);
   const targetButton = useRef<HTMLButtonElement>(null);
@@ -116,6 +122,16 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
   // The model in use: the one the user chose if it is installed, else the smallest installed.
   const model = installed?.find((id) => id === modelChoice) ?? installed?.[0] ?? null;
 
+  useEffect(() => {
+    let live = true;
+    void window.nexus.modules.translator.runtime({}).then((next) => {
+      if (live) setRuntime(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [model]);
+
   // The source is the detected language while the picker says Detect.
   const detected = useMemo(() => (source === "auto" ? detectLanguage(text, locale) : null), [source, text, locale]);
   const sourceRow = source === "auto" ? detected : (languageByCode(source) ?? null);
@@ -133,6 +149,11 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
         : null,
     );
   }, [session, model, modelText, sourceCode, targetCode]);
+
+  useEffect(() => {
+    if (view.kind !== "done") return;
+    void window.nexus.modules.translator.runtime({}).then(setRuntime);
+  }, [view.kind]);
 
   const translated = view.kind === "translating" || view.kind === "done" || view.kind === "failed" ? view.text : "";
   const shown = serbianTarget && script === "latin" ? serbianToLatin(translated) : translated;
@@ -183,6 +204,27 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
       setCopied(true);
     } catch (failure) {
       console.error("Nexus: the translation could not be copied:", failure);
+    }
+  }
+
+  async function loadModel(): Promise<void> {
+    if (model === null) return;
+    setRuntime((current) => current === null ? current : { ...current, state: "loading", model: null });
+    try {
+      setRuntime(await window.nexus.modules.translator.loadModel({ packId: model }));
+    } catch (failure) {
+      setRuntime((current) => current === null ? null : { ...current, state: "error", model: null });
+      console.error("Nexus: the translation model could not be loaded:", failure);
+    }
+  }
+
+  async function ejectModel(): Promise<void> {
+    setRuntime((current) => current === null ? current : { ...current, state: "ejecting" });
+    try {
+      setRuntime(await window.nexus.modules.translator.ejectModel({}));
+    } catch (failure) {
+      setRuntime((current) => current === null ? null : { ...current, state: "error" });
+      console.error("Nexus: the translation model could not be ejected:", failure);
     }
   }
 
@@ -250,8 +292,34 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
             onSelect={chooseModel}
           />
         )}
+        {runtime !== null && (
+          <div className="translator__memory" role="status">
+            <span className="nx-hint">
+              {runtime.state === "resident" && runtime.model !== null
+                ? fill(copy.translate.memoryResident, { model: MODEL_LABEL[runtime.model] })
+                : lookupRuntimeState(runtime.state)}
+            </span>
+            <Button
+              size="sm"
+              variant="quiet"
+              disabled={runtime.state === "loading" || runtime.state === "ejecting"}
+              onClick={() => void loadModel()}
+            >
+              {copy.translate.loadModel}
+            </Button>
+            <Button
+              size="sm"
+              variant="quiet"
+              disabled={runtime.state === "absent" || runtime.state === "ejecting"}
+              onClick={() => void ejectModel()}
+            >
+              {copy.translate.ejectModel}
+            </Button>
+          </div>
+        )}
       </div>
       {installed.length > 1 && <p className="nx-hint">{copy.translate.modelHint}</p>}
+      <p className="nx-hint">{copy.translate.memoryIdleHint}</p>
 
       {open !== null && (
         <LanguagePanel
@@ -334,4 +402,11 @@ export function TranslateTab({ request, onRequestApplied }: TranslateTabProps) {
       </div>
     </Card>
   );
+}
+
+function lookupRuntimeState(state: TranslatorRuntimeView["state"]): string {
+  if (state === "loading") return copy.translate.memoryLoading;
+  if (state === "ejecting") return copy.translate.memoryEjecting;
+  if (state === "error") return copy.translate.memoryError;
+  return copy.translate.memoryAbsent;
 }

@@ -432,6 +432,71 @@ export class ZimReader {
     return this.resolve(index);
   }
 
+  /**
+   * A bounded page of image entries.
+   *
+   * A ZIM has no image catalogue of its own, so Gallery walks the URL pointer
+   * list in bounded batches. The cursor is an entry index and the caller keeps
+   * it between calls, which keeps one request from scanning a multi-million
+   * entry pack synchronously.
+   */
+  imagesAfter(
+    afterIndex: number,
+    limit: number,
+    maxScan: number,
+  ): { readonly entries: readonly ZimEntry[]; readonly nextIndex: number; readonly done: boolean } {
+    const start =
+      Math.trunc(afterIndex) <= 0 ? this.namespaceStart("I") : Math.trunc(afterIndex);
+    const stop = Math.min(this.header.entryCount, start + Math.max(1, Math.trunc(maxScan)));
+    const entries: ZimEntry[] = [];
+    let index = start;
+    for (; index < stop; index += 1) {
+      try {
+        const dirent = this.direntAt(this.urlPointer(index));
+        if (
+          dirent.kind !== "content" ||
+          !(this.mimeTypes[dirent.mimetype] ?? "").startsWith("image/")
+        ) {
+          continue;
+        }
+        entries.push(this.view(index, dirent));
+        if (entries.length >= limit) {
+          index += 1;
+          break;
+        }
+      } catch {
+        // One damaged image entry must not stop a bounded scan.
+      }
+    }
+    return {
+      entries,
+      nextIndex: index,
+      done: index >= this.header.entryCount,
+    };
+  }
+
+  /** The first URL pointer whose namespace/path is not before `<namespace>/`. */
+  private namespaceStart(namespace: string): number {
+    const target = pathKey(namespace, "");
+    let low = 0;
+    let high = this.header.entryCount - 1;
+    let answer = this.header.entryCount;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const dirent = this.direntAt(this.urlPointer(middle));
+      if (dirent.kind === "ignored") {
+        high = middle - 1;
+        continue;
+      }
+      if (compareKeys(pathKey(dirent.namespace, dirent.path), target) < 0) low = middle + 1;
+      else {
+        answer = middle;
+        high = middle - 1;
+      }
+    }
+    return answer;
+  }
+
   /** Whether a `X/fulltext/xapian` entry exists — the file carries a full-text index Nexus cannot open (see ADR-098). */
   hasFullTextIndex(): boolean {
     return this.entryByPath("X/fulltext/xapian") !== null;

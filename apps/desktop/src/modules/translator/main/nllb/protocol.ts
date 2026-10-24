@@ -22,6 +22,7 @@ import type { TranslationFailure } from "../../shared/ipc.js";
 const NLLB_CODE = /^[a-z]{3}_[A-Z][a-z]{3}$/;
 
 export type NllbRequest =
+  | { readonly id: number; readonly type: "load"; readonly directory: string }
   | {
       readonly id: number;
       readonly type: "translate";
@@ -43,6 +44,7 @@ const FAILURE_CODES: readonly string[] = [
 ] satisfies readonly NllbFailureCode[];
 
 export type NllbReply =
+  | { readonly id: number; readonly type: "loaded" }
   | { readonly id: number; readonly type: "sentence"; readonly index: number; readonly text: string }
   | { readonly id: number; readonly type: "translated" }
   | { readonly id: number; readonly type: "failed"; readonly code: NllbFailureCode; readonly message: string };
@@ -60,6 +62,10 @@ export function requestProblem(value: unknown): string | null {
   if (!isRecord(value)) return "a request must be an object.";
   if (!isId(value["id"])) return '"id" must be a positive whole number.';
   switch (value["type"]) {
+    case "load":
+      return typeof value["directory"] === "string" && value["directory"] !== ""
+        ? null
+        : '"directory" must be a non-empty path.';
     case "translate": {
       if (typeof value["directory"] !== "string" || value["directory"] === "") {
         return '"directory" must be a non-empty path.';
@@ -87,6 +93,8 @@ export function replyProblem(value: unknown): string | null {
   if (!isRecord(value)) return "a reply must be an object.";
   if (!isId(value["id"])) return '"id" must be a positive whole number.';
   switch (value["type"]) {
+    case "loaded":
+      return null;
     case "sentence": {
       const index = value["index"];
       if (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) {

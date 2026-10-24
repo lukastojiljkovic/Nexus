@@ -1758,6 +1758,9 @@ describe("RestoreStore", () => {
       // Tickets (migration 097) go with their plan: the culture import empties them first.
       "culture_plan_tickets",
       "culture_settings",
+      // Gallery (migration 100) is a KIT module: its own archive section
+      // replaces `gallery_items` inside the restore transaction.
+      "gallery_items",
       "vehicles",
       "odometer_readings",
       "service_entries",

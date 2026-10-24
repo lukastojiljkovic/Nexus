@@ -212,36 +212,6 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
       ],
     },
     {
-      // ADR-086 §5: the card that explains why this profile's app looks the way
-      // it does. „upitnik" is deliberately shared with the „Moduli" row below —
-      // both are honest answers to somebody typing it, and a keyword that only
-      // one of two right answers carries is a filter picking for the user.
-      id: "setup-explain",
-      section: "setup",
-      label: s.sectionTitle.setup,
-      keywords: [
-        "upitnik",
-        "onboarding",
-        "prilagodjeno",
-        "zasto",
-        "objasnjenje",
-        "odgovori",
-        "pocetak",
-      ],
-    },
-    {
-      // ADR-065 §5, moved by ADR-086: the row that reopens the questionnaire.
-      // It was filed under „Moduli“ while it sat in that card; it now sits in
-      // „Kako je Nexus podešen za tebe", which is what the questionnaire
-      // actually decides. The id is unchanged — it names a control, not a card,
-      // and „moduli“ stays in the keywords because that is still one of the
-      // words somebody hunting for it types.
-      id: "modules-onboarding",
-      section: "setup",
-      label: s.onboardingRerunTitle,
-      keywords: ["upitnik", "onboarding", "podesavanje", "ponovo", "pocetak", "moduli", "oblasti"],
-    },
-    {
       // ADR-101: the „Prikaz" card — the module list, its switches and the
       // order. The card's own title is „Prikaz", so „moduli" — the word the
       // category and the old gallery carried — is a keyword rather than a
@@ -260,12 +230,6 @@ function shellEntries(): readonly ShellSettingsSearchEntry[] {
         "prikazi",
         "sortiranje",
       ],
-    },
-    {
-      id: "setup-forget",
-      section: "setup",
-      label: s.setup.forget,
-      keywords: ["zaboravi", "obrisi", "odgovori", "upitnik", "privatnost"],
     },
     // One entry per remappable action (ADR-040) — a user hunting for "novi
     // unos" or "zakljucaj" should land on the exact row that rebinds it — plus

@@ -51,6 +51,15 @@ async function translate(request: Extract<NllbRequest, { type: "translate" }>): 
   send({ id: request.id, type: "translated" });
 }
 
+async function load(request: Extract<NllbRequest, { type: "load" }>): Promise<void> {
+  try {
+    await resident(request.directory);
+    send({ id: request.id, type: "loaded" });
+  } catch (error) {
+    send({ id: request.id, type: "failed", code: "load-failed", message: messageOf(error) });
+  }
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -73,7 +82,8 @@ export function startNllbWorker(): void {
       return;
     }
     queue = queue.then(async () => {
-      await translate(request);
+      if (request.type === "load") await load(request);
+      else await translate(request);
       cancelled.delete(request.id);
     });
   });

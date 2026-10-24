@@ -92,6 +92,8 @@ export interface RecipeSummaryView {
   readonly favourite: boolean;
   readonly source: RecipeSource;
   readonly hasPhoto: boolean;
+  readonly hasIngredients: boolean;
+  readonly hasSteps: boolean;
   readonly updatedAt: string;
 }
 

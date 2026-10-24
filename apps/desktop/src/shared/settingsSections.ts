@@ -50,6 +50,7 @@ export type SettingsIcon =
   | "grid"
   | "bell"
   | "database"
+  | "archive"
   | "shield"
   | "info"
   | "import"
@@ -61,6 +62,7 @@ export type CategoryId =
   | "appearance"
   | "keyboard"
   | "modules"
+  | "content-packs"
   | "notifications"
   | "data"
   | "privacy"
@@ -178,7 +180,6 @@ const CATEGORY_TABLE: readonly SettingsCategory[] = [
     id: "modules",
     icon: "grid",
     entries: [
-      { kind: "card", id: "setup" },
       { kind: "card", id: "modules" },
       // „Paketi alatki" immediately after „Moduli", because the two answer the
       // same question at two depths: which parts of Nexus this profile has, and
@@ -189,6 +190,11 @@ const CATEGORY_TABLE: readonly SettingsCategory[] = [
       { kind: "card", id: "risk" },
       { kind: "list", id: "module-settings" },
     ],
+  },
+  {
+    id: "content-packs",
+    icon: "archive",
+    entries: [{ kind: "card", id: "content-packs" }],
   },
   {
     id: "notifications",
@@ -205,12 +211,6 @@ const CATEGORY_TABLE: readonly SettingsCategory[] = [
       // third answer to „where does a copy of my data go" — and the privacy
       // card's own `sync` sentence reads as a summary of the card just above it.
       { kind: "card", id: "sync" },
-      // ADR-091. Last in „Podaci", beside „Sinhronizacija", because the two are
-      // the device's two ways of growing content it did not make: sync brings
-      // this profile's own data back, and a pack brings in somebody else's
-      // library. It is not a module card (a pack is content, not a part of the
-      // app) and it is not a privacy card (nothing here reaches the network).
-      { kind: "card", id: "content-packs" },
     ],
   },
   {

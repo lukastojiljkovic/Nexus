@@ -97,6 +97,7 @@ const ALLOWLIST: Record<string, Reason> = {
   "drawings/renderer/Page.tsx": "links",
   "drawings/renderer/copy.ts": "strings",
   "emergency/renderer/copy.ts": "strings",
+  "gallery/renderer/copy.ts": "strings",
   "lab/renderer/BatteryCard.tsx": "strings",
   "lab/renderer/SerialCard.tsx": "strings",
   "lab/renderer/ToneCard.tsx": "strings",

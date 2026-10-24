@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
+  Checkbox,
   Chip,
   ConfirmDialog,
   Dialog,
@@ -41,8 +42,11 @@ import type {
 import {
   clampServings,
   courseLabel,
+  EMPTY_RECIPE_FILTERS,
   factorFor,
+  filterRecipes,
   formatTime,
+  hasRecipeFilters,
   lineText,
   scaleLines,
   stepIndex,
@@ -95,6 +99,7 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   const [deleting, setDeleting] = useState(false);
   /** The shelf the list is filtered to, or null for every recipe. */
   const [shelf, setShelf] = useState<string | null>(null);
+  const [filters, setFilters] = useState(EMPTY_RECIPE_FILTERS);
 
   /**
    * One read of the list, into state. Every mutation answers with the same
@@ -190,9 +195,12 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
   // A shelf that no longer exists (deleted in another window) filters nothing,
   // rather than hiding every recipe behind a name the list no longer offers.
   const shelfIds = view?.collections.find((candidate) => candidate.id === shelf)?.recipeIds;
-  const shown = (hits ?? recipes).filter(
-    (recipe) => shelfIds === undefined || shelfIds.includes(recipe.id),
-  );
+  const activeFilters = {
+    ...filters,
+    collectionIds: shelfIds === undefined ? null : new Set(shelfIds),
+  } as const;
+  const shown = filterRecipes(hits ?? recipes, activeFilters);
+  const filtersActive = shelf !== null || hasRecipeFilters(filters);
 
   return (
     <div className="cookbook">
@@ -236,6 +244,95 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
                 ))}
               </Select>
             )}
+            <div className="cookbook__filters">
+              <Select
+                label={copy.filters.course}
+                value={filters.course ?? ""}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    course: event.target.value === "" ? null : (event.target.value as CookbookCourse),
+                  }))
+                }
+              >
+                <option value="">{copy.filters.anyCourse}</option>
+                {COOKBOOK_COURSES.map((course) => (
+                  <option key={course} value={course}>{courseLabel(course)}</option>
+                ))}
+              </Select>
+              {view.tags.length > 0 && (
+                <Select
+                  label={copy.filters.tag}
+                  value={filters.tag ?? ""}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      tag: event.target.value === "" ? null : event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">{copy.filters.anyTag}</option>
+                  {view.tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                </Select>
+              )}
+              <Select
+                label={copy.filters.source}
+                value={filters.source ?? ""}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    source:
+                      event.target.value === ""
+                        ? null
+                        : (event.target.value as RecipeSummaryView["source"]),
+                  }))
+                }
+              >
+                <option value="">{copy.filters.anySource}</option>
+                <option value="own">{copy.filters.own}</option>
+                <option value="imported">{copy.filters.imported}</option>
+              </Select>
+              <Select
+                label={copy.filters.completeness}
+                value={filters.completeness ?? ""}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    completeness:
+                      event.target.value === ""
+                        ? null
+                        : (event.target.value as "complete" | "missing"),
+                  }))
+                }
+              >
+                <option value="">{copy.filters.anyCompleteness}</option>
+                <option value="complete">{copy.filters.complete}</option>
+                <option value="missing">{copy.filters.missing}</option>
+              </Select>
+              <Checkbox
+                checked={filters.favouriteOnly}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    favouriteOnly: event.target.checked,
+                  }))
+                }
+              >
+                {copy.filters.favourites}
+              </Checkbox>
+              {filtersActive && (
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => {
+                    setShelf(null);
+                    setFilters(EMPTY_RECIPE_FILTERS);
+                  }}
+                >
+                  {copy.filters.reset}
+                </Button>
+              )}
+            </div>
             {searchFailed ? (
               <Notice
                 kind="danger"
@@ -251,7 +348,13 @@ export default function CookbookPage({ profileId }: ModulePageProps) {
             ) : shown.length === 0 ? (
               <EmptyState
                 variant="inline"
-                title={shelfIds === undefined ? copy.list.noResults : copy.collections.emptyShelf}
+                title={
+                  shelfIds !== undefined
+                    ? copy.collections.emptyShelf
+                    : filtersActive
+                      ? copy.filters.noResults
+                      : copy.list.noResults
+                }
               />
             ) : (
               <div className="cookbook__list">
@@ -1181,7 +1284,7 @@ function RecipeEditor({
   );
   const [tags, setTags] = useState((recipe?.tags ?? []).join(", "));
   const [notes, setNotes] = useState(recipe?.notes ?? "");
-  const [problem, setProblem] = useState<"name" | "ingredients" | "steps" | null>(null);
+  const [problem, setProblem] = useState<"name" | "ingredients" | "steps" | "save" | null>(null);
   const [busy, setBusy] = useState(false);
 
   function drafts(): RecipeIngredientDraft[] | null {
@@ -1252,7 +1355,7 @@ function RecipeEditor({
         onSaved(recipe.id);
       }
     } catch (failure) {
-      setProblem("name");
+      setProblem("save");
       console.error("Nexus: the recipe was not saved:", failure);
     } finally {
       setBusy(false);
@@ -1378,6 +1481,7 @@ function RecipeEditor({
         value={notes}
         onChange={(event) => setNotes(event.target.value)}
       />
+      {problem === "save" && <p className="cookbook__error">{copy.errors.mutate}</p>}
     </Dialog>
   );
 }

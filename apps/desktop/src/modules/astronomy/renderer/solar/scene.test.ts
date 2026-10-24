@@ -222,13 +222,27 @@ describe("buildSolarScene", () => {
 });
 
 describe("textures in the graph", () => {
+  it("draws the sky inward-facing behind the bodies", () => {
+    const resources = new SceneResources();
+    const sky = resources.track(new THREE.Texture());
+    const scene = build({ resources, textures: { bodies: {}, sky } });
+    expect(scene.sky).not.toBeNull();
+    const material = scene.sky?.material as THREE.MeshBasicMaterial;
+    expect(material.map).toBe(sky);
+    expect(material.side).toBe(THREE.BackSide);
+    expect(material.depthWrite).toBe(false);
+  });
+
   it("puts each loaded map on the material that asked for it, and tracks it", () => {
     const resources = new SceneResources();
     const day = resources.track(new THREE.Texture());
     const rings = resources.track(new THREE.Texture());
     const scene = build({
       resources,
-      textures: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
+      textures: {
+        bodies: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
+        sky: null,
+      },
     });
     const earth = handleFor(scene, "earth");
     const saturn = handleFor(scene, "saturn");
@@ -246,7 +260,10 @@ describe("textures in the graph", () => {
     const rings = resources.track(new THREE.Texture());
     const scene = build({
       resources,
-      textures: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
+      textures: {
+        bodies: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
+        sky: null,
+      },
     });
     dropTexture(scene, "earth", "day");
     const earth = handleFor(scene, "earth");
@@ -302,7 +319,10 @@ describe("updates", () => {
   it("repaints for another theme in place, leaving a texture where it is", () => {
     const resources = new SceneResources();
     const day = resources.track(new THREE.Texture());
-    const scene = build({ resources, textures: { earth: { day, night: null, rings: null } } });
+    const scene = build({
+      resources,
+      textures: { bodies: { earth: { day, night: null, rings: null } }, sky: null },
+    });
     const night = solarPalette("noc");
     applyPalette(scene, night);
     expect(scene.palette).toBe(night);
@@ -324,7 +344,10 @@ describe("disposal", () => {
     const rings = resources.track(new THREE.Texture());
     const scene = build({
       resources,
-      textures: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
+      textures: {
+        bodies: { earth: { day, night: null, rings: null }, saturn: { day: null, night: null, rings } },
+        sky: null,
+      },
     });
     const found = collect(scene);
     for (const item of found) expect(resources.has(item)).toBe(true);

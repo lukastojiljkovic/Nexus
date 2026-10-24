@@ -18,6 +18,9 @@ function fakeHost() {
   }[] = [];
   let disposals = 0;
   const host: NllbHost = {
+    load() {
+      return Promise.resolve();
+    },
     translate(job, onSentence, signal) {
       return new Promise<void>((resolve, reject) => {
         calls.push({ job, onSentence, signal, finish: resolve, fail: reject });
@@ -33,7 +36,13 @@ function fakeHost() {
 
 function jobs(host: NllbHost) {
   let next = 0;
-  return new TranslationJobs(() => host, () => `job-${String((next += 1))}`);
+  return new TranslationJobs(
+    () => host,
+    () => `job-${String((next += 1))}`,
+    undefined,
+    undefined,
+    () => host.dispose(),
+  );
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -43,6 +52,29 @@ afterEach(() => {
 });
 
 describe("TranslationJobs", () => {
+  it("does not create a worker merely to eject one that was never started", () => {
+    let created = 0;
+    const host = fakeHost();
+    const translations = new TranslationJobs(
+      () => {
+        created += 1;
+        return host.host;
+      },
+      () => "job-1",
+      undefined,
+      undefined,
+      () => {
+        if (created > 0) host.host.dispose();
+      },
+    );
+
+    translations.eject();
+
+    expect(created).toBe(0);
+    expect(host.disposals()).toBe(0);
+    expect(translations.runtimeState()).toBe("absent");
+  });
+
   it("sends the text as sentences and reads back the ones done, in the source's layout", async () => {
     const { host, calls } = fakeHost();
     const translations = jobs(host);
@@ -97,6 +129,51 @@ describe("TranslationJobs", () => {
     translations.cancel(cancelled);
     await settle();
     expect(translations.poll(cancelled)).toMatchObject({ done: true, error: "aborted" });
+    expect(translations.runtimeState()).toBe("resident");
+  });
+
+  it("keeps an eject final when an in-flight load rejects afterwards", async () => {
+    let rejectLoad: ((error: unknown) => void) | undefined;
+    const host: NllbHost = {
+      load() {
+        return new Promise<void>((_resolve, reject) => {
+          rejectLoad = reject;
+        });
+      },
+      translate() {
+        return Promise.resolve();
+      },
+      dispose() {
+        rejectLoad?.(new NllbError("no-worker", "the translator worker was stopped."));
+      },
+    };
+    const translations = jobs(host);
+    const loading = translations.load("dir");
+    expect(translations.runtimeState()).toBe("loading");
+    translations.eject();
+    await expect(loading).resolves.toBeUndefined();
+    expect(translations.runtimeState()).toBe("absent");
+  });
+
+  it("does not reload a model that is already resident", async () => {
+    let loads = 0;
+    const host: NllbHost = {
+      load() {
+        loads += 1;
+        return Promise.resolve();
+      },
+      translate() {
+        return Promise.resolve();
+      },
+      dispose() {
+        return undefined;
+      },
+    };
+    const translations = jobs(host);
+    await translations.load("dir");
+    await translations.load("dir");
+    expect(loads).toBe(1);
+    expect(translations.runtimeState()).toBe("resident");
   });
 
   it("ends the worker once the translator has been idle, and not while it works", async () => {

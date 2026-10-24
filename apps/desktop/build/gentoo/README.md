@@ -168,13 +168,15 @@ dock instead of attaching to its launcher.
 
 ## 4. What Nexus needs from the desktop
 
-**A Secret Service provider is required** — gnome-keyring, KWallet, or KeePassXC
-with Secret Service enabled. The device-bound half of the key chain goes through
-Electron's `safeStorage`, and on Linux that is libsecret. Without a provider,
-`safeStorage.isEncryptionAvailable()` is false and Nexus **refuses** to create or
-unlock an account. That refusal is the design (ADR-018: no silent PIN-only
-downgrade), not a defect — but it does mean a bare window manager with no
-keyring daemon gives you an app you cannot log into.
+**A Secret Service provider is preferred but not required.** gnome-keyring,
+KWallet, or KeePassXC with Secret Service enabled lets the device-bound half of
+the key chain use Electron's `safeStorage`. Without a real provider — including
+the case where Electron selects its plaintext `basic_text` backend — Nexus uses
+an owner-only `guard.json` with mode `0600`, beside the encrypted database. The
+account can then use a passcode or explicit device-convenience mode. Private
+notes keep their own mandatory credential under either account mode
+([ADR-018](../../../../docs/architecture/adr/018-local-account-passcode.md),
+[ADR-120](../../../../docs/architecture/adr/120-optional-account-passcode.md)).
 
 Everything else is ordinary Chromium runtime: GTK 3, NSS, ALSA, dbus, mesa. The
 ebuild's `RDEPEND` lists them; the AppImage assumes they are already there,

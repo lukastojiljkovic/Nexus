@@ -2,8 +2,8 @@ import { TOOL_PACKS, packFlagKey, type ModuleRegistry, type ToolPack } from "@ne
 import { LOCKED_MODULE_IDS } from "./modules.js";
 
 /**
- * ADR-065 / PRD 30: what the onboarding questionnaire is made of, and the pure
- * functions that turn its answers into what actually gets stored.
+ * Module and pack presets shared by profile planning, business presets and
+ * toolkit installs. Nexus 3 no longer exposes this data as a first-run flow.
  *
  * Lives in `shared/` beside `modules.ts` for the same reason that file does:
  * both processes may read these facts, and two hand-copied copies are how they
@@ -12,14 +12,14 @@ import { LOCKED_MODULE_IDS } from "./modules.js";
  */
 
 /**
- * „Osnovno": what a profile gets when the questionnaire is skipped. It IS
+ * „Osnovno": the profile-planning baseline. It IS
  * today's personal defaults (`defaultEnabled` across the v0 manifests) written
  * out by hand — pinned by a test against the live registry, so the two can
  * never quietly disagree.
  *
  * **Every selectable module is decided here, `false` included.** It is never a
  * list of the ids that happen to be on. That is what lets
- * `onboardingPresets.test.ts` derive the expected key set from the live registry
+ * `modulePresets.test.ts` derives the expected key set from the live registry
  * and fail the moment a module is registered without anybody deciding its place
  * — a module that silently inherited `defaultEnabled` is precisely the failure
  * mode this shape designs out.
@@ -55,6 +55,7 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   // And the same for the culture corner (ADR-090): it holds nothing until a
   // visit, a plan or an audio file is added, so there is nothing to opt into.
   culture: true,
+  gallery: true,
   // And the second (ADR-090): a cookbook writes nothing until somebody saves a
   // recipe, so there is nothing to opt into either.
   cookbook: true,
@@ -77,7 +78,7 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
   miniapps: true,
   // The arcade is decided here like every other selectable module, and its
   // answer is `false`: PRD 31 hides the entertainment section by default and
-  // never suggests it during onboarding, so a profile that never asks for it
+  // never suggests it during profile planning, so a profile that never asks for it
   // never sees it. The gallery is where it is switched on.
   arcade: false,
   // And the second kit module (ADR-090), for the same reason: a board game is a
@@ -146,7 +147,7 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
 };
 
 /**
- * The packs the questionnaire may offer — every pack that has at least one tool
+ * The packs profile planning may offer — every pack that has at least one tool
  * registered against it, in `TOOL_PACKS` order.
  *
  * **This replaces a table, and the replacement is the design.** The screen this
@@ -158,7 +159,7 @@ export const ESSENTIALS_MODULE_PRESET: Readonly<Record<string, boolean>> = {
  * More importantly it would have carried a rule somebody has to remember: *do
  * not offer a pack whose tools are not built yet*, the founder's 2026-07-12
  * „only built modules are registered" applied one level down. A user who picks
- * „Poljoprivreda" and lands on an empty list has been lied to by a questionnaire.
+ * „Poljoprivreda" and lands on an empty list has been lied to by a preset.
  * Derived from the registry, that rule is not a rule at all — an empty pack is
  * unofferable because there is nothing to build a card out of.
  *
@@ -187,7 +188,7 @@ export function packInventory(registry: ModuleRegistry): { pack: ToolPack; toolC
  * The module selection implied by a set of chosen packs: the base, plus PRO
  * switched on exactly when at least one pack was chosen.
  *
- * **This is the whole of the questionnaire's module inference, and it is one
+ * **This is the whole of the module inference, and it is one
  * line on purpose.** The obvious design — and the one this replaced — gives
  * every card a module delta: „Fotografija" turns „Učenje" off, because a
  * photographer is not sitting an exam. That is a guess, and it is the *wrong
@@ -211,7 +212,7 @@ export function applyPackSelection(
   return { ...base, pro: packs.size > 0 };
 }
 
-/** Every registered module the questionnaire may offer, in registration order — the locked pair is never one of them. */
+/** Every registered module a preset may name, in registration order — the locked pair is never one of them. */
 export function selectableModuleIds(registry: ModuleRegistry): string[] {
   return registry
     .all()
@@ -282,7 +283,7 @@ export function moduleFlagWrites(
 
 /**
  * The pack rows a completion writes — `moduleFlagWrites`' rule, applied to the
- * other half of what the questionnaire decides.
+ * other half of what profile planning decides.
  *
  * The walk is over `TOOL_PACKS` and not over the packs that HAVE tools, and the
  * difference matters exactly once: a first run stores a `false` row for a pack

@@ -131,12 +131,12 @@ overrides:
   # electron-builder's fetch path. 6.x is a separate line with its own tree and
   # is not covered by this advisory's range.
   undici@7: ^7.29.0
-  # GHSA-rfgv-xxqx-mfg5 — DoS when a server answers with a WebSocket
-  # subprotocol the client never requested. Build-time only, through
-  # app-builder-lib > @electron/rebuild > node-gyp, which fetches Electron
-  # headers and opens no WebSocket at all. Retires when node-gyp's own
-  # resolution reaches 6.28.1.
-  undici@6: ^6.28.1
+  # GHSA-rfgv-xxqx-mfg5 (unrequested WebSocket subprotocol) and
+  # GHSA-xjj6-f33q-929c (excessive content-encodings) are both fixed at
+  # 6.29.1. This line is build-time only, through app-builder-lib >
+  # @electron/rebuild > node-gyp, which fetches Electron headers and opens no
+  # WebSocket. Retires when node-gyp's own resolution reaches 6.29.1.
+  undici@6: ^6.29.1
   # GHSA-r292-9mhp-454m — uncontrolled recursion in `mapHas`/`filesFilter`, so
   # a crafted archive with a long member path and a selection filter overflows
   # the stack UNCATCHABLY. Build-time only: `tar` arrives through

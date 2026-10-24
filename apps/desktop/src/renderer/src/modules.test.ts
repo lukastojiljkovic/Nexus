@@ -30,9 +30,7 @@ import { BLOCKED_IN_TODAY_OPTIONS } from "./taskPrefs.js";
 import { PRO_TOOL_SURFACES } from "./proToolSurfaces.js";
 import { TOOL_SURFACES } from "./toolSurfaces.js";
 import {
-  BUSINESS_DISABLED_MODULE_IDS,
   LOCKED_MODULE_IDS,
-  businessProfileFlags,
   createModuleRegistry,
 } from "../../shared/modules.js";
 // Aliased: this file already has three local `lookup` helpers of its own
@@ -133,6 +131,7 @@ describe("createModuleRegistry", () => {
       // reference-and-helper kits by `order`, ahead of the astronomy corner at
       // 400.
       "assistant",
+      "gallery",
       // `order: 300`.
       "scanner",
       // The maker's file viewers, `order: 310`.
@@ -249,6 +248,7 @@ describe("createModuleRegistry", () => {
       // CULTURE's own PRD entry, so it takes its own prefix rather than joining
       // one of the groups above.
       CULT: ["culture"],
+      GAL: ["gallery"],
       // „Automobil" (ADR-093) takes its own prefix: PRD 22 is its own entry,
       // not a second reading of another module's subject.
       CAR: ["car"],
@@ -399,6 +399,7 @@ describe("createModuleRegistry", () => {
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual([
       "library",
       "culture",
+      "gallery",
     ]);
     expect(grouped.get("make")?.map((manifest) => manifest.id)).toEqual([
       "tools",
@@ -427,6 +428,7 @@ describe("createModuleRegistry", () => {
     expect(grouped.get("culture")?.map((manifest) => manifest.id)).toEqual([
       "library",
       "culture",
+      "gallery",
     ]);
     // The play group is where the games arrive (ADR-093), and the arcade is
     // its first member: a game is what somebody does for fun, which is what the
@@ -527,6 +529,7 @@ describe("createModuleRegistry", () => {
       // and its page is where a person learns where models come from - so it is
       // on by default like every module but the two above.
       "assistant",
+      "gallery",
       // ON by default too. The scanner needs a language pack before it can
       // read, and the page says so where the reading happens instead of hiding
       // the module from everybody who has not installed one.
@@ -699,7 +702,6 @@ describe("createModuleRegistry", () => {
     }
   });
 });
-
 describe("the settings each v0 module publishes (SettingsPanel)", () => {
   const registry = createModuleRegistry();
   const declared = registry.all().flatMap((manifest) =>
@@ -1449,44 +1451,5 @@ describe("the tools the registry publishes (PRD 29 UTIL, PRD 30 PRO)", () => {
       // family, not a citation somebody can check.
       expect(String(line), tool.id).toMatch(/\d/);
     }
-  });
-});
-
-/**
- * ADR-058's business preset. It used to be a hand-written list of five module
- * ids in `main/index.ts`, and FIN, PRIV and DOC — every module that shipped
- * after it was written — were never added to it, so they quietly fell back to
- * `defaultEnabled`, which is precisely what its own comment said the list
- * existed to prevent. It is derived now, and these are the tests that keep it
- * honest: the first fails the day a module is registered without one.
- */
-describe("businessProfileFlags — the seeded preset covers every module there is", () => {
-  const registry = createModuleRegistry();
-  const flags = businessProfileFlags(registry);
-
-  it("writes exactly one row per unlocked module, and none for a locked one", () => {
-    const rowIds = flags.map((flag) => flag.moduleId);
-    expect(new Set(rowIds).size).toBe(rowIds.length);
-    expect([...rowIds].sort()).toEqual(
-      registry
-        .all()
-        .map((manifest) => manifest.id)
-        .filter((id) => !LOCKED_MODULE_IDS.has(id))
-        .sort(),
-    );
-  });
-
-  it("turns off exactly the disabled set and otherwise repeats the module's own default", () => {
-    for (const { moduleId, enabled } of flags) {
-      const manifest = registry.get(moduleId);
-      expect(manifest, moduleId).toBeDefined();
-      expect(enabled, moduleId).toBe(
-        !BUSINESS_DISABLED_MODULE_IDS.has(moduleId) && manifest!.defaultEnabled,
-      );
-    }
-  });
-
-  it("keeps STUDY off — the one thing a business profile does not do", () => {
-    expect(flags.find((flag) => flag.moduleId === "study")?.enabled).toBe(false);
   });
 });

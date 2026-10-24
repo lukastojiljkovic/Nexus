@@ -117,6 +117,12 @@ export interface TranslatorPacksView {
   readonly packs: readonly TranslatorPackView[];
 }
 
+export interface TranslatorRuntimeView {
+  readonly state: "absent" | "loading" | "resident" | "ejecting" | "error";
+  readonly model: NllbPackId | null;
+  readonly idleUnloadMinutes: number;
+}
+
 /** The translator's models, one pack per size (`docs/packs/nllb.md`); the user installs the one they want. */
 export const NLLB_PACK_IDS = ["nllb-600m", "nllb-1300m", "nllb-3300m"] as const;
 export type NllbPackId = (typeof NLLB_PACK_IDS)[number];
@@ -156,6 +162,10 @@ interface TranslationPayload {
   jobId: string;
 }
 
+interface ModelPayload {
+  packId: NllbPackId;
+}
+
 type TranslatorOps = {
   status: { request: Record<string, never>; response: TranslatorStatusView };
   search: { request: SearchPayload; response: TranslatorSearchView };
@@ -165,6 +175,9 @@ type TranslatorOps = {
   translate: { request: TranslatePayload; response: { readonly jobId: string } };
   translation: { request: TranslationPayload; response: TranslationView };
   cancelTranslation: { request: TranslationPayload; response: null };
+  runtime: { request: Record<string, never>; response: TranslatorRuntimeView };
+  loadModel: { request: ModelPayload; response: TranslatorRuntimeView };
+  ejectModel: { request: Record<string, never>; response: TranslatorRuntimeView };
 };
 
 /** This module's renderer API: one method per op, named after the op. */
@@ -182,6 +195,9 @@ export const contract = defineModuleContract<"translator", TranslatorOps>("trans
   "translate",
   "translation",
   "cancelTranslation",
+  "runtime",
+  "loadModel",
+  "ejectModel",
 ]);
 
 /**

@@ -76,6 +76,15 @@
   display: flex;
   flex-direction: column;
 }
+.boards__list .nx-list-row__content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--nx-space-2);
+}
+.boards__list .boards__row-name {
+  margin-inline-end: 0;
+}
 
 .boards__label {
   font-weight: var(--nx-font-weight-medium);

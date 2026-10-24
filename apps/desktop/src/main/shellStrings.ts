@@ -60,6 +60,8 @@ export interface ShellStrings {
   zimDialogTitle: string;
   zimFilterName: string;
   defaultAccountLabel: string;
+  defaultPersonalProfileName: string;
+  defaultBusinessProfileName: string;
   noteCopySuffix: string;
   backupProfileSlugFallback: string;
   cardPdfFilterName: string;
@@ -153,6 +155,9 @@ const SR: ShellStrings = {
    */
   zimDialogTitle: "Izaberi ZIM datoteku",
   zimFilterName: "ZIM datoteke",
+  /** The persisted name of a first-run or newly created profile whose name is blank. */
+  defaultPersonalProfileName: "Lični profil",
+  defaultBusinessProfileName: "Poslovni profil",
   /**
    * The label given to an account nobody named (`accounts.ts`'s
    * `defaultAccountLabel`, ADR-044 section 3) - renameable from the picker, so
@@ -193,6 +198,8 @@ const EN: ShellStrings = {
     "The NexusData folder beside the program is read-only, so Nexus cannot keep your data on this computer. Copy Nexus to a disk or a USB stick that can be written to, then start it again.",
   zimDialogTitle: "Choose a ZIM file",
   zimFilterName: "ZIM files",
+  defaultPersonalProfileName: "Personal profile",
+  defaultBusinessProfileName: "Work profile",
   defaultAccountLabel: "My account",
   noteCopySuffix: " (copy)",
   backupProfileSlugFallback: "profile",

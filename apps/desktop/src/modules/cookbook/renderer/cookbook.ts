@@ -1,6 +1,11 @@
-import { type CookbookCourse, type IngredientUnit, scaleIngredients } from "@nexus/core";
+import {
+  foldSearchText,
+  type CookbookCourse,
+  type IngredientUnit,
+  scaleIngredients,
+} from "@nexus/core";
 import { numberFormat } from "../../../renderer/src/intl.js";
-import type { RecipeIngredientView, RecipeView } from "../shared/ipc.js";
+import type { RecipeIngredientView, RecipeSummaryView, RecipeView } from "../shared/ipc.js";
 import { copy } from "./copy.js";
 
 /**
@@ -134,4 +139,66 @@ export function totalMinutes(
 export function stepIndex(index: number, delta: number, total: number): number {
   if (total <= 0) return 0;
   return Math.min(total - 1, Math.max(0, index + delta));
+}
+
+export interface RecipeFilters {
+  readonly course: CookbookCourse | null;
+  readonly tag: string | null;
+  readonly collectionIds: ReadonlySet<string> | null;
+  readonly favouriteOnly: boolean;
+  readonly source: RecipeSummaryView["source"] | null;
+  readonly completeness: "complete" | "missing" | null;
+}
+
+export const EMPTY_RECIPE_FILTERS: RecipeFilters = {
+  course: null,
+  tag: null,
+  collectionIds: null,
+  favouriteOnly: false,
+  source: null,
+  completeness: null,
+};
+
+export function hasRecipeFilters(filters: RecipeFilters): boolean {
+  return (
+    filters.course !== null ||
+    filters.tag !== null ||
+    filters.collectionIds !== null ||
+    filters.favouriteOnly ||
+    filters.source !== null ||
+    filters.completeness !== null
+  );
+}
+
+export function filterRecipes(
+  recipes: readonly RecipeSummaryView[],
+  filters: RecipeFilters,
+): RecipeSummaryView[] {
+  const tag = filters.tag === null ? null : foldSearchText(filters.tag);
+  return recipes.filter((recipe) => {
+    if (filters.collectionIds !== null && !filters.collectionIds.has(recipe.id)) return false;
+    if (filters.course !== null && recipe.course !== filters.course) return false;
+    if (
+      tag !== null &&
+      !recipe.tags.some((candidate) => foldSearchText(candidate) === tag)
+    ) {
+      return false;
+    }
+    if (filters.favouriteOnly && !recipe.favourite) return false;
+    if (filters.source !== null && recipe.source !== filters.source) return false;
+    if (
+      filters.completeness === "complete" &&
+      (!recipe.hasIngredients || !recipe.hasSteps)
+    ) {
+      return false;
+    }
+    if (
+      filters.completeness === "missing" &&
+      recipe.hasIngredients &&
+      recipe.hasSteps
+    ) {
+      return false;
+    }
+    return true;
+  });
 }

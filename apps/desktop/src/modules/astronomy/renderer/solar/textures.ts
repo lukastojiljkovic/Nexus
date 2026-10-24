@@ -37,6 +37,10 @@ export interface PlanetTextureSet {
 
 export interface PlanetTextures {
   readonly layout: 1;
+  readonly sky?: {
+    readonly image: string;
+    readonly credit: string;
+  };
   readonly bodies: Readonly<Partial<Record<BodyId, PlanetTextureSet>>>;
 }
 
@@ -48,10 +52,13 @@ export interface LoadedBodyTextures {
   readonly rings: THREE.Texture | null;
 }
 
-export type LoadedTextures = Readonly<Partial<Record<BodyId, LoadedBodyTextures>>>;
+export interface LoadedTextures {
+  readonly bodies: Readonly<Partial<Record<BodyId, LoadedBodyTextures>>>;
+  readonly sky: THREE.Texture | null;
+}
 
 /** Which image of a body a callback is about. */
-export type PlanetTextureSlot = "day" | "night" | "rings";
+export type PlanetTextureSlot = "day" | "night" | "rings" | "sky";
 
 /**
  * How an image becomes a texture. `TextureLoader.load` answers immediately with
@@ -90,11 +97,11 @@ export function loadPlanetTextures(
   textures: PlanetTextures | null,
   port: TexturePort,
   resources: SceneResources,
-  onLoaded: (id: BodyId, slot: PlanetTextureSlot) => void,
-  onFailed: (id: BodyId, slot: PlanetTextureSlot) => void,
+  onLoaded: (id: BodyId | null, slot: PlanetTextureSlot) => void,
+  onFailed: (id: BodyId | null, slot: PlanetTextureSlot) => void,
 ): LoadedTextures {
   const loaded: Partial<Record<BodyId, LoadedBodyTextures>> = {};
-  if (textures === null) return loaded;
+  if (textures === null) return { bodies: loaded, sky: null };
   for (const id of BODY_ORDER) {
     const set = textures.bodies[id];
     if (set === undefined) continue;
@@ -110,17 +117,29 @@ export function loadPlanetTextures(
           : loadOne(id, "rings", set.rings, port, resources, onLoaded, onFailed),
     };
   }
-  return loaded;
+  const sky =
+    textures.sky === undefined
+      ? null
+      : loadOne(
+          null,
+          "sky",
+          textures.sky.image,
+          port,
+          resources,
+          onLoaded,
+          onFailed,
+        );
+  return { bodies: loaded, sky };
 }
 
 function loadOne(
-  id: BodyId,
+  id: BodyId | null,
   slot: PlanetTextureSlot,
   url: string,
   port: TexturePort,
   resources: SceneResources,
-  onLoaded: (id: BodyId, slot: PlanetTextureSlot) => void,
-  onFailed: (id: BodyId, slot: PlanetTextureSlot) => void,
+  onLoaded: (id: BodyId | null, slot: PlanetTextureSlot) => void,
+  onFailed: (id: BodyId | null, slot: PlanetTextureSlot) => void,
 ): THREE.Texture {
   const texture = port.load(
     url,

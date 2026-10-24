@@ -441,7 +441,15 @@ export function createModelHost(deps: ModelHostDeps): ModelHost {
     loadedChat = null;
     loadedEmbedder = null;
     streaming.clear();
-    await send((seq) => ({ v: PROTOCOL_VERSION, kind: "unload", seq }));
+    try {
+      await send((seq) => ({ v: PROTOCOL_VERSION, kind: "unload", seq }));
+    } catch (error) {
+      // Application shutdown can end the utility process before its unload
+      // acknowledgement reaches main. The memory is already released; treating
+      // that expected race as a failed unload only produces a false error.
+      if (port === null && error instanceof RuntimeError && error.code === "worker") return;
+      throw error;
+    }
   }
 
   return {

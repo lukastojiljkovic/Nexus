@@ -66,6 +66,19 @@ describe("ZimReader over openZIM's Wikibooks fixture", () => {
     }
   });
 
+  it("pages image entries from the media namespace for Gallery", () => {
+    const reader = ZimReader.open(FIXTURE);
+    try {
+      const page = reader.imagesAfter(0, 10, 500);
+      expect(page.entries.length).toBeGreaterThan(0);
+      expect(page.entries.every((entry) => entry.mimetype.startsWith("image/"))).toBe(true);
+      expect(page.entries.some((entry) => entry.zimPath === "I/favicon.png")).toBe(true);
+      expect(page.nextIndex).toBeGreaterThan(0);
+    } finally {
+      reader.close();
+    }
+  });
+
   it("finds an entry by its title, through the title pointer list", () => {
     const reader = ZimReader.open(FIXTURE);
     try {

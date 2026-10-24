@@ -195,6 +195,8 @@ export function register(host: ModuleHostSurface): void {
       favourite: recipe.favourite,
       source: recipe.source,
       hasPhoto: recipe.photo !== null,
+      hasIngredients: recipe.ingredients.length > 0,
+      hasSteps: recipe.steps.length > 0,
       updatedAt: recipe.updatedAt,
     };
   }

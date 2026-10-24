@@ -111,6 +111,8 @@ export interface BuiltSolarBody {
 
 export interface BuiltSolarScene {
   readonly root: THREE.Group;
+  /** An inward-facing equirectangular sky behind every body, when the pack carries one. */
+  readonly sky: THREE.Mesh | null;
   readonly bodies: readonly BuiltSolarBody[];
   readonly sunLight: THREE.PointLight;
   readonly resources: SceneResources;
@@ -191,6 +193,23 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
   root.add(sunLight);
   root.add(new THREE.AmbientLight(WHITE, AMBIENT_INTENSITY));
 
+  let sky: THREE.Mesh | null = null;
+  if (textures?.sky != null) {
+    const skyGeometry = resources.track(new THREE.SphereGeometry(500_000, 64, 32));
+    const skyMaterial = resources.track(
+      new THREE.MeshBasicMaterial({
+        map: textures.sky,
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+      }),
+    );
+    sky = new THREE.Mesh(skyGeometry, skyMaterial);
+    sky.renderOrder = -1;
+    sky.frustumCulled = false;
+    root.add(sky);
+  }
+
   const bodiesById = new Map(input.snapshot.bodies.map((body) => [body.id, body]));
   const orbitsByBody = new Map<BodyId, THREE.Line>();
   const orbitParents = new Map<BodyId, BodyId>();
@@ -234,7 +253,7 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
   const bodies: BuiltSolarBody[] = [];
   for (const body of input.snapshot.bodies) {
     const isSun = body.id === "sun";
-    const forBody = textures?.[body.id] ?? null;
+    const forBody = textures?.bodies[body.id] ?? null;
     const dayMap = forBody?.day ?? null;
 
     // The Sun is its own light: a lit material on it would be lit from inside
@@ -304,6 +323,7 @@ export function buildSolarScene(input: SolarSceneInput): BuiltSolarScene {
 
   const scene: BuiltSolarScene = {
     root,
+    sky,
     bodies,
     sunLight,
     resources,
@@ -422,6 +442,15 @@ export function dropTexture(scene: BuiltSolarScene, id: BodyId, slot: TextureSlo
   }
   material.map = null;
   material.color.set(id === "sun" ? scene.palette.sun : scene.palette.body);
+  material.needsUpdate = true;
+}
+
+/** Hides a sky map that failed to decode; the token-coloured surface returns. */
+export function dropSkyTexture(scene: BuiltSolarScene): void {
+  if (scene.sky === null) return;
+  scene.sky.visible = false;
+  const material = scene.sky.material as THREE.MeshBasicMaterial;
+  material.map = null;
   material.needsUpdate = true;
 }
 

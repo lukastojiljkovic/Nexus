@@ -46,7 +46,10 @@ function s(): typeof strings.settings {
  * states.
  */
 const REGISTRY = createModuleRegistry();
-const VISIBLE = visibleModuleSet(REGISTRY, DEFAULT_SHELL_VISIBILITY);
+const VISIBLE = visibleModuleSet(REGISTRY, {
+  ...DEFAULT_SHELL_VISIBILITY,
+  hidden: ["priv", "pro"],
+});
 const INDEX = buildSettingsIndex(REGISTRY, VISIBLE);
 const ENTRIES = INDEX.entries;
 /** The sections a DISCOVERED module claims for its own card (ADR-090): its module id, which is by definition not a key of the shell's `sectionTitle`. */

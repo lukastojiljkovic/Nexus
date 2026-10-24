@@ -1,0 +1,98 @@
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+}
+.gallery__filters,
+.gallery__reference {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--nx-space-3);
+  margin-block-end: var(--nx-space-3);
+}
+.gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--nx-space-3);
+}
+.gallery__tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--nx-space-1);
+  padding: 0;
+  border: 1px solid var(--nx-border-subtle);
+  border-radius: var(--nx-radius-lg);
+  overflow: hidden;
+  background: var(--nx-surface-raised);
+  color: var(--nx-text);
+  text-align: start;
+  cursor: pointer;
+}
+.gallery__tile:hover {
+  border-color: var(--nx-accent);
+}
+.gallery__tile:focus-visible,
+.gallery__file-button:focus-within {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+.gallery__tile img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--nx-surface-sunken);
+  transition: transform var(--nx-motion-fast) var(--nx-motion-ease);
+}
+.gallery__tile:hover img {
+  transform: scale(1.015);
+}
+.gallery__tile-title,
+.gallery__source {
+  padding-inline: var(--nx-space-2);
+}
+.gallery__tile-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nx-font-weight-semibold);
+}
+.gallery__source {
+  padding-block-end: var(--nx-space-2);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-font-size-caption);
+}
+.gallery__file-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2rem;
+  padding-inline: var(--nx-space-3);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-accent);
+  color: var(--nx-bg);
+  font-weight: var(--nx-font-weight-semibold);
+  cursor: pointer;
+}
+.gallery__file-button input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+.gallery__file-button:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+.gallery__viewer {
+  display: block;
+  max-inline-size: 100%;
+  max-block-size: 70vh;
+  margin: 0 auto var(--nx-space-3);
+  object-fit: contain;
+}
+.gallery__error {
+  margin: 0;
+  color: var(--nx-danger);
+}

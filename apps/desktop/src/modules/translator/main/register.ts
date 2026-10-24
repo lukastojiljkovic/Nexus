@@ -14,7 +14,7 @@ import {
 import { languageByCode, type NllbLanguage } from "../shared/languages.js";
 import { createDictionaryReader } from "./dictionary.js";
 import { createNllbHost, type NllbHost } from "./nllb/host.js";
-import { TranslationJobs } from "./nllb/jobs.js";
+import { IDLE_UNLOAD_MS, TranslationJobs } from "./nllb/jobs.js";
 import { NLLB_WORKER_ENTRY } from "./nllb/workerEntry.js";
 import { installedPacksRoot } from "./packDir.js";
 
@@ -48,7 +48,52 @@ export function register(host: ModuleHostSurface): void {
   // Started on the first translation, not at registration: most sessions never
   // open the translator, and the worker costs a process.
   let worker: NllbHost | null = null;
-  const jobs = new TranslationJobs(() => (worker ??= createNllbHost(NLLB_WORKER_ENTRY)), randomUUID);
+  let residentPackId: NllbPackId | null = null;
+  let pendingPackId: NllbPackId | null = null;
+  const hostFactory = (): NllbHost => (worker ??= createNllbHost(NLLB_WORKER_ENTRY));
+  const disposeHost = (): void => {
+    const current = worker;
+    worker = null;
+    current?.dispose();
+  };
+  const jobs = new TranslationJobs(
+    hostFactory,
+    randomUUID,
+    () => {
+      residentPackId = null;
+      pendingPackId = null;
+    },
+    (state) => {
+      if (state === "resident") residentPackId = pendingPackId;
+      else if (state === "absent" || state === "error") residentPackId = null;
+    },
+    disposeHost,
+  );
+
+  function runtime(): {
+    state: "absent" | "loading" | "resident" | "ejecting" | "error";
+    model: NllbPackId | null;
+    idleUnloadMinutes: number;
+  } {
+    return {
+      state: jobs.runtimeState(),
+      model: residentPackId,
+      idleUnloadMinutes: IDLE_UNLOAD_MS / 60_000,
+    };
+  }
+
+  function packDirectory(packId: NllbPackId): string {
+    const access = ctx.packs();
+    const installed = readInstalled(access.userData(), access.publicKeyPem).find(
+      (entry) => entry.manifest.id === packId,
+    );
+    if (installed === undefined) throw new Error(`The translator model "${packId}" is not installed.`);
+    return packVersionDir(access.userData(), packId, installed.manifest.version);
+  }
+
+  ctx.onSessionEnd(() => {
+    jobs.eject();
+  });
 
   ctx.handle("status", (payload, call) => {
     // The payload is empty by contract, and it is still validated: a channel
@@ -98,6 +143,26 @@ export function register(host: ModuleHostSurface): void {
     } satisfies TranslatorPacksView;
   });
 
+  ctx.handle("runtime", (payload, call) => {
+    call.as.asRecord(payload);
+    return runtime();
+  });
+
+  ctx.handle("loadModel", async (payload, call) => {
+    const record = call.as.asRecord(payload);
+    const packId = nllbPackOf(record["packId"]);
+    pendingPackId = packId;
+    residentPackId = null;
+    await jobs.load(packDirectory(packId));
+    return runtime();
+  });
+
+  ctx.handle("ejectModel", (payload, call) => {
+    call.as.asRecord(payload);
+    jobs.eject();
+    return runtime();
+  });
+
   /**
    * A translation with an installed NLLB pack. The page names the pack by id,
    * and main finds its folder in the registry: a path never crosses the wire.
@@ -116,12 +181,9 @@ export function register(host: ModuleHostSurface): void {
     if (source.code === target.code) {
       throw new Error('Invalid IPC payload: "source" and "target" must be two languages.');
     }
-    const access = ctx.packs();
-    const installed = readInstalled(access.userData(), access.publicKeyPem).find(
-      (entry) => entry.manifest.id === packId,
-    );
-    if (installed === undefined) throw new Error(`The translator model "${packId}" is not installed.`);
-    const directory = packVersionDir(access.userData(), packId, installed.manifest.version);
+    const directory = packDirectory(packId);
+    pendingPackId = packId;
+    if (residentPackId !== packId) residentPackId = null;
     return { jobId: jobs.start({ directory, text, source, target }) };
   });
 

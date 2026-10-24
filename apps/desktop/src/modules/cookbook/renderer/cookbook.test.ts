@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { RecipeIngredientView } from "../shared/ipc.js";
+import type { RecipeIngredientView, RecipeSummaryView } from "../shared/ipc.js";
 import {
   clampServings,
   courseLabel,
   formatAmount,
   formatTime,
+  filterRecipes,
   lineText,
   scaleLines,
   stepIndex,
@@ -145,5 +146,68 @@ describe("stepIndex", () => {
     expect(stepIndex(0, -1, 4)).toBe(0);
     // A recipe with no steps has no step to point at.
     expect(stepIndex(0, 1, 0)).toBe(0);
+  });
+});
+
+function summary(overrides: Partial<RecipeSummaryView> = {}): RecipeSummaryView {
+  return {
+    id: "recipe-1",
+    title: "Sarma",
+    course: "main",
+    cuisine: "",
+    servings: 4,
+    prepMinutes: null,
+    cookMinutes: null,
+    tags: ["zima"],
+    favourite: false,
+    source: "own",
+    hasPhoto: false,
+    hasIngredients: true,
+    hasSteps: true,
+    updatedAt: "2026-10-24T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("recipe filters", () => {
+  const rows = [
+    summary(),
+    summary({ id: "recipe-2", course: "dessert", tags: ["Zima"], favourite: true, source: "imported" }),
+    summary({ id: "recipe-3", hasSteps: false }),
+  ];
+
+  it("combines every filter with the rows already found by search", () => {
+    const filtered = filterRecipes(rows, {
+      course: "main",
+      tag: "zima",
+      collectionIds: new Set(["recipe-1"]),
+      favouriteOnly: false,
+      source: "own",
+      completeness: "complete",
+    });
+    expect(filtered.map((recipe) => recipe.id)).toEqual(["recipe-1"]);
+  });
+
+  it("matches tags without case or diacritic dependence and identifies incomplete recipes", () => {
+    expect(
+      filterRecipes(rows, {
+        course: null,
+        tag: "ZIMA",
+        collectionIds: null,
+        favouriteOnly: true,
+        source: "imported",
+        completeness: "missing",
+      }),
+    ).toEqual([]);
+    expect(
+      filterRecipes(rows, {
+        course: null,
+        tag: null,
+        collectionIds: null,
+        favouriteOnly: false,
+        source: null,
+        completeness: "missing",
+      }).map((recipe) => recipe.id),
+    ).toEqual(["recipe-3"]);
   });
 });

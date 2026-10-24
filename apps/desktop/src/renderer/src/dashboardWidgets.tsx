@@ -19,7 +19,7 @@ import type { IconName } from "@nexus/ui";
 import { FIT_MEAL_SLOTS } from "../../shared/ipc.js";
 import { NOTIFICATION_SOURCE_MODULE } from "../../shared/notificationModules.js";
 import { createModuleRegistry } from "../../shared/modules.js";
-import { packInventory, resolvePackSelection } from "../../shared/onboardingPresets.js";
+import { packInventory, resolvePackSelection } from "../../shared/modulePresets.js";
 import type { Event, Exam, Subject } from "../../shared/ipc.js";
 import { buildCalendarItems } from "./calendarItems.js";
 import type { CalendarItem, CalendarSource } from "./calendarItems.js";
