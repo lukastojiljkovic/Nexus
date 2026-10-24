@@ -3,14 +3,14 @@
  * `SHA256SUMS.txt`.
  *
  * The private half lives only in `NEXUS_RELEASE_SIGNING_KEY`, a secret of the
- * repository's `release` environment (which admits `v*` tags only), and in the
- * maintainer's offline backup. The release workflow signs with it and checks
- * the signature against this key before it uploads anything. An update
- * check trusts a downloaded installer only when its hash is listed in a
- * `SHA256SUMS.txt` this key verifies, so replacing the key is a release of its
- * own, recorded in an ADR.
+ * repository's `release` environment (which admits `v*` tags only). The release
+ * workflow signs with it and checks the signature against this key before it
+ * uploads anything. An update check trusts a downloaded installer only when its
+ * hash is listed in a `SHA256SUMS.txt` this key verifies. ADR-121 records the
+ * 3.0.0 replacement of the original key; that release is the one-time manual
+ * upgrade from installations that only trust the original key.
  */
 export const RELEASE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAatKmMRuiiEocwXINUthuLw68lNNl+QAkmGV8a0hxO0k=
+MCowBQYDK2VwAyEAvj/NbrP8XrnmIjrn/+A1B6egKYavpwZszFJntNS+OQM=
 -----END PUBLIC KEY-----
 `;

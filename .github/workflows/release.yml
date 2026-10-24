@@ -236,6 +236,9 @@ jobs:
             echo "- Nexus is **offline by default**. On first start you choose one of three modes: **Offline only**, which makes no network call at all; **Offline + update checks**, which contacts GitHub only to check for and download a new version of Nexus; or **Offline + update checks + downloads**, which adds the downloads you start yourself — content packs, Wikipedia libraries and models — only from addresses built into the app, each checked before Nexus uses it. Your notes and data never leave the computer in any mode."
             echo "- Sync is **off by default and unreachable in this build**: no backend project is compiled in."
             echo "- Each installer is covered by \`SHA256SUMS.txt\` and its detached Ed25519 signature \`SHA256SUMS.txt.sig\`. Before it runs an update, Nexus checks the signature against a key compiled into the app and the installer's hash against the signed list."
+            if [ "${GITHUB_REF_NAME}" = "v3.0.0" ]; then
+              echo "- **Upgrading from 2.5.0 or earlier requires one manual download.** The 3.0.0 release rotates the release-signing key, so older installations cannot verify it as an in-app update. Download and install 3.0.0 once; later updates use the new key. See ADR-121."
+            fi
             echo
             echo "### Toolchain"
             echo

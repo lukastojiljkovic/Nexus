@@ -1,11 +1,12 @@
 # GitHub repository settings (web UI)
 
-**Status: the repository is public, and every setting below was applied on
-2026-10-05, except the release environment and the last section.** They live only in the GitHub web UI and
+**Status: the repository is public. The general settings were applied on
+2026-10-05, and the release environment was completed with tag protection and
+the rotated 3.0 key on 2026-10-24.** They live only in the GitHub web UI and
 its API. The in-repo half — CI, the security, CodeQL, Scorecard, release and
 Pages workflows, the Dependabot config, the pull-request template and
-CODEOWNERS — is committed under `.github/`. Run this list once before the first
-release and again after any change to the repository's settings.
+CODEOWNERS — is committed under `.github/`.
+Run this list again after any change to the repository's settings.
 
 ## Repository
 
@@ -49,11 +50,14 @@ release and again after any change to the repository's settings.
 
 ## Release signing key — Settings → Environments
 
-- [ ] Environment `release`, limited to tags matching `v*`: the `sign` job in
+- [x] Environment `release`, limited to tags matching `v*`: the `sign` job in
       `release.yml` declares it, and it is the only job that reads the key
-- [ ] `NEXUS_RELEASE_SIGNING_KEY` as a secret of `release`, then the
+- [x] `NEXUS_RELEASE_SIGNING_KEY` as a secret of `release`, then the
       repository-level secret of that name deleted (it was set there on
       2026-10-07, before the environment existed)
+- [x] The 3.0.0 value is the rotated key recorded by
+      [ADR-121](../architecture/adr/121-release-key-rotation.md). The retired
+      secret must not be restored.
 
 ## Later, when relevant
 

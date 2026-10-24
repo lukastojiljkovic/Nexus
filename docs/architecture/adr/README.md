@@ -132,3 +132,4 @@ directory is the decision log behind it.
 | [118](118-maps-cut-from-the-planet-build.md) | Maps cut from the planet build: any territory, a continent or the world, at three details (uses ADR-090, ADR-098) | Accepted; amends ADR-099 and ADR-092 | 2026-10-23 |
 | [119](119-translator-on-nllb.md) | The translator runs NLLB-200: three model packs, a process of its own, a sentence at a time (uses ADR-091, ADR-105, ADR-117) | Accepted; replaces the Bergamot sentence translator, which no ADR recorded | 2026-10-23 |
 | [120](120-optional-account-passcode.md) | Optional account passcode and the no-vault fallback | Accepted; amends ADR-018 | 2026-10-24 |
+| [121](121-release-key-rotation.md) | Rotate the release key for 3.0.0 | Accepted; amends ADR-089 §3 and ADR-091 signing | 2026-10-24 |
