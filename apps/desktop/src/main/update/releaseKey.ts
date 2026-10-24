@@ -14,3 +14,20 @@ export const RELEASE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAvj/NbrP8XrnmIjrn/+A1B6egKYavpwZszFJntNS+OQM=
 -----END PUBLIC KEY-----
 `;
+
+/**
+ * The retired key remains a content-pack verifier for the manifests already
+ * published under it. It is never consulted by the updater and never receives a
+ * new signature. ADR-121 records why this compatibility boundary is narrower
+ * than reusing the key for releases.
+ */
+export const LEGACY_PACK_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAatKmMRuiiEocwXINUthuLw68lNNl+QAkmGV8a0hxO0k=
+-----END PUBLIC KEY-----
+`;
+
+/**
+ * Content-pack verification accepts either key; the signed catalogue and every
+ * update use `RELEASE_PUBLIC_KEY_PEM` alone.
+ */
+export const PACK_PUBLIC_KEYRING_PEM = `${RELEASE_PUBLIC_KEY_PEM}${LEGACY_PACK_PUBLIC_KEY_PEM}`;

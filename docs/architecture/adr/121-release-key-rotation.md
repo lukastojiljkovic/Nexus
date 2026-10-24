@@ -26,7 +26,10 @@ verified or bypass the verification already present in installed clients. The
    workflow's existing signature-versus-compiled-key check.
 4. Restrict the `release` environment to `v*` tag deployments. The signing job
    verifies its signature against the compiled public key before uploading.
-5. Sign the 3.0.0 installers, the rebuilt planet-texture and Whisper manifests,
+5. Keep the retired public key only as a content-pack verifier. Published pack
+   manifests remain installable, while the updater and every catalogue signature
+   use the new key alone.
+6. Sign the 3.0.0 installers, the rebuilt planet-texture and Whisper manifests,
    and the catalogue with the new key.
 
 ## Consequences
@@ -36,17 +39,17 @@ verified or bypass the verification already present in installed clients. The
   users on 2.5.0 and earlier download 3.0.0 once by hand.
 - Future 3.0.x updates verify against the new compiled key and use the ordinary
   in-app update path.
-- Content packs signed with the retired key must be re-signed. Release and
-  catalogue publication stay blocked until every published artifact verifies
-  against the new key.
+- Existing content packs remain installable through the retired public key in
+  the app's pack keyring. Newly built or replaced manifests, and the catalogue,
+  are signed with the new key.
 - Losing the new private key repeats the same manual-upgrade boundary. The
   maintainer keeps the offline backup described by ADR-089.
 
 ## Alternatives rejected
 
-- **Trust both keys indefinitely.** The old private half cannot sign anything,
-  and retaining it in the updater would expand the trust set without preserving
-  a working upgrade path.
+- **Trust both keys in the updater.** The old private half cannot sign a
+  transitional update, and retaining it there would expand the update trust set
+  without preserving a working path.
 - **Publish a transitional 2.5.1 signed by the old key.** No matching private
   key exists, so this cannot be done.
 - **Disable signature verification for one release.** That converts a key-loss

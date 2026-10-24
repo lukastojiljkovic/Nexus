@@ -72,8 +72,9 @@ astronomy, Gallery, translator memory and content-pack downloads.
 - **The release-signing key is rotated for 3.0.0.** The original private key is
   no longer available, so installed 2.5.0 and earlier copies cannot verify this
   release as an in-app update. Download 3.0.0 once by hand; later updates use
-  the new key (ADR-121). Pack manifests and the catalogue are re-signed with the
-  same key.
+  the new key (ADR-121). The new catalogue and rebuilt pack manifests use the
+  new key; existing pack manifests stay installable through the app's
+  content-pack-only legacy keyring.
 - **undici 6.29.1**, replacing 6.29.0 for
   GHSA-xjj6-f33q-929c. The affected copy is build-time only through
   electron-builder and `node-gyp`; the direct Electron download uses 7.x, which

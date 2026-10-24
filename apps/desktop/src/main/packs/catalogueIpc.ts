@@ -42,6 +42,8 @@ export interface PackCatalogueIpcDeps {
   readonly userData: string;
   readonly appVersion: string;
   readonly publicKeyPem: string;
+  /** The current release key alone; absent in tests that use one key for everything. */
+  readonly cataloguePublicKeyPem?: string | undefined;
   /** The mode this launch may ACT on, never the stored file. */
   readonly mode: () => NetworkMode;
   readonly http: DownloadHttp;
@@ -118,7 +120,7 @@ export function isUsableEntry(entry: Pick<PackCatalogueEntry, "minAppVersion">, 
 export function createPackCatalogueIpc(deps: PackCatalogueIpcDeps): PackCatalogueIpc {
   const client = createCatalogueClient({
     http: deps.http,
-    publicKeyPem: deps.publicKeyPem,
+    publicKeyPem: deps.cataloguePublicKeyPem ?? deps.publicKeyPem,
     hosts: deps.hosts,
     isAllowedUrl: deps.isAllowedUrl,
     mode: deps.mode,
