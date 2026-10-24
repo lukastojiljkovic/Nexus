@@ -18,11 +18,11 @@ Nexus is a desktop application that keeps your tasks, calendar, notes, documents
 | `nexus-<version>-linux-x64.tar.gz` | Linux x64 — the payload the Gentoo ebuild installs |
 | `Nexus-<version>-arm64.dmg` | macOS on Apple silicon — unsigned, so open it the first time with right-click → Open |
 
-Every release also carries `SHA256SUMS.txt` with its Ed25519 signature `SHA256SUMS.txt.sig`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app needs a running Secret Service keyring (gnome-keyring, KWallet, KeePassXC with Secret Service enabled); without one it refuses to create an account rather than weaken the key chain. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. The macOS build is unsigned and has no update path yet: a new version is installed by downloading the next `.dmg`.
+Every release also carries `SHA256SUMS.txt` with its Ed25519 signature `SHA256SUMS.txt.sig`, a CycloneDX SBOM, the rendered `THIRD-PARTY-NOTICES.md`, and build-provenance attestations. On Linux the app uses the Secret Service when one is available and falls back to an owner-only local guard when it is not. Code signing is paused for now, so SmartScreen warns on first run; the source is all here for anyone who wants to check what the installer does, and the attestations tie each file to the commit and workflow that built it. The macOS build is unsigned and has no update path yet: a new version is installed by downloading the next `.dmg`.
 
 ## What it does
 
-Forty modules in six groups, beside the **Dashboard** (today's agenda, upcoming tasks, expiring documents, exams and study time, from widgets you place yourself) and **Settings**. What the app shows is one device-level setting (ADR-101): hide a module, order the groups, order the rows.
+Forty-three modules in six groups, beside the **Dashboard** (today's agenda, upcoming tasks, expiring documents, exams and study time, from widgets you place yourself) and **Settings**. Every registered module is visible on a new install. What the app shows is one device-level setting (ADR-101): hide a module, order the groups, order the rows.
 
 The bold name is the label the interface ships in English; the code is the module id the registry uses.
 
@@ -31,7 +31,7 @@ The bold name is the label the interface ships in English; the code is the modul
 | Plan | **Tasks** (`tasks`) — lists, subtasks, recurrence and dependencies, as a list, a board, a calendar or a smart list, with reminders. **Calendar** (`calendar`) — month, week, day and agenda views, recurring events, and the documents whose expiry dates belong on it. **Habits** (`habits`), **Focus** (`focus`; one Pomodoro timer) and **Timers** (`timers`). |
 | Knowledge | **Notes** (`notes`) — folders, tags, backlinks, templates, version history and inline flashcards. **Files** (`files`) — attachments with preview and content search. **Study** (`study`) — exam countdowns, spaced repetition with Anki import, typeset maths, and a planner that books study time before each exam. **Reference** (`wiki`) — Wikipedia and other Kiwix libraries, read offline by the app's own ZIM reader. **Reader** (`reader`), **Translator** (`translator`), **Maps** (`maps`), **Astronomy** (`astronomy`), **Recorder** (`recorder`), and the **Assistant** (`assistant`) — a local model you choose, running in the app, that works in every module and asks before each change. |
 | Life | **Finance** (`finance`) — accounts, budgets and subscriptions, each currency kept separate, with CSV import. **Fitness** (`fitness`) — training, personal records and a food catalogue that names the source of every number. **Private** (`priv`) — notes encrypted with a Recovery Kit of their own. **Pantry** (`pantry`), **Cookbook** (`cookbook`), **Car** (`car`) and the **Emergency card** (`emergency`). |
-| Culture | **Library** (`library`) — the books, films and series you read and watch. **Culture** (`culture`) — museums, theatre, concerts and cinema. |
+| Culture | **Library** (`library`) — the books, films and series you read and watch. **Culture** (`culture`) — museums, theatre, concerts and cinema. **Gallery** (`gallery`) — art packs, images from downloaded References and your own encrypted pictures. |
 | Make | **Electronics** (`electronics`) — a wiring bench that derives an Arduino sketch, a ROS 2 package and a URDF from a circuit. **Board** (`canvas`), **Drawings** (`drawings`; DXF), **Workshop** (`workshop`; STL, G-code and Gerber), **Scanner** (`scanner`), **Calculator** (`calculator`), **Signals** (`signals`), **The Lab** (`lab`), **Mini apps** (`miniapps`), **Tools** (`tools`), and the opt-in **Professional tools** (`pro`). |
 | Play | **Cards** (`cards`; nine games), **Chess** (`chess`), **Board games** (`boards`), **Puzzles** (`puzzles`) and **Arcade** (`arcade`). |
 
@@ -42,7 +42,7 @@ Public content arrives as **content packs**: signed folders, each with its own l
 - **Local by default.** Your data is one encrypted SQLite database on your own device. The local path cannot reach the network, and that is enforced in CI rather than promised in copy.
 - **Offline is the default, and every connection is opt-in.** On first start Nexus asks whether it may use the network at all: **Offline only** makes no network call of any kind; **Offline + update checks** contacts GitHub for one purpose — checking for and downloading a new version of Nexus itself; **Downloads** adds the content you choose to fetch — content packs, map regions, Kiwix libraries and models from Hugging Face — each from a short, compiled-in list of hosts. Your notes and data never leave the computer. Updates and content packs are verified against a key compiled into the app. Change the mode any time in **Settings → Privacy → Network and updates**.
 - **No telemetry, no analytics, no crash reporting.**
-- **No account, no server, nothing leaves the device.** To move to another computer, export everything into one archive, protected with a password if you like, and import it there.
+- **No online account, no server, nothing leaves the device.** The local account may use a passcode or explicit device-convenience mode; Private notes always keep their own credential. To move to another computer, export everything into one archive, protected with a password if you like, and import it there.
 
 Read [PRIVACY.md](PRIVACY.md) for exactly what is stored where, and
 [SECURITY.md](SECURITY.md) to report a vulnerability privately.
@@ -190,7 +190,7 @@ attestations and the rendered third-party notices, and uploads them to a
 **draft** release for a human to publish.
 
 The full Linux guide — the AppImage's sandbox and FUSE behaviour, the keyring
-requirement, and installing the Gentoo overlay — is in
+fallback, and installing the Gentoo overlay — is in
 [apps/desktop/build/gentoo/README.md](apps/desktop/build/gentoo/README.md).
 
 ## Layout

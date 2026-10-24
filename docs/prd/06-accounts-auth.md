@@ -6,6 +6,12 @@ founder decisions #3/#4/#6, `docs/research/private-notes-crypto-ux.md`,
 SEC-SES, SEC-LOC, SEC-ZK-04, SEC-DAR-03 are binding constraints and are not
 restated as requirements here).
 
+> **Implemented state, 2026-10-24:** local accounts ship. Cloud accounts, sync,
+> sharing and the local-to-cloud upgrade remain parked. AUTH-002 and AUTH-004
+> are amended by [ADR-120](../architecture/adr/120-optional-account-passcode.md):
+> account creation opens the shell directly, and the account passcode is
+> optional. Private Notes keeps its own mandatory credential.
+
 ## 1. Purpose
 
 Every Nexus user starts here. AUTH provides two account types — instant,
@@ -32,11 +38,10 @@ privacy-first user and the founder (local, desktop) are primary for v0.
 
 ## 3. User experience & flows
 
-- **First launch:** welcome screen (ONB screen 1) offers "Počni odmah
-  (lokalno)" (primary), "Prijavi se" and "Napravi cloud nalog" (secondary).
-- **Local account creation:** name (display only) → PIN set (with strength
-  hint) → optional biometric enable (Android) → straight into onboarding.
-  No network, under 30 seconds.
+- **First launch:** choose or create a local account, then enter the shell.
+- **Local account creation:** account name → optional passcode → Recovery Kit
+  → shell. When the OS vault is unavailable, Nexus explains the owner-only
+  local guard and does not require a keyring. No network.
 - **Cloud registration:** nickname (live uniqueness check with suggestions)
   → email → password (strength meter, breached-password warning) → account
   created and usable immediately; verification email sent; a quiet banner
@@ -49,8 +54,9 @@ privacy-first user and the founder (local, desktop) are primary for v0.
 - **Forgot username:** enter email → uniform confirmation → email contains
   the nickname(s) registered to it.
 - **Profile switch:** profile tab at login; in-app switcher in the sidebar
-  footer — selecting the other profile prompts for password (PIN on local)
-  every time; a distinct accent/badge marks the active business profile.
+  footer — selecting another profile requires the account credential when one is
+  set, and is an explicit Open action in device-convenience mode; a distinct
+  accent/badge marks the active business profile.
 - **Local → cloud upgrade:** from Settings; creates a cloud account and
   migrates all local data into it (progress UI, verify-before-delete);
   original local data removed only after successful migration confirmation.
@@ -62,14 +68,16 @@ privacy-first user and the founder (local, desktop) are primary for v0.
   local, feature-equivalent except for network-dependent capabilities (sync,
   sharing, cloud backup, email flows).
 - **AUTH-002 (M)** Local account creation shall work fully offline with no
-  email, complete in a single short flow, and lead directly into onboarding.
+  email, complete in a single short flow, and lead directly into the shell.
 - **AUTH-003 (M)** Local accounts shall generate zero network traffic
   (SEC-LOC-04); the UI shall state this guarantee in plain language.
-- **AUTH-004 (M)** Local accounts shall be protected by a PIN (minimum 4
-  digits; longer numeric or alphanumeric passcodes allowed), stored and used
-  per SEC-LOC-01/02.
-- **AUTH-005 (M)** PIN change shall require the current PIN; forgotten-PIN
-  reset shall use the OS device credential per SEC-LOC-03.
+- **AUTH-004 (M)** An account passcode is optional. If set, it uses the current
+  passcode policy and SEC-LOC-01/02. Without one, the account is explicitly
+  described as device convenience, not as a secret-protected boundary.
+- **AUTH-005 (M)** Adding, changing or removing an account passcode shall require
+  proof of the current passcode, or the Recovery Kit when the system vault is
+  unavailable. A device-credential reset may use the OS credential where
+  SEC-LOC-03 provides one.
 - **AUTH-006 (S)** The system should support multiple local accounts per
   device with an account picker at launch.
 - **AUTH-007 (S)** A local account should be upgradeable to a cloud account
@@ -127,13 +135,15 @@ privacy-first user and the founder (local, desktop) are primary for v0.
   business profile with fully separate module data; only the calendar is
   shared, as an overlay with clear visual distinction of profile origin
   (founder decision #4).
-- **AUTH-024 (M)** Profile selection shall be available at login; in-app
-  switching shall require the account password (PIN for local accounts) on
-  every switch (founder decision #4).
+- **AUTH-024 (M)** Profile selection shall be available at login. In-app
+  switching shall require the account credential when one is set; a
+  device-convenience account uses an explicit Open action and never implies an
+  authentication boundary it does not have (ADR-120).
 - **AUTH-025 (S)** The active business profile should be visually
   distinguished app-wide (badge and/or distinct accent). *Additional idea.*
-- **AUTH-026 (S)** Each profile should have independent feature flags and
-  onboarding state (business mini-questionnaire on first entry — see ONB).
+- **AUTH-026 (S)** Each profile has independent data and preferences. Module
+  visibility and ordering are device-wide under ADR-101, and there is no
+  onboarding state or questionnaire on first entry.
 
 ## 5. Options & settings
 
@@ -143,7 +153,6 @@ per-profile accent; login notifications (on by default; per-channel in NTF).
 
 ## 6. Integrations
 
-ONB (welcome screen is ONB screen 1; business mini-questionnaire ONB-side);
 PRIV (Recovery Kit interplay at password reset — PRIV owns vault crypto);
 SET (profile editing, nickname change lives in SET but enforces AUTH-009
 uniqueness); NTF (security notifications); IMEX (export before deletion);

@@ -1,7 +1,6 @@
-import { TOOL_PACKS, buildNoteUpdate, packFlagKey, parseMarkdownNote } from "@nexus/core";
+import { TOOL_PACKS, packFlagKey } from "@nexus/core";
 import { describe, expect, it } from "vitest";
 
-import { NOTE_UPDATE_MAX_BYTES } from "../../shared/ipc.js";
 import { createModuleRegistry, LOCKED_MODULE_IDS } from "../../shared/modules.js";
 import {
   ESSENTIALS_MODULE_PRESET,
@@ -12,7 +11,7 @@ import {
   resolveModuleSelection,
   resolvePackSelection,
   selectableModuleIds,
-} from "../../shared/onboardingPresets.js";
+} from "../../shared/modulePresets.js";
 import { strings } from "./strings.js";
 
 /**
@@ -32,7 +31,7 @@ const registry = createModuleRegistry();
 const SELECTABLE = selectableModuleIds(registry).sort();
 const DECLARED_TOOLS = registry.all().flatMap((manifest) => manifest.tools ?? []);
 
-describe("the questionnaire's module tables cover exactly the registry", () => {
+describe("the preset tables cover exactly the registry", () => {
   it("offers every registered module except the locked pair", () => {
     expect(selectableModuleIds(registry)).toEqual(
       registry.all().map((manifest) => manifest.id).filter((id) => !LOCKED_MODULE_IDS.has(id)),
@@ -210,6 +209,7 @@ describe("resolveModuleSelection", () => {
       habits: true,
       fitness: true,
       focus: true,
+      gallery: true,
       tools: true,
       canvas: true,
       electronics: true,
@@ -328,6 +328,7 @@ describe("moduleFlagWrites", () => {
       { moduleId: "wiki", enabled: true },
       { moduleId: "translator", enabled: true },
       { moduleId: "assistant", enabled: true },
+      { moduleId: "gallery", enabled: true },
       { moduleId: "scanner", enabled: true },
       { moduleId: "workshop", enabled: true },
       // The arcade is off in Osnovno: PRD 31 keeps the entertainment section
@@ -373,27 +374,5 @@ describe("moduleFlagWrites", () => {
     expect(moduleFlagWrites(registry, partial, null).map((write) => write.moduleId)).not.toContain(
       "study",
     );
-  });
-});
-
-describe("the welcome note's copy (ADR-065 §4)", () => {
-  const welcome = strings.onboarding.welcomeNote;
-  const parsed = parseMarkdownNote(welcome.body, welcome.title);
-
-  it("parses to a real document filed under the title the note is named by", () => {
-    expect(parsed.title).toBe(welcome.title);
-    expect(parsed.blocks.length).toBeGreaterThan(1);
-  });
-
-  it("degrades nothing on the way in — it carries no image to land as bare text", () => {
-    expect(parsed.imagesAsText).toBe(0);
-  });
-
-  it("fits in ONE update, the cap the real creation path enforces", () => {
-    expect(buildNoteUpdate(parsed.blocks).byteLength).toBeLessThanOrEqual(NOTE_UPDATE_MAX_BYTES);
-  });
-
-  it("prints no keyboard chord — every one of them is remappable (ADR-040), so a printed one goes stale", () => {
-    expect(welcome.body).not.toMatch(/ctrl|alt|shift/i);
   });
 });

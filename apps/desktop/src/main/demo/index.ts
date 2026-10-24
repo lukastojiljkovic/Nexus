@@ -17,7 +17,7 @@
 import { TOOL_PACKS, packFlagKey } from "@nexus/core";
 import { SqliteFlagStore, TaskListStore } from "@nexus/db";
 import { mainLocale } from "../locale.js";
-import { BUSINESS_DISABLED_MODULE_IDS, createModuleRegistry } from "../../shared/modules.js";
+import { createModuleRegistry } from "../../shared/modules.js";
 import { seedDemoBusinessProfile } from "./business.js";
 import { seedDemoCanvas } from "./canvas.js";
 import { seedDemoElectronics } from "./electronics.js";
@@ -141,12 +141,8 @@ export async function seedDemoProfile(
  *
  * Two things make it a different profile rather than the same one twice:
  *
- *  - **The module set is the product's own answer**, not a demo invention:
- *    `BUSINESS_DISABLED_MODULE_IDS` is exactly what `handleProfilesCreate`
- *    writes for a real business profile, so „Učenje" is absent here for the
- *    same reason it is absent for anybody who creates one. Reading the shared
- *    set rather than restating it means a module added to that list is off
- *    here too, without anybody remembering to come back.
+ *  - **The module arrangement is the product's current answer**: every module
+ *    stays visible, exactly as it does when a real business profile is created.
  *  - **The rows are business rows** — clients, offers, invoices, VAT, an
  *    accountant — written by `business.ts`, which seeds six modules and
  *    deliberately not the four that belong to a person rather than to a
@@ -157,7 +153,7 @@ export async function seedDemoProfile(
  * it is a demo of thirteen modules.
  */
 export function seedDemoBusiness(db: DatabaseHandle, profileId: string, now: number): void {
-  enableEverything(new SqliteFlagStore(db, profileId), BUSINESS_DISABLED_MODULE_IDS);
+  enableEverything(new SqliteFlagStore(db, profileId), new Set());
   new TaskListStore(db, profileId).ensureInbox(new Date(now).toISOString());
   seedDemoBusinessProfile(db, createDemoContext(profileId, now, mainLocale()));
 }

@@ -50,6 +50,12 @@ A Whisper pack holds the quantised encoder and decoder
 `added_tokens.json`, `normalizer.json`, `vocab.json`, `merges.txt`). The voice
 pack holds `onnx/model_quantized.onnx` and its four tokenizer files.
 
+The card labels the three tiers by the trade-off they actually represent:
+`whisper-tiny` is the smallest, fastest and least accurate; `whisper-base` is
+the balanced recommendation; `whisper-small` is the highest-accuracy and
+slowest tier of these three. The model and pack ids remain unchanged, including
+`whisper-small`, so existing installations keep resolving to the same bytes.
+
 All four were built and hashed on 2026-10-10, and all three Whisper sizes were
 measured on the same audio: `ADR-105` §2 has the real-time factors, and it is
 where the reason for recommending `whisper-base` is written down.

@@ -136,13 +136,14 @@ export const AUDIT_SCRIPT = `(() => {
 
   function add(kind, el, other, amount) {
     const where = label(el);
-    const key = kind + "|" + where + "|" + label(other) + "|" + Math.round(amount);
+    const otherLabel = typeof other === "string" ? other : other === null ? "" : label(other);
+    const key = kind + "|" + where + "|" + otherLabel + "|" + Math.round(amount);
     if (seen.has(key)) return;
     seen.add(key);
     findings.push({
       kind: kind,
       where: where,
-      other: other ? label(other) : "",
+      other: otherLabel,
       amount: round1(amount),
       text: textOf(el),
     });
@@ -296,11 +297,16 @@ export const AUDIT_SCRIPT = `(() => {
     const clipsY = style.overflowY === "hidden" || style.overflowY === "clip";
     const ellipsised = style.textOverflow === "ellipsis";
     const lineClamped = style.webkitLineClamp && style.webkitLineClamp !== "none";
-    if (clipsX && !ellipsised && el.scrollWidth - el.clientWidth > 1) {
-      add("clipped-text", el, null, el.scrollWidth - el.clientWidth);
+    // The shell frame deliberately clips: its panes own the scrolling, and a
+    // scrollHeight measured on the frame includes content the visible scroller
+    // can reach. A finding here names the wrong element and no user-visible
+    // defect; the pane and its descendants are audited in their own iterations.
+    const shellFrame = el.classList.contains("nx-app") && el.classList.contains("app");
+    if (!shellFrame && clipsX && !ellipsised && el.scrollWidth - el.clientWidth > 1) {
+      add("clipped-text", el, "x", el.scrollWidth - el.clientWidth);
     }
-    if (clipsY && !lineClamped && el.scrollHeight - el.clientHeight > 1) {
-      add("clipped-text", el, null, el.scrollHeight - el.clientHeight);
+    if (!shellFrame && clipsY && !lineClamped && el.scrollHeight - el.clientHeight > 1) {
+      add("clipped-text", el, "y", el.scrollHeight - el.clientHeight);
     }
 
     // --- A child painting outside a parent that never asked to clip ---------

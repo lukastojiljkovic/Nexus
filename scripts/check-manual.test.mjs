@@ -199,7 +199,7 @@ describe("the cross-page rules", () => {
     expect(validateManual([page("sr", source), page("en", GOOD_EN)], vocabulary)).toEqual([]);
   });
 
-  it("refuses a Settings value that is not one of the eight categories", () => {
+  it("refuses a Settings value that is not one of the nine categories", () => {
     const source = GOOD_SR.replace("location: { module: tasks }", "location: { module: settings, settings: sync }");
     expect(validateManual([page("sr", source), page("en", GOOD_EN)], vocabulary)).toContainEqual(
       expect.objectContaining({ message: "location.settings `sync` is not a Settings category" }),
@@ -303,7 +303,7 @@ describe("the vocabulary the tree declares", () => {
     expect(kitModuleId(discovered)).toBe("timers");
   });
 
-  it("reads the eight Settings categories off the union they are typed by", () => {
+  it("reads the nine Settings categories off the union they are typed by", () => {
     const sections = readFileSync(
       join(REPO_ROOT, "apps", "desktop", "src", "shared", "settingsSections.ts"),
       "utf8",
@@ -313,6 +313,7 @@ describe("the vocabulary the tree declares", () => {
       "appearance",
       "keyboard",
       "modules",
+      "content-packs",
       "notifications",
       "data",
       "privacy",
@@ -322,10 +323,10 @@ describe("the vocabulary the tree declares", () => {
 
   it("counts sixteen compiled-in modules plus the discovered ones", () => {
     const vocabulary = knownVocabulary();
-    // 16 + 26 kit modules with a manifest (`modules/*/shared/manifest.ts`).
-    expect(vocabulary.moduleIds.size).toBe(42);
+    // 16 + 27 kit modules with a manifest (`modules/*/shared/manifest.ts`).
+    expect(vocabulary.moduleIds.size).toBe(43);
     expect(vocabulary.moduleIds.has("timers")).toBe(true);
-    expect(vocabulary.settingsCategories.size).toBe(8);
+    expect(vocabulary.settingsCategories.size).toBe(9);
   });
 
   it("keeps BUILT_IN_PAGES pinned to the shell constant it stands for", () => {
@@ -350,7 +351,7 @@ describe("the pages in this tree", () => {
     // page in both languages, and nothing is exempt today.
     expect(census.documented).toBe(census.moduleIds);
     expect(census.exempt).toBe(0);
-    expect(census.settingsCategories).toBe(8);
+    expect(census.settingsCategories).toBe(9);
   });
 });
 

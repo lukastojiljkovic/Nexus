@@ -4,6 +4,69 @@ All notable changes to this project are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-10-24
+
+This release removes the first-run questionnaire, makes the account passcode
+optional, and closes the v2.5.1 defect round across Linux startup, the cookbook,
+astronomy, Gallery, translator memory and content-pack downloads.
+
+### Added
+
+- **Gallery**, one searchable place for images from installed art packs, images
+  found in downloaded Reference libraries, and personal pictures imported into
+  encrypted local storage. Personal images have generated thumbnails, editable
+  metadata, a full viewer, delete confirmation and archive round-trip support.
+- **Translator model memory controls.** The Translate tab reports whether the
+  selected NLLB model is absent, loading, resident or ejecting, and can load,
+  translate and eject it explicitly. Ejecting terminates its worker and releases
+  the memory.
+- **Determinate content-pack downloads.** Downloads now show byte progress,
+  received and total bytes, speed, elapsed time and file count, beside pause,
+  resume and cancel.
+- **A Milky Way sky and a textured Pluto** in the `planet-textures` pack and the
+  solar-system view.
+- **Cookbook filters that combine with search:** course, tag, collection,
+  favourite, source and completeness.
+
+### Changed
+
+- **Accounts may have no passcode.** A no-passcode account is labelled as device
+  convenience rather than a secret-protected boundary. Private notes still
+  require their own independent credential.
+- **Linux no longer requires a keyring.** Nexus uses the system Secret Service
+  when available. Electron's plaintext `basic_text` backend is not treated as a
+  vault; without a real backend Nexus writes an owner-only local guard with mode
+  `0600` on POSIX.
+- **The first-run questionnaire is gone.** Account creation names the personal
+  profile with a localized default and opens the shell directly; every
+  registered module is visible on a new install.
+- **Content Packs is its own Settings category**, separate from Data.
+- **Whisper tiers describe the actual trade-off.** `whisper-small` keeps its
+  stable pack id and is labelled as the highest-accuracy, slowest tier rather
+  than merely “small”.
+
+### Fixed
+
+- **Cookbook recipes save reliably.** Quotes, commas, blank time fields and an
+  empty initial steps list round-trip through the real renderer-to-main path,
+  and a main refusal is no longer reported as a missing title.
+- **A planet-texture rebuild cannot inherit an old pack.** The builder stages
+  the new folder and replaces the previous output, so stale images, a stale
+  manifest or an old signature cannot survive beside fresh content.
+- **Live QA layout defects:** undersized visibility arrows and astronomy labels,
+  Scanner's native file target, overlapping Boards rows, and Calendar's template
+  popover opening from an offscreen trigger.
+- **Gallery validates encoded image dimensions before decoding**, so a tiny file
+  declaring a decompression-bomb canvas is refused before a raster allocation.
+  Its tag list now uses the active Serbian/English collation.
+- **Account recovery publishes the owner guard safely** and restores the previous
+  guard if the keychain commit fails, so a failed migration cannot strand an old
+  keychain behind a new device secret.
+- **Translator ejection never creates a worker just to dispose it.**
+- **The assistant runtime closes without an exit/unload race.**
+- **The tool-runner test waits for the child process to start** rather than
+  assuming it will print inside a fixed 250 ms window under parallel load.
+
 ## [2.5.0] - 2026-10-23
 
 The translator reads 202 languages, the map is whatever part of the world you

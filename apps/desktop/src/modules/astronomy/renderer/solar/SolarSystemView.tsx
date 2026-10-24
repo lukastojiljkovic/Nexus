@@ -18,6 +18,7 @@ import {
   applySelection,
   applySnapshot,
   buildSolarScene,
+  dropSkyTexture,
   dropTexture,
   sceneFitRadius,
   type BuiltSolarScene,
@@ -255,7 +256,10 @@ export function SolarSystemView({
         },
         (id, slot) => {
           const built = state.built;
-          if (built !== null && state.generation === generation) dropTexture(built, id, slot);
+          if (built !== null && state.generation === generation) {
+            if (id === null) dropSkyTexture(built);
+            else if (slot !== "sky") dropTexture(built, id, slot);
+          }
           state.requestRender();
         },
       );

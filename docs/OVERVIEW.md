@@ -54,10 +54,9 @@ read them**. This isn't a policy on a website — it's how the app is built. And
 can always export **all** of your data and take it with you. Nexus never holds your
 information hostage.
 
-**3. You only see what you need.**
-Nexus has many parts, but you don't get all of them dumped on you. A short setup at
-the start tailors the app to you, and everything else stays tucked away: any module
-can be hidden, and the sidebar's groups can be reordered. You can even keep your
+**3. You see everything, then make it yours.**
+Nexus starts with every module visible. Hide what you do not use, and reorder the
+sidebar's groups and rows. You can even keep your
 **personal** and **business** lives in completely separate spaces.
 
 ---
@@ -68,14 +67,13 @@ Nexus is a **desktop program** for Windows, Linux and macOS that you install lik
 any other app. It is unsigned for now, so Windows warns on first run and macOS asks
 for a right-click → Open. It has been in daily use since 2 August 2026.
 
-**Getting in.** The first time you open it, a short setup asks your name, lets you
-pick a light or dark look, and asks a few questions about your life so it can
-switch on only the parts you'll actually use. Your account lives on your computer
-and is locked with a passcode. You can keep several accounts on one machine, and
+**Getting in.** The first time you open it, Nexus creates a locally named personal
+profile and opens the shell directly. Your account lives on your computer; it can
+be protected by a passcode or use explicit device-convenience mode. You can keep several accounts on one machine, and
 split your life into a **personal** and a **business** profile that never see each
 other's data.
 
-Every module below is built and usable. The app registers **42 modules**, counted
+Every module below is built and usable. The app registers **43 modules**, counted
 from the compiled-in list and the module folders (see [STATUS.md](STATUS.md) §2),
 grouped the way the sidebar groups them.
 
@@ -156,6 +154,8 @@ grouped the way the sidebar groups them.
   list, what is in progress, and what is finished.
 - **Culture** — museums, theatre, concerts and cinema: a visits log, notes per venue,
   an arts guide, and your own music.
+- **Gallery** — art from installed packs, images found in downloaded Reference
+  libraries, and your own encrypted pictures in one searchable grid.
 
 ### Make
 

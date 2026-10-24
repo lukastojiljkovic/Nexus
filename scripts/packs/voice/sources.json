@@ -164,7 +164,7 @@
     },
     {
       "id": "whisper-small",
-      "version": "2026.10.0",
+      "version": "2026.10.1",
       "kind": "stt",
       "engine": "whisper",
       "languages": [
@@ -204,8 +204,8 @@
         "vocab.json": "50d6a919f0a0601d56a04eb583c780d18553aa388254ba3158eb6a00f13e2c1a"
       },
       "title": {
-        "sr": "Whisper, mali model",
-        "en": "Whisper, small model"
+        "sr": "Whisper, najtačniji model",
+        "en": "Whisper, highest accuracy"
       },
       "description": {
         "sr": "Prepoznavanje govora, najtačnije i najsporije. Za jače računare.",

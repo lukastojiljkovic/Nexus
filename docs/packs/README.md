@@ -15,7 +15,7 @@ record, written beside the code in `scripts/packs/`.
 
 | Pack page | Pack ids and kind | Licence | Builder | What it feeds |
 | --- | --- | --- | --- | --- |
-| [art.md](art.md) | `art-open-access` *(dataset)* | per work: CC0-1.0, PDM-1.0 or PD-Art | `scripts/packs/art/build.mjs` | Culture — the offline art gallery |
+| [art.md](art.md) | `art-open-access` *(dataset)* | per work: CC0-1.0, PDM-1.0 or PD-Art | `scripts/packs/art/build.mjs` | Culture and Gallery — the offline art collection |
 | [car-help.md](car-help.md) | `car-help` *(content)* | US federal and US Army material, no copyright | `scripts/packs/car-help/build.mjs` | the Reader, for the Car module |
 | [collections.md](collections.md) | `collections-wikidata` *(dataset)* | CC0-1.0 | `scripts/packs/collections/build.mjs` | Library — twenty-five suggested collections |
 | [dictionary.md](dictionary.md) | `dictionary-sr-en` *(dataset)* | CC BY-SA 4.0 | `scripts/packs/dictionary/build.mjs` | Translator — words and the Wikivoyage phrasebook |

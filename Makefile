@@ -133,7 +133,7 @@ linux: require-linux install build
 	@echo "  Nexus-$(VERSION)-x86_64.AppImage   any glibc desktop, no packaging"
 	@echo "  nexus-$(VERSION)-linux-x64.tar.gz  the payload the Gentoo ebuild installs"
 	@echo
-	@echo "Install notes — AppImage sandbox, keyring requirement, the overlay:"
+	@echo "Install notes — AppImage sandbox, keyring fallback, the overlay:"
 	@echo "  apps/desktop/build/gentoo/README.md"
 
 windows: require-windows install build

@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { createModuleRegistry } from "../../shared/modules.js";
-import { packInventory } from "../../shared/onboardingPresets.js";
+import { packInventory } from "../../shared/modulePresets.js";
 import { fill, strings } from "./strings.js";
 import { useFocusTrap } from "./useFocusTrap.js";
 

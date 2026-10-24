@@ -48,7 +48,7 @@
 // honest form of that, not a hole in the manifest.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 
 import * as roots from "../lib/roots.mjs";
 import { readIfPresent } from "../lib/readIfPresent.mjs";
@@ -117,6 +117,8 @@ export const PLAN = [
   { body: "saturn", slot: "rings", file: "saturn-rings.webp", source: "saturn-rings" },
   { body: "uranus", slot: "day", file: "uranus-day.webp", source: "uranus" },
   { body: "neptune", slot: "day", file: "neptune-day.webp", source: "neptune" },
+  { body: "pluto", slot: "day", file: "pluto-day.webp", source: "pluto" },
+  { body: "sky", slot: "day", file: "sky-milky-way.webp", source: "sky-milky-way" },
 ];
 
 /**
@@ -289,7 +291,15 @@ export function buildTexturesJson(images, sources) {
     entry.credit = source.credit;
     bodies[id] = entry;
   }
-  return { layout: 1, bodies };
+  const sky = images.find((image) => image.body === "sky");
+  const skySource = sky === undefined ? undefined : sources.get(sky.source);
+  return {
+    layout: 1,
+    ...(sky === undefined || skySource === undefined
+      ? {}
+      : { sky: { image: `images/${sky.file}`, credit: skySource.credit } }),
+    bodies,
+  };
 }
 
 /**
@@ -305,7 +315,7 @@ export function buildMetadata(appVersion) {
   return {
     format: 1,
     id: PACK_ID,
-    version: "2026.10.0",
+    version: "2026.10.1",
     kind: "dataset",
     title: { sr: "Teksture planeta", en: "Planet textures" },
     description: {
@@ -347,28 +357,40 @@ function kib(bytes) {
 
 /** The whole build: fetch, verify, convert, write. */
 export async function build(options) {
-  mkdirSync(join(options.packDir, "images"), { recursive: true });
-  const images = [];
-  for (const target of PLAN) {
-    const source = options.sources.get(target.source);
-    if (source === undefined) throw new Error(`planet-textures: no source named "${target.source}".`);
-    const { bytes, fetched } = await fetchSource(source, options);
-    const converted = await convertToWebp(bytes, limitsFor(target.slot));
-    writeFileSync(join(options.packDir, "images", target.file), converted.data);
-    images.push({ ...target, converted });
-    options.log(
-      `  ${target.file.padEnd(20)} ${String(converted.width)}x${String(converted.height)}  ` +
-        `${kib(converted.data.byteLength).padStart(9)}  from ${source.url}` +
-        (fetched ? "" : " (cache)"),
+  mkdirSync(dirname(options.packDir), { recursive: true });
+  const staging = mkdtempSync(join(dirname(options.packDir), "planet-textures-build-"));
+  try {
+    mkdirSync(join(staging, "images"), { recursive: true });
+    const images = [];
+    for (const target of PLAN) {
+      const source = options.sources.get(target.source);
+      if (source === undefined) throw new Error(`planet-textures: no source named "${target.source}".`);
+      const { bytes, fetched } = await fetchSource(source, options);
+      const converted = await convertToWebp(bytes, limitsFor(target.slot));
+      writeFileSync(join(staging, "images", target.file), converted.data);
+      images.push({ ...target, converted });
+      options.log(
+        `  ${target.file.padEnd(20)} ${String(converted.width)}x${String(converted.height)}  ` +
+          `${kib(converted.data.byteLength).padStart(9)}  from ${source.url}` +
+          (fetched ? "" : " (cache)"),
+      );
+    }
+    writeFileSync(
+      join(staging, "textures.json"),
+      `${JSON.stringify(buildTexturesJson(images, options.sources), null, 2)}\n`,
     );
+    // Replacing the whole folder is the boundary that makes a rebuild from
+    // nothing: an old manifest, signature or image cannot survive beside files
+    // that describe a different release.
+    rmSync(options.packDir, { recursive: true, force: true });
+    renameSync(staging, options.packDir);
+    const metadata = buildMetadata(appVersion());
+    writeFileSync(options.metaPath, `${JSON.stringify(metadata, null, 2)}\n`);
+    return { images, metadata };
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true });
+    throw error;
   }
-  writeFileSync(
-    join(options.packDir, "textures.json"),
-    `${JSON.stringify(buildTexturesJson(images, options.sources), null, 2)}\n`,
-  );
-  const metadata = buildMetadata(appVersion());
-  writeFileSync(options.metaPath, `${JSON.stringify(metadata, null, 2)}\n`);
-  return { images, metadata };
 }
 
 /**

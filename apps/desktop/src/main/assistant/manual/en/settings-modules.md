@@ -2,17 +2,17 @@
 id: settings-modules
 title: Modules
 location: { module: settings, settings: modules }
-keywords: [modules, switching on, tool packs, questionnaire, module settings]
+keywords: [modules, switching on, tool packs, visibility, order, module settings]
 ---
 The "Modules" category says what is on and offers each module's own settings.
 
 What it holds:
 
-1. "How Nexus is set up for you" — what came out of your answers on the first run. "Run the questionnaire again" asks the same questions again, and "Forget the answers" deletes the answers from this device without putting anything back.
-2. "Modules" — the modules grouped by the sidebar's areas ("Plan", "Knowledge", "Life", "Make"). A switch turns a module on and off; "Dashboard" and "Settings" stand as "Always on".
+1. "Modules" — every registered module grouped by the sidebar's areas. A switch hides or shows a module; "Dashboard" and "Settings" stand as "Always on".
+2. "Order" — moves groups and modules in the sidebar without hiding anything.
 3. "Tool packs" — which tool packs this profile carries.
 4. "Notes on the professional tools" — the full notice beside the tools that calculate in a regulated trade.
-5. The "Module settings" list — one card per module that publishes one, e.g. "Tasks", "Notes", "Calendar", "Study", "Finance", "Habits", "Focus", "Fitness", "Tools", "Files", "Private notes", "Dashboard" and "Timers".
+5. The "Module settings" list — one card per module that publishes one.
 
 There is a faster way to a module's card: the gear in a module page's header opens Settings at that exact card.
 

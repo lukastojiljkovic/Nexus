@@ -205,6 +205,38 @@
         "url": "https://www.solarsystemscope.com/textures/",
         "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
       }
+    },
+    {
+      "id": "pluto",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Pluto_color_mapmosaic.jpg",
+      "bytes": 3972946,
+      "sha256": "d63da5ee9eab8d0b98ebef3c0cdc3a92676d7c9b247b2383294fb5da5c67a71a",
+      "width": 5926,
+      "height": 2963,
+      "format": "jpeg",
+      "licence": "Public domain (NASA)",
+      "credit": "Pluto: NASA, Johns Hopkins University Applied Physics Laboratory and Southwest Research Institute — public domain",
+      "page": "https://www.nasa.gov/image-feature/pluto-global-color-map",
+      "evidence": {
+        "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+        "quote": "NASA content — images, audio, video, and media files used in the rendition of 3-dimensional models, such as texture maps and polygon data in any format — generally are not subject to copyright in the United States."
+      }
+    },
+    {
+      "id": "sky-milky-way",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_stars_milky_way.jpg",
+      "bytes": 251454,
+      "sha256": "ec2240e6f3784d962ab81609b228bfd470e87c86d1fed5e99134d4cd3de24239",
+      "width": 2048,
+      "height": 1024,
+      "format": "jpeg",
+      "licence": "CC-BY-4.0",
+      "credit": "Milky Way sky: Solar System Scope (INOVE) — CC BY 4.0",
+      "page": "https://www.solarsystemscope.com/textures/",
+      "evidence": {
+        "url": "https://www.solarsystemscope.com/textures/",
+        "quote": "Distributed under Attribution 4.0 International license: You may use, adapt, and share these textures for any purpose, even commercially."
+      }
     }
   ]
 }

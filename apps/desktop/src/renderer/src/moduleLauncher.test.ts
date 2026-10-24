@@ -87,7 +87,7 @@ describe("launcherGroups", () => {
     ]);
     // Kultura is a group of its own (ADR-093), and it draws the shelf and the
     // culture corner beside it.
-    expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["library", "culture"]);
+    expect(groups()[3]?.tiles.map((tile) => tile.id)).toEqual(["library", "culture", "gallery"]);
     // Play closes the list; the arcade ships off by default, so its three
     // on-by-default games are what this group draws.
     expect(groups().at(-1)?.tiles.map((tile) => tile.id)).toEqual([

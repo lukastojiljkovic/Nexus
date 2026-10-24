@@ -57,8 +57,8 @@ export const manifest: ModuleManifest = {
 };
 ```
 
-* **`copy` is not optional in practice.** The rail, the settings gallery, the
-  onboarding row and the page header all draw words the shell needs before your
+* **`copy` is not optional in practice.** The rail, the settings gallery and the
+  page header all draw words the shell needs before your
   page chunk exists, so they live here as `{ sr, en }` pairs. Both locales, in the
   same register as the copy around them.
 * **`order`** sorts the discovered modules after every compiled-in one, ties
@@ -299,9 +299,9 @@ exists, and that is what they are for. Each fix is one line, and each one is a
 statement that your module belongs where it says: `renderer/src/modules.test.ts`
 (registry order, the prefix map, the group blocks, the settings-card list, the
 widget pairing), `renderer/src/moduleSettings.test.ts`,
-`renderer/src/settingsSearch.test.ts`, `renderer/src/onboardingPresets.test.ts`
-and `shared/onboardingPresets.ts` — the questionnaire's own table must decide
-every selectable module.
+`renderer/src/settingsSearch.test.ts`, `renderer/src/modulePresets.test.ts`
+and `shared/modulePresets.ts` — every selectable module needs an explicit
+profile-planning and toolkit-preset decision.
 
 ## 8. The manual page
 

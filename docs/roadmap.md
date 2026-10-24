@@ -15,7 +15,8 @@ release.** Commits, migrations, modules and gates live in [STATUS.md](STATUS.md)
 ## Where we are
 
 Nexus is an offline desktop application, in daily use, and released: the current
-release is **2.5.0**, tagged `v2.5.0`. Every release is unsigned for now
+published release is **2.5.0**, tagged `v2.5.0`. The **3.0.0** release
+candidate is in final verification. Every release is unsigned for now
 ([DEV-008](deviations.md)).
 
 Two decisions set the sequence:
@@ -35,6 +36,9 @@ Two decisions set the sequence:
   usable end to end on an encrypted local database, the professional toolkits,
   the astronomy corner, the electronics workbench, the cards, boards, puzzles
   and arcade games, and the assistant's first working version.
+- **Direct first use** — no questionnaire, an optional account passcode, a
+  keyring-free Linux fallback, every module visible on a fresh install, and a
+  Gallery for art, Reference images and a person's own encrypted pictures.
 - **Content packs** — signed, hash-pinned packages installed from the app
   through the `downloads` network mode, with the catalogue published in the
   packs repository.
@@ -68,6 +72,9 @@ Two decisions set the sequence:
   user's computer, between 202 languages, in place of six fixed directions.
 - **The assistant's runtime in the user's hands** — the context size, the
   sampling, unloading the model and summarizing a long conversation.
+- **Explicit local-model memory controls** — the translator can load, translate
+  and eject NLLB without restarting the app, alongside the assistant's existing
+  unload.
 
 ---
 

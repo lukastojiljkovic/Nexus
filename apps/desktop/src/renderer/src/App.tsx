@@ -42,7 +42,6 @@ import type {
 } from "../../shared/ipc.js";
 import { AuthGate } from "./AuthGate.js";
 import { TitleBar } from "./TitleBar.js";
-import { Onboarding } from "./Onboarding.js";
 import { ProfileSwitchDialog } from "./ProfileSwitchDialog.js";
 import { NotePopover } from "./notePopover.js";
 import { applyProfileAccent, defaultAccent, seedAccent } from "./accent.js";
@@ -61,7 +60,6 @@ import {
   toggleCollapsedGroups,
   unpinModule,
 } from "./navPrefs.js";
-import { pruneOnboardingDrafts } from "./onboardingDraft.js";
 import { moduleIconName } from "./moduleIcon.js";
 import { moduleName } from "./moduleName.js";
 import { ModuleSettingsNavProvider, type ModuleSettingsNav } from "./moduleSettingsGear.js";
@@ -420,12 +418,9 @@ export function App() {
    * and the counter that makes a fresh write show up.
    *
    * An EFFECT over the active profile rather than a read at each of the three
-   * places a profile is entered — boot, a switch, and the end of the
-   * questionnaire — because a preference read in three places is one that gets
-   * read in two after the next change. The questionnaire bumps `navEpoch`: it
-   * has just written the key, and this is what re-reads it.
+   * places a profile is entered because a preference read in three places is one
+   * that gets read in two after the next change.
    */
-  const [navEpoch, setNavEpoch] = useState(0);
   /**
    * Bumped when the assistant changed what the page on screen shows: a location
    * that opens the dashboard (its layout lives in main), or a docked turn that
@@ -441,7 +436,7 @@ export function App() {
    *
    * Read and written on the same terms as the pins above — one effect over the
    * active profile, so entering a profile through any of its three doors loads
-   * both, and `navEpoch` is what re-reads them after the questionnaire.
+   * both.
    */
   const [collapsedGroups, setCollapsedGroups] = useState<readonly string[]>([]);
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -502,11 +497,6 @@ export function App() {
   // (its own held-cycle mechanism), so setting a boolean already true is the
   // guard against opening twice.
   const [appetiteAsk, setAppetiteAsk] = useState(false);
-  // ADR-065 §5: the Settings row reopened the questionnaire. Session state, not
-  // a preference — a rerun interrupted by a lock is simply over, since the name
-  // sentinel (the thing that gates the shell) was satisfied long ago.
-  const [rerunOnboarding, setRerunOnboarding] = useState(false);
-
   /** Loads everything that requires an open database. Only ever called once `auth:status` (or an unlock/create/recover result) has confirmed `state === "unlocked"`. */
   async function loadUnlockedData(): Promise<void> {
     const [nextInfo, nextProfiles, nextVisibility] = await Promise.all([
@@ -525,11 +515,6 @@ export function App() {
     // paint corrected.
     const active = resolveActiveProfile(nextProfiles);
     const nextFlags = active ? await window.nexus.getFlags(active.id) : {};
-    // ADR-065: the same live-list rule, applied to the questionnaire's
-    // in-progress drafts — a profile can be deleted (or replaced wholesale by a
-    // restore) between two runs, and its half-answered draft has nothing left
-    // to resume. This is the one place the live list first exists.
-    pruneOnboardingDrafts(nextProfiles.map((profile) => profile.id));
     setInfo(nextInfo);
     setProfiles(nextProfiles);
     setActiveProfileId(active?.id ?? null);
@@ -616,6 +601,8 @@ export function App() {
       state: "locked",
       lockedForMs: 0,
       keystoreAvailable: previous?.keystoreAvailable ?? true,
+      deviceProtection: previous?.deviceProtection ?? "system-vault",
+      requiresPasscode: previous?.requiresPasscode ?? true,
       requiresRecovery: false,
       // Carried over rather than re-fetched: locking changes neither the
       // account list nor which one is selected (ADR-044), and AuthGate needs
@@ -708,7 +695,7 @@ export function App() {
   useEffect(() => {
     setPinnedModules(activeProfileId === null ? [] : readPinnedModules(activeProfileId));
     setCollapsedGroups(activeProfileId === null ? [] : readCollapsedGroups(activeProfileId));
-  }, [activeProfileId, navEpoch]);
+  }, [activeProfileId]);
 
   /**
    * The modules this DEVICE shows (ADR-101), as the one set every surface below
@@ -1266,11 +1253,6 @@ export function App() {
   useEffect(() => {
     if (authStatus?.state !== "unlocked") {
       setAppetiteAsk(false);
-      // ADR-065 §5, for the same reason: a rerun is session state, and this
-      // component outlives a lock cycle. Leaving the flag set would drop the
-      // user straight back into the questionnaire on the next unlock, over a
-      // profile that has been named for months — the rerun is simply over.
-      setRerunOnboarding(false);
       return;
     }
     return window.nexus.onNotificationAppetiteAsk(() => {
@@ -1475,8 +1457,8 @@ export function App() {
   /**
    * The app's one global chord handler (ADR-040) — it replaced the inline
    * Ctrl+K listener this shell used to carry. Armed only once truly unlocked
-   * and past onboarding: a shortcut firing over the lock screen or the name
-   * prompt would act on a shell that is not there yet.
+   * and past the account gates: a shortcut firing over the lock screen would
+   * act on a shell that is not there yet.
    *
    * It needs no input-focus guard, and that is a property of the binding rule
    * rather than an oversight: nothing that looks like typing can be bound (see
@@ -1685,65 +1667,6 @@ export function App() {
 
   if (!profiles) {
     return inWindow(<p className="nx-hint">{strings.app.loading}</p>, true);
-  }
-
-  // ONB gates the shell on the ACTIVE profile's empty name — the deliberate
-  // "not yet named" sentinel (ADR-058): the seeded personal profile on first
-  // run, and a fresh business profile on its FIRST ENTRY (created empty from
-  // the switcher or the „Profili“ card, named here). ADR-065 grew that one
-  // screen into the four-screen questionnaire without moving the sentinel: the
-  // flow's single `renameProfile` write is still what opens this gate, and it
-  // still happens exactly once, at the end.
-  //
-  // The Settings row (§5) reopens the SAME flow over a profile that already has
-  // a name, which is what `rerunOnboarding` adds — one component, one render
-  // site, told apart by `mode`.
-  if (activeProfile && (activeProfile.name.trim() === "" || rerunOnboarding)) {
-    const rerun = activeProfile.name.trim() !== "";
-    const onboardingProfile = activeProfile;
-    return inWindow(
-      <>
-        <Onboarding
-          key={onboardingProfile.id}
-          profileId={onboardingProfile.id}
-          kind={onboardingProfile.kind}
-          mode={rerun ? "rerun" : "first-run"}
-          initialName={onboardingProfile.name}
-          flags={flags}
-          registry={registry}
-          theme={theme}
-          onThemeChange={changePreference}
-          onCancel={rerun ? () => setRerunOnboarding(false) : null}
-          onComplete={({ name, flags: nextFlags, demoProfile }) => {
-            const renamed = profiles.map((profile) =>
-              profile.id === onboardingProfile.id ? { ...profile, name } : profile,
-            );
-            // The demo profile onboarding just made, appended on the spot. The
-            // switcher lists this array and the „Dodaj demo profil" entry hides
-            // itself off it, so a profile missing here is one the user cannot
-            // reach and is still being offered.
-            setProfiles(demoProfile === null ? renamed : [...renamed, demoProfile]);
-            setFlags(nextFlags);
-            // ADR-101: the questionnaire's module screen writes the DEVICE's
-            // arrangement now (main routes a module id there, `flags:set`), so
-            // the rail, the launcher and every page need the new arrangement
-            // and not only the new flag map.
-            void window.nexus
-              .getModuleVisibility()
-              .then(setVisibility)
-              .catch((error: unknown) => {
-                console.error("Nexus: failed to reload the module arrangement:", error);
-                setArrangementFailed(true);
-              });
-            // The questionnaire has just written the pinned modules for this
-            // profile (ADR-086); the bump is what redraws the sidebar without
-            // a reload.
-            setNavEpoch((epoch) => epoch + 1);
-            setRerunOnboarding(false);
-          }}
-        />
-      </>,
-    );
   }
 
   /** Patches one field of the active profile in the shell's own state — what both Settings callbacks below reflect through. */
@@ -2433,13 +2356,13 @@ export function App() {
                   onShortcutOverridesChange={changeShortcutOverrides}
                   globalShortcutTaken={globalCaptureTaken}
                   onShowShortcuts={() => setShortcutsHelpOpen(true)}
-                  onRerunOnboarding={() => setRerunOnboarding(true)}
                   target={settingsTarget}
                   onTargetHandled={clearSettingsTarget}
                   moduleVisibility={visibility}
                   onModuleVisibilityChanged={setVisibility}
                   intent={intentForPage(itemIntents, "settings")}
                   onIntentHandled={handleIntentHandled}
+                  onOpenModule={setActiveId}
                 />
               ) : activeProfile !== undefined && hasModulePage(shownId) ? (
                 // The kit's ONE generic path (ADR-090): the shown id is a

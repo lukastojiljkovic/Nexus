@@ -74,6 +74,15 @@ function field(result: ToolResult, name: string): string {
   return line?.slice(name.length + 2).trim() ?? "";
 }
 
+/** Wait for the child to prove it started instead of guessing at process startup time. */
+async function waitForStdout(proc: { readonly stdout: Buffer }, text: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (!proc.stdout.toString("utf8").includes(text)) {
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for child stdout to contain ${text}.`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe("the tool environment", () => {
   it("builds a Windows environment from nothing, with PATH at the entry's own folder", () => {
     expect(
@@ -184,7 +193,6 @@ describe("a tool session", () => {
     // It was killed rather than waited for: the measured wall clock is the
     // assertion that the deadline is what ended it, not a later event.
     expect(Date.now() - started).toBeLessThan(10_000);
-    expect(result.stdout.toString("utf8")).toContain("ready");
   });
 
   it("kills a program that outruns the output cap", async () => {
@@ -201,10 +209,12 @@ describe("a tool session", () => {
   it("kills a program on cancel", async () => {
     const { session } = await sessionFor({ timeoutMs: 30_000 });
     const controller = new AbortController();
-    const running = session.run({ args: ["hang"], stdin: "", signal: controller.signal });
-    setTimeout(() => controller.abort(), 100);
-    const result = await running;
-    expect(result.stopped).toBe("cancelled");
+    const proc = await session.start({ args: ["hang"], stdin: "", signal: controller.signal });
+    await waitForStdout(proc, "ready");
+    controller.abort();
+    const exit = await proc.exited;
+    expect(exit.stopped).toBe("cancelled");
+    expect(proc.stdout.toString("utf8")).toContain("ready");
   });
 
   it("kills a program that ignores SIGTERM, rather than waiting for it", async () => {

@@ -34,10 +34,9 @@ dashboard, one search, one calendar, one reminder system, one design language.
    encrypted — not even we can read them. Security is designed in from the
    first commit (`docs/security/baseline.md`), not patched on later. Full data
    export is a permanent guarantee: Nexus never holds data hostage.
-3. **Modular by onboarding.** Dozens of modules, but each user sees only what
-   they chose. A visual onboarding questionnaire configures the app per person;
-   everything else stays hidden until enabled in Settings. Separate personal
-   and business profiles keep both lives cleanly apart.
+3. **Modular from the first screen.** Dozens of modules are visible immediately;
+   each person hides and reorders only what they do not use in Settings.
+   Separate personal and business profiles keep both lives cleanly apart.
 4. **Depth per module, not a bundle of widgets.** "All-in-one" earns its name
    only if each part is genuinely good: a study hub with spaced repetition and
    exam planning; a fitness hub backed by a real food database including

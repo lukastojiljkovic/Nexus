@@ -42,7 +42,10 @@ vi.mock("./packDir.js", () => ({ installedPacksRoot: () => state.root }));
  */
 const nllb = vi.hoisted(() => ({
   jobs: [] as { directory: string; sentences: readonly string[]; source: string; target: string }[],
+  loads: [] as string[],
+  disposals: 0,
   hold: false,
+  fail: false,
 }));
 vi.mock("./nllb/workerEntry.js", () => ({ NLLB_WORKER_ENTRY: "nllb-worker.js" }));
 vi.mock("./nllb/host.js", async (importOriginal) => {
@@ -50,8 +53,15 @@ vi.mock("./nllb/host.js", async (importOriginal) => {
   return {
     ...original,
     createNllbHost: (): import("./nllb/host.js").NllbHost => ({
+      load(job) {
+        nllb.loads.push(job.directory);
+        return nllb.fail
+          ? Promise.reject(new original.NllbError("load-failed", "the model did not load"))
+          : Promise.resolve();
+      },
       translate(job, onSentence, signal) {
         nllb.jobs.push(job);
+        if (nllb.fail) return Promise.reject(new original.NllbError("load-failed", "the model did not load"));
         if (nllb.hold) {
           return new Promise((_resolve, reject) => {
             signal.addEventListener("abort", () => reject(new original.NllbError("aborted", "cancelled.")));
@@ -60,7 +70,9 @@ vi.mock("./nllb/host.js", async (importOriginal) => {
         job.sentences.forEach((sentence, index) => onSentence(index, `[${job.target}] ${sentence}`));
         return Promise.resolve();
       },
-      dispose: () => undefined,
+      dispose: () => {
+        nllb.disposals += 1;
+      },
     }),
   };
 });
@@ -85,7 +97,10 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "nexus-translator-"));
   state.root = join(dir, "packs");
   nllb.jobs = [];
+  nllb.loads = [];
+  nllb.disposals = 0;
   nllb.hold = false;
+  nllb.fail = false;
 });
 
 afterEach(() => {
@@ -155,6 +170,9 @@ describe("the translator handler surface", () => {
       // a pack the user installs makes a model choosable without a reload (ADR-107's
       // wiring of `renderer/translate/TranslateTab.tsx`).
       "translator:packs",
+      "translator:runtime",
+      "translator:loadModel",
+      "translator:ejectModel",
       // The Translate tab: a job the page polls, and cancels when the text changes.
       "translator:translate",
       "translator:translation",
@@ -498,6 +516,46 @@ describe("translating with an installed NLLB model", () => {
         target: "eng_Latn",
       },
     ]);
+  });
+
+  it("loads once, reports the resident model and ejects its worker on request", async () => {
+    installModel("nllb-600m");
+    const host = harness();
+    const resident = await call<{ state: string; model: string | null }>(
+      host,
+      "translator:loadModel",
+      { packId: "nllb-600m" },
+    );
+    expect(resident).toMatchObject({ state: "resident", model: "nllb-600m" });
+    expect(nllb.loads).toEqual([join(state.root, "nllb-600m", "1.0.0")]);
+
+    await call(host, "translator:loadModel", { packId: "nllb-600m" });
+    expect(nllb.loads).toHaveLength(1);
+
+    expect(await call(host, "translator:ejectModel", {})).toMatchObject({
+      state: "absent",
+      model: null,
+    });
+    expect(nllb.disposals).toBe(1);
+  });
+
+  it("does not claim a resident model when a translation fails to load it", async () => {
+    installModel("nllb-600m");
+    nllb.fail = true;
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const host = harness();
+    const { jobId } = await call<{ jobId: string }>(host, "translator:translate", {
+      packId: "nllb-600m",
+      text: "Hello.",
+      source: "eng_Latn",
+      target: "srp_Cyrl",
+    });
+    expect(await finished(host, jobId)).toMatchObject({ error: "load-failed" });
+    expect(await call(host, "translator:runtime", {})).toMatchObject({
+      state: "error",
+      model: null,
+    });
+    quiet.mockRestore();
   });
 
   it("stops a translation the page cancels", async () => {

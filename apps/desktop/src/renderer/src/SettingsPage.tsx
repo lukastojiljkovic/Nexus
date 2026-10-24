@@ -23,7 +23,6 @@ import {
 import {
   ARCHIVE_MODULE_IDS,
   buildLlmPrompt,
-  buildProfilePlan,
   chordAccelerator,
   chordFromEvent,
   enabledPacks,
@@ -53,6 +52,7 @@ import type {
   ApkgImportSkip,
   ApkgImportSubjectChoice,
   AppInfo,
+  AuthStatus,
   BackupSettingsView,
   CsvImportColumnRole,
   CsvImportDelimiter,
@@ -113,9 +113,6 @@ import { ModuleVisibilityCard } from "./ModuleVisibilityCard.js";
 import { visibleModuleSet, type ShellVisibility } from "../../shared/moduleVisibility.js";
 import type { ModulePageIntent } from "../../shared/moduleApi.js";
 import { parseDevicePreference, type DevicePreferenceKey } from "../../shared/devicePreferences.js";
-import { resolveModuleSelection } from "../../shared/onboardingPresets.js";
-import { heardTrades, planReasonLines } from "./profilePlanCopy.js";
-import { clearStoredSignals, readStoredSignals } from "./signalPrefs.js";
 import { profileDisplayName } from "./profilePrefs.js";
 import {
   clearStoredWeekStart,
@@ -419,7 +416,7 @@ interface ProfileSectionProps {
 }
 
 /**
- * Profil section: the profile's name (same 1–80-char rule as Onboarding) and
+ * Profil section: the profile's name (the same 1–80-char rule as profile creation) and
  * its picture (SET-001).
  *
  * The renderer validates nothing about the picture and never sees one — every
@@ -4684,11 +4681,25 @@ interface SecuritySectionProps {
  * every other section here this one takes no `profileId`.
  */
 function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySectionProps) {
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [currentPasscode, setCurrentPasscode] = useState("");
   const [nextPasscode, setNextPasscode] = useState("");
   const [confirmPasscode, setConfirmPasscode] = useState("");
   const [changing, setChanging] = useState(false);
   const [changeMessage, setChangeMessage] = useState<SecurityMessage | null>(null);
+  const [removingPasscode, setRemovingPasscode] = useState(false);
+
+  async function refreshAuthStatus(): Promise<void> {
+    try {
+      setAuthStatus(await window.nexus.getAuthStatus());
+    } catch (error) {
+      console.error("Nexus: the account protection state could not be read:", error);
+    }
+  }
+
+  useEffect(() => {
+    void refreshAuthStatus();
+  }, []);
 
   async function submitChange(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -4704,18 +4715,42 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
     }
     setChanging(true);
     try {
-      const result = await window.nexus.changePasscode(currentPasscode, nextPasscode);
+      const result = await window.nexus.changePasscode(
+        authStatus?.requiresPasscode === false ? null : currentPasscode,
+        nextPasscode,
+      );
       if (result.ok) {
         setChangeMessage({ text: strings.settings.security.changeSuccess, failed: false });
         setCurrentPasscode("");
         setNextPasscode("");
         setConfirmPasscode("");
+        await refreshAuthStatus();
       } else {
         setChangeMessage({ text: authErrorMessage(result.reason), failed: true });
       }
     } catch (error) {
       setChangeMessage({ text: strings.auth.error.generic, failed: true });
       console.error("Nexus: failed to change the passcode:", error);
+    } finally {
+      setChanging(false);
+    }
+  }
+
+  async function removeAccountPasscode(): Promise<void> {
+    setRemovingPasscode(false);
+    setChanging(true);
+    try {
+      const result = await window.nexus.changePasscode(currentPasscode, null);
+      if (result.ok) {
+        setChangeMessage({ text: strings.settings.security.passcodeRemoved, failed: false });
+        setCurrentPasscode("");
+        await refreshAuthStatus();
+      } else {
+        setChangeMessage({ text: authErrorMessage(result.reason), failed: true });
+      }
+    } catch (error) {
+      setChangeMessage({ text: strings.auth.error.generic, failed: true });
+      console.error("Nexus: failed to remove the account passcode:", error);
     } finally {
       setChanging(false);
     }
@@ -4750,17 +4785,24 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
     <>
       <div className="set__security-block">
         <h3 className={labelClass("nx-eyebrow set__module-group-title", hits.has("security-passcode"))}>
-          {s.changeTitle}
+          {authStatus?.requiresPasscode === false ? s.addTitle : s.changeTitle}
         </h3>
+        {authStatus !== null && (
+          <p className="nx-hint">
+            {authStatus.requiresPasscode ? s.passcodeOn : s.passcodeOff}
+          </p>
+        )}
         <form className="set__security-form" onSubmit={(event) => void submitChange(event)}>
-          <Field required>
-            <TextField
-              type="password"
-              label={s.currentLabel}
-              value={currentPasscode}
-              onChange={(event) => setCurrentPasscode(event.target.value)}
-            />
-          </Field>
+          {authStatus?.requiresPasscode !== false && (
+            <Field required>
+              <TextField
+                type="password"
+                label={s.currentLabel}
+                value={currentPasscode}
+                onChange={(event) => setCurrentPasscode(event.target.value)}
+              />
+            </Field>
+          )}
           <Field required>
             <TextField
               type="password"
@@ -4778,8 +4820,19 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
             />
           </Field>
           <Button type="submit" size="sm" variant="primary" disabled={changing}>
-            {s.save}
+            {authStatus?.requiresPasscode === false ? s.add : s.save}
           </Button>
+          {authStatus?.requiresPasscode === true && (
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              disabled={changing || currentPasscode === ""}
+              onClick={() => setRemovingPasscode(true)}
+            >
+              {s.removePasscode}
+            </Button>
+          )}
         </form>
         {changeMessage != null && (
           <Notice kind={changeMessage.failed ? "danger" : "info"} message={changeMessage.text} />
@@ -4826,7 +4879,19 @@ function SecuritySection({ autoLockMinutes, onAutoLockChange, hits }: SecuritySe
         <p className="nx-hint">{s.autoLockHint}</p>
       </div>
 
-      <AskPasscodeRow hits={hits} />
+      {authStatus?.requiresPasscode !== false && <AskPasscodeRow hits={hits} />}
+
+      {removingPasscode && (
+        <ConfirmDialog
+          title={s.removePasscodeTitle}
+          question={s.removePasscodeQuestion}
+          confirmLabel={s.removePasscodeConfirm}
+          cancelLabel={s.cancel}
+          destructive
+          onConfirm={() => void removeAccountPasscode()}
+          onCancel={() => setRemovingPasscode(false)}
+        />
+      )}
     </>
   );
 }
@@ -5297,104 +5362,6 @@ function LicencesSection() {
   );
 }
 
-interface SetupSectionProps {
-  profileId: string;
-  flags: FlagState;
-  registry: ModuleRegistry;
-  hits: ReadonlySet<string>;
-  onRerunOnboarding: () => void;
-}
-
-/**
- * ADR-086 §5 — „Kako je Nexus podešen za tebe".
- *
- * The plan is REBUILT here from the stored answers, never read back from a
- * stored plan, and that is the whole reason the ANSWERS are what get stored: a
- * plan is a snapshot of what one build's registry could compose, where a plan
- * rebuilt from the same answers next year names the modules and cards that
- * exist then. It also means this card cannot drift from the questionnaire's own
- * reveal, because both render `planReasonLines` over the same object.
- *
- * It is rebuilt against the profile's LIVE flags, so the sentence about modules
- * describes the app as it now stands rather than as it stood the day it was
- * answered — somebody who has since switched Finansije off is not told it was
- * turned on for them.
- */
-function SetupSection({ profileId, flags, registry, hits, onRerunOnboarding }: SetupSectionProps) {
-  const s = strings.settings.setup;
-  const [signals, setSignals] = useState(() => readStoredSignals(profileId));
-  const plan = useMemo(
-    () => buildProfilePlan(signals, registry, resolveModuleSelection(registry, flags)),
-    [signals, registry, flags],
-  );
-  const trades = heardTrades(plan);
-  const lines = planReasonLines(plan);
-  const answered = signals.length > 0;
-
-  return (
-    <>
-      <p className="nx-hint">{answered ? s.description : s.none}</p>
-      {/* What it HEARD, in the person's own spelling, before anything it
-          decided — the reveal's own opening, for the same reason. */}
-      {trades.length > 0 && (
-        <div className="onb__heard-list">
-          {trades.map((entry) => (
-            <Chip key={entry.term} variant="accent">
-              {entry.term} → {entry.packs}
-            </Chip>
-          ))}
-        </div>
-      )}
-      {lines.length > 0 && (
-        <ul className="onb__reasons">
-          {lines.map((line) => (
-            <li key={line} className="onb__reason">
-              <span className="onb__reason-mark" aria-hidden="true">
-                ✦
-              </span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="set__module-row set__module-row--foot">
-        <div className="set__module-info">
-          <span className={labelClass("set__module-name", hits.has("modules-onboarding"))}>
-            {strings.settings.onboardingRerunTitle}
-          </span>
-          <span className="nx-hint">{strings.settings.onboardingRerunCaption}</span>
-        </div>
-        <Button size="sm" onClick={onRerunOnboarding}>
-          {strings.settings.onboardingRerunAction}
-        </Button>
-      </div>
-      {/* Forgetting is quiet and typographic, the `ResetLink` idiom, and it is
-          offered only where there is something to forget. It deliberately does
-          NOT undo: the answers go, the app stays exactly as it is, which is
-          what the hint says. An „erase" that also reverted the app would be an
-          undo nobody asked for, reaching settings the person may since have
-          changed by hand. */}
-      {answered && (
-        <>
-          <p className={labelClass("nx-hint", hits.has("setup-forget"))}>
-            {s.forgetHint}
-          </p>
-          <Button
-            variant="quiet"
-            className="set__reset"
-            onClick={() => {
-              clearStoredSignals(profileId);
-              setSignals([]);
-            }}
-          >
-            {s.forget}
-          </Button>
-        </>
-      )}
-    </>
-  );
-}
-
 export interface SettingsPageProps {
   profileId: string;
   profileName: string;
@@ -5430,8 +5397,6 @@ export interface SettingsPageProps {
   /** TASK-002: main's answer to the last global registration — false whenever the system granted it. */
   globalShortcutTaken: boolean;
   onShowShortcuts: () => void;
-  /** ADR-065 §5: reopens the onboarding questionnaire over this profile. App owns the flow — it is the same screen the first run draws, not a dialog of this page's. */
-  onRerunOnboarding: () => void;
   /**
    * The module card a module page's gear asked for (`moduleSettingsGear.tsx`),
    * or null for an ordinary visit. Read ONCE, by the mount that the gear caused:
@@ -5457,6 +5422,8 @@ export interface SettingsPageProps {
    */
   intent?: ModulePageIntent | null;
   onIntentHandled?: () => void;
+  /** Opens another module from a settings card; used by Content Packs → Gallery. */
+  onOpenModule?: (moduleId: string) => void;
 }
 
 /**
@@ -5511,13 +5478,13 @@ export function SettingsPage({
   onShortcutOverridesChange,
   globalShortcutTaken,
   onShowShortcuts,
-  onRerunOnboarding,
   target,
   onTargetHandled,
   moduleVisibility,
   onModuleVisibilityChanged,
   intent,
   onIntentHandled,
+  onOpenModule,
 }: SettingsPageProps) {
   // The accent is per-profile (ADR-058 §3), and its default depends on the
   // profile's KIND (bordo for business, decision #11). Reading it lazily in a
@@ -6265,24 +6232,6 @@ export function SettingsPage({
           </Card>
 
           {searchGroupTitle("modules")}
-          {/* ADR-086 §5 — why this profile's Nexus looks the way it does.
-              First in „Moduli", above the gallery and the module cards it
-              explains, because a summary belongs before the detail it
-              summarises. */}
-          <Card
-            id={sectionDomId("setup")}
-            title={strings.settings.sectionTitle.setup}
-            className={sectionClass(visibility.cards.has("setup"))}
-          >
-            <SetupSection
-              profileId={profileId}
-              flags={flags}
-              registry={registry}
-              hits={hits}
-              onRerunOnboarding={onRerunOnboarding}
-            />
-          </Card>
-
           <Card
             id={sectionDomId("modules")}
             title={strings.settings.sectionTitle.modules}
@@ -6405,6 +6354,17 @@ export function SettingsPage({
               </Card>
             );
           })}
+
+          {searchGroupTitle("content-packs")}
+          <Card
+            id={sectionDomId("content-packs")}
+            title={strings.settings.sectionTitle["content-packs"]}
+            className={sectionClass(visibility.cards.has("content-packs"))}
+          >
+            <PacksSettings
+              {...(onOpenModule === undefined ? {} : { onOpenGallery: () => onOpenModule("gallery") })}
+            />
+          </Card>
 
           {searchGroupTitle("notifications")}
           <Card
@@ -6580,18 +6540,6 @@ export function SettingsPage({
               <SyncSection hits={hits} />
             </Card>
           )}
-
-          {/* ADR-091, last in „Podaci": content this device holds that it did not
-              make. A DEVICE card like „Sinhronizacija" above it — the packs live
-              in `<userData>/packs`, not in a profile's database, so it takes no
-              `profileId` and shows the same thing under every profile. */}
-          <Card
-            id={sectionDomId("content-packs")}
-            title={strings.settings.sectionTitle["content-packs"]}
-            className={sectionClass(visibility.cards.has("content-packs"))}
-          >
-            <PacksSettings />
-          </Card>
 
           {searchGroupTitle("privacy")}
           {/* ADR-089, FIRST in this category: the device-level decision about

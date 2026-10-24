@@ -169,6 +169,13 @@
   align-items: center;
   gap: var(--nx-space-2);
 }
+.translator__memory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nx-space-2);
+  margin-left: auto;
+}
 
 /* The model choice sits at the end of the bar, and wraps under the pickers on a narrow card. */
 .translator__model {

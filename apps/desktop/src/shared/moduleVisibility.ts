@@ -47,7 +47,7 @@ import { LOCKED_MODULE_IDS } from "./modules.js";
  */
 
 /** The one version this build writes and understands. A future version is a future parser. */
-export const SHELL_VISIBILITY_VERSION = 1;
+export const SHELL_VISIBILITY_VERSION = 2;
 
 /** One module id, or one group key, as these lists spell one. Bounded, and never `__proto__`. */
 const KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
@@ -123,7 +123,7 @@ function asKeyList(value: unknown, limit: number): readonly string[] | null {
 export function parseShellVisibility(value: unknown): ShellVisibility | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (record["version"] !== SHELL_VISIBILITY_VERSION) return null;
+  if (record["version"] !== SHELL_VISIBILITY_VERSION && record["version"] !== 1) return null;
   const hidden = asKeyList(record["hidden"], MAX_LIST_ENTRIES);
   const shown = asKeyList(record["shown"], MAX_LIST_ENTRIES);
   const groupOrder = asKeyList(record["groupOrder"], MAX_ORDER_GROUPS);
@@ -139,7 +139,16 @@ export function parseShellVisibility(value: unknown): ShellVisibility | null {
     if (list === null) return null;
     moduleOrder[group] = list;
   }
-  return { version: SHELL_VISIBILITY_VERSION, hidden, shown, groupOrder, moduleOrder };
+  // Version 1 encoded the old default-disabled rule in these lists. Nexus 3
+  // starts every module visible; inherited hidden ids and shown overrides are
+  // therefore dropped together, while the user's ordering survives.
+  return {
+    version: SHELL_VISIBILITY_VERSION,
+    hidden: record["version"] === 1 ? [] : hidden,
+    shown: [],
+    groupOrder,
+    moduleOrder,
+  };
 }
 
 /**
@@ -165,23 +174,11 @@ export function parseShellVisibility(value: unknown): ShellVisibility | null {
  */
 export function normalizeShellVisibility(
   visibility: ShellVisibility,
-  registry: ModuleRegistry,
+  _registry: ModuleRegistry,
 ): ShellVisibility {
   const hidden = new Set<string>();
-  const shown = new Set<string>();
   for (const id of visibility.hidden) {
     if (!LOCKED_MODULE_IDS.has(id)) hidden.add(id);
-  }
-  for (const id of visibility.shown) {
-    if (LOCKED_MODULE_IDS.has(id)) continue;
-    if (registry.get(id)?.defaultEnabled === true) continue;
-    shown.add(id);
-  }
-  // `hidden` wins a contradiction, so the entry that states it survives the write
-  // and the one that disputes it is the one dropped.
-  for (const id of hidden) shown.delete(id);
-  for (const id of [...hidden]) {
-    if (registry.get(id)?.defaultEnabled === false) hidden.delete(id);
   }
   const moduleOrder: Record<string, readonly string[]> = {};
   for (const [group, ids] of Object.entries(visibility.moduleOrder)) {
@@ -190,7 +187,7 @@ export function normalizeShellVisibility(
   return {
     version: SHELL_VISIBILITY_VERSION,
     hidden: [...hidden],
-    shown: [...shown],
+    shown: [],
     groupOrder: [...new Set(visibility.groupOrder)],
     moduleOrder,
   };
@@ -210,8 +207,7 @@ export function normalizeShellVisibility(
 export function isModuleVisible(manifest: ModuleManifest, visibility: ShellVisibility): boolean {
   if (LOCKED_MODULE_IDS.has(manifest.id)) return true;
   if (visibility.hidden.includes(manifest.id)) return false;
-  if (visibility.shown.includes(manifest.id)) return true;
-  return manifest.defaultEnabled;
+  return true;
 }
 
 /**
@@ -255,12 +251,10 @@ export function setModuleVisible(
   const shown = new Set(visibility.shown);
   if (visible) {
     hidden.delete(manifest.id);
-    if (manifest.defaultEnabled) shown.delete(manifest.id);
-    else shown.add(manifest.id);
+    shown.delete(manifest.id);
   } else {
     shown.delete(manifest.id);
-    if (manifest.defaultEnabled) hidden.add(manifest.id);
-    else hidden.delete(manifest.id);
+    hidden.add(manifest.id);
   }
   return normalizeShellVisibility(
     { ...visibility, hidden: [...hidden], shown: [...shown] },
@@ -283,11 +277,11 @@ export function setModuleVisible(
  */
 export function seedVisibleModules(
   registry: ModuleRegistry,
-  enabledModuleIds: ReadonlySet<string>,
+  _enabledModuleIds: ReadonlySet<string>,
 ): ShellVisibility {
   let next = DEFAULT_SHELL_VISIBILITY;
   for (const manifest of registry.all()) {
-    next = setModuleVisible(next, manifest, enabledModuleIds.has(manifest.id), registry);
+    next = setModuleVisible(next, manifest, true, registry);
   }
   return next;
 }

@@ -7,7 +7,7 @@ import { strings } from "./strings.js";
 
 /**
  * The local-account lock screen (ADR-018, extended by ADR-044). Five screens
- * share one shell, mirroring `Onboarding`'s `.onb`/`.onb__card` structure so
+ * share one account-gate shell, mirroring the auth card structure so
  * the first thing a user ever sees matches the second: (a) create an account,
  * (b) the one-time Recovery Kit, (c) unlock, (d) recovery, and (e) the account
  * picker that comes ahead of (c) whenever this device holds more than one.
@@ -34,9 +34,9 @@ function initialScreen(status: AuthStatus): Screen {
 }
 
 /** The one line under an account's label in the picker: why it cannot simply be opened, in the order that decides what the user has to do about it. */
-function accountStateLine(account: AccountSummary, keystoreAvailable: boolean): string {
-  if (!keystoreAvailable) return strings.auth.picker.stateKeystoreUnavailable;
+function accountStateLine(account: AccountSummary): string {
   if (account.requiresRecovery) return strings.auth.picker.stateRecovery;
+  if (!account.requiresPasscode) return strings.auth.picker.stateNoPasscode;
   return strings.auth.picker.stateLocked;
 }
 
@@ -68,6 +68,8 @@ export function authErrorMessage(reason: AuthErrorReason): string {
       return messages.weakPasscode;
     case "keystoreUnavailable":
       return messages.keystoreUnavailable;
+    case "passcodeNotSet":
+      return messages.passcodeNotSet;
     case "otherDevice":
       return messages.otherDevice;
     case "corruptKeychain":
@@ -150,22 +152,9 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
   const [label, setLabel] = useState("");
   const [passcode, setPasscode] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [usePasscode, setUsePasscode] = useState(status.keystoreAvailable);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!status.keystoreAvailable) {
-    return (
-      <>
-        <h1 className="auth__title">{strings.auth.keystoreUnavailable.title}</h1>
-        <p className="nx-hint nx-hint--prose">{strings.auth.keystoreUnavailable.description}</p>
-        {additional && (
-          <Button variant="ghost" size="sm" type="button" onClick={onBack}>
-            {strings.auth.picker.back}
-          </Button>
-        )}
-      </>
-    );
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -175,19 +164,19 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
       setError(strings.auth.validation.labelRequired);
       return;
     }
-    if (!passcodeMeetsPolicy(passcode)) {
+    if (usePasscode && !passcodeMeetsPolicy(passcode)) {
       setError(strings.auth.validation.tooWeak);
       return;
     }
-    if (passcode !== confirm) {
+    if (usePasscode && passcode !== confirm) {
       setError(strings.auth.validation.mismatch);
       return;
     }
     setSubmitting(true);
     try {
       const result = additional
-        ? await window.nexus.createAdditionalAccount(label, passcode)
-        : await window.nexus.createAccount(label, passcode);
+        ? await window.nexus.createAdditionalAccount(label, usePasscode ? passcode : null)
+        : await window.nexus.createAccount(label, usePasscode ? passcode : null);
       if (result.ok && result.recoveryCode) {
         onCreated(result.recoveryCode);
         return;
@@ -219,23 +208,37 @@ function CreateForm({ status, additional, onBack, onCreated }: CreateFormProps) 
         onChange={(event) => setLabel(event.target.value)}
       />
       <p className="nx-hint nx-hint--prose">{strings.auth.create.labelNote}</p>
-      <TextField
-        type="password"
-        label={strings.auth.create.passcodeLabel}
-        placeholder={strings.auth.create.passcodePlaceholder}
-        value={passcode}
-        required
-        onChange={(event) => setPasscode(event.target.value)}
-      />
-      <TextField
-        type="password"
-        label={strings.auth.create.confirmLabel}
-        placeholder={strings.auth.create.confirmPlaceholder}
-        value={confirm}
-        required
-        onChange={(event) => setConfirm(event.target.value)}
-      />
-      <p className="nx-hint nx-hint--prose">{strings.auth.create.note}</p>
+      <Checkbox
+        checked={usePasscode}
+        onChange={(event) => setUsePasscode(event.target.checked)}
+      >
+        {strings.auth.create.passcodeToggle}
+      </Checkbox>
+      {!status.keystoreAvailable && (
+        <p className="nx-hint nx-hint--prose">{strings.auth.create.ownerFileNote}</p>
+      )}
+      {usePasscode && (
+        <>
+          <TextField
+            type="password"
+            label={strings.auth.create.passcodeLabel}
+            placeholder={strings.auth.create.passcodePlaceholder}
+            value={passcode}
+            required
+            onChange={(event) => setPasscode(event.target.value)}
+          />
+          <TextField
+            type="password"
+            label={strings.auth.create.confirmLabel}
+            placeholder={strings.auth.create.confirmPlaceholder}
+            value={confirm}
+            required
+            onChange={(event) => setConfirm(event.target.value)}
+          />
+          <p className="nx-hint nx-hint--prose">{strings.auth.create.note}</p>
+        </>
+      )}
+      {!usePasscode && <p className="nx-hint nx-hint--prose">{strings.auth.create.noPasscodeNote}</p>}
       {error != null && (
         <p className="auth__error" role="alert">
           {error}
@@ -466,7 +469,7 @@ function AccountPicker({ status, onStatusChange, onSelected, onAdd, onEmptied }:
             <Button disabled={busy} onClick={() => void select(account.id)}>
               {account.label}
               <span className="nx-hint nx-hint--prose">
-                {accountStateLine(account, status.keystoreAvailable)}
+                {accountStateLine(account)}
               </span>
             </Button>
           </ListRow>
@@ -494,6 +497,7 @@ interface UnlockFormProps {
   onOtherAccount: (() => void) | null;
   onForgot: () => void;
   onUnlocked: () => void;
+  noPasscode: boolean;
 }
 
 /** Screen (c): a single passcode field. Throttled attempts disable the form and count the wait down locally, re-enabling it without another round-trip once it reaches zero. */
@@ -504,6 +508,7 @@ function UnlockForm({
   onOtherAccount,
   onForgot,
   onUnlocked,
+  noPasscode,
 }: UnlockFormProps) {
   const [passcode, setPasscode] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -530,7 +535,9 @@ function UnlockForm({
     setSubmitting(true);
     setError(null);
     try {
-      const result = await window.nexus.unlockWithPasscode(passcode);
+      const result = noPasscode
+        ? await window.nexus.openWithoutPasscode()
+        : await window.nexus.unlockWithPasscode(passcode);
       if (result.ok) {
         onUnlocked();
         return;
@@ -550,17 +557,21 @@ function UnlockForm({
   return (
     <form className="auth__form" onSubmit={(event) => void submit(event)}>
       <h1 className="auth__title">{accountLabel ?? strings.auth.unlock.title}</h1>
-      <p className="nx-hint nx-hint--prose">{strings.auth.unlock.description}</p>
-      <TextField
-        type="password"
-        label={strings.auth.unlock.passcodeLabel}
-        placeholder={strings.auth.unlock.passcodePlaceholder}
-        value={passcode}
-        autoFocus
-        required
-        disabled={stillLocked}
-        onChange={(event) => setPasscode(event.target.value)}
-      />
+      <p className="nx-hint nx-hint--prose">
+        {noPasscode ? strings.auth.unlock.noPasscodeDescription : strings.auth.unlock.description}
+      </p>
+      {!noPasscode && (
+        <TextField
+          type="password"
+          label={strings.auth.unlock.passcodeLabel}
+          placeholder={strings.auth.unlock.passcodePlaceholder}
+          value={passcode}
+          autoFocus
+          required
+          disabled={stillLocked}
+          onChange={(event) => setPasscode(event.target.value)}
+        />
+      )}
       {stillLocked && (
         <p className="nx-hint nx-hint--prose">
           {strings.auth.unlock.retryPrefix} {formatCountdown(lockedForMs)}
@@ -572,11 +583,13 @@ function UnlockForm({
         </p>
       )}
       <Button type="submit" variant="primary" disabled={submitting || stillLocked}>
-        {strings.auth.unlock.submit}
+        {noPasscode ? strings.auth.unlock.openNoPasscode : strings.auth.unlock.submit}
       </Button>
-      <Button variant="ghost" size="sm" type="button" onClick={onForgot}>
-        {strings.auth.unlock.forgot}
-      </Button>
+      {!noPasscode && (
+        <Button variant="ghost" size="sm" type="button" onClick={onForgot}>
+          {strings.auth.unlock.forgot}
+        </Button>
+      )}
       {onOtherAccount != null && (
         <Button variant="ghost" size="sm" type="button" onClick={onOtherAccount}>
           {strings.auth.unlock.otherAccount}
@@ -753,6 +766,7 @@ export function AuthGate({ status: initialStatus, onUnlocked }: AuthGateProps) {
               onOtherAccount={multipleAccounts ? () => setScreen("picker") : null}
               onForgot={() => setScreen("recovery")}
               onUnlocked={onUnlocked}
+              noPasscode={!status.requiresPasscode}
             />
           )}
           {screen === "recovery" && (

@@ -4,7 +4,8 @@
 
 ## Platform
 
-desktop (Electron). The web app is on hold permanently; no public copy describes it as coming.
+web. Nexus ships as an Electron desktop renderer for Windows, Linux and macOS;
+the separate web app is on hold permanently.
 
 ## Users
 
@@ -51,10 +52,11 @@ Three commitments distinguish it from the tools it replaces:
 The shipped build is a desktop application: Electron rendering a React
 interface, with an encrypted SQLite database in the main process. Releases are
 per-user installers for Windows 10 and 11 on x64, an AppImage and a tarball for
-Linux x64, and a dmg for macOS on arm64. On Linux the app requires a running
-Secret Service keyring and refuses to create an account without one.
+Linux x64, and a dmg for macOS on arm64. Linux uses the secret service when one
+is available and an owner-only local guard when it is not.
 
-Accounts are local and passcode-protected; several accounts can exist on one
+Accounts are local and may be passcode-protected or use explicit device
+convenience mode; several accounts can exist on one
 machine, and a person can keep a personal and a business profile apart. The
 interface ships in Serbian and English, follows the system language on first
 run, and remembers the choice. Two themes ship: Dan (light) and Noc (dark),
@@ -66,11 +68,11 @@ dmg is not notarised.
 
 ## Capabilities and Constraints
 
-The module registry holds 42 modules: sixteen compiled into the shell (Dashboard,
+The module registry holds 43 modules: sixteen compiled into the shell (Dashboard,
 Tasks, Calendar, Notes, Private notes, Files, Study, Finance, Habits, Fitness,
 Focus, Tools, Canvas, Electronics, Professional tools and Settings) and the rest
-discovered from their own folders. The setup chooses which modules a profile
-starts with, and one setting for the whole app hides any module and orders the
+discovered from their own folders. Every registered module is visible on a new
+install, and one setting for the whole app hides any module and orders the
 sidebar groups. Data and store logic
 are written test-first, migrations are forward-only, and the desktop smoke
 script launches the built application and exercises the real IPC surface against
@@ -138,8 +140,9 @@ states plans without dates, and nothing here should claim otherwise.
    credential, the app cannot reach the network unless the user turns on update
    checks or downloads, and the guarantees are enforced by checks rather than stated only in
    prose.
-3. **Modular by onboarding.** A person sees the modules they chose and enables
-   the rest when they want them; personal and business profiles stay apart.
+3. **Modular from the first screen.** Every module is available immediately; a
+   person hides and reorders only what they do not use, and personal and
+   business profiles stay apart.
 4. **Depth per module.** A module is finished before the next one starts, and
    each one records the requirement IDs and tests behind it.
 5. **Sustainable productivity.** Habit streaks forgive a missed day, the focus

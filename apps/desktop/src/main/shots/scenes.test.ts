@@ -59,20 +59,18 @@ describe("every scene script", () => {
 describe("the pre-shell scenes", () => {
   const shells = SHOT_SCENES.filter((scene) => scene.kind === "shell");
 
-  it("names the network choice, the questionnaire and the lock screen once each", () => {
+  it("names the network choice and the lock screen once each", () => {
     const ids = shells.map((scene) => scene.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain("network");
-    expect(ids).toContain("onboarding");
     expect(ids).toContain("lock");
   });
 
-  it("runs the network scene before the first-run scene", () => {
+  it("runs the network scene before the lock scene", () => {
     // It reloads and then ANSWERS the choice, so the file exists again for every
-    // scene after it; the questionnaire is the other scene that rewrites this
-    // profile, and it must run after the choice has settled.
+    // scene after it; the lock scene must run after the choice has settled.
     const ids = shells.map((scene) => scene.id);
-    expect(ids.indexOf("network")).toBeLessThan(ids.indexOf("onboarding"));
+    expect(ids.indexOf("network")).toBeLessThan(ids.indexOf("lock"));
   });
 });
 

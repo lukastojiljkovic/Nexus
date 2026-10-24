@@ -32,6 +32,8 @@ export class NllbError extends Error {
 }
 
 export interface NllbHost {
+  /** Loads one model without translating; repeated loads of the same folder are idempotent. */
+  load(job: { readonly directory: string }): Promise<void>;
   /** Resolves when every sentence was handed to `onSentence`; rejects with an `NllbError`. */
   translate(job: NllbJob, onSentence: (index: number, text: string) => void, signal: AbortSignal): Promise<void>;
   /** Ends the worker, and with it the memory the model holds. */
@@ -71,7 +73,7 @@ export function createNllbHost(
         return;
       }
       pending.delete(reply.id);
-      if (reply.type === "translated") waiting.resolve();
+      if (reply.type === "translated" || reply.type === "loaded") waiting.resolve();
       else waiting.reject(new NllbError(reply.code, reply.message));
     });
     started.on("exit", () => {
@@ -83,6 +85,14 @@ export function createNllbHost(
   }
 
   return {
+    load(job) {
+      const running = ensureWorker();
+      const id = nextId++;
+      return new Promise<void>((resolve, reject) => {
+        pending.set(id, { onSentence: () => undefined, resolve, reject });
+        running.postMessage({ id, type: "load", directory: job.directory });
+      });
+    },
     translate(job, onSentence, signal) {
       if (signal.aborted) return Promise.reject(new NllbError("aborted", "cancelled before it started."));
       const running = ensureWorker();

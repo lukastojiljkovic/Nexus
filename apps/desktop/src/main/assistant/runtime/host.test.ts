@@ -79,6 +79,7 @@ class FakeWorker implements WorkerPort {
   /** While `control.hold` is true this worker records requests and answers none of them. */
   control: { hold: boolean } = { hold: false };
   exits = 0;
+  dieOnUnload = false;
   /** The text the scripted model "generates", chunk by chunk. */
   answer: readonly string[] = ["Zdravo"];
   /** Set to a failure code to make the next request fail. */
@@ -194,6 +195,10 @@ class FakeWorker implements WorkerPort {
         });
         return;
       case "unload":
+        if (this.dieOnUnload) {
+          queueMicrotask(() => this.die());
+          return;
+        }
         this.emit({ v: PROTOCOL_VERSION, kind: "unloaded", seq: request.seq });
         return;
     }
@@ -376,6 +381,15 @@ describe("the model host on a fake worker", () => {
     await host.loadEmbedder("qwen3-embedding-0.6b-q8-0", new AbortController().signal);
     expect(host.resident()).toEqual({ chat: "qwen3.5-2b-q4-k-m", embedder: "qwen3-embedding-0.6b-q8-0" });
     await host.unloadAll();
+    expect(host.resident()).toEqual({ chat: null, embedder: null });
+  });
+
+  it("treats a worker that exits before acknowledging unload as already released", async () => {
+    installFixture("qwen3.5-2b-q4-k-m");
+    const { host, workers } = makeHost();
+    await host.loadChat("qwen3.5-2b-q4-k-m", new AbortController().signal);
+    workers[0]!.dieOnUnload = true;
+    await expect(host.unloadAll()).resolves.toBeUndefined();
     expect(host.resident()).toEqual({ chat: null, embedder: null });
   });
 

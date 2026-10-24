@@ -26,7 +26,8 @@ describe("the translator worker's protocol", () => {
     expect(requestProblem({ id: 2, type: "cancel", request: 1 })).toBeNull();
     expect(requestProblem({ id: 2, type: "cancel" })).toMatch(/request/);
     expect(requestProblem({ id: 3, type: "dispose" })).toMatch(/unknown/);
-    expect(requestProblem({ id: 4, type: "load" })).toMatch(/unknown/);
+    expect(requestProblem({ id: 4, type: "load", directory: "/packs/nllb-600m" })).toBeNull();
+    expect(requestProblem({ id: 5, type: "load" })).toMatch(/directory/);
   });
 
   it("refuses a reply that is not one of its own", () => {

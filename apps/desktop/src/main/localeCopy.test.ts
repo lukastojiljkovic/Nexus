@@ -33,10 +33,14 @@ afterEach(() => {
 describe("main's native chrome", () => {
   it("writes Serbian by default and English after the renderer reports", () => {
     expect(shellStrings().defaultAccountLabel).toBe("Moj nalog");
+    expect(shellStrings().defaultPersonalProfileName).toBe("Lični profil");
+    expect(shellStrings().defaultBusinessProfileName).toBe("Poslovni profil");
     expect(shellStrings().noteCopySuffix).toBe(" (kopija)");
 
     setMainLocale("en");
     expect(shellStrings().defaultAccountLabel).toBe("My account");
+    expect(shellStrings().defaultPersonalProfileName).toBe("Personal profile");
+    expect(shellStrings().defaultBusinessProfileName).toBe("Work profile");
     expect(shellStrings().noteCopySuffix).toBe(" (copy)");
     expect(shellStrings().backupProfileSlugFallback).toBe("profile");
     expect(shellStrings().calendarFilterName).toBe("Calendar (iCalendar)");

@@ -42,6 +42,10 @@ function stubPort(): { readonly port: TexturePort; readonly calls: Call[] } {
 
 const LAYOUT: PlanetTextures = {
   layout: 1,
+  sky: {
+    image: "pack://planet-textures/images/sky.webp",
+    credit: "Solar System Scope",
+  },
   bodies: {
     earth: {
       day: "pack://planet-textures/images/earth-day.webp",
@@ -68,7 +72,10 @@ describe("configurePlanetTexture", () => {
 describe("loadPlanetTextures", () => {
   it("loads nothing at all for no pack", () => {
     const { port, calls } = stubPort();
-    expect(loadPlanetTextures(null, port, new SceneResources(), () => undefined, () => undefined)).toEqual({});
+    expect(loadPlanetTextures(null, port, new SceneResources(), () => undefined, () => undefined)).toEqual({
+      bodies: {},
+      sky: null,
+    });
     expect(calls).toHaveLength(0);
   });
 
@@ -82,22 +89,24 @@ describe("loadPlanetTextures", () => {
       "pack://planet-textures/images/earth-night.webp",
       "pack://planet-textures/images/saturn-day.webp",
       "pack://planet-textures/images/saturn-rings.webp",
+      "pack://planet-textures/images/sky.webp",
     ]);
-    expect(loaded.earth?.day).not.toBeNull();
-    expect(loaded.earth?.night).not.toBeNull();
-    expect(loaded.earth?.rings).toBeNull();
-    expect(loaded.saturn?.rings).not.toBeNull();
-    expect(resources.size).toBe(4);
-    expect(resources.has(loaded.earth?.day as THREE.Texture)).toBe(true);
-    expect(resources.has(loaded.earth?.night as THREE.Texture)).toBe(true);
-    expect(resources.has(loaded.saturn?.rings as THREE.Texture)).toBe(true);
+    expect(loaded.bodies.earth?.day).not.toBeNull();
+    expect(loaded.bodies.earth?.night).not.toBeNull();
+    expect(loaded.bodies.earth?.rings).toBeNull();
+    expect(loaded.bodies.saturn?.rings).not.toBeNull();
+    expect(loaded.sky).not.toBeNull();
+    expect(resources.size).toBe(5);
+    expect(resources.has(loaded.bodies.earth?.day as THREE.Texture)).toBe(true);
+    expect(resources.has(loaded.bodies.earth?.night as THREE.Texture)).toBe(true);
+    expect(resources.has(loaded.bodies.saturn?.rings as THREE.Texture)).toBe(true);
   });
 
   it("fetches Earth's night map, which the terminator now draws", () => {
     const { port, calls } = stubPort();
     const loaded = loadPlanetTextures(LAYOUT, port, new SceneResources(), () => undefined, () => undefined);
     expect(calls.some((call) => call.url.includes("earth-night"))).toBe(true);
-    expect(loaded.earth?.night).not.toBeNull();
+    expect(loaded.bodies.earth?.night).not.toBeNull();
   });
 
   it("ignores a body this contract does not know", () => {
@@ -112,8 +121,8 @@ describe("loadPlanetTextures", () => {
 
   it("names the body and the slot back to its caller on load and on failure", () => {
     const { port, calls } = stubPort();
-    const loaded: [BodyId, PlanetTextureSlot][] = [];
-    const failed: [BodyId, PlanetTextureSlot][] = [];
+    const loaded: [BodyId | null, PlanetTextureSlot][] = [];
+    const failed: [BodyId | null, PlanetTextureSlot][] = [];
     loadPlanetTextures(
       LAYOUT,
       port,
@@ -127,6 +136,7 @@ describe("loadPlanetTextures", () => {
       ["earth", "night"],
       ["saturn", "day"],
       ["saturn", "rings"],
+      [null, "sky"],
     ]);
     expect(failed).toEqual([]);
     const rings = calls[3];

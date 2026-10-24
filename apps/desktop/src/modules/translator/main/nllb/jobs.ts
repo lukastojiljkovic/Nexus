@@ -38,11 +38,53 @@ export interface TranslationInput {
 export class TranslationJobs {
   private current: Job | null = null;
   private idle: ReturnType<typeof setTimeout> | null = null;
+  private state: "absent" | "loading" | "resident" | "error" = "absent";
+  private loadedDirectory: string | null = null;
+  private loadGeneration = 0;
+  private readonly disposeHost: () => void;
 
   constructor(
     private readonly host: () => NllbHost,
     private readonly newId: () => string,
-  ) {}
+    private readonly onUnload: () => void = () => undefined,
+    private readonly onState: (state: "absent" | "loading" | "resident" | "error") => void = () => undefined,
+    disposeHost?: () => void,
+  ) {
+    this.disposeHost = disposeHost ?? (() => undefined);
+  }
+
+  runtimeState(): "absent" | "loading" | "resident" | "error" {
+    return this.state;
+  }
+
+  async load(directory: string): Promise<void> {
+    if (this.state === "resident" && this.loadedDirectory === directory) return;
+    const generation = (this.loadGeneration += 1);
+    this.disarm();
+    this.setState("loading");
+    try {
+      await this.host().load({ directory });
+      if (generation !== this.loadGeneration) return;
+      this.loadedDirectory = directory;
+      this.setState("resident");
+      this.arm();
+    } catch (error) {
+      if (generation !== this.loadGeneration) return;
+      this.setState("error");
+      throw error;
+    }
+  }
+
+  eject(): void {
+    this.loadGeneration += 1;
+    this.current?.controller.abort();
+    this.current = null;
+    this.disarm();
+    this.disposeHost();
+    this.loadedDirectory = null;
+    this.setState("absent");
+    this.onUnload();
+  }
 
   start(input: TranslationInput): string {
     this.current?.controller.abort();
@@ -57,6 +99,8 @@ export class TranslationJobs {
       error: null,
     };
     this.current = job;
+    if (this.loadedDirectory !== input.directory) this.loadedDirectory = null;
+    this.setState("loading");
     const sentences = segmented.sentences.map((sentence) => sentence.text);
     void this.host()
       .translate(
@@ -72,7 +116,16 @@ export class TranslationJobs {
       })
       .finally(() => {
         job.done = true;
-        if (this.current === job) this.arm();
+        if (this.current === job) {
+          if (job.error === null || job.error === "aborted") {
+            this.loadedDirectory = input.directory;
+            this.setState("resident");
+          } else {
+            this.loadedDirectory = null;
+            this.setState("error");
+          }
+          this.arm();
+        }
       });
     return job.id;
   }
@@ -104,7 +157,10 @@ export class TranslationJobs {
   private arm(): void {
     this.idle = setTimeout(() => {
       this.idle = null;
-      this.host().dispose();
+      this.disposeHost();
+      this.loadedDirectory = null;
+      this.setState("absent");
+      this.onUnload();
     }, IDLE_UNLOAD_MS);
     this.idle.unref?.();
   }
@@ -112,5 +168,11 @@ export class TranslationJobs {
   private disarm(): void {
     if (this.idle !== null) clearTimeout(this.idle);
     this.idle = null;
+  }
+
+  private setState(state: "absent" | "loading" | "resident" | "error"): void {
+    if (this.state === state) return;
+    this.state = state;
+    this.onState(state);
   }
 }

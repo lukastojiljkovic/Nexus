@@ -32,6 +32,11 @@ export interface PlanetTextureSetView {
 /** The pack's `textures.json`, with every image path turned into an `nx-pack://` address. */
 export interface PlanetTexturesView {
   readonly layout: 1;
+  /** Optional equirectangular sky behind the solar system. */
+  readonly sky?: {
+    readonly image: string;
+    readonly credit: string;
+  };
   readonly bodies: Readonly<Partial<Record<BodyId, PlanetTextureSetView>>>;
 }
 
