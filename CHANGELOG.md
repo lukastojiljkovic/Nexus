@@ -67,6 +67,13 @@ astronomy, Gallery, translator memory and content-pack downloads.
 - **The tool-runner test waits for the child process to start** rather than
   assuming it will print inside a fixed 250 ms window under parallel load.
 
+### Security
+
+- **undici 6.29.1**, replacing 6.29.0 for
+  GHSA-xjj6-f33q-929c. The affected copy is build-time only through
+  electron-builder and `node-gyp`; the direct Electron download uses 7.x, which
+  remains on the patched line.
+
 ## [2.5.0] - 2026-10-23
 
 The translator reads 202 languages, the map is whatever part of the world you
